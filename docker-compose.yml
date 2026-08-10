@@ -1,13 +1,26 @@
 version: '3.8'
 
 services:
-  kotatsu-reader:
-    build: .
+  manhuasync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: manhuasync-tracker
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - HOST=0.0.0.0
+      - ENCRYPTION_SECRET=omnimanga-gdpr-aes256-secret-key-32b!
+      - STORAGE_PATH=/app/data/storage
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
+      - ./database.json:/app/database.json
+      - ./BUGS.md:/app/BUGS.md
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

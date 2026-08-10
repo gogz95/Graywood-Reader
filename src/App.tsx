@@ -29,6 +29,7 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
+import { SubmitBugModal } from './components/SubmitBugModal';
 import { BrowseView } from './components/BrowseView';
 import { KotatsuSourcesView } from './components/KotatsuSourcesView';
 import { UserProfile, UserRole } from './types';
@@ -36,8 +37,22 @@ import { UserProfile, UserRole } from './types';
 
 
 
+const GUEST_PROFILE: UserProfile = {
+  id: 'usr_guest',
+  name: 'Guest Reader',
+  username: 'guest',
+  email: 'guest@omnimanga.app',
+  avatar: '👤',
+  role: 'user',
+  storageFolderPath: 'data/storage/Guest',
+  createdAt: new Date().toISOString(),
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppNavTab>('library');
+
+  // Host PC Connection & Security State
+  const [isHostComputer, setIsHostComputer] = useState<boolean>(true);
 
   // Incognito Mode State
   const [isIncognito, setIsIncognito] = useState(false);
@@ -51,7 +66,7 @@ export default function App() {
       email: 'admin@manga.dev',
       avatar: '🛡️',
       role: 'admin',
-      storageFolderPath: 'C:\\Users\\gogz9\\MangaStorage\\Admin',
+      storageFolderPath: 'data/storage/Admin',
       createdAt: new Date().toISOString(),
     },
     {
@@ -61,9 +76,10 @@ export default function App() {
       email: 'jordan@manga.dev',
       avatar: '🦊',
       role: 'user',
-      storageFolderPath: 'C:\\Users\\gogz9\\MangaStorage\\Jordan',
+      storageFolderPath: 'data/storage/Jordan',
       createdAt: new Date().toISOString(),
     },
+    GUEST_PROFILE,
   ]);
   const [activeProfileId, setActiveProfileId] = useState<string>('usr_admin');
   const [userProfileModalOpen, setUserProfileModalOpen] = useState(false);
@@ -156,6 +172,7 @@ export default function App() {
   const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingManga, setEditingManga] = useState<MangaItem | null>(null);
+  const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
 
   // Reader Mode state
   const [readerTarget, setReaderTarget] = useState<{ manga: MangaItem; chapterNumber: number; chapterId?: string } | null>(null);
@@ -273,7 +290,59 @@ export default function App() {
     }
   };
 
+  // Device-Specific Cache Helper (Stores preferences per device)
+  const getDeviceId = (): string => {
+    try {
+      let devId = localStorage.getItem('omnimanga_device_id');
+      if (!devId) {
+        devId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        localStorage.setItem('omnimanga_device_id', devId);
+      }
+      return devId;
+    } catch (_) {
+      return 'dev_default';
+    }
+  };
+
+  const fetchClientContext = async () => {
+    try {
+      const res = await fetch('/api/auth/client-context');
+      if (res.ok) {
+        const data = await res.json();
+        setIsHostComputer(data.isHost);
+        if (!data.isHost) {
+          setActiveProfileId('usr_guest');
+        } else {
+          // Check per-device cached profile for host PC
+          const cachedProfileId = localStorage.getItem(`omnimanga_${getDeviceId()}_active_profile`);
+          if (cachedProfileId && profiles.some((p) => p.id === cachedProfileId)) {
+            setActiveProfileId(cachedProfileId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Fetch client context error:", err);
+    }
+  };
+
+  // Reset Guest Profile data whenever Guest profile is selected or booted
   useEffect(() => {
+    if (activeProfileId === 'usr_guest') {
+      console.log("[Guest Isolation Engine] Guest Reader active. History reset for fresh session.");
+      // Purge transient guest history from local session storage
+      try {
+        sessionStorage.removeItem('guest_reading_history');
+      } catch (_) {}
+    } else {
+      // Save active profile to device-specific cache for non-guest users
+      try {
+        localStorage.setItem(`omnimanga_${getDeviceId()}_active_profile`, activeProfileId);
+      } catch (_) {}
+    }
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    fetchClientContext();
     fetchMangaList();
     fetchConfig();
     fetchLogs();
@@ -287,6 +356,66 @@ export default function App() {
       document.body.className = `theme-${appSettings.appTheme}`;
     }
   }, [appSettings.appTheme]);
+
+  // ── URL & HTML5 HISTORY ROUTING ENGINE ─────────────────────────────────────
+  const updateUrl = (path: string) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
+  };
+
+  const handleTabChange = (tab: AppNavTab) => {
+    setActiveTab(tab);
+    const tabPaths: Record<string, string> = {
+      library: '/',
+      browse: '/browse',
+      sources: '/sources',
+      autoupdate: '/autoupdate',
+      tracker: '/tracker',
+      sync: '/sync',
+      duplicates: '/duplicates',
+      openapi: '/openapi',
+      reader: '/reader',
+    };
+    updateUrl(tabPaths[tab] || '/');
+  };
+
+  useEffect(() => {
+    const syncRouteFromUrl = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/browse')) {
+        setActiveTab('browse');
+      } else if (path.startsWith('/sources')) {
+        setActiveTab('sources');
+      } else if (path.startsWith('/autoupdate')) {
+        setActiveTab('autoupdate');
+      } else if (path.startsWith('/tracker')) {
+        setActiveTab('tracker');
+      } else if (path.startsWith('/sync')) {
+        setActiveTab('sync');
+      } else if (path.startsWith('/duplicates')) {
+        setActiveTab('duplicates');
+      } else if (path.startsWith('/openapi')) {
+        setActiveTab('openapi');
+      } else if (path.startsWith('/series/')) {
+        const id = path.split('/series/')[1]?.split('?')[0];
+        const item = mangaList.find((m) => m.id === id);
+        if (item) setSelectedMangaDetail(item);
+      } else if (path.startsWith('/reader/')) {
+        const parts = path.split('/reader/')[1]?.split('/');
+        const id = parts?.[0];
+        const ch = parts?.[1] ? parseInt(parts[1], 10) : 1;
+        const item = mangaList.find((m) => m.id === id);
+        if (item) setReaderTarget({ manga: item, chapterNumber: ch });
+      } else {
+        setActiveTab('library');
+      }
+    };
+
+    syncRouteFromUrl();
+    window.addEventListener('popstate', syncRouteFromUrl);
+    return () => window.removeEventListener('popstate', syncRouteFromUrl);
+  }, [mangaList]);
 
 
 
@@ -491,9 +620,44 @@ export default function App() {
   };
 
   // Reader Launch Handlers
+  const handleSelectMangaDetail = (manga: MangaItem | null) => {
+    setSelectedMangaDetail(manga);
+    if (manga) {
+      updateUrl(`/series/${manga.id}`);
+    } else {
+      const tabPaths: Record<string, string> = {
+        library: '/',
+        browse: '/browse',
+        sources: '/sources',
+        autoupdate: '/autoupdate',
+        tracker: '/tracker',
+        sync: '/sync',
+        duplicates: '/duplicates',
+        openapi: '/openapi',
+      };
+      updateUrl(tabPaths[activeTab] || '/');
+    }
+  };
+
   const handleOpenReader = (manga: MangaItem, chapterNumber?: number, chapterId?: string) => {
-    const chNum = chapterNumber !== undefined ? chapterNumber : Math.max(1, manga.currentChapter + 1);
-    setReaderTarget({ manga, chapterNumber: chNum, chapterId });
+    const ch = chapterNumber !== undefined ? chapterNumber : manga.currentChapter || 1;
+    setReaderTarget({ manga, chapterNumber: ch, chapterId });
+    updateUrl(`/reader/${manga.id}/${ch}`);
+  };
+
+  const handleCloseReader = () => {
+    setReaderTarget(null);
+    const tabPaths: Record<string, string> = {
+      library: '/',
+      browse: '/browse',
+      sources: '/sources',
+      autoupdate: '/autoupdate',
+      tracker: '/tracker',
+      sync: '/sync',
+      duplicates: '/duplicates',
+      openapi: '/openapi',
+    };
+    updateUrl(tabPaths[activeTab] || '/');
   };
 
   const handleOpenChapters = (manga: MangaItem) => {
@@ -541,7 +705,7 @@ export default function App() {
       {/* Top Fixed Header & Tab Navigation */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         subdomain={config.subdomain}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -559,20 +723,22 @@ export default function App() {
         onOpenLocalReader={() => setLocalReaderOpen(true)}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
         activeProfile={activeProfile}
+        isHostComputer={isHostComputer}
         onOpenProfileModal={() => setUserProfileModalOpen(true)}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminPanel={() => setAdminPanelOpen(true)}
+        onOpenSubmitBugModal={() => setSubmitBugModalOpen(true)}
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-24 md:pb-6">
         {activeTab === 'library' && (
           <LibraryView
             mangaList={myLibraryList}
             searchQuery={searchQuery}
 
             onIncrementChapter={handleIncrementChapter}
-            onSelectManga={(manga) => setSelectedMangaDetail(manga)}
+            onSelectManga={handleSelectMangaDetail}
             onQuickEdit={(manga) => {
               setEditingManga(manga);
               setAddModalOpen(true);
@@ -592,7 +758,7 @@ export default function App() {
             mangaList={displayMangaList}
             searchQuery={searchQuery}
             onIncrementChapter={handleIncrementChapter}
-            onSelectManga={(manga) => setSelectedMangaDetail(manga)}
+            onSelectManga={handleSelectMangaDetail}
             onQuickEdit={(manga) => {
               setEditingManga(manga);
               setAddModalOpen(true);
@@ -637,7 +803,7 @@ export default function App() {
           <KotatsuSourcesView
             onAddToTracker={handleSaveManga}
             onOpenReader={handleOpenReader}
-            onSelectManga={(manga) => setSelectedMangaDetail(manga)}
+            onSelectManga={handleSelectMangaDetail}
           />
         )}
       </main>
@@ -646,7 +812,7 @@ export default function App() {
       {selectedMangaDetail && (
         <MangaDetailModal
           manga={selectedMangaDetail}
-          onClose={() => setSelectedMangaDetail(null)}
+          onClose={() => handleSelectMangaDetail(null)}
           onUpdateManga={(updated) => {
             handleSaveManga(updated);
             setSelectedMangaDetail(updated);
@@ -680,7 +846,7 @@ export default function App() {
           initialChapterNumber={readerTarget.chapterNumber}
           initialChapterId={readerTarget.chapterId}
           defaultSettings={appSettings.readerDefaults}
-          onClose={() => setReaderTarget(null)}
+          onClose={handleCloseReader}
           onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
         />
       )}
@@ -765,8 +931,25 @@ export default function App() {
         />
       )}
 
+      {/* User Profiles Selector Modal */}
+      {userProfileModalOpen && (
+        <UserProfileModal
+          profiles={profiles}
+          activeProfileId={activeProfileId}
+          isHostComputer={isHostComputer}
+          onSelectProfile={(id) => {
+            setActiveProfileId(id);
+            setUserProfileModalOpen(false);
+          }}
+          onCreateProfile={handleCreateProfile}
+          onUpdateProfileFolder={handleUpdateProfileFolder}
+          onDeleteProfile={handleDeleteProfile}
+          onClose={() => setUserProfileModalOpen(false)}
+        />
+      )}
+
       {/* Host / Administrator Command Panel */}
-      {adminPanelOpen && activeProfile.role === 'admin' && (
+      {adminPanelOpen && activeProfile.role === 'admin' && isHostComputer && (
         <AdminPanelModal
           currentUser={activeProfile}
           allUsers={profiles}
@@ -778,6 +961,14 @@ export default function App() {
             setAdminPanelOpen(false);
           }}
           onClose={() => setAdminPanelOpen(false)}
+        />
+      )}
+
+      {/* Submit Bug Tracker Modal */}
+      {submitBugModalOpen && (
+        <SubmitBugModal
+          currentUser={activeProfile}
+          onClose={() => setSubmitBugModalOpen(false)}
         />
       )}
 

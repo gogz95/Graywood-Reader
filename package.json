@@ -5,12 +5,17 @@
   "main": "electron-main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
-    "start": "node dist/server.cjs",
+    "build": "vite build",
+    "start": "npx tsx server.ts",
+    "start:prod": "npx tsx server.ts",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "docker:build": "docker build -t manhuasync-tracker .",
+    "docker:run": "docker compose up -d",
+    "deploy:linux": "bash scripts/deploy-linux.sh",
+    "deploy:windows": "scripts\\deploy-windows.bat",
     "electron:dev": "electron .",
     "build:exe": "npm run build && electron-builder --win",
     "preview": "vite preview",
-    "clean": "rm -rf dist dist-electron server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

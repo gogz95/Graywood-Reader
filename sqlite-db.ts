@@ -293,6 +293,10 @@ export const SqliteDb = {
     return purgeReaperScans();
   },
 
+  deleteAllManga() {
+    db.prepare('DELETE FROM manga').run();
+  },
+
   getMangaCount(): number {
     const row = db.prepare('SELECT COUNT(*) as count FROM manga').get() as { count: number };
     return row.count;

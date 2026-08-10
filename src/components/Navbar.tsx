@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
   RefreshCw,
@@ -20,6 +20,9 @@ import {
   Calendar,
   User,
   Compass,
+  Bug,
+  MoreVertical,
+  X,
 } from 'lucide-react';
 
 import { AppNavTab, UserProfile } from '../types';
@@ -41,9 +44,11 @@ interface NavbarProps {
   onOpenLocalReader: () => void;
   onOpenAnalytics: () => void;
   activeProfile: UserProfile;
+  isHostComputer?: boolean;
   onOpenProfileModal: () => void;
   onOpenAuthModal: () => void;
   onOpenAdminPanel: () => void;
+  onOpenSubmitBugModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -63,11 +68,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLocalReader,
   onOpenAnalytics,
   activeProfile,
+  isHostComputer = true,
   onOpenProfileModal,
   onOpenAuthModal,
   onOpenAdminPanel,
+  onOpenSubmitBugModal,
 }) => {
-
+  const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-slate-100 shadow-xl">
@@ -124,11 +131,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2.5">
+          {/* Action Buttons (Desktop) */}
+          <div className="hidden md:flex items-center gap-2">
             <button
               onClick={onToggleIncognito}
-              title="Toggle Incognito Private Reading Mode (Zero history tracking)"
+              title="Toggle Incognito Private Reading Mode"
               className={`p-2 rounded-lg border transition-all ${
                 isIncognito
                   ? 'bg-purple-500 text-slate-950 font-bold border-purple-400 shadow-md'
@@ -141,45 +148,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenLocalReader}
               title="Open local CBZ, ZIP, or Image Folder Manga"
-              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-700 transition-all hidden sm:block"
+              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-700 transition-all"
             >
               <FileArchive className="w-4 h-4 text-amber-400" />
             </button>
 
             <button
               onClick={onOpenAnalytics}
-              title="View GitHub-style Reading Activity Heatmap & Analytics"
-              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-cyan-400 border border-slate-700 transition-all hidden sm:block"
+              title="View Reading Activity Heatmap"
+              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-cyan-400 border border-slate-700 transition-all"
             >
               <Calendar className="w-4 h-4 text-cyan-400" />
             </button>
 
-            {activeProfile.role === 'admin' && (
+            {activeProfile.role === 'admin' && isHostComputer && (
               <button
                 onClick={onOpenAdminPanel}
-                title="Host & Administrator Command Panel (Manage users, privacy, and system DB)"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 transition-all shadow-md"
+                title="Host Admin Panel: Promote, Demote, or Remove User Accounts"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition-all"
               >
                 <Shield className="w-4 h-4 text-purple-400" />
-                <span className="hidden sm:inline">Admin Panel</span>
+                <span>Admin Panel</span>
               </button>
             )}
 
             <button
-              onClick={onOpenAuthModal}
-              title="Sign In or Register a new user account"
-              className="px-3 py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all hidden sm:block"
-            >
-              Sign In / Register
-            </button>
-
-            <button
               onClick={onOpenProfileModal}
-              title={`User Profile: ${activeProfile.name} (${activeProfile.role === 'admin' ? 'Host/Admin' : 'Private User'})`}
+              title={`User Profile: ${activeProfile.name}`}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
             >
               <span className="text-base">{activeProfile.avatar}</span>
-              <span className="hidden sm:inline font-bold">{activeProfile.name}</span>
+              <span className="font-bold">{activeProfile.name}</span>
               {activeProfile.role === 'admin' && (
                 <span className="px-1 py-0.2 text-[9px] font-black uppercase rounded bg-purple-500 text-slate-950 ml-1">
                   Admin
@@ -189,25 +188,126 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenSettingsModal}
-              title="Settings, Duplicate Finder, DB Subdomain Sync, UI Themes"
-              className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-800 text-slate-200 hover:text-amber-400 border border-slate-700 transition-all"
+              title="Settings & Tools"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800/90 hover:bg-slate-800 text-slate-200 hover:text-amber-400 border border-slate-700 transition-all"
             >
               <Sliders className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Settings</span>
+              <span>Settings</span>
             </button>
 
-
+            {onOpenSubmitBugModal && (
+              <button
+                onClick={onOpenSubmitBugModal}
+                title="Report a bug"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all"
+              >
+                <Bug className="w-4 h-4 text-red-400" />
+                <span>Submit Bug</span>
+              </button>
+            )}
 
             <button
               onClick={onOpenAddModal}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md shadow-amber-500/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md transition-all active:scale-95"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Add Series</span>
             </button>
           </div>
+
+          {/* Action Buttons (Mobile Compact <768px) */}
+          <div className="flex md:hidden items-center gap-1.5">
+            <button
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-black rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>Add</span>
+            </button>
+
+            <button
+              onClick={onOpenProfileModal}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs font-bold rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30"
+            >
+              <span className="text-sm">{activeProfile.avatar}</span>
+              <span className="max-w-[70px] truncate">{activeProfile.name}</span>
+            </button>
+
+            <button
+              onClick={() => setMobileQuickMenuOpen(!mobileQuickMenuOpen)}
+              className="p-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 active:scale-95"
+              title="Toggle Mobile Menu"
+            >
+              {mobileQuickMenuOpen ? <X className="w-4 h-4 text-amber-400" /> : <MoreVertical className="w-4 h-4 text-slate-300" />}
+            </button>
+          </div>
         </div>
 
+        {/* Mobile Quick Action Drawer Overlay */}
+        {mobileQuickMenuOpen && (
+          <div className="md:hidden p-3 bg-slate-950 border-b border-slate-800 grid grid-cols-2 gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2">
+            <button
+              onClick={() => {
+                onToggleIncognito();
+                setMobileQuickMenuOpen(false);
+              }}
+              className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                isIncognito ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-900 text-slate-300 border-slate-800'
+              }`}
+            >
+              <EyeOff className="w-4 h-4 text-purple-400" />
+              <span>{isIncognito ? 'Incognito ON' : 'Incognito OFF'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onOpenLocalReader();
+                setMobileQuickMenuOpen(false);
+              }}
+              className="p-2.5 rounded-xl bg-slate-900 text-slate-300 border border-slate-800 flex items-center gap-2"
+            >
+              <FileArchive className="w-4 h-4 text-amber-400" />
+              <span>Local CBZ Reader</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onOpenAnalytics();
+                setMobileQuickMenuOpen(false);
+              }}
+              className="p-2.5 rounded-xl bg-slate-900 text-slate-300 border border-slate-800 flex items-center gap-2"
+            >
+              <Calendar className="w-4 h-4 text-cyan-400" />
+              <span>Activity Heatmap</span>
+            </button>
+
+            {onOpenSubmitBugModal && (
+              <button
+                onClick={() => {
+                  onOpenSubmitBugModal();
+                  setMobileQuickMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 flex items-center gap-2"
+              >
+                <Bug className="w-4 h-4 text-red-400" />
+                <span>Submit Bug</span>
+              </button>
+            )}
+
+            {activeProfile.role === 'admin' && isHostComputer && (
+              <button
+                onClick={() => {
+                  onOpenAdminPanel();
+                  setMobileQuickMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-2 col-span-2"
+              >
+                <Shield className="w-4 h-4 text-purple-400" />
+                <span>Host Admin Panel</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Mobile Search Bar */}
         <div className="md:hidden pb-3">
@@ -223,8 +323,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar py-2 border-t border-slate-800/80 text-xs sm:text-sm font-medium">
+        {/* Navigation Tabs Bar (Desktop) */}
+        <div className="hidden md:flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar py-2 border-t border-slate-800/80 text-xs sm:text-sm font-medium">
           <button
             onClick={() => setActiveTab('library')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
@@ -312,6 +412,60 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Mobile Floating Bottom Navigation Bar (Visible <768px) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
+        <button
+          onClick={() => setActiveTab('library')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            activeTab === 'library' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <BookOpen className="w-5 h-5" />
+          <span className="text-[10px]">Library</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('browse')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            activeTab === 'browse' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <Compass className="w-5 h-5 text-cyan-400" />
+          <span className="text-[10px]">Explore</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sources')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all ${
+            activeTab === 'sources' ? 'text-purple-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <Globe className="w-5 h-5 text-purple-400" />
+          <span className="text-[10px]">Sources</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('autoupdate')}
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all relative ${
+            activeTab === 'autoupdate' ? 'text-amber-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <Zap className="w-5 h-5 text-orange-400" />
+          <span className="text-[10px]">Feed</span>
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+          )}
+        </button>
+
+        <button
+          onClick={onOpenSettingsModal}
+          className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-slate-400 hover:text-amber-400 transition-all"
+        >
+          <Sliders className="w-5 h-5 text-slate-400" />
+          <span className="text-[10px]">Settings</span>
+        </button>
+      </nav>
     </header>
   );
 };

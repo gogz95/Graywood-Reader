@@ -1,0 +1,17 @@
+[Unit]
+Description=ManhuaSync & OmniManga Subdomain Tracking Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/manhuasync
+ExecStart=/usr/bin/npx tsx server.ts
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target

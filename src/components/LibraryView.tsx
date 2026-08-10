@@ -326,7 +326,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
           {sortedList.map((manga) => {
             const hasNewChapter = manga.latestChapter > manga.currentChapter;
             const progress =

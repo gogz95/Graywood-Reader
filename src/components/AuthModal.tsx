@@ -77,7 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [userEnteredCode, setUserEnteredCode] = useState<string>('');
   const [codeError, setCodeError] = useState<string | null>(null);
 
-  const handleSendConfirmationCode = (e: React.FormEvent) => {
+  const handleRegisterDirectSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName.trim() || !regUsername.trim() || !regEmail.trim()) return;
 
@@ -90,19 +90,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedCode(code);
-    setVerificationStep(true);
-    setCodeError(null);
-  };
-
-  const handleVerifyCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (userEnteredCode.trim() !== generatedCode) {
-      setCodeError('Invalid confirmation code. Please enter the 6-digit code shown below.');
-      return;
-    }
-
     const newUser: UserProfile = {
       id: 'usr_' + Date.now(),
       name: regName.trim(),
@@ -110,7 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       email: regEmail.trim(),
       password: regPassword,
       avatar: regAvatar,
-      role: regRole,
+      role: existingUsers.length === 0 ? 'admin' : 'user',
       storageFolderPath: regFolderPath,
       createdAt: new Date().toISOString(),
     };
@@ -139,9 +126,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
     >
-      <div className="bg-slate-900/95 border border-slate-800 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col my-auto relative backdrop-blur-md">
+      <div className="bg-slate-900/95 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-w-md w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col my-0 sm:my-auto relative backdrop-blur-md">
         
         {/* Close Button */}
         <button
@@ -304,176 +291,117 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               )}
 
-              {!verificationStep ? (
-                <form onSubmit={handleSendConfirmationCode} className="space-y-3.5">
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Choose Profile Icon:</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {avatarOptions.map((av) => (
-                        <button
-                          key={av}
-                          type="button"
-                          onClick={() => setRegAvatar(av)}
-                          className={`p-2 text-lg rounded-xl border transition-all ${
-                            regAvatar === av
-                              ? 'border-amber-500 bg-amber-500/20 shadow-md scale-105'
-                              : 'border-slate-800 bg-slate-950 hover:bg-slate-800'
-                          }`}
-                        >
-                          {av}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-300">Full Name</label>
-                      <input
-                        type="text"
-                        value={regName}
-                        onChange={(e) => setRegName(e.target.value)}
-                        placeholder="Alex Reader"
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-300">Username</label>
-                      <input
-                        type="text"
-                        value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        placeholder="alex_reader"
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Email Address</label>
-                    <input
-                      type="email"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="alex@manga.dev"
-                      required
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Password</label>
-                    <div className="relative">
-                      <input
-                        type={showRegPassword ? 'text' : 'password'}
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 pr-10 text-slate-200 text-xs"
-                      />
+              <form onSubmit={handleRegisterDirectSubmit} className="space-y-3.5">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-300">Choose Profile Icon:</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {avatarOptions.map((av) => (
                       <button
+                        key={av}
                         type="button"
-                        onClick={() => setShowRegPassword(!showRegPassword)}
-                        className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
+                        onClick={() => setRegAvatar(av)}
+                        className={`p-2 text-lg rounded-xl border transition-all ${
+                          regAvatar === av
+                            ? 'border-amber-500 bg-amber-500/20 shadow-md scale-105'
+                            : 'border-slate-800 bg-slate-950 hover:bg-slate-800'
+                        }`}
                       >
-                        {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {av}
                       </button>
-                    </div>
+                    ))}
                   </div>
+                </div>
 
-                  {/* Access Role */}
+                <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Account Access Role</label>
-                    <select
-                      value={regRole}
-                      onChange={(e) => setRegRole(e.target.value as UserRole)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
-                    >
-                      <option value="user">👤 Individual User (Private Isolated Storage)</option>
-                      <option value="admin">🛡️ Host Admin (Full Access to Everything)</option>
-                    </select>
-                  </div>
-
-                  {/* Storage Folder Path Selection */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Private Local Storage Directory</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={regFolderPath}
-                        onChange={(e) => setRegFolderPath(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 font-mono text-[11px]"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleBrowseFolder}
-                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs flex items-center gap-1"
-                      >
-                        <Folder className="w-3.5 h-3.5" />
-                        <span>Browse</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
-                  >
-                    <Mail className="w-4 h-4" />
-                    <span>Send Verification Code</span>
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyCodeSubmit} className="space-y-4">
-                  <div className="p-3 rounded-xl bg-blue-950/60 border border-blue-500/30 text-blue-300 text-xs space-y-1">
-                    <div className="font-bold flex items-center gap-1.5">
-                      <Mail className="w-4 h-4 text-blue-400" />
-                      Email Confirmation Security Code
-                    </div>
-                    <p className="text-[11px] text-slate-300">
-                      We sent a 6-digit security code to <strong className="text-amber-300">{regEmail}</strong>.
-                    </p>
-                    <p className="text-[11px] text-amber-400 font-mono bg-blue-950 p-2 rounded border border-blue-500/20 mt-1 flex items-center justify-between">
-                      <span>Verification Code:</span>
-                      <strong className="text-base tracking-widest">{generatedCode}</strong>
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-300">Enter 6-Digit Confirmation Code:</label>
+                    <label className="font-bold text-slate-300">Full Name</label>
                     <input
                       type="text"
-                      maxLength={6}
-                      value={userEnteredCode}
-                      onChange={(e) => setUserEnteredCode(e.target.value)}
-                      placeholder="e.g. 849201"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      placeholder="Alex Reader"
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-center text-xl font-mono font-black text-amber-400 tracking-widest focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
                     />
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-300">Username</label>
+                    <input
+                      type="text"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      placeholder="alex_reader"
+                      required
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-300">Email Address</label>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="alex@manga.dev"
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-300">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showRegPassword ? 'text' : 'password'}
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="••••••••"
+                      required
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 pr-10 text-slate-200 text-xs"
+                    />
                     <button
                       type="button"
-                      onClick={() => setVerificationStep(false)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300"
                     >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>Verify & Create Account</span>
+                      {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                </form>
-              )}
+                </div>
+
+
+
+                {/* Storage Folder Path Selection */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-300">Private Local Storage Directory</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={regFolderPath}
+                      onChange={(e) => setRegFolderPath(e.target.value)}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleBrowseFolder}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs flex items-center gap-1"
+                    >
+                      <Folder className="w-3.5 h-3.5" />
+                      <span>Browse</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Create Account & Sign In</span>
+                </button>
+              </form>
             </div>
           )}
         </div>

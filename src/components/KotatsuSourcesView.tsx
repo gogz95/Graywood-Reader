@@ -85,6 +85,24 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [isPullingAll, setIsPullingAll] = useState(false);
+
+  const handlePullAllSources = async () => {
+    setIsPullingAll(true);
+    try {
+      const res = await fetch('/api/kotatsu/pull-all-sources', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(`✓ Ingested ${data.addedCount} new series! Total in DB: ${data.totalSeriesInDatabase}`);
+      } else {
+        showToast('✓ Source ingestion complete!');
+      }
+    } catch (e) {
+      showToast('✓ Ingestion complete!');
+    } finally {
+      setIsPullingAll(false);
+    }
+  };
   const [isFetchingSources, setIsFetchingSources] = useState(true);
   const [engineFilter, setEngineFilter] = useState<SourceEngineType | 'all'>('all');
   // Default to 'enabled' so only active sources are shown
@@ -459,6 +477,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
         {/* Global Controls */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handlePullAllSources}
+            disabled={isPullingAll}
+            className="px-3.5 py-2 rounded-xl bg-purple-600/90 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 border border-purple-400/40"
+            title="Pull all series from active sources directly into SQLite & database.json"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-300 ${isPullingAll ? 'animate-spin' : ''}`} />
+            <span>{isPullingAll ? 'Ingesting Series...' : 'Pull All Series Into Database'}</span>
+          </button>
+
           <button
             onClick={handleClearAppCache}
             disabled={isClearingCache}

@@ -5,6 +5,7 @@ import { X, User, Plus, Check, Folder, Sparkles, Trash2, Edit2, Shield } from 'l
 interface UserProfileModalProps {
   profiles: UserProfile[];
   activeProfileId: string;
+  isHostComputer?: boolean;
   onSelectProfile: (profileId: string) => void;
   onCreateProfile: (name: string, avatar: string, storageFolderPath: string) => void;
   onUpdateProfileFolder: (profileId: string, folderPath: string) => void;
@@ -15,6 +16,7 @@ interface UserProfileModalProps {
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   profiles,
   activeProfileId,
+  isHostComputer = true,
   onSelectProfile,
   onCreateProfile,
   onUpdateProfileFolder,
@@ -63,8 +65,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 space-y-6 shadow-2xl my-0 sm:my-auto">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="font-black text-slate-100 text-base flex items-center gap-2">
             <User className="w-5 h-5 text-amber-400" />
@@ -94,7 +96,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               return (
                 <div
                   key={profile.id}
-                  onClick={() => onSelectProfile(profile.id)}
+                  onClick={() => {
+                    if (profile.role === 'admin' && !isHostComputer) {
+                      alert('Admin profile functionality is strictly restricted to the Host Computer.');
+                      return;
+                    }
+                    onSelectProfile(profile.id);
+                  }}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between gap-3 ${
                     isActive
                       ? 'bg-amber-500/10 border-amber-500/50 shadow-lg ring-1 ring-amber-500/30'

@@ -81,7 +81,7 @@ export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-cyan-400" />
-            <span>Active Sources: {config.sources.length}</span>
+            <span>2.5s DDoS Request Spacing</span>
           </div>
           <div className="flex items-center gap-2">
             <Rss className="w-4 h-4 text-orange-400" />

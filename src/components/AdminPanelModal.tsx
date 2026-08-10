@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, UserRole, MangaItem } from '../types';
-import { Shield, User, Folder, Key, Trash2, Check, Sparkles, Database, Settings, BarChart3, X } from 'lucide-react';
+import { Shield, User, Folder, Key, Trash2, Check, Sparkles, Database, Settings, BarChart3, X, AlertTriangle } from 'lucide-react';
 
 interface AdminPanelModalProps {
   currentUser: UserProfile;
@@ -21,9 +21,39 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onSwitchUserView,
   onClose,
 }) => {
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [confirmInput, setConfirmInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    try {
+      // Call API endpoint with mandatory confirmation payload
+      const res = await fetch(`/api/admin/users/${userToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true, confirmationText: confirmInput }),
+      });
+
+      if (res.ok) {
+        onDeleteUser(userToDelete.id);
+        setUserToDelete(null);
+        setConfirmInput('');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete user account.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error deleting user account.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full p-6 space-y-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 space-y-6 shadow-2xl relative my-0 sm:my-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
@@ -127,9 +157,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </button>
 
                       <button
-                        onClick={() => onDeleteUser(u.id)}
+                        onClick={() => {
+                          setUserToDelete(u);
+                          setConfirmInput('');
+                        }}
                         className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
-                        title="Delete User Account"
+                        title="Delete User Account (Requires Confirmation)"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -140,6 +173,66 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
             ))}
           </div>
         </div>
+
+        {/* DOUBLE CONFIRMATION MODAL OVERLAY */}
+        {userToDelete && (
+          <div className="fixed inset-0 z-60 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-red-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-3 text-red-400 border-b border-slate-800 pb-3">
+                <div className="p-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-100">Confirm Permanent User Deletion</h3>
+                  <p className="text-xs text-red-400 font-semibold">This action cannot be undone!</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-1 text-xs">
+                <div className="flex items-center gap-2 font-bold text-slate-100">
+                  <span className="text-xl">{userToDelete.avatar}</span>
+                  <span>{userToDelete.name} (@{userToDelete.username})</span>
+                </div>
+                <div className="text-slate-400 font-mono text-[11px]">{userToDelete.email}</div>
+              </div>
+
+              <p className="text-xs text-slate-300">
+                Are you sure you want to permanently purge user account <strong>{userToDelete.name}</strong> and all associated library data?
+              </p>
+
+              <div className="space-y-1 text-xs">
+                <label className="font-bold text-slate-300 block">
+                  To confirm, type <span className="font-mono text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">{userToDelete.username}</span> below:
+                </label>
+                <input
+                  type="text"
+                  value={confirmInput}
+                  onChange={(e) => setConfirmInput(e.target.value)}
+                  placeholder={`Type '${userToDelete.username}' to enable delete`}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 text-xs">
+                <button
+                  onClick={() => setUserToDelete(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={confirmInput.trim() !== userToDelete.username || isDeleting}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black flex items-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {isDeleting ? 'Purging Account...' : 'Permanently Delete User'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-end border-t border-slate-800 pt-4">
@@ -154,3 +247,4 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     </div>
   );
 };
+

@@ -179,6 +179,7 @@ export interface DatabaseSyncConfig {
   autoUpdateIntervalMinutes: number;
   enableWebCrawling: boolean;
   sources: string[];
+  disabledSources?: string[];
   lastSyncTime: string | null;
   totalTracked: number;
 }
