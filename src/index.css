@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --accent-primary: #f59e0b;
+    --accent-secondary: #f97316;
+    --accent-text: #fef3c7;
+    --bg-main: #020617;
+  }
+
+  body.theme-emerald {
+    --accent-primary: #10b981;
+    --accent-secondary: #14b8a6;
+    --accent-text: #d1fae5;
+    --bg-main: #022c22;
+  }
+
+  body.theme-amoled {
+    --accent-primary: #e4e4e7;
+    --accent-secondary: #a1a1aa;
+    --accent-text: #ffffff;
+    --bg-main: #000000;
+  }
+
+  body.theme-violet {
+    --accent-primary: #a855f7;
+    --accent-secondary: #6366f1;
+    --accent-text: #f3e8ff;
+    --bg-main: #0f0728;
+  }
+
+  body.theme-cyberpunk {
+    --accent-primary: #06b6d4;
+    --accent-secondary: #3b82f6;
+    --accent-text: #cffafe;
+    --bg-main: #03131a;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

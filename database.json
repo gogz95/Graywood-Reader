@@ -1,0 +1,2026 @@
+{
+  "version": 1,
+  "gdprEncrypted": true,
+  "lastSaved": "2026-08-10T12:21:11.005Z",
+  "mangaDatabase": [
+    {
+      "id": "flame_tyrant_tower",
+      "title": "Tyrant of the Tower Defense Game",
+      "altTitles": [
+        "Tower Defense Tyrant"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80",
+      "description": "Transported into an unbeatably difficult tower defense game as the hopeless tyrant prince.",
+      "genres": [
+        "Action",
+        "Strategy",
+        "Tower Defense"
+      ],
+      "status": "reading",
+      "currentChapter": 90,
+      "totalChapters": null,
+      "latestChapter": 194,
+      "lastUpdated": "2026-08-10T12:13:01.236Z",
+      "rating": 9.7,
+      "sourceUrl": "https://flamecomics.xyz/series/104",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": true,
+      "notes": "Flame Comics release",
+      "addedAt": "2026-08-10T09:54:31.058Z",
+      "lastReadAt": "2026-08-10T09:54:31.058Z",
+      "syncedFromApi": "FlameComics",
+      "apiId": "",
+      "userId": null,
+      "isFavorite": false,
+      "availableSources": [],
+      "isFlagged": false
+    },
+    {
+      "id": "flame_ancient_sovereign",
+      "title": "The Ancient Sovereign of Eternity",
+      "altTitles": [
+        "Ancient Sovereign"
+      ],
+      "type": "manhua",
+      "coverImage": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80",
+      "description": "The ancient emperor reincarnates into a young martial artist to reclaim his supreme glory.",
+      "genres": [
+        "Action",
+        "Martial Arts",
+        "Cultivation"
+      ],
+      "status": "reading",
+      "currentChapter": 20,
+      "totalChapters": null,
+      "latestChapter": 23,
+      "lastUpdated": "2026-08-10T09:54:31.058Z",
+      "rating": 9.3,
+      "sourceUrl": "https://flamecomics.xyz/series/23",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": 1,
+      "notes": "Flame Comics release",
+      "addedAt": "2026-08-10T09:54:31.058Z",
+      "lastReadAt": "2026-08-10T09:54:31.058Z",
+      "syncedFromApi": "FlameComics"
+    },
+    {
+      "id": "flame_ghost_story",
+      "title": "Got Dropped Into a Ghost Story, Still Gotta Work",
+      "altTitles": [
+        "Ghost Story Work"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&auto=format&fit=crop&q=80",
+      "description": "Living in a supernatural ghost story dimension while still keeping an office job.",
+      "genres": [
+        "Action",
+        "Comedy",
+        "Supernatural"
+      ],
+      "status": "reading",
+      "currentChapter": 150,
+      "totalChapters": null,
+      "latestChapter": 162,
+      "lastUpdated": "2026-08-10T09:54:31.058Z",
+      "rating": 9.4,
+      "sourceUrl": "https://flamecomics.xyz/series/162",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": 1,
+      "notes": "Flame Comics release",
+      "addedAt": "2026-08-10T09:54:31.058Z",
+      "lastReadAt": "2026-08-10T09:54:31.058Z",
+      "syncedFromApi": "FlameComics"
+    },
+    {
+      "id": "asura_solo_leveling",
+      "title": "Solo Leveling (Na Honjaman Level-Up)",
+      "altTitles": [
+        "I Level Up Alone"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80",
+      "description": "10 years ago, after the \"Gate\" connected the real world with the monster world opened, some of the ordinary, everyday people received the power to hunt monsters within the Gate.",
+      "genres": [
+        "Action",
+        "System",
+        "Supernatural"
+      ],
+      "status": "reading",
+      "currentChapter": 179,
+      "totalChapters": 200,
+      "latestChapter": 200,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.8,
+      "sourceUrl": "https://asurascans.com/comics/solo-leveling",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Primary Asura Scans series",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "AsuraScans Feeds"
+    },
+    {
+      "id": "asura_tbate",
+      "title": "The Beginning After The End",
+      "altTitles": [
+        "TBATE"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80",
+      "description": "King Grey has unrivaled strength, wealth, and prestige in a world governed by martial ability. However, solitude lingers closely behind those with great power.",
+      "genres": [
+        "Action",
+        "Reincarnation",
+        "Magic"
+      ],
+      "status": "reading",
+      "currentChapter": 185,
+      "totalChapters": null,
+      "latestChapter": 190,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.6,
+      "sourceUrl": "https://asurascans.com/comics/the-beginning-after-the-end",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Asura Scans release",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "AsuraScans Feeds"
+    },
+    {
+      "id": "asura_orv",
+      "title": "Omniscient Reader's Viewpoint",
+      "altTitles": [
+        "ORV",
+        "전지적 독자 시점",
+        "Jeonjijeok Dokja Sijeom"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&auto=format&fit=crop&q=80",
+      "description": "Dokja was an average office worker whose sole interest was reading his favorite web novel. But when the novel suddenly becomes reality, he is the only person who knows how the world will end.",
+      "genres": [
+        "Action",
+        "System",
+        "Apocalypse",
+        "Fantasy",
+        "Apocalyptic"
+      ],
+      "status": "reading",
+      "currentChapter": 210,
+      "totalChapters": null,
+      "latestChapter": 225,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.7,
+      "sourceUrl": "https://asuracomic.net/series/omniscient-readers-viewpoint-24e56064",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Asura Scans track",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "AsuraScans Feeds",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/omniscient-readers-viewpoint"
+        }
+      ]
+    },
+    {
+      "id": "aqua_martial_peak",
+      "title": "Martial Peak",
+      "altTitles": [
+        "Wu Lian Dian Feng",
+        "武炼巅峰",
+        "Wu Lian Feng Feng"
+      ],
+      "type": "manhua",
+      "coverImage": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80",
+      "description": "The journey to the peak of martial arts is a long and lonely one. In the face of adversity, you must survive and remain unyielding.",
+      "genres": [
+        "Action",
+        "Martial Arts",
+        "Cultivation",
+        "Harem"
+      ],
+      "status": "reading",
+      "currentChapter": 3450,
+      "totalChapters": null,
+      "latestChapter": 3700,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.4,
+      "sourceUrl": "https://aquamanga.com/read/martial-peak/",
+      "sourceName": "Aqua Manga • Manhua Fast • Aqua Manga (AquaReader)",
+      "autoUpdateEnabled": 1,
+      "notes": "Aqua Manga cultivation source",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "Aqua Manga",
+      "availableSources": [
+        {
+          "sourceName": "Manhua Fast",
+          "sourceUrl": "https://manhuafast.com/manga/martial-peak"
+        },
+        {
+          "sourceName": "Aqua Manga (AquaReader)",
+          "sourceUrl": "https://aquareader.org/manga/martial-peak"
+        }
+      ]
+    },
+    {
+      "id": "aqua_apotheosis",
+      "title": "Apotheosis",
+      "altTitles": [
+        "Elevated to Godhood",
+        "Bai Lian Cheng Shen",
+        "百炼成神"
+      ],
+      "type": "manhua",
+      "coverImage": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80",
+      "description": "Luo Zheng was a slave who refined himself into a weapon to save his family.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Cultivation",
+        "Overpowered"
+      ],
+      "status": "reading",
+      "currentChapter": 1100,
+      "totalChapters": null,
+      "latestChapter": 1120,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.2,
+      "sourceUrl": "https://aquamanga.com/read/apotheosis/",
+      "sourceName": "Aqua Manga • Aqua Manga (AquaReader)",
+      "autoUpdateEnabled": 1,
+      "notes": "Aqua Manga track",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "Aqua Manga",
+      "availableSources": [
+        {
+          "sourceName": "Aqua Manga (AquaReader)",
+          "sourceUrl": "https://aquamanga.com/read/apotheosis/"
+        }
+      ]
+    },
+    {
+      "id": "m18_pick_me_up",
+      "title": "Pick Me Up! Infinite Gacha",
+      "altTitles": [
+        "Pick Me Up",
+        "Pick Me Up!",
+        "픽미업!"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80",
+      "description": "In the mobile gacha game Pick Me Up, rank 5 master Han YSL gets summoned into his own game as a 1-star hero.",
+      "genres": [
+        "Adult",
+        "Action",
+        "System",
+        "Fantasy",
+        "Gacha"
+      ],
+      "status": "reading",
+      "currentChapter": 80,
+      "totalChapters": null,
+      "latestChapter": 105,
+      "lastUpdated": "2026-08-10T09:44:22.182Z",
+      "rating": 9.5,
+      "sourceUrl": "https://asuracomic.net/series/pick-me-up-3ccf82e6",
+      "sourceName": "Manhwa18 • Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Manhwa18 official track",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "Manhwa18",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/pick-me-up-infinite-gacha"
+        }
+      ]
+    },
+    {
+      "id": "m18_secret_class",
+      "title": "Secret Class",
+      "altTitles": [
+        "Secret Class Webtoon"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&auto=format&fit=crop&q=80",
+      "description": "Daeho was orphaned at a young age and raised by a close friend of his father.",
+      "genres": [
+        "18+",
+        "Drama",
+        "Romance"
+      ],
+      "status": "reading",
+      "currentChapter": 200,
+      "totalChapters": null,
+      "latestChapter": 210,
+      "lastUpdated": "2026-08-10T12:21:10.893Z",
+      "rating": 9,
+      "sourceUrl": "https://manhwa18.cc/webtoon/secret-class",
+      "sourceName": "Manhwa18",
+      "autoUpdateEnabled": true,
+      "notes": "Manhwa18 18+ section",
+      "addedAt": "2026-08-10T09:44:22.182Z",
+      "lastReadAt": "2026-08-10T09:44:22.182Z",
+      "syncedFromApi": "Manhwa18",
+      "apiId": null,
+      "userId": null,
+      "isFavorite": false,
+      "availableSources": [],
+      "isFlagged": false
+    },
+    {
+      "id": "md_32d76d19-8a05-4db0-9fc2-e0b0648fe9d0",
+      "title": "Solo Leveling",
+      "altTitles": [
+        "나 혼자만 레벨업",
+        "Solo Leveling",
+        "Na Honjaman Lebel-eob",
+        "I level up alone",
+        "Ore Dake Level Up na Ken",
+        "Поднятие уровня в одиночку",
+        "俺だけレベルアップな件",
+        "我独自升级",
+        "I am the only the one who levels up",
+        "我獨自升級",
+        "Solo Adtritio",
+        "Yalnız Seviye Atlama",
+        "Sadece Ben Seviye Atlayabiliyorum",
+        "I Alone Level-Up",
+        "Jogador solo",
+        "Upando sozinho",
+        "Singur îmi ridic nivelul",
+        "Тільки я візьму новий рівень",
+        "سولو لولینگ",
+        "تکرو",
+        "केवल मैं स्तर बढ़ाता हूं",
+        "सोलो लेभलिङ",
+        "Aku Level Up Sendiri",
+        "Grinding Sendiri",
+        "Ben yanlız gelişirim",
+        "Tek başına seviye atlama",
+        "სოლო ლეველინგი",
+        "سولو ليفيلنغ",
+        "الإرتقاء بالمستوى منفردًا",
+        "俺だけレベルアップな件〜外伝〜",
+        "সোলো লেভেলিং",
+        "שחקן בודד",
+        "सोलो लेवलिंग",
+        "Egyéni szintlépés",
+        "சோலோ லெவெலிங்",
+        "Only I Level up",
+        "Tôi Thăng Cấp Một Mình",
+        "Na Honjaman Level Up",
+        "I Level Up Alone",
+        "Ore dake Level Up na Ken",
+        "Solo adtritio",
+        "俺だけレベルアップな件　～外伝～",
+        "나혼렙",
+        "Only I Level Up",
+        "Leveling Up Alone",
+        "Na Honjaman Rebeleop",
+        "SL",
+        "Solo Leveling: Arise",
+        "Thăng Cấp Một Mình",
+        "Solo Leveling: Seulement moi je monte de niveau",
+        "Solo Leveling: El Nivel Mismo Subo",
+        "Solo Leveling: O Único que Sobe de Nível",
+        "Level Up Khon Diao",
+        "سولو ليفلينج",
+        "เลเวลอัปคนเดียว"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/solo-leveling.c27830.webp",
+      "description": "<p>10 years ago, after “the Gate” that connected the real world with the monster world opened, some of the ordinary, everyday people received the power to hunt monsters within the Gate. They are known as \"Hunters\". However, not all Hunters are powerful. My name is Sung Jin-Woo, an E-rank Hunter. I'm someone who has to risk his life in the lowliest of dungeons, the \"World's Weakest\". Having no skills whatsoever to display, I barely earned the required money by fighting in low-leveled dungeons… at least until I found a hidden dungeon with the hardest difficulty within the D-rank dungeons! In the end, as I was accepting death, I suddenly received a strange power, a quest log that only I could see, a secret to leveling up that only I know about! If I trained in accordance with my quests and hunted monsters, my level would rise. Changing from the weakest  Hunter to the strongest S-rank Hunter!  </p>",
+      "genres": [
+        "Award Winning",
+        "Monsters",
+        "Action",
+        "Long Strip",
+        "Adventure",
+        "Magic",
+        "Drama",
+        "Fantasy",
+        "Web Comic",
+        "Supernatural",
+        "Adaptation",
+        "Full Color",
+        "System",
+        "Shounen"
+      ],
+      "status": "reading",
+      "currentChapter": 0,
+      "totalChapters": 200,
+      "latestChapter": 201,
+      "lastUpdated": "2026-08-09T23:40:58.850Z",
+      "rating": 9.8,
+      "sourceUrl": "https://asuracomic.net/series/solo-leveling-bd0e4024",
+      "sourceName": "MangaDex API v5 • Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Imported via API Sync Engine",
+      "addedAt": "2026-08-09T17:18:58.323Z",
+      "lastReadAt": "2026-08-09T17:18:58.323Z",
+      "syncedFromApi": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/solo-leveling"
+        }
+      ]
+    },
+    {
+      "id": "md_9a414441-bbad-43f1-a3a7-dc262ca790a3",
+      "title": "Omniscient Reader’s Viewpoint",
+      "altTitles": [
+        "Omniscient Reader's Viewpoint",
+        "Lecteur omniscient",
+        "Lector omnisciente",
+        "Punkt Widzenia Wszechwiedzącego Czytelnika",
+        "Всеведущий читатель",
+        "دیدگاه خواننده‌ی همه‌چی‌دون",
+        "وجهة نظر القارئ العراف",
+        "อ่านชะตาวันสิ้นโลก",
+        "全知的な読者の視点から",
+        "全知讀者視角",
+        "全知读者",
+        "전독시",
+        "Der allwissende Leser",
+        "Toàn Trí Độc Giả",
+        "全知读者视角",
+        "Góc nhìn của Độc giả Toàn tri",
+        "ORV",
+        "전지적 독자 시점",
+        "Jeonjijeok Dokja Sijeom",
+        "Punto de vista de lector omnisciente",
+        "Toàn trí độc giả",
+        "Omniscient Reader",
+        "Всезнаючий читач",
+        "خواننده همه فن حریف",
+        "Omniscient Reader Viewpoint",
+        "Point de Vue du Lecteur Omniscient",
+        "Punto de Vista del Lector Omnisciente",
+        "Ponto de Vista do Leitor Onisciente",
+        "Sudut Pandang Pembaca Yang Maha Tahu",
+        "Mum Mong Nak An Phra Chao",
+        "全知的な読者視点",
+        "وجهة نظر القارئ العليم",
+        "มุมมองนักอ่านพระเจ้า"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/omniscient-readers-viewpoint.c29ced.webp",
+      "description": "<p>‘This is a development that I know of.’The moment he thought that the world had been destroyed, a new universe had unfolded.The new life of an ordinary reader begins within the world of the novel, a novel that he alone had finished.</p>",
+      "genres": [
+        "Award Winning",
+        "Reincarnation",
+        "Monsters",
+        "Action",
+        "Long Strip",
+        "Survival",
+        "Adventure",
+        "Post-Apocalyptic",
+        "Magic",
+        "Fantasy",
+        "Web Comic",
+        "Supernatural",
+        "Adaptation",
+        "Full Color",
+        "Apocalyptic",
+        "System"
+      ],
+      "status": "reading",
+      "currentChapter": 0,
+      "totalChapters": null,
+      "latestChapter": 312,
+      "lastUpdated": "2026-08-09T23:41:04.949Z",
+      "rating": 9.9,
+      "sourceUrl": "https://asuracomic.net/manga/omniscient-readers-viewpoint",
+      "sourceName": "MangaDex API v5 • Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Imported via API Bulk Sync Engine",
+      "addedAt": "2026-08-09T17:21:42.908Z",
+      "lastReadAt": "2026-08-09T17:21:42.908Z",
+      "syncedFromApi": "MangaDex API"
+    },
+    {
+      "id": "md_6e4805a6-75ab-462d-883c-4ddedb8e4df6",
+      "title": "Nano Machine",
+      "altTitles": [
+        "나노마신",
+        "某天成为魔神",
+        "奈米魔神",
+        "喇勞 魔神",
+        "Nano Mashin",
+        "Наномашины",
+        "ナノ魔神",
+        "นาโนมาชิน",
+        "Nanoroboty",
+        "Maluska Maszynka",
+        "Ngã Lão Ma Thần",
+        "Ma Thần Nano",
+        "Nano Machine",
+        "喇勞魔神",
+        "نانو ماشین",
+        "Nanotecnologia Marcial",
+        "El despiadado Demonio Celestial",
+        "Ngã lão ma thần",
+        "Nano máquinas",
+        "마신 강림",
+        "Nanotechnology Martial Arts",
+        "Demon God Nano",
+        "Advent of the Demon God",
+        "Nano Masin",
+        "NM",
+        "ナノマシン",
+        "Наномашина",
+        "آلة النانو",
+        "La Machine Nano",
+        "Nano Makine",
+        "Mesin Nano"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/nano-machine.e31bdb.webp",
+      "description": "<p>Nanotechnology meets martial arts at the Mashin Academy. Yeo-un’s mother may not be one of the High Priest’s six official wives, but his father’s blood still qualifies him for a chance at the position of Minor Priest. Will a mysterious nanomachine injection from a future descendent help Yeo-un in this fierce competition against his powerful half-siblings?</p>",
+      "genres": [
+        "Sci-Fi",
+        "Action",
+        "Long Strip",
+        "Martial Arts",
+        "Adventure",
+        "Wuxia",
+        "Fantasy",
+        "Web Comic",
+        "Adaptation",
+        "Full Color",
+        "System",
+        "Murim"
+      ],
+      "status": "reading",
+      "currentChapter": 0,
+      "totalChapters": null,
+      "latestChapter": 324,
+      "lastUpdated": "2026-08-09T23:41:42.290Z",
+      "rating": 9.4,
+      "sourceUrl": "https://asuracomic.net/series/nano-machine-a08fb5e5",
+      "sourceName": "MangaDex API v5 • Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Imported via API Bulk Sync Engine",
+      "addedAt": "2026-08-09T17:21:46.794Z",
+      "lastReadAt": "2026-08-09T17:21:46.794Z",
+      "syncedFromApi": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/nano-machine"
+        }
+      ]
+    },
+    {
+      "id": "md_d7f56ace-cd30-48b9-8b64-afeca0077fca",
+      "title": "The Greatest Estate Developer",
+      "altTitles": [
+        "역대급 영지 설계사",
+        "The Greatest Estate Developer",
+        "史上最高の領地設計士",
+        "The World's Best Engineer",
+        "史诗级领地设计师",
+        "Система всемогущего дизайнера",
+        "史詩級領地設計師",
+        "El Mejor Ingeniero del Mundo",
+        "El Mejor Diseñador Inmobiliario",
+        "MŚCICHUJ",
+        "দ্য গ্রেটেস্ট এস্টেট ডেভেলপার",
+        "Bậc Thầy Thiết Kế Điền Trang",
+        "The Greatest Estate Designer",
+        "O Melhor Engenheiro Do Mundo",
+        "ยอดสถาปนิกผู้พิทักษ์อาณาจักร",
+        "Loco Frontera",
+        "Yeogdaegeub Yeongji Seolgyesa",
+        "El mejor desarrollador inmobiliario",
+        "역영설",
+        "The Greatest Estate Builder",
+        "The Greatest Estate Contractor",
+        "The Greatest Territory Designer",
+        "Yeokdaegeup Yeongji Seolgyesa",
+        "TGED",
+        "史上第一领地设计师",
+        "Самый выдающийся проектировщик недвижимости",
+        "أعظم مطور عقاري",
+        "Kỷ Lục Gia Thiết Kế Lãnh Địa",
+        "Đại Số Lượng Lãnh Địa Thiết Kế Sư",
+        "Le Plus Grand Développeur de Domaine",
+        "El Mejor Diseñador de Fincas",
+        "El Mejor Desarrollador de Fincas",
+        "O Maior Desenvolvedor de Propriedades",
+        "Pengembang Real Estat Terhebat",
+        "นักออกแบบที่ดินที่ยิ่งใหญ่ที่สุด"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/the-greatest-estate-developer.ad682d.webp",
+      "description": "When civil engineering student Suho Kim falls asleep reading a fantasy novel, he wakes up as a character in the book! Suho is now in the body of Lloyd Frontera, a lazy noble who loves to drink, and whose family is in a mountain of debt. Using his engineering knowledge, Suho designs inventions to avert the terrible future that lies in wait for him. With the help of a giant hamster, a knight, and the world’s magic, can Suho dig his new family out of debt and build a better future?",
+      "genres": [
+        "Reincarnation",
+        "Monsters",
+        "Action",
+        "Long Strip",
+        "Comedy",
+        "Adventure",
+        "Magic",
+        "Isekai",
+        "Fantasy",
+        "Web Comic",
+        "Adaptation",
+        "Full Color",
+        "Building"
+      ],
+      "status": "reading",
+      "currentChapter": 1,
+      "totalChapters": 222.5,
+      "latestChapter": 223.9,
+      "lastUpdated": "2026-08-09T23:41:44.211Z",
+      "rating": 9.9,
+      "sourceUrl": "https://asuracomic.net/series/the-greatest-estate-developer-89c23b6e",
+      "sourceName": "MangaDex API v5 • Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "Imported via API Bulk Sync Engine",
+      "addedAt": "2026-08-09T17:21:46.800Z",
+      "lastReadAt": "2026-08-10T10:01:53.682Z",
+      "syncedFromApi": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/the-greatest-estate-developer"
+        }
+      ]
+    },
+    {
+      "id": "md_b1461071-bfbb-43e7-a5b6-a7ba5904649f",
+      "title": "Wǔ Liàn Diānfēng",
+      "altTitles": [
+        "Martial Peak",
+        "Вершина боевых искусств",
+        "Пик боевых искусств",
+        "武炼巅峰",
+        "Võ Luyện Đỉnh Phong",
+        "Wu Lian Dian Feng",
+        "무련전봉",
+        "The Pinnacle of Martial Arts",
+        "ذروة الفنون القتالية",
+        "مارشال بيك",
+        "Вершина бойових мистецтв",
+        "Пік бойових мистецтв",
+        "武錬天下",
+        "Wu Lian Feng Feng"
+      ],
+      "type": "manhua",
+      "coverImage": "https://uploads.mangadex.org/covers/b1461071-bfbb-43e7-a5b6-a7ba5904649f/d175e74d-4ab7-47f4-8196-371aa51d8c2d.png.256.jpg",
+      "description": "The peak of martial arts is solitary and lonely. It is an endless pursuit for unattainable heights as well. In order to surpass the limits of martial arts, growth and the will to survive in adverse situations is necessary.\r\nOne day, Yang Kai, a disciple-on-trial (and floor sweeper) of the Lingxiao Martial Arts Sect discovered a Wordless Black Book. That marked the turn in his luck and the beginning of his martial arts journey.",
+      "genres": [
+        "Action",
+        "Long Strip",
+        "Martial Arts",
+        "Adventure",
+        "Sexual Violence",
+        "Harem",
+        "Wuxia",
+        "Fantasy",
+        "Supernatural",
+        "Adaptation",
+        "Full Color",
+        "Cultivation"
+      ],
+      "status": "reading",
+      "currentChapter": 1,
+      "totalChapters": null,
+      "latestChapter": 3700,
+      "lastUpdated": "2026-08-09T23:41:50.378Z",
+      "rating": 9,
+      "sourceUrl": "https://aquareader.org/manga/martial-peak",
+      "sourceName": "MangaDex API v5 • Manhua Fast • Aqua Manga (AquaReader)",
+      "autoUpdateEnabled": 1,
+      "notes": "Imported via API Bulk Sync Engine",
+      "addedAt": "2026-08-09T17:21:47.444Z",
+      "lastReadAt": "2026-08-09T17:21:47.444Z",
+      "syncedFromApi": "MangaDex API"
+    },
+    {
+      "id": "kotatsu_db_1786299143265_jjn1",
+      "title": "Return of the Mount Hua Sect",
+      "altTitles": [
+        "Return of the Blossom Sect",
+        "화산귀환",
+        "Return of the Mount Hua Sect (Novel)",
+        "劍尊歸來(Novel)",
+        "Return of Sword Master (Novel)",
+        "Return of the Blossoming Blade (Novel)",
+        "화산귀환 (Novel)",
+        "Return of the Hwasan Sect (Novel)",
+        "Return of the Blossoming Blade",
+        "Return of the Flowery Mountain Sect",
+        "Return of the Hwasan Sect",
+        "Return of Sword Master",
+        "Return of the Sword Master",
+        "Return of the Huashan Sect",
+        "Return of the Sword Master (LICO)",
+        "Hwasan Gwihwan",
+        "RMHS",
+        "ROTMHS",
+        "華山帰還",
+        "花山歸還",
+        "剑尊归来",
+        "劍尊歸來",
+        "Die Rückkehr der Huashan-Sekte",
+        "Возрождение Хуашань",
+        "عودة طائفة جبل هوا",
+        "Hoa Sơn Tái Khởi",
+        "Hoa Sơn Tái Xuất",
+        "Sự trở lại của môn phái Hoa Sơn",
+        "Le retour du clan Hwasan",
+        "Regreso De La Secta Del Monte Hua",
+        "El retorno de la hoja del Ciruelo",
+        "El retorno del Monte Hua",
+        "Secta de la montaña",
+        "O retorno da seita do Monte Hua",
+        "Hua Dağı Mezhebinin Dönüşü",
+        "Kembalinya Sekte Gunung Hua",
+        "หวนคืนสู่ฮวาซาน"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/return-of-the-mount-hua-sect.c0cbf9.webp",
+      "description": "<p>Chung Myung, The 13th Disciple of the Mount Hua Sect, One of the 3 Great Swordsmen, Plum Blossom Sword Saint, defeated Chun Ma, who brought destruction and disarray onto the world. After the battle, he breathes his last breath on top of the headquarter mountain of the Heavenly Demon Sect. He is reborn after 100 years in the body of a child. ......What? The Mount Hua Sect has fallen? What kind of nonsense is that!?</p>",
+      "genres": [
+        "Action",
+        "Martial Arts",
+        "Reincarnation",
+        "Comedy",
+        "Adventure",
+        "Fantasy",
+        "Murim",
+        "Shounen"
+      ],
+      "status": "reading",
+      "currentChapter": 2,
+      "totalChapters": 130,
+      "latestChapter": 180,
+      "lastUpdated": "2026-08-09T23:42:23.541Z",
+      "rating": 9.8,
+      "sourceUrl": "https://asuracomic.net/series/return-of-the-mount-hua-sect-2c04f59a",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.265Z",
+      "lastReadAt": "2026-08-09T18:12:23.265Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/return-of-the-mount-hua-sect"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786299143270_wz3u",
+      "title": "Damn Reincarnation",
+      "altTitles": [
+        "My Blasted Reincarnation",
+        "바금재생",
+        "Damn Reincarnation (Novel)",
+        "My Blasted Reincarnated Life (Novel)",
+        "빌어먹을 환생 (Novel)",
+        "My Damn Reincarnation",
+        "Damned Reincarnation",
+        "Bireomeogeul Hwansaeng",
+        "DR",
+        "Trùng Sinh Đáng Chết",
+        "Damnée Réincarnation",
+        "Maldita Reencarnación",
+        "Maldita Reencarnação",
+        "Reinkarnasi Sialan",
+        "빌어먹을 환생",
+        "くたばれ転生",
+        "该死的转生",
+        "該死的轉生",
+        "Чёртова ре인карнация",
+        "اللعنة على التناسخ",
+        "เกิดใหม่ทั้งทีสลัดความซวยไม่หลุด",
+        "바람직한 환생"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/damn-reincarnation.6735aa.webp",
+      "description": "<p>Hamel, a warrior who traveled with his colleagues to exterminate the devil. Unfortunately, he died just before the battle with the devil started. \"Yes.\" What the hell? He was reborn as the descendant of his fellow warrior, Vermouth. The descendant from the bloodline of the great Vermouth, Hamel. No, he was now Eugene Lionhart. \"It was already enough with me having the delusion that I was a genius in my past life. But… this… It's… It's incomparable.' From a dying body to a new body, he has the achievement that he did not have in his previous life. And, a reincarnation of an unknown origin, the reality of living together with the demons. Facing a new world where everything is questionable. The journey of the unfinished previous life begins with Eugene's body.</p>",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Reincarnation",
+        "Magic",
+        "Adventure",
+        "Shounen"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 110,
+      "latestChapter": 110,
+      "lastUpdated": "2026-08-09T23:42:23.543Z",
+      "rating": 9.7,
+      "sourceUrl": "https://asuracomic.net/series/damn-reincarnation-c75bb69c",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.270Z",
+      "lastReadAt": "2026-08-09T18:12:23.270Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/damn-reincarnation"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786299143277_n039",
+      "title": "Reaper of the Drifting Moon",
+      "altTitles": [
+        "모용객의 사신",
+        "Tử Thần Phiêu Nguyệt",
+        "La Faucheuse de la lune errante",
+        "Ceifador da Lua Cheia",
+        "Death God of the Drifting Moon",
+        "Sasinpyowol",
+        "فرشته مرگ ماه سرگردان",
+        "ملك الموت للقمر المنجرف",
+        "死神漂月〜暗闇からの刺客〜",
+        "La Parca De La Muerte Lunar",
+        "The Reaper (INKYO)",
+        "Жнець Блукаючого Мiсяця",
+        "死神漂月",
+        "მოძრავი მთვარის მომკელი",
+        "사신표월",
+        "Grim Reaper's Floating Moon",
+        "Pyo Wol",
+        "Reaper of the Wandering Moon",
+        "ROTDM",
+        "Mộc Tuyết",
+        "L'Espadon de la Lune Dérivante",
+        "El Cosechador de la Luna Aritmetica",
+        "O Ceifador da Lua Derivante",
+        "Pemetik Bulan Melayang",
+        "표월",
+        "漂月",
+        "Жнец плавающей луны",
+        "حصاد القمر العائم",
+        "ยมทูตแห่งจันทร์ล่องลอย",
+        "유랑하는 달의 사신"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/reaper-of-the-drifting-moon.d67783.webp",
+      "description": "<p>He's in the deepest part of the Jianghu. Keep your eyes wide open if you do not wish to get dragged into the abyss.</p>",
+      "genres": [
+        "Action",
+        "Martial Arts",
+        "Assassin",
+        "Dark",
+        "Fantasy",
+        "Genius MC",
+        "Murim"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 95,
+      "latestChapter": 136,
+      "lastUpdated": "2026-08-09T23:42:23.549Z",
+      "rating": 9.6,
+      "sourceUrl": "https://asuracomic.net/series/reaper-of-the-drifting-moon-4bc83bbe",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.277Z",
+      "lastReadAt": "2026-08-09T18:12:23.277Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/reaper-of-the-drifting-moon"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786299143280_tpfd",
+      "title": "Pick Me Up, Infinite Gacha",
+      "altTitles": [
+        "Pick Me Up!",
+        "픽미업!",
+        "PICK ME UP～低レア★英雄の成り上がり～",
+        "¡Escógeme! Gacha Infinito",
+        "Pick Me Up !",
+        "PICK ME UP～低レア英雄の成り上がり～",
+        "픽 미 업!",
+        "Pick Me Up",
+        "Me Escolhe! Gacha Infinito",
+        "ピックミーアップ！低レア英雄の成り上がり",
+        "レア度★1の英雄として生き残る方法~PICK ME UP~",
+        "Pik Mi Eop!",
+        "PMU",
+        "PMU:IG",
+        "Choisissez-moi, Gacha Infini",
+        "Me Escolha! Infinito Gacha",
+        "Escolha-me Gacha Infinito",
+        "Pilih Aku, Gacha Tanpa Batas",
+        "Выбери меня!",
+        "إخترني، غاتشا لا نهائية"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/pick-me-up-infinite-gacha.3ebe61.webp",
+      "description": "The mobile gacha game 'Pick Me Up!' is known for being brutally difficult, and no one has been able to clear a dungeon. Loki, the fifth among all the world's masters, loses consciousness while trying to clear the dungeon. Upon waking up, Loki finds himself turned into a 1-star level 1 hero, 'Islat Han'. \"It's him! I'm certain he's the one who brought me here!\" In order to return to Earth, he must lead novice masters and heroes and break through the 100th floor of the dungeon! \"You messed with the wrong person.\" This is the story of master Loki who is forced to carry everyone to victory and cannot afford a single defeat.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Gacha",
+        "System",
+        "Adventure"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 105,
+      "latestChapter": 213,
+      "lastUpdated": "2026-08-09T23:42:23.550Z",
+      "rating": 9.8,
+      "sourceUrl": "https://asuracomic.net/manga/pick-me-up-infinite-gacha",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.280Z",
+      "lastReadAt": "2026-08-09T18:12:23.280Z",
+      "syncedFromApi": "Asura Scans"
+    },
+    {
+      "id": "kotatsu_db_1786299143284_qtfb",
+      "title": "Swordmaster’s Youngest Son",
+      "altTitles": [
+        "The Youngest Son of a Swordmaster",
+        "검술명가 막내아들",
+        "The Youngest Son of a Master Swordsman",
+        "Младший сын мечника",
+        "บุตรคนสุดท้องของตระกูลเซียนดาบ",
+        "剣術名家の末息子",
+        "Youngest Son of the Swordmaster",
+        "Youngest Son of the Renowned Swordsmanship Clan",
+        "Le Benjamin des Luncandel",
+        "The Swordmaster's Son",
+        "The Sword Master's Son",
+        "Le Plus Jeune Fils du Maître Épéiste",
+        "Geomsulmyeongga Mangnaeadeul",
+        "الابن الأصغر لسيد السيوف",
+        "Младший сын мастера меча",
+        "Con Trai Út Của Gia Đình Kiếm Thuật Danh Tiếng",
+        "검막",
+        "The Youngest Son of a Renowned Magic Clan",
+        "Younger Son of the Sword Master Family",
+        "Youngest Son of the Swordsmaster Clan",
+        "SYS",
+        "剑术名家的小儿子",
+        "Младший сын семьи мечников",
+        "أصغر أبناء عائلة السياف",
+        "Út Nam Của Gia Tộc Kiếm Thuật",
+        "Ảo Thuật Gia Út Nam",
+        "El Hijo Menor de la Familia de Espadachines",
+        "O Filho Mais Novo do Mestre Espadachim",
+        "Putra Bungsu Master Pedang",
+        "Anak Bungsu dari Klan Master Pedang",
+        "บุตรชายคนสุดท้องของตระกูลนักดาบ"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://cdn.asurascans.com/asura-images/covers/swordmasters-youngest-son.c550f1.webp",
+      "description": "<p>Jin Runcandel was the youngest son of Runcandel, the land's most prestigious swordsman family...\nAnd the biggest failure in Runcandel history.He, who was kicked out miserably and came to a meaningless end, was given another chance.\"How do you want to use this power?\"\n\"I want to use it for myself.\"Memories of his past life, overwhelming talent, and a contract with God...\nThe preparations to become the greatest are complete.</p>",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Regression",
+        "Magic",
+        "Overpowered",
+        "Shounen"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 120,
+      "latestChapter": 206,
+      "lastUpdated": "2026-08-09T23:42:23.556Z",
+      "rating": 9.6,
+      "sourceUrl": "https://asuracomic.net/series/swordmasters-youngest-son-8d4dd1b1",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.284Z",
+      "lastReadAt": "2026-08-09T18:12:23.284Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/swordmasters-youngest-son"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786299143288_q40x",
+      "title": "Level Up with the Gods",
+      "altTitles": [
+        "신들과 함께 레벨업",
+        "신과 함께 레벨업",
+        "Leveling Up With the Gods",
+        "Singwa Hamkke Level Up",
+        "Leveling With the Gods",
+        "เลเวลอัปไปกับเทพเจ้า",
+        "神と共にレベルアップ",
+        "与神一同升级",
+        "Поднятие уровня с богами",
+        "Підняття рівня з богами",
+        "Subindo De Nível Com Os Deuses",
+        "POZIOMKOWANIE Z BOŻKAMI"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://uploads.mangadex.org/covers/4a43c227-b201-4fb7-b796-924c51797d50/813e10ac-a4d9-42ee-a0a6-ba8ef0d19340.jpg.256.jpg",
+      "description": "“Maybe Inner Gods can never defeat Outer Gods…” so thought Yuwon Kim, a plucky, high-ranking warrior, after a bitter defeat.\n\nBut Yuwon is too tenacious to give up. His loss becomes the dawn of a new journey as a returnee. With renewed determination, Yuwon starts back from where he began, smashing monster after monster and relearning his skills before taking on the Tower once again.\n\nBut can he fight his way through the tutorials and level up once more, or will his conquest crumble before him?\n\n---\n\n- [Webtoon Trailer](https://www.youtube.com/watch?v=xhObyLPUq6w)\n\n- [Original Webtoon <Webtoon kakao>](https://webtoon.kakao.com/content/%EC%8B%A0%EA%B3%BC-%ED%95%A8%EA%BB%98-%EB%A0%88%EB%B2%A8%EC%97%85/2708)\n\n---\n\n- [Official Simplified Chinese Translation](https://www.kuaikanmanhua.com/web/topic/12982/)\n\n- [Official Japanese Translation](https://piccoma.com/web/product/82357)\n\n- [Official Thai Translation](https://th.kakaowebtoon.com/content/%E0%B9%80%E0%B8%A5%E0%B9%80%E0%B8%A7%E0%B8%A5%E0%B8%AD%E0%B8%B1%E0%B8%9B%E0%B9%84%E0%B8%9B%E0%B8%81%E0%B8%B1%E0%B8%9A%E0%B9%80%E0%B8%97%E0%B8%9E%E0%B9%80%E0%B8%88%E0%B9%89%E0%B8%B2/215)",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Tower",
+        "Gods"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 115,
+      "latestChapter": 148,
+      "lastUpdated": "2026-08-09T23:42:24.428Z",
+      "rating": 9.5,
+      "sourceUrl": "https://asuracomic.net/manga/leveling-up-with-gods",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T18:12:23.288Z",
+      "lastReadAt": "2026-08-09T18:12:23.288Z",
+      "syncedFromApi": "Asura Scans"
+    },
+    {
+      "id": "kotatsu_db_1786305538939_mppx",
+      "title": "The Legend of the Northern Blade",
+      "altTitles": [
+        "북검전기",
+        "Bukgeom Jeongi",
+        "Buggeomjeongi",
+        "Legend of the Northern Blade",
+        "Chronicles of the Northern Sword",
+        "Die Legende von die Nordklinge",
+        "Biographie de l'épée du nord",
+        "Легенда про північний клинок",
+        "Легенда о северном клинке",
+        "Kuzey kılıcı efsanesi",
+        "Солтүстік жүз аңызы",
+        "北剣伝記",
+        "北剑江湖",
+        "Bắc kiếm giang hồ"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://uploads.mangadex.org/covers/9ed16bc9-f570-4e71-8dda-aebc098b683b/8a917622-1853-47b7-9114-997da510a8a2.jpg.256.jpg",
+      "description": "When the world was plunged into darkness by the ‘Silent Night’, Martial Artists from all over the place gathered to form the ‘Northern Heavenly Sect’. With overwhelming strength from the Northern Heavenly Sect, the Silent Night was pushed away and the people began to enjoy peace once more. However, as time passed the martial artists from the mainlands began to conspire against the ‘Northern Heavenly Sect’, and eventually caused the death of the Fourth Generation Sect Leader, Jin Kwan-Ho, destroying the sect with it. As everyone left the sect, Jin Kwan-Ho’s only son, Jin Mu-Won was left behind. Mu-Won has never learned anything about martial arts, but he eventually finds the Martial Techniques secretly left behind by his father and begins to acquire the martial arts of the Northern Heavenly Sect. Then one day, a mysterious girl appears before Mu-Won…!!\n___\nWhen the world was plunged into darkness, martial artists gathered to form the **‘Northern Heavenly Sect’**. With the help of the Northern Heavenly Sect, people began to enjoy peace again. However, as time passed, the martial artists began to conspire against the ‘Northern Heavenly Sect’, and eventually caused the **DEATH of the Sect Leader, Jin Kwan-Ho**, destroying the sect with it. As everyone left the sect, Jin Kwan-Ho’s only son, Jin Mu-Won was left behind. Mu-Won has never learned martial arts, but he finds the **Secret Techniques** which are left behind by **the Former Leaders and His Father** and begins to acquire the ***Martial Arts of the Northern Heavenly Sect.***",
+      "genres": [
+        "Action",
+        "Martial Arts",
+        "Revenge",
+        "Masterpiece"
+      ],
+      "status": "reading",
+      "currentChapter": 2,
+      "totalChapters": 190,
+      "latestChapter": 202,
+      "lastUpdated": "2026-08-09T23:42:25.185Z",
+      "rating": 9.9,
+      "sourceUrl": "https://asuracomic.net/series/legend-of-the-northern-blade-00dcbf97",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T19:58:58.939Z",
+      "lastReadAt": "2026-08-09T19:58:58.939Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/series/legend-of-the-northern-blade-00dcbf97"
+        }
+      ],
+      "apiId": "9ed16bc9-f570-4e71-8dda-aebc098b683b"
+    },
+    {
+      "id": "kotatsu_db_1786319326724_i4dy",
+      "title": "Leveling Up With Gods",
+      "altTitles": [
+        "신들과 함께 레벨업"
+      ],
+      "type": "manhwa",
+      "coverImage": "https://images.unsplash.com/photo-1563089145-599997674d42?w=500&auto=format&fit=crop&q=80",
+      "description": "The Gods of Earth lost the war against Outer Gods. YuWon regresses back in time to climb the Tower faster and gather strength to save humanity.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Tower",
+        "Gods"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 115,
+      "latestChapter": 115,
+      "lastUpdated": "2026-08-09T23:48:46.724Z",
+      "rating": 9.5,
+      "sourceUrl": "https://asuracomic.net/series/leveling-up-with-gods-0e40e9db",
+      "sourceName": "Asura Scans",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-09T23:48:46.724Z",
+      "lastReadAt": "2026-08-09T23:48:46.724Z",
+      "syncedFromApi": "Asura Scans",
+      "availableSources": [
+        {
+          "sourceName": "Asura Scans",
+          "sourceUrl": "https://asuracomic.net/manga/leveling-up-with-gods"
+        }
+      ],
+      "apiId": "4a43c227-b201-4fb7-b796-924c51797d50"
+    },
+    {
+      "id": "kotatsu_db_1786355083830_gkx9",
+      "title": "Survival Story of a Sword King in Fantasy World",
+      "altTitles": [
+        "Latna Saga",
+        "이계 검왕 생존기"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F7fb8bb46-5120-4a7b-a010-3fa844b2d131%2F09f58225-b461-46db-90eb-b8c187bc95ee.jpg",
+      "description": "Ryu Han-Bin was trapped in a hellish tutorial zone for 22 years due to a system glitch. When he finally escapes, his physical strength is overwhelmingly immense.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Overpowered",
+        "Comedy"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 215,
+      "latestChapter": 215,
+      "lastUpdated": "2026-08-10T09:44:43.830Z",
+      "rating": 9.7,
+      "sourceUrl": "https://flamecomics.xyz/series/survival-story-of-a-sword-king",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-10T09:44:43.830Z",
+      "lastReadAt": "2026-08-10T09:44:43.830Z",
+      "syncedFromApi": "Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/survival-story-of-a-sword-king"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786355083830_4cnm",
+      "title": "The World After the Fall",
+      "altTitles": [
+        "멸망 이후의 세계"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F223707e5-1a83-4ee0-a1bd-1bb8f2372d82%2F9906059c-6a75-430c-ab22-38d58c89b710.jpg",
+      "description": "When monsters attacked, towers appeared offering regression stones. While everyone regressed, Jaehwan refused and thrust his spear until he shattered the Tower.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Tower",
+        "Apocalyptic"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 135,
+      "latestChapter": 135,
+      "lastUpdated": "2026-08-10T09:44:43.830Z",
+      "rating": 9.5,
+      "sourceUrl": "https://flamecomics.xyz/series/the-world-after-the-fall",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-10T09:44:43.830Z",
+      "lastReadAt": "2026-08-10T09:44:43.830Z",
+      "syncedFromApi": "Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/the-world-after-the-fall"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786355083831_a9r8",
+      "title": "Superhuman Era",
+      "altTitles": [
+        "초인의 시대",
+        "Choin Shidai",
+        "초인시대"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2Fa6e9a667-d7d8-4f11-85db-115f013d297d%2F272f2324-4f0b-4632-aa79-d10fbabf0d1a.jpg",
+      "description": "Monsters known as Inhumans threaten mankind. High school student Yugang possesses monstrous physical strength and steps into combat to protect civilization.",
+      "genres": [
+        "Action",
+        "Superpower",
+        "Monsters",
+        "Hero",
+        "Sci-Fi"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 160,
+      "latestChapter": 180,
+      "lastUpdated": "2026-08-10T09:44:43.831Z",
+      "rating": 9.8,
+      "sourceUrl": "https://flamecomics.xyz/series/superhuman-era",
+      "sourceName": "Flame Comics • Weeb Central",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-10T09:44:43.831Z",
+      "lastReadAt": "2026-08-10T09:44:43.831Z",
+      "syncedFromApi": "Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/superhuman-era"
+        },
+        {
+          "sourceName": "Weeb Central",
+          "sourceUrl": "https://weebcentral.com/manga/superhuman-era"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786355083831_q9ih",
+      "title": "The Novel's Extra",
+      "altTitles": [
+        "소설 속 엑스트라"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F44a10dfa-c5ee-4a81-9b17-062e73703901%2F71abcf01-1b20-4e59-86ab-5ff8aa59df39.jpg",
+      "description": "Kim Hajin gets transmigrated into his own unfinished web novel as a minor extra character at Cube Academy. Armed with a modern sniper rifle, he navigates the plot.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Academy",
+        "Isekai"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "totalChapters": 110,
+      "latestChapter": 110,
+      "lastUpdated": "2026-08-10T09:44:43.831Z",
+      "rating": 9.6,
+      "sourceUrl": "https://flamecomics.xyz/series/the-novels-extra",
+      "sourceName": "Flame Comics",
+      "autoUpdateEnabled": 1,
+      "notes": "",
+      "addedAt": "2026-08-10T09:44:43.831Z",
+      "lastReadAt": "2026-08-10T09:44:43.831Z",
+      "syncedFromApi": "Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/the-novels-extra"
+        }
+      ]
+    },
+    {
+      "id": "kotatsu_db_1786355685973_tlzv",
+      "title": "Magic Emperor",
+      "altTitles": [
+        "Demonic Emperor",
+        "魔皇大管家"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Zhuo Yifan, the Demonic Emperor, was betrayed and killed by his disciple. Reborn as a servant boy for the declining Luo Clan, he uses ancient sinister schemes to rise.",
+      "genres": [
+        "Action",
+        "Cultivation",
+        "Cunning",
+        "Overpowered"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 600,
+      "totalChapters": 600,
+      "rating": 9.8,
+      "notes": "",
+      "sourceUrl": "https://nightscans.net/series/magic-emperor",
+      "sourceName": "Night Scans",
+      "availableSources": [
+        {
+          "sourceName": "Night Scans",
+          "sourceUrl": "https://nightscans.net/series/magic-emperor"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Night Scans",
+      "addedAt": "2026-08-10T09:54:45.973Z",
+      "lastUpdated": "2026-08-10T09:54:45.973Z",
+      "lastReadAt": "2026-08-10T09:54:45.973Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685973_0k6n",
+      "title": "Tales of Demons and Gods",
+      "altTitles": [
+        "妖神记"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Nie Li, the strongest Demon Spiritist, died battling the Sage Emperor. He wakes up as a 13-year-old in Glory City with full memories of his past life.",
+      "genres": [
+        "Action",
+        "Cultivation",
+        "Regression",
+        "Demons"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 480,
+      "totalChapters": 480,
+      "rating": 9.4,
+      "notes": "",
+      "sourceUrl": "https://nightscans.net/series/tales-of-demons-and-gods",
+      "sourceName": "Night Scans",
+      "availableSources": [
+        {
+          "sourceName": "Night Scans",
+          "sourceUrl": "https://nightscans.net/series/tales-of-demons-and-gods"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Night Scans",
+      "addedAt": "2026-08-10T09:54:45.973Z",
+      "lastUpdated": "2026-08-10T09:54:45.973Z",
+      "lastReadAt": "2026-08-10T09:54:45.973Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685973_l7rn",
+      "title": "I Am The Fated Villain",
+      "altTitles": [
+        "我!天命大反派"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Gu Changge transmigrates as a young master in a high-tier immortal realm with a Destiny Villain System. He systematically harvests so-called protagonists.",
+      "genres": [
+        "Action",
+        "Cultivation",
+        "System",
+        "Villain"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 210,
+      "totalChapters": 210,
+      "rating": 9.7,
+      "notes": "",
+      "sourceUrl": "https://nightscans.net/series/i-am-the-fated-villain",
+      "sourceName": "Night Scans",
+      "availableSources": [
+        {
+          "sourceName": "Night Scans",
+          "sourceUrl": "https://nightscans.net/series/i-am-the-fated-villain"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Night Scans",
+      "addedAt": "2026-08-10T09:54:45.973Z",
+      "lastUpdated": "2026-08-10T09:54:45.973Z",
+      "lastReadAt": "2026-08-10T09:54:45.973Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685974_023k",
+      "title": "Mercenary Enrollment",
+      "altTitles": [
+        "Teenage Mercenary",
+        "입시용병"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Yu Ijin was the sole survivor of a plane crash in a war zone, forced to become a elite mercenary. 10 years later, he returns home to attend high school.",
+      "genres": [
+        "Action",
+        "School",
+        "Mercenary",
+        "Family"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 200,
+      "totalChapters": 200,
+      "rating": 9.7,
+      "notes": "",
+      "sourceUrl": "https://flamecomics.xyz/series/mercenary-enrollment",
+      "sourceName": "Manhwa Buddy • Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Manhwa Buddy",
+          "sourceUrl": "https://manhwabuddy.com/manga/mercenary-enrollment"
+        },
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/mercenary-enrollment"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Manhwa Buddy",
+      "addedAt": "2026-08-10T09:54:45.974Z",
+      "lastUpdated": "2026-08-10T09:54:45.974Z",
+      "lastReadAt": "2026-08-10T09:54:45.974Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685974_7l4m",
+      "title": "Bloom Into You",
+      "altTitles": [
+        "Yagate Kimi ni Naru",
+        "やがて君になる"
+      ],
+      "type": "manga",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F2e30bcbe-74a4-44df-a8f4-406c5980e14c%2F6b4d34a4-5692-4f81-8fb2-39c2c62c2f2d.jpg",
+      "description": "Yuu has always loved shojo manga and waited for the day she gets a confession. When a classmate confesses, she feels nothing—until she meets student council member Touko.",
+      "genres": [
+        "Romance",
+        "School",
+        "Yuri",
+        "Drama"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 45,
+      "totalChapters": 45,
+      "rating": 9.6,
+      "notes": "",
+      "sourceUrl": "https://dynasty-scans.com/series/bloom_into_you",
+      "sourceName": "Dynasty Scans",
+      "availableSources": [
+        {
+          "sourceName": "Dynasty Scans",
+          "sourceUrl": "https://dynasty-scans.com/series/bloom_into_you"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Dynasty Scans",
+      "addedAt": "2026-08-10T09:54:45.974Z",
+      "lastUpdated": "2026-08-10T09:54:45.974Z",
+      "lastReadAt": "2026-08-10T09:54:45.974Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685974_uej3",
+      "title": "Chainsaw Man",
+      "altTitles": [
+        "CSM",
+        "チェンソーマン"
+      ],
+      "type": "manga",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2Fa77742b1-04d4-4100-99e3-477712d07746%2F2c2069bd-bb63-4725-b072-a720979bf598.jpg",
+      "description": "Denji is a young man living as a Devil Hunter with Pochita, the Chainsaw Devil. After being betrayed and killed, he makes a contract with Pochita to return as Chainsaw Man.",
+      "genres": [
+        "Action",
+        "Horror",
+        "Supernatural",
+        "Dark Comedy"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 175,
+      "totalChapters": 175,
+      "rating": 9.7,
+      "notes": "",
+      "sourceUrl": "https://mangadex.org/title/a77742b1-04d4-4100-99e3-477712d07746",
+      "sourceName": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "MangaDex API",
+          "sourceUrl": "https://mangadex.org/title/a77742b1-04d4-4100-99e3-477712d07746"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "MangaDex API",
+      "addedAt": "2026-08-10T09:54:45.974Z",
+      "lastUpdated": "2026-08-10T09:54:45.974Z",
+      "lastReadAt": "2026-08-10T09:54:45.974Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685974_7lko",
+      "title": "Jujutsu Kaisen",
+      "altTitles": [
+        "JJK",
+        "呪術廻戦"
+      ],
+      "type": "manga",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2Fc52c2237-7030-4981-9b16-e5658e379471%2F06dcfefb-53c0-4f51-b0e6-231ee6f8bb1a.jpg",
+      "description": "Yuji Itadori is a high school student with extraordinary strength. To save his friends from cursed spirits, he swallows a cursed finger of Ryomen Sukuna.",
+      "genres": [
+        "Action",
+        "Supernatural",
+        "School",
+        "Demons"
+      ],
+      "status": "reading",
+      "currentChapter": 1,
+      "latestChapter": 271,
+      "totalChapters": 271,
+      "rating": 9.8,
+      "notes": "",
+      "sourceUrl": "https://mangadex.org/title/c52c2237-7030-4981-9b16-e5658e379471",
+      "sourceName": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "MangaDex API",
+          "sourceUrl": "https://mangadex.org/title/c52c2237-7030-4981-9b16-e5658e379471"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "MangaDex API",
+      "addedAt": "2026-08-10T09:54:45.974Z",
+      "lastUpdated": "2026-08-10T09:54:45.974Z",
+      "lastReadAt": "2026-08-10T10:02:02.400Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685975_mn3g",
+      "title": "Frieren: Beyond Journey’s End",
+      "altTitles": [
+        "Sousou no Frieren",
+        "葬送のフリーレン"
+      ],
+      "type": "manga",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2Fb0b7270d-4171-49a4-a50e-013dd707b46d%2F36f1c4df-591d-407a-9a99-4c8d5236b28d.jpg",
+      "description": "Elven mage Frieren defeated the Demon King alongside the Hero’s party. Decades later, she embarks on a journey to understand humanity and honor past memories.",
+      "genres": [
+        "Fantasy",
+        "Adventure",
+        "Slice of Life",
+        "Magic"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 130,
+      "totalChapters": 130,
+      "rating": 9.9,
+      "notes": "",
+      "sourceUrl": "https://mangadex.org/title/b0b7270d-4171-49a4-a50e-013dd707b46d",
+      "sourceName": "MangaDex API",
+      "availableSources": [
+        {
+          "sourceName": "MangaDex API",
+          "sourceUrl": "https://mangadex.org/title/b0b7270d-4171-49a4-a50e-013dd707b46d"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "MangaDex API",
+      "addedAt": "2026-08-10T09:54:45.975Z",
+      "lastUpdated": "2026-08-10T09:54:45.975Z",
+      "lastReadAt": "2026-08-10T09:54:45.975Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685975_3j0h",
+      "title": "The Heavenly Demon Can’t Live a Normal Life",
+      "altTitles": [
+        "Descent of the Heavenly Demon",
+        "천마는 평범하게 살 수 없다"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2Fb2f6b3cf-9f9d-4720-9285-333cf743b174%2F09c3d40a-9d90-4822-b5e1-70bf81dfb194.jpg",
+      "description": "Junghyeok Baek, the Heavenly Demon of Murim, reincarnates as Roman Dmitry, the trash noble son of a blacksmith family in a western fantasy world.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Reincarnation",
+        "Kingdom Building"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 115,
+      "totalChapters": 115,
+      "rating": 9.7,
+      "notes": "",
+      "sourceUrl": "https://demonicscans.org/manga/the-heavenly-demon-cant-live-a-normal-life",
+      "sourceName": "Demonic Scans",
+      "availableSources": [
+        {
+          "sourceName": "Demonic Scans",
+          "sourceUrl": "https://demonicscans.org/manga/the-heavenly-demon-cant-live-a-normal-life"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Demonic Scans",
+      "addedAt": "2026-08-10T09:54:45.975Z",
+      "lastUpdated": "2026-08-10T09:54:45.975Z",
+      "lastReadAt": "2026-08-10T09:54:45.975Z"
+    },
+    {
+      "id": "kotatsu_db_1786355685976_dkgy",
+      "title": "Standard of Reincarnation",
+      "altTitles": [
+        "Reincarnation Standard",
+        "환생의 기준"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F1ec472db-2f88-43d9-9529-6d65377f0a8c%2F54e19747-c0e8-466d-9653-a30ae047c3bb.jpg",
+      "description": "Daven, born with one arm into the greatest martial family, was betrayed and murdered. Reincarnated 500 years later as Julian, he seeks vengeance with both arms intact.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Reincarnation",
+        "Swordsmanship"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 90,
+      "totalChapters": 90,
+      "rating": 9.5,
+      "notes": "",
+      "sourceUrl": "https://atsu.moe/manga/standard-of-reincarnation",
+      "sourceName": "Atsu Moe",
+      "availableSources": [
+        {
+          "sourceName": "Atsu Moe",
+          "sourceUrl": "https://atsu.moe/manga/standard-of-reincarnation"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Atsu Moe",
+      "addedAt": "2026-08-10T09:54:45.976Z",
+      "lastUpdated": "2026-08-10T09:54:45.976Z",
+      "lastReadAt": "2026-08-10T09:54:45.976Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131411_2ofo",
+      "title": "Academy Outcast",
+      "altTitles": [],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "A young man with extraordinary combat potential enrolls in a prestigious magic academy and must prove himself against those who underestimate him.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Academy",
+        "Magic"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 65,
+      "totalChapters": 65,
+      "rating": 9.1,
+      "notes": "",
+      "sourceUrl": "https://flamecomics.xyz/series/academy-outcast",
+      "sourceName": "Flame Comics",
+      "availableSources": [
+        {
+          "sourceName": "Flame Comics",
+          "sourceUrl": "https://flamecomics.xyz/series/academy-outcast"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Flame Comics",
+      "addedAt": "2026-08-10T11:25:31.411Z",
+      "lastUpdated": "2026-08-10T11:25:31.411Z",
+      "lastReadAt": "2026-08-10T11:25:31.411Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131412_tunm",
+      "title": "Battle Through the Heavens",
+      "altTitles": [
+        "Fights Break Sphere",
+        "斗破苍穹"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Xiao Yan was a genius child in the Xiao family but lost his talent at age 11. Three years later, he regains his path to power through a mysterious ring.",
+      "genres": [
+        "Action",
+        "Cultivation",
+        "Fantasy",
+        "Harem"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 400,
+      "totalChapters": 400,
+      "rating": 9.3,
+      "notes": "",
+      "sourceUrl": "https://aquamanga.com/read/battle-through-the-heavens/",
+      "sourceName": "Aqua Manga (AquaReader)",
+      "availableSources": [
+        {
+          "sourceName": "Aqua Manga (AquaReader)",
+          "sourceUrl": "https://aquamanga.com/read/battle-through-the-heavens/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Aqua Manga (AquaReader)",
+      "addedAt": "2026-08-10T11:25:31.412Z",
+      "lastUpdated": "2026-08-10T11:25:31.412Z",
+      "lastReadAt": "2026-08-10T11:25:31.412Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131412_h53w",
+      "title": "Versatile Mage",
+      "altTitles": [
+        "Full-Time Magister",
+        "全职法师"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Mo Fan wakes up to discover his world is now full of magic. He enters a mage school and discovers he can use multiple elements, unlike others who only get one.",
+      "genres": [
+        "Action",
+        "Fantasy",
+        "Magic",
+        "School"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 1200,
+      "totalChapters": 1200,
+      "rating": 9.4,
+      "notes": "",
+      "sourceUrl": "https://aquamanga.com/read/versatile-mage/",
+      "sourceName": "Aqua Manga (AquaReader)",
+      "availableSources": [
+        {
+          "sourceName": "Aqua Manga (AquaReader)",
+          "sourceUrl": "https://aquamanga.com/read/versatile-mage/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Aqua Manga (AquaReader)",
+      "addedAt": "2026-08-10T11:25:31.412Z",
+      "lastUpdated": "2026-08-10T11:25:31.412Z",
+      "lastReadAt": "2026-08-10T11:25:31.412Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131412_rk27",
+      "title": "Dragon Prince Yuan",
+      "altTitles": [
+        "Yuan Zun",
+        "元尊"
+      ],
+      "type": "manhua",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Zhou Yuan, a young man born with a crippled divine mark, discovers the truth of the universe and fights to stand atop the Great Zhou Dynasty.",
+      "genres": [
+        "Action",
+        "Cultivation",
+        "Fantasy",
+        "Adventure"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 750,
+      "totalChapters": 750,
+      "rating": 9.3,
+      "notes": "",
+      "sourceUrl": "https://aquamanga.com/read/dragon-prince-yuan/",
+      "sourceName": "Aqua Manga (AquaReader)",
+      "availableSources": [
+        {
+          "sourceName": "Aqua Manga (AquaReader)",
+          "sourceUrl": "https://aquamanga.com/read/dragon-prince-yuan/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Aqua Manga (AquaReader)",
+      "addedAt": "2026-08-10T11:25:31.412Z",
+      "lastUpdated": "2026-08-10T11:25:31.412Z",
+      "lastReadAt": "2026-08-10T11:25:31.412Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131413_oybb",
+      "title": "Sweet Guy",
+      "altTitles": [
+        "달콤한 남자"
+      ],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "Ho-Sang accidentally gets an electric shock and gains the power to stimulate women with his touch, leading to wild romantic adventures.",
+      "genres": [
+        "Romance",
+        "Adult",
+        "Comedy"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 49,
+      "totalChapters": 49,
+      "rating": 8.5,
+      "notes": "",
+      "sourceUrl": "https://manhwa18.com/manhwa/sweet-guy/",
+      "sourceName": "Manhwa18",
+      "availableSources": [
+        {
+          "sourceName": "Manhwa18",
+          "sourceUrl": "https://manhwa18.com/manhwa/sweet-guy/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Manhwa18",
+      "addedAt": "2026-08-10T11:25:31.413Z",
+      "lastUpdated": "2026-08-10T11:25:31.413Z",
+      "lastReadAt": "2026-08-10T11:25:31.413Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131413_oh2a",
+      "title": "Boarding Diary",
+      "altTitles": [],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "A young man moves into his auntie restaurant and boarding house, meeting attractive girls who live there.",
+      "genres": [
+        "Romance",
+        "Adult",
+        "Slice of Life"
+      ],
+      "status": "reading",
+      "currentChapter": 1,
+      "latestChapter": 89,
+      "totalChapters": 89,
+      "rating": 8.8,
+      "notes": "",
+      "sourceUrl": "https://manhwa18.com/manhwa/boarding-diary/",
+      "sourceName": "Manhwa18",
+      "availableSources": [
+        {
+          "sourceName": "Manhwa18",
+          "sourceUrl": "https://manhwa18.com/manhwa/boarding-diary/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Manhwa18",
+      "addedAt": "2026-08-10T11:25:31.413Z",
+      "lastUpdated": "2026-08-10T11:25:31.413Z",
+      "lastReadAt": "2026-08-10T12:21:08.107Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131413_v210",
+      "title": "My Stepmother Is My Ex-Girlfriend",
+      "altTitles": [],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "A young man discovers that his father is remarrying — and his new stepmother is his old flame from high school.",
+      "genres": [
+        "Romance",
+        "Adult",
+        "Drama"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 60,
+      "totalChapters": 60,
+      "rating": 8.7,
+      "notes": "",
+      "sourceUrl": "https://manhwa18.com/manhwa/my-stepmother-is-my-ex-girlfriend/",
+      "sourceName": "Manhwa18",
+      "availableSources": [
+        {
+          "sourceName": "Manhwa18",
+          "sourceUrl": "https://manhwa18.com/manhwa/my-stepmother-is-my-ex-girlfriend/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Manhwa18",
+      "addedAt": "2026-08-10T11:25:31.413Z",
+      "lastUpdated": "2026-08-10T11:25:31.413Z",
+      "lastReadAt": "2026-08-10T11:25:31.413Z"
+    },
+    {
+      "id": "kotatsu_db_1786361131413_3ia7",
+      "title": "Xtra Ordinary",
+      "altTitles": [],
+      "type": "manhwa",
+      "coverImage": "/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg",
+      "description": "A school setting romance with mature themes, following a young man navigating unexpected connections with the women around him.",
+      "genres": [
+        "Romance",
+        "Adult",
+        "School"
+      ],
+      "status": "plan_to_read",
+      "currentChapter": 0,
+      "latestChapter": 45,
+      "totalChapters": 45,
+      "rating": 8.4,
+      "notes": "",
+      "sourceUrl": "https://manhwa18.com/manhwa/xtra-ordinary/",
+      "sourceName": "Manhwa18",
+      "availableSources": [
+        {
+          "sourceName": "Manhwa18",
+          "sourceUrl": "https://manhwa18.com/manhwa/xtra-ordinary/"
+        }
+      ],
+      "autoUpdateEnabled": true,
+      "isFavorite": false,
+      "syncedFromApi": "Manhwa18",
+      "addedAt": "2026-08-10T11:25:31.413Z",
+      "lastUpdated": "2026-08-10T11:25:31.413Z",
+      "lastReadAt": "2026-08-10T11:25:31.413Z"
+    }
+  ],
+  "userProfiles": [
+    {
+      "id": "usr_admin",
+      "name": "Host Administrator",
+      "username": "admin",
+      "email": "enc:2c2edadd3a96307905691e55:2bba16d30f302b2dcf9e71e8e9034f33:82bb2fda7c78db61ea0cfe7a130c8af15dc576891645f31f89dd566dd297f6c692cc",
+      "avatar": "🛡️",
+      "role": "admin",
+      "storageFolderPath": "enc:93023e9f263776b1324fa25c:3be7b752d279ddfc8b92623d3c40545d:191f9f6c0aa2ba0cbd1591b426580364b5756c789c6f15a74e2b20879e80c08dc6e7638b7ed2b9a3fdf98a4f3805948dd40355e861aba2524fde734778048b23bc7e910bd083",
+      "createdAt": "2026-08-09T18:57:50.000Z",
+      "password": ""
+    }
+  ],
+  "autoUpdateLogs": [
+    {
+      "id": "log-1786318945185",
+      "mangaId": "bulk-refresh",
+      "mangaTitle": "Bulk Metadata Refresh",
+      "previousChapter": 0,
+      "newChapter": 432,
+      "source": "Metadata Refresh Engine",
+      "timestamp": "2026-08-09T23:42:25.185Z",
+      "type": "manhwa"
+    }
+  ],
+  "syncConfig": {
+    "subdomain": "tracker.manhuahub.app",
+    "autoUpdateIntervalMinutes": 60,
+    "enableWebCrawling": true,
+    "sources": [
+      "MangaDex API",
+      "AniList GraphQL",
+      "AsuraScans Feeds",
+      "ReaperScans Feeds",
+      "FlameScans",
+      "Bilibili Comics"
+    ],
+    "lastSyncTime": "2026-08-09T18:57:50.000Z",
+    "totalTracked": 45
+  },
+  "appSettings": {
+    "appTheme": "amoled",
+    "libraryLayout": "grid",
+    "gridColumns": 4,
+    "autoMarkReadPercent": 80,
+    "enableDownloadOffline": true,
+    "sourceTimeoutSeconds": 15,
+    "anilistConnected": true,
+    "mangadexConnected": true,
+    "customUserAgent": "Kotatsu/4.8.2 (Android 14; Mobile; OmniManga-Sync)",
+    "enableCloudflareBypass": true,
+    "flareSolverrUrl": "http://localhost:8191/v1",
+    "captchaSolverEnabled": true,
+    "captchaApiKey": "",
+    "stealthMode": true,
+    "readerDefaults": {
+      "viewMode": "webtoon",
+      "maxWidth": "850px",
+      "pageGap": 8,
+      "bgColor": "slate",
+      "zoomLevel": 100,
+      "autoMarkRead": true,
+      "imageFilter": "normal",
+      "autoScrollEnabled": false,
+      "autoScrollSpeed": 1,
+      "tapZonesEnabled": true,
+      "cropWhiteMargins": true,
+      "showPageNumberOverlay": true,
+      "showPersistentPageBadge": true,
+      "autoNextChapter": true,
+      "mangaFitMode": "fit-height",
+      "preloadCount": 3
+    }
+  }
+}
