@@ -51,7 +51,7 @@ const ENGINE_META: Record<SourceEngineType, { label: string; color: string; icon
   custom_html:   { label: 'Custom HTML',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       icon: '🟡' },
 };
 
-type ViewSection = 'all' | 'popular' | 'latest' | 'search';
+type ViewSection = 'all' | 'popular' | 'latest' | 'search' | 'expanded';
 type StatusFilter = 'all' | 'enabled' | 'disabled';
 
 export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
@@ -78,10 +78,11 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const [activeTab, setActiveTab] = useState<ViewSection>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Dual Category Results (Popular & Latest)
+  // Category & Expanded Results (Popular, Latest, Search, Expanded 50/page)
   const [popularResults, setPopularResults] = useState<KotatsuSourceResult[]>([]);
   const [latestResults, setLatestResults] = useState<KotatsuSourceResult[]>([]);
   const [searchResults, setSearchResults] = useState<KotatsuSourceResult[]>([]);
+  const [expandedResults, setExpandedResults] = useState<KotatsuSourceResult[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -217,24 +218,46 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     showToast(`"${sName}" is now ${nextIsEnabled ? 'ENABLED ✓' : 'DISABLED ✗'}`);
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState<number | null>(null);
+  const [totalSeriesCount, setTotalSeriesCount] = useState<number | null>(null);
+
   // Fetch Category Datasets for the Active Source
-  const loadSourceCategoryData = useCallback(async (src: SourceDefinition | null, q: string) => {
+  const loadSourceCategoryData = useCallback(async (src: SourceDefinition | null, q: string, pageNum: number, tabMode: ViewSection) => {
     if (!src) return;
     setIsLoading(true);
 
     try {
       if (q.trim()) {
         // Search query mode
-        const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&q=${encodeURIComponent(q)}`);
-        if (res.ok) setSearchResults(await res.json());
+        const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&q=${encodeURIComponent(q)}&page=${pageNum}&limit=20`);
+        if (res.ok) {
+          setSearchResults(await res.json());
+          const tp = res.headers.get('X-Total-Pages');
+          if (tp) setTotalPages(Number(tp));
+        }
+      } else if (tabMode === 'expanded') {
+        // Expanded View Mode: 20 items per page (matches Asura's native page size)
+        const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`);
+        if (res.ok) {
+          setExpandedResults(await res.json());
+          const tp = res.headers.get('X-Total-Pages');
+          const tc = res.headers.get('X-Total-Count');
+          if (tp) setTotalPages(Number(tp));
+          if (tc) setTotalSeriesCount(Number(tc));
+        }
       } else {
         // Dual Category Mode: Fetch Popular & Latest simultaneously
         const [popRes, latRes] = await Promise.all([
-          fetch(`/api/kotatsu/search?sourceId=${src.id}`),
-          fetch(`/api/kotatsu/latest?sourceId=${src.id}`),
+          fetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`),
+          fetch(`/api/kotatsu/latest?sourceId=${src.id}&page=${pageNum}&limit=20`),
         ]);
 
-        if (popRes.ok) setPopularResults(await popRes.json());
+        if (popRes.ok) {
+          setPopularResults(await popRes.json());
+          const tp = popRes.headers.get('X-Total-Pages');
+          if (tp) setTotalPages(Number(tp));
+        }
         if (latRes.ok) setLatestResults(await latRes.json());
       }
     } catch (e) {
@@ -246,9 +269,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
   useEffect(() => {
     if (selectedSource) {
-      loadSourceCategoryData(selectedSource, searchQuery);
+      loadSourceCategoryData(selectedSource, searchQuery, currentPage, activeTab);
     }
-  }, [selectedSource, searchQuery, loadSourceCategoryData]);
+  }, [selectedSource, searchQuery, currentPage, activeTab, loadSourceCategoryData]);
+
+  // Reset page counter and total when changing active source or tab
+  useEffect(() => {
+    setCurrentPage(1);
+    setTotalPages(null);
+    setTotalSeriesCount(null);
+  }, [selectedSource, activeTab]);
 
   const openSeriesDetail = (r: KotatsuSourceResult) => {
     const tempManga: MangaItem = {
@@ -328,10 +358,13 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     onOpenReader(tempManga, 1);
   };
 
+  const [selectedLangFilter, setSelectedLangFilter] = useState<string>('en');
+
   // SORTING FUNCTIONALITY: Enabled sources stay on top, disabled move down to bottom
   const filteredSources = sources.filter(s => {
     if (!nsfwVisible && s.isNsfw) return false;
     if (engineFilter !== 'all' && s.engineType !== engineFilter) return false;
+    if (selectedLangFilter !== 'all' && (s.lang || 'en').toLowerCase() !== selectedLangFilter) return false;
 
     const isDisabled = disabledSourceIds.has(s.id);
     if (statusFilter === 'enabled' && isDisabled) return false;
@@ -464,7 +497,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </div>
           <div>
             <h1 className="text-lg font-black text-white flex items-center gap-2">
-              Kotatsu Extension Sources Manager
+              Sources
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                 v2.5 Redo
               </span>
@@ -476,7 +509,23 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         </div>
 
         {/* Global Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Language Selector */}
+          <select
+            value={selectedLangFilter}
+            onChange={(e) => setSelectedLangFilter(e.target.value)}
+            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            title="Filter Kotatsu sources by language"
+          >
+            <option value="en">🇬🇧 English (Preferred)</option>
+            <option value="all">🌐 All Languages</option>
+            <option value="ko">🇰🇷 Korean</option>
+            <option value="zh">🇨🇳 Chinese</option>
+            <option value="ja">🇯🇵 Japanese</option>
+            <option value="es">🇪🇸 Spanish</option>
+            <option value="fr">🇫🇷 French</option>
+          </select>
+
           <button
             onClick={handlePullAllSources}
             disabled={isPullingAll}
@@ -708,9 +757,12 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     <span>{disabledSourceIds.has(selectedSource.id) ? 'Enable Source' : 'Disable Source'}</span>
                   </button>
 
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
                     <button
-                      onClick={() => setActiveTab('all')}
+                      onClick={() => {
+                        setActiveTab('all');
+                        setCurrentPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                         activeTab === 'all' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
                       }`}
@@ -719,7 +771,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                       <span>All Categories</span>
                     </button>
                     <button
-                      onClick={() => setActiveTab('popular')}
+                      onClick={() => {
+                        setActiveTab('popular');
+                        setCurrentPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                         activeTab === 'popular' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
                       }`}
@@ -728,13 +783,29 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                       <span>Popular Only</span>
                     </button>
                     <button
-                      onClick={() => setActiveTab('latest')}
+                      onClick={() => {
+                        setActiveTab('latest');
+                        setCurrentPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                         activeTab === 'latest' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <Zap className="w-3.5 h-3.5 text-cyan-400" />
                       <span>Latest Only</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveTab('expanded');
+                        setCurrentPage(1);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        activeTab === 'expanded' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Expanded View (50/page)</span>
                     </button>
                   </div>
                 </div>
@@ -794,6 +865,34 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     </div>
                   )}
                 </div>
+              ) : activeTab === 'expanded' ? (
+                /* EXPANDED FULL CATALOG VIEW (50 Series Per Page) */
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-black text-white flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-400" />
+                      {selectedSource.name} — Full Catalog
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Page {currentPage}{totalPages ? ` of ${totalPages}` : ''}
+                      </span>
+                      {totalSeriesCount !== null && (
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          {totalSeriesCount} Total Series
+                        </span>
+                      )}
+                    </h3>
+                  </div>
+
+                  {expandedResults.length === 0 ? (
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-400">
+                      No series found for this catalog page.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                      {expandedResults.map((r) => renderSeriesCard(r))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 /* CATEGORIZED SECTIONS VIEW (Top Popular Series & Latest Uploads) */
                 <div className="flex flex-col gap-8">
@@ -841,13 +940,51 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                          {latestResults.slice(0, activeTab === 'latest' ? 24 : 12).map(r => renderSeriesCard(r))}
+                          {latestResults.slice(0, activeTab === 'latest' ? 24 : 12).map((r) => renderSeriesCard(r))}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Pagination Toolbar */}
+              <div className="flex items-center justify-between border-t border-slate-800/80 pt-4 mt-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1 || isLoading}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    currentPage <= 1 || isLoading
+                      ? 'bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800/50'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm'
+                  }`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Previous</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-slate-300 font-mono bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl shadow-inner">
+                    Page {currentPage}{totalPages ? ` / ${totalPages}` : ''}
+                  </span>
+                  {totalSeriesCount !== null && (
+                    <span className="text-[11px] text-slate-500 font-mono">{totalSeriesCount} series</span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage((prev) => prev + 1)}
+                  disabled={isLoading || (totalPages !== null && currentPage >= totalPages)}
+                  className={`px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 ${
+                    isLoading || (totalPages !== null && currentPage >= totalPages)
+                      ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-800/50'
+                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'
+                  }`}
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center p-12 text-slate-500">

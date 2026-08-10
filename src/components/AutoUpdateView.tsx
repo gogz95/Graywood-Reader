@@ -9,29 +9,40 @@ import {
   AlertCircle,
   Globe,
   Rss,
-  CheckSquare,
   Play,
   ShieldCheck,
 } from 'lucide-react';
 
 interface AutoUpdateViewProps {
   logs: AutoUpdateLog[];
-  config: DatabaseSyncConfig;
+  config?: DatabaseSyncConfig;
   mangaList: MangaItem[];
-  onRunAutoUpdate: () => void;
+  onRunAutoUpdate?: () => void;
+  onRunUpdate?: () => void;
   isUpdating: boolean;
-  onToggleAutoUpdateItem: (id: string, enabled: boolean) => void;
+  isAdmin?: boolean;
+  onOpenReader?: (manga: MangaItem, chapterNumber?: number) => void;
 }
 
 export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
   logs,
-  config,
+  config = { autoUpdateIntervalMinutes: 60 } as DatabaseSyncConfig,
   mangaList,
   onRunAutoUpdate,
+  onRunUpdate,
   isUpdating,
-  onToggleAutoUpdateItem,
+  isAdmin = false,
+  onOpenReader,
 }) => {
   const autoTrackedCount = mangaList.filter((m) => m.autoUpdateEnabled).length;
+  const handleTriggerUpdate = onRunAutoUpdate || onRunUpdate || (() => {});
+
+  // Filter logs: ONLY show updates for series the client has read or favorited (present in user's mangaList)
+  const userMangaIds = new Set(mangaList.map((m) => m.id));
+  const userMangaTitles = new Set(mangaList.map((m) => m.title.toLowerCase().trim()));
+  const filteredLogs = logs.filter(
+    (log) => userMangaIds.has(log.mangaId) || userMangaTitles.has(log.mangaTitle.toLowerCase().trim())
+  );
 
   return (
     <div className="space-y-6">
@@ -53,20 +64,21 @@ export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <button
-              onClick={onRunAutoUpdate}
-              disabled={isUpdating}
-              className={`px-5 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2.5 transition-all ${
-                isUpdating
-                  ? 'bg-slate-800 text-amber-400 border border-amber-500/30'
-                  : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 hover:scale-[1.02] active:scale-[0.98]'
-              }`}
-            >
-              <RefreshCw className={`w-5 h-5 ${isUpdating ? 'animate-spin' : ''}`} />
-              <span>{isUpdating ? 'Scanning Release Feeds...' : 'Run Auto-Crawler Now'}</span>
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <button
+                onClick={handleTriggerUpdate}
+                disabled={isUpdating}
+                className={`px-5 py-3 rounded-xl font-bold text-sm shadow-lg flex items-center justify-center gap-2.5 transition-all ${isUpdating
+                    ? 'bg-slate-800 text-amber-400 border border-amber-500/30'
+                    : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-slate-950 hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
+              >
+                <RefreshCw className={`w-5 h-5 ${isUpdating ? 'animate-spin' : ''}`} />
+                <span>{isUpdating ? 'Scanning Release Feeds...' : 'Run Auto-Crawler Now'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Status Pills */}
@@ -97,19 +109,19 @@ export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
               <Zap className="w-4 h-4 text-orange-400" />
-              Latest Chapter Release Logs
+              Latest Chapter Release Logs (Your Read & Favorited Series)
             </h3>
-            <span className="text-xs text-slate-400 font-mono">{logs.length} Logged Updates</span>
+            <span className="text-xs text-slate-400 font-mono">{filteredLogs.length} Logged Updates</span>
           </div>
 
-          {logs.length === 0 ? (
+          {filteredLogs.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400 space-y-2">
               <CheckCircle className="w-8 h-8 text-slate-600 mx-auto" />
-              <p>No new chapter updates detected yet. Click "Run Auto-Crawler Now" to force a scan!</p>
+              <p>No chapter updates detected for your read or favorited series yet.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {logs.map((log) => (
+              {filteredLogs.map((log) => (
                 <div
                   key={log.id}
                   className="bg-slate-900 border border-slate-800/80 hover:border-slate-700 rounded-xl p-4 flex items-center justify-between gap-4 transition-all"
@@ -170,37 +182,6 @@ export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
             </div>
           </div>
 
-          {/* Individual Series Auto-Update Toggles */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 max-h-96 overflow-y-auto no-scrollbar">
-            <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-emerald-400" />
-              Series Auto-Sync Rules
-            </h3>
-            <div className="space-y-2 text-xs">
-              {mangaList.map((manga) => (
-                <div
-                  key={manga.id}
-                  className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between gap-2"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-200 truncate">{manga.title}</p>
-                    <p className="text-[10px] text-slate-500">Ch. {manga.currentChapter} / {manga.latestChapter}</p>
-                  </div>
-
-                  <button
-                    onClick={() => onToggleAutoUpdateItem(manga.id, !manga.autoUpdateEnabled)}
-                    className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
-                      manga.autoUpdateEnabled
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-slate-800 text-slate-500'
-                    }`}
-                  >
-                    {manga.autoUpdateEnabled ? 'Auto-Sync ON' : 'Paused'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

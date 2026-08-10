@@ -41,7 +41,6 @@ interface NavbarProps {
   onOpenSettingsModal: () => void;
   isIncognito: boolean;
   onToggleIncognito: () => void;
-  onOpenLocalReader: () => void;
   onOpenAnalytics: () => void;
   activeProfile: UserProfile;
   isHostComputer?: boolean;
@@ -65,7 +64,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettingsModal,
   isIncognito,
   onToggleIncognito,
-  onOpenLocalReader,
   onOpenAnalytics,
   activeProfile,
   isHostComputer = true,
@@ -89,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-slate-100 via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                  OmniManga Sync
+                  Graywood Reader & Tracker
                 </h1>
                 {isIncognito ? (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
@@ -143,14 +141,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <EyeOff className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={onOpenLocalReader}
-              title="Open local CBZ, ZIP, or Image Folder Manga"
-              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-amber-400 border border-slate-700 transition-all"
-            >
-              <FileArchive className="w-4 h-4 text-amber-400" />
             </button>
 
             <button
@@ -261,17 +251,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => {
-                onOpenLocalReader();
-                setMobileQuickMenuOpen(false);
-              }}
-              className="p-2.5 rounded-xl bg-slate-900 text-slate-300 border border-slate-800 flex items-center gap-2"
-            >
-              <FileArchive className="w-4 h-4 text-amber-400" />
-              <span>Local CBZ Reader</span>
-            </button>
-
-            <button
-              onClick={() => {
                 onOpenAnalytics();
                 setMobileQuickMenuOpen(false);
               }}
@@ -346,33 +325,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}
           >
             <Compass className="w-4 h-4 text-cyan-400" />
-            <span>Explore & Browse</span>
+            <span>Catalog</span>
           </button>
 
-
-          <button
-            onClick={() => setActiveTab('reader')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'reader'
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <Play className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
-            <span>Reading & Offline</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('tracker')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
-              activeTab === 'tracker'
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4 text-cyan-400" />
-            <span>Tracker & Sync</span>
-          </button>
 
           <button
             onClick={() => setActiveTab('sources')}
@@ -386,22 +341,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Sources</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('autoupdate')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap relative ${
-              activeTab === 'autoupdate'
-                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <Zap className="w-4 h-4 text-orange-400" />
-            <span>Auto-Update Feed</span>
-            {unreadCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-orange-500 text-slate-950 animate-pulse">
-                +{unreadCount}
-              </span>
-            )}
-          </button>
+
 
           <button
             onClick={onOpenSettingsModal}
@@ -445,18 +385,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span className="text-[10px]">Sources</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('autoupdate')}
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all relative ${
-            activeTab === 'autoupdate' ? 'text-amber-400 font-bold' : 'text-slate-400'
-          }`}
-        >
-          <Zap className="w-5 h-5 text-orange-400" />
-          <span className="text-[10px]">Feed</span>
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-          )}
-        </button>
+
 
         <button
           onClick={onOpenSettingsModal}

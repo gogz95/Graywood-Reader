@@ -30,7 +30,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regAvatar, setRegAvatar] = useState('🥷');
-  const [regFolderPath, setRegFolderPath] = useState('C:\\Users\\LocalMangaStorage');
   const [regRole, setRegRole] = useState<UserRole>(existingUsers.length === 0 ? 'admin' : 'user');
 
   const avatarOptions = ['🥷', '🦊', '🦸‍♂️', '🧙‍♂️', '🐉', '⚡', '👑', '🔥', '⚔️', '🤖'];
@@ -98,27 +97,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       password: regPassword,
       avatar: regAvatar,
       role: existingUsers.length === 0 ? 'admin' : 'user',
-      storageFolderPath: regFolderPath,
       createdAt: new Date().toISOString(),
     };
 
     onRegister(newUser);
     onLogin(newUser);
     onClose();
-  };
-
-  const handleBrowseFolder = async () => {
-    try {
-      if ('showDirectoryPicker' in window) {
-        const dirHandle = await (window as any).showDirectoryPicker();
-        setRegFolderPath(`C:\\Users\\LocalMangaStorage\\${dirHandle.name}`);
-      } else {
-        const customPath = prompt('Enter or paste local storage folder path:', regFolderPath);
-        if (customPath) setRegFolderPath(customPath);
-      }
-    } catch (err) {
-      console.log('Folder selection cancelled:', err);
-    }
   };
 
   return (
@@ -146,7 +130,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <Shield className="w-7 h-7" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-100 tracking-tight">OmniManga Reader Account</h2>
+            <h2 className="text-xl font-black text-slate-100 tracking-tight">Graywood Reader Account</h2>
             <p className="text-xs text-slate-400 mt-1">
               {mode === 'login' ? 'Sign in to access your library & sync reading progress' : 'Create an account with private storage isolation'}
             </p>
@@ -372,27 +356,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
 
-
-                {/* Storage Folder Path Selection */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-300">Private Local Storage Directory</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={regFolderPath}
-                      onChange={(e) => setRegFolderPath(e.target.value)}
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2 text-slate-200 font-mono text-[11px]"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleBrowseFolder}
-                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs flex items-center gap-1"
-                    >
-                      <Folder className="w-3.5 h-3.5" />
-                      <span>Browse</span>
-                    </button>
-                  </div>
-                </div>
 
                 <button
                   type="submit"

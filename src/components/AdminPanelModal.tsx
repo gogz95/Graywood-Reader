@@ -133,7 +133,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 font-mono truncate pt-0.5">
-                      {u.email} • Folder: {u.storageFolderPath}
+                      {u.email}
                     </div>
                   </div>
                 </div>
@@ -147,7 +147,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     Inspect View
                   </button>
 
-                  {u.id !== currentUser.id && (
+                  {u.id !== currentUser.id && u.id !== 'usr_admin' && u.id !== 'usr_guest' && u.role !== 'admin' && (
                     <>
                       <button
                         onClick={() => onPromoteUser(u.id, u.role === 'admin' ? 'user' : 'admin')}

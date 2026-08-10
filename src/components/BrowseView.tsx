@@ -50,20 +50,20 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
   // Filter States
   const [localSearch, setLocalSearch] = useState('');
-
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
   const [selectedType, setSelectedType] = useState<MangaType | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<ReadingStatus | 'all'>('all');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedSourceName, setSelectedSourceName] = useState<string>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [autoUpdateOnly, setAutoUpdateOnly] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   // Sorting State
   const [sortBy, setSortBy] = useState<'title_asc' | 'title_desc' | 'rating_desc' | 'latest_chap_desc' | 'updated_desc'>('rating_desc');
 
-  // Pagination State (Show 8 items initially, load 8 more on click)
-  const [visibleCount, setVisibleCount] = useState<number>(8);
+  // Page-by-Page Pagination State (50 items per page)
+  const ITEMS_PER_PAGE = 50;
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Layout Density State
   const [viewDensity, setViewDensity] = useState<'grid' | 'list'>('grid');
@@ -97,6 +97,14 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           if (!matchTitle && !matchAlt && !matchGenre && !matchDesc) return false;
         }
 
+        // Language Filter
+        if (selectedLanguage !== 'all') {
+          if (selectedLanguage === 'en' && m.type === 'manga' && m.title.includes('[JP]')) return false;
+          if (selectedLanguage === 'ko' && m.type !== 'manhwa') return false;
+          if (selectedLanguage === 'zh' && m.type !== 'manhua') return false;
+          if (selectedLanguage === 'ja' && m.type !== 'manga') return false;
+        }
+
         // Source filter
         if (selectedSourceName !== 'all' && m.sourceName !== selectedSourceName) return false;
 
@@ -112,8 +120,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         // Favorites filter
         if (favoritesOnly && !m.isFavorite) return false;
 
-        // Auto-update filter
-        if (autoUpdateOnly && !m.autoUpdateEnabled) return false;
+
 
         // Unread filter
         if (unreadOnly && m.currentChapter >= m.latestChapter) return false;
@@ -134,32 +141,33 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     mangaList,
     localSearch,
     searchQuery,
+    selectedLanguage,
     selectedType,
     selectedStatus,
     selectedGenre,
     selectedSourceName,
     favoritesOnly,
-    autoUpdateOnly,
     unreadOnly,
     sortBy,
   ]);
 
-  // Sliced Visible Collection for Pagination
-  const visibleManga = useMemo(() => {
-    return filteredManga.slice(0, visibleCount);
-  }, [filteredManga, visibleCount]);
+  const totalPages = Math.max(1, Math.ceil(filteredManga.length / ITEMS_PER_PAGE));
+  const displayMangaPage = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredManga.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredManga, currentPage]);
 
   const handleResetFilters = () => {
     setLocalSearch('');
+    setSelectedLanguage('en');
     setSelectedType('all');
     setSelectedStatus('all');
     setSelectedGenre('all');
     setSelectedSourceName('all');
     setFavoritesOnly(false);
-    setAutoUpdateOnly(false);
     setUnreadOnly(false);
     setSortBy('rating_desc');
-    setVisibleCount(8);
+    setCurrentPage(1);
   };
 
 
@@ -174,12 +182,12 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-100 flex items-center gap-2">
-                Browse & Explore Catalog
+                Unified Catalog
                 <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   {filteredManga.length} Series
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Showing series from active sources: AquaManga · Asura Scans · Flame Comics · Manhwa18</p>
+              <p className="text-xs text-slate-400">Aggregated catalog grouping all series across all active connected Kotatsu sources in one place</p>
             </div>
           </div>
 
@@ -217,7 +225,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
 
         {/* Filter Controls Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Search Bar Input */}
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -225,9 +233,36 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               type="text"
               placeholder="Search title, genre, author..."
               value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              onChange={(e) => {
+                setLocalSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
+          </div>
+
+          {/* Language Filter Dropdown */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              Language Preference:
+            </label>
+            <select
+              value={selectedLanguage}
+              onChange={(e: any) => {
+                setSelectedLanguage(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            >
+              <option value="en">🇬🇧 English (Preferred)</option>
+              <option value="all">🌐 All Languages</option>
+              <option value="ko">🇰🇷 Korean (Raw/Translated)</option>
+              <option value="zh">🇨🇳 Chinese (Raw/Translated)</option>
+              <option value="ja">🇯🇵 Japanese (Raw/Translated)</option>
+              <option value="es">🇪🇸 Spanish</option>
+              <option value="fr">🇫🇷 French</option>
+            </select>
           </div>
 
           {/* Sort By Dropdown */}
@@ -331,16 +366,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             <span>Favorites Only</span>
           </button>
 
-          <button
-            onClick={() => setAutoUpdateOnly(!autoUpdateOnly)}
-            className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
-              autoUpdateOnly
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md font-black'
-                : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <span>🔄 Auto-Update Enabled</span>
-          </button>
+
 
           <button
             onClick={() => setUnreadOnly(!unreadOnly)}
@@ -405,7 +431,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       ) : viewDensity === 'grid' ? (
         /* GRID CARDS VIEW */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-          {visibleManga.map((manga) => (
+          {displayMangaPage.map((manga) => (
             <div
               key={manga.id}
               className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-all group"
@@ -511,7 +537,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {visibleManga.map((manga) => (
+                {displayMangaPage.map((manga) => (
                   <tr key={manga.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-3 px-4 flex items-center gap-3">
                       <img
@@ -576,23 +602,41 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
       )}
 
+      {/* PAGE-BY-PAGE PAGINATION CONTROLS (50 items per page) */}
+      {totalPages > 1 && (
+        <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl">
+          <div className="text-xs font-mono text-slate-400">
+            Showing Page <span className="font-bold text-amber-400">{currentPage}</span> of{' '}
+            <span className="font-bold text-slate-200">{totalPages}</span> ({filteredManga.length} series)
+          </div>
 
-      {/* LOAD MORE SERIES BUTTON */}
-      {visibleCount < filteredManga.length && (
-        <div className="pt-6 text-center space-y-2">
-          <button
-            onClick={() => setVisibleCount((prev) => prev + 8)}
-            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 mx-auto shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95"
-          >
-            <span>Load More Series</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-950/20 text-slate-950 font-mono font-bold">
-              +{Math.min(8, filteredManga.length - visibleCount)}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setCurrentPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage <= 1}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 font-bold text-xs text-slate-200 border border-slate-700 transition-all active:scale-95"
+            >
+              Previous Page
+            </button>
+
+            <span className="px-3 py-2 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-bold text-xs">
+              Page {currentPage} / {totalPages}
             </span>
-          </button>
 
-          <p className="text-[11px] font-semibold text-slate-400 font-mono">
-            Showing {visibleManga.length} of {filteredManga.length} total series
-          </p>
+            <button
+              onClick={() => {
+                setCurrentPage((p) => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage >= totalPages}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-40 font-black text-xs text-slate-950 shadow-md transition-all active:scale-95"
+            >
+              Next Page
+            </button>
+          </div>
         </div>
       )}
     </div>

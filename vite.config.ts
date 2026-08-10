@@ -11,6 +11,26 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      target: 'esnext',
+      minify: 'esbuild',
+      cssCodeSplit: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+              return 'react-vendor';
+            }
+            if (id.includes('node_modules/lucide-react')) {
+              return 'lucide-icons';
+            }
+            if (id.includes('node_modules/motion')) {
+              return 'motion-animations';
+            }
+          },
+        },
+      },
+    },
     server: {
       watch: {
         ignored: ['**/database.json*', '**/*.tmp', '**/*.log', '**/reset_favs.js', '**/node_modules/**', '**/.git/**'],

@@ -5,14 +5,11 @@ import { LibraryView } from './components/LibraryView';
 import { AutoUpdateView } from './components/AutoUpdateView';
 import { OpenApiFinderView } from './components/OpenApiFinderView';
 import { DuplicateFinderView } from './components/DuplicateFinderView';
-import { DatabaseSyncView } from './components/DatabaseSyncView';
 import { MangaDetailModal } from './components/MangaDetailModal';
 import { AddEditModal } from './components/AddEditModal';
 import { ReaderView } from './components/ReaderView';
 import { ChapterListModal } from './components/ChapterListModal';
 import { SettingsModal } from './components/SettingsModal';
-import { ReaderHubView } from './components/ReaderHubView';
-import { TrackerView } from './components/TrackerView';
 import {
   MangaItem,
   AutoUpdateLog,
@@ -24,7 +21,6 @@ import {
 } from './types';
 import { INITIAL_MANGA_DATABASE } from './data/initialManga';
 
-import { LocalMangaReaderModal } from './components/LocalMangaReaderModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
@@ -44,7 +40,6 @@ const GUEST_PROFILE: UserProfile = {
   email: 'guest@omnimanga.app',
   avatar: '👤',
   role: 'user',
-  storageFolderPath: 'data/storage/Guest',
   createdAt: new Date().toISOString(),
 };
 
@@ -66,17 +61,6 @@ export default function App() {
       email: 'admin@manga.dev',
       avatar: '🛡️',
       role: 'admin',
-      storageFolderPath: 'data/storage/Admin',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'usr_jordan',
-      name: 'Jordan',
-      username: 'jordan',
-      email: 'jordan@manga.dev',
-      avatar: '🦊',
-      role: 'user',
-      storageFolderPath: 'data/storage/Jordan',
       createdAt: new Date().toISOString(),
     },
     GUEST_PROFILE,
@@ -86,8 +70,6 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
 
-  // New Modals State
-  const [localReaderOpen, setLocalReaderOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
 
@@ -111,7 +93,7 @@ export default function App() {
   }, [displayMangaList]);
 
 
-  const handleCreateProfile = (name: string, avatar: string, storageFolderPath: string) => {
+  const handleCreateProfile = (name: string, avatar: string) => {
     const newProf: UserProfile = {
       id: 'usr_' + Date.now(),
       name,
@@ -119,7 +101,6 @@ export default function App() {
       email: `${name.toLowerCase().replace(/\s+/g, '_')}@manga.dev`,
       avatar,
       role: 'user',
-      storageFolderPath,
       createdAt: new Date().toISOString(),
     };
     setProfiles([...profiles, newProf]);
@@ -128,17 +109,13 @@ export default function App() {
 
   const handleRegisterUser = (newUser: UserProfile) => {
     setProfiles([...profiles, newUser]);
+    setActiveProfileId(newUser.id);
+    migrateClientSessionHistoryToUser(newUser.id);
   };
 
   const handlePromoteUser = (userId: string, newRole: UserRole) => {
     setProfiles((prev) =>
       prev.map((p) => (p.id === userId ? { ...p, role: newRole } : p))
-    );
-  };
-
-  const handleUpdateProfileFolder = (profileId: string, folderPath: string) => {
-    setProfiles((prev) =>
-      prev.map((p) => (p.id === profileId ? { ...p, storageFolderPath: folderPath } : p))
     );
   };
 
@@ -325,14 +302,76 @@ export default function App() {
     }
   };
 
-  // Reset Guest Profile data whenever Guest profile is selected or booted
+  // ── CLIENT-SIDE SESSION READING HISTORY ENGINE ─────────────────────────────────────
+  const CLIENT_SESSION_STORAGE_KEY = 'omnimanga_client_session_reading_history';
+
+  const getClientSessionHistory = (): Record<string, { currentChapter: number; lastReadAt: string }> => {
+    try {
+      const raw = localStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  };
+
+  const saveClientSessionProgress = (mangaId: string, chapterNumber: number) => {
+    try {
+      const history = getClientSessionHistory();
+      const existingCh = history[mangaId]?.currentChapter || 0;
+      const nextCh = Math.max(existingCh, chapterNumber);
+      history[mangaId] = {
+        currentChapter: nextCh,
+        lastReadAt: new Date().toISOString(),
+      };
+      localStorage.setItem(CLIENT_SESSION_STORAGE_KEY, JSON.stringify(history));
+      console.log(`[Client Session Engine] Saved reading progress Ch. ${nextCh} for ${mangaId} in client session storage.`);
+    } catch (err) {
+      console.error("[Client Session Engine] Storage error:", err);
+    }
+  };
+
+  const migrateClientSessionHistoryToUser = async (targetUserId: string) => {
+    const sessionHistory = getClientSessionHistory();
+    const entries = Object.entries(sessionHistory);
+    if (entries.length === 0) return;
+
+    console.log(`[Client Session Engine] Migrating ${entries.length} client session reading entries to user ${targetUserId}...`);
+
+    for (const [mangaId, record] of entries) {
+      try {
+        await fetch('/api/reader/mark-read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mangaId, chapterNumber: record.currentChapter, userId: targetUserId }),
+        });
+      } catch (_) {}
+    }
+
+    try {
+      localStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
+    } catch (_) {}
+  };
+
+  // Synchronize Client-Side Session Reading Progress when Guest profile is active
   useEffect(() => {
     if (activeProfileId === 'usr_guest') {
-      console.log("[Guest Isolation Engine] Guest Reader active. History reset for fresh session.");
-      // Purge transient guest history from local session storage
-      try {
-        sessionStorage.removeItem('guest_reading_history');
-      } catch (_) {}
+      const sessionHistory = getClientSessionHistory();
+      if (Object.keys(sessionHistory).length > 0) {
+        setMangaList((prev) =>
+          prev.map((m) => {
+            const sessionEntry = sessionHistory[m.id];
+            if (sessionEntry && sessionEntry.currentChapter > m.currentChapter) {
+              return {
+                ...m,
+                currentChapter: sessionEntry.currentChapter,
+                lastReadAt: sessionEntry.lastReadAt,
+                status: m.status === 'plan_to_read' ? 'reading' : m.status,
+              };
+            }
+            return m;
+          })
+        );
+      }
     } else {
       // Save active profile to device-specific cache for non-guest users
       try {
@@ -371,11 +410,8 @@ export default function App() {
       browse: '/browse',
       sources: '/sources',
       autoupdate: '/autoupdate',
-      tracker: '/tracker',
-      sync: '/sync',
       duplicates: '/duplicates',
       openapi: '/openapi',
-      reader: '/reader',
     };
     updateUrl(tabPaths[tab] || '/');
   };
@@ -389,10 +425,6 @@ export default function App() {
         setActiveTab('sources');
       } else if (path.startsWith('/autoupdate')) {
         setActiveTab('autoupdate');
-      } else if (path.startsWith('/tracker')) {
-        setActiveTab('tracker');
-      } else if (path.startsWith('/sync')) {
-        setActiveTab('sync');
       } else if (path.startsWith('/duplicates')) {
         setActiveTab('duplicates');
       } else if (path.startsWith('/openapi')) {
@@ -438,11 +470,11 @@ export default function App() {
 
   // Increment Chapter (+1)
   const handleIncrementChapter = async (id: string) => {
-    // Optimistic UI update
+    let nextCh = 1;
     setMangaList((prev) =>
       prev.map((m) => {
         if (m.id === id) {
-          const nextCh = m.currentChapter + 1;
+          nextCh = m.currentChapter + 1;
           return {
             ...m,
             currentChapter: nextCh,
@@ -453,6 +485,12 @@ export default function App() {
         return m;
       })
     );
+
+    if (activeProfileId === 'usr_guest') {
+      // Guest / Unregistered Client: Save strictly on client side!
+      saveClientSessionProgress(id, nextCh);
+      return;
+    }
 
     try {
       await fetch(`/api/manga/increment/${id}`, { method: 'POST' });
@@ -611,14 +649,6 @@ export default function App() {
     }
   };
 
-  // Toggle Auto-Update per series
-  const handleToggleAutoUpdateItem = async (id: string, enabled: boolean) => {
-    const item = mangaList.find((m) => m.id === id);
-    if (item) {
-      await handleSaveManga({ ...item, autoUpdateEnabled: enabled });
-    }
-  };
-
   // Reader Launch Handlers
   const handleSelectMangaDetail = (manga: MangaItem | null) => {
     setSelectedMangaDetail(manga);
@@ -629,9 +659,8 @@ export default function App() {
         library: '/',
         browse: '/browse',
         sources: '/sources',
+        updates: '/updates',
         autoupdate: '/autoupdate',
-        tracker: '/tracker',
-        sync: '/sync',
         duplicates: '/duplicates',
         openapi: '/openapi',
       };
@@ -652,8 +681,6 @@ export default function App() {
       browse: '/browse',
       sources: '/sources',
       autoupdate: '/autoupdate',
-      tracker: '/tracker',
-      sync: '/sync',
       duplicates: '/duplicates',
       openapi: '/openapi',
     };
@@ -686,6 +713,11 @@ export default function App() {
       })
     );
 
+    if (activeProfileId === 'usr_guest') {
+      // Guest / Unregistered Client: Save strictly on client side!
+      saveClientSessionProgress(mangaId, chapterNumber);
+      return;
+    }
 
     try {
       await fetch('/api/reader/mark-read', {
@@ -720,7 +752,6 @@ export default function App() {
         onOpenSettingsModal={() => setIsSettingsOpen(true)}
         isIncognito={isIncognito}
         onToggleIncognito={() => setIsIncognito(!isIncognito)}
-        onOpenLocalReader={() => setLocalReaderOpen(true)}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
@@ -773,31 +804,9 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'reader' && (
-
-          <ReaderHubView
-            mangaList={displayMangaList}
-            onOpenReader={handleOpenReader}
-            onOpenChapters={handleOpenChapters}
-            onSelectManga={(manga) => setSelectedMangaDetail(manga)}
-          />
-        )}
-
-        {activeTab === 'tracker' && (
-          <TrackerView mangaList={displayMangaList} />
-        )}
 
 
-        {activeTab === 'autoupdate' && (
-          <AutoUpdateView
-            logs={logs}
-            config={config}
-            mangaList={mangaList}
-            onRunAutoUpdate={handleRunAutoUpdate}
-            isUpdating={isUpdating}
-            onToggleAutoUpdateItem={handleToggleAutoUpdateItem}
-          />
-        )}
+
 
         {activeTab === 'sources' && (
           <KotatsuSourcesView
@@ -883,46 +892,22 @@ export default function App() {
           onExportDb={handleExportDb}
           onImportDb={handleImportDb}
           onResetDb={handleResetDb}
+          activeProfile={activeProfile}
+          logs={logs}
+          mangaList={mangaList}
+          onRunAutoUpdate={handleRunAutoUpdate}
+          isUpdating={isUpdating}
         />
       )}
 
-      {/* Local Offline CBZ / Folder Reader Modal */}
 
-      {localReaderOpen && (
-        <LocalMangaReaderModal
-          onClose={() => setLocalReaderOpen(false)}
-          onOpenCustomPagesReader={(title, pages) => {
-            const tempManga: MangaItem = {
-              id: 'local_' + Date.now(),
-              title,
-              altTitles: ['Local CBZ Archive'],
-              type: 'manga',
-              coverImage: pages[0] || '',
-              description: 'Local offline manga CBZ file',
-              genres: ['Offline', 'Local'],
-              status: 'reading',
-              currentChapter: 1,
-              totalChapters: 1,
-              latestChapter: 1,
-              lastUpdated: new Date().toISOString(),
-              rating: 10,
-              sourceUrl: 'file://local',
-              sourceName: 'Local CBZ Reader',
-              autoUpdateEnabled: false,
-              notes: 'Local file',
-              addedAt: new Date().toISOString(),
-              lastReadAt: new Date().toISOString(),
-            };
-            setReaderTarget({ manga: tempManga, chapterNumber: 1 });
-          }}
-        />
-      )}
 
       {/* User Registration & Sign In Auth Modal */}
       {authModalOpen && (
         <AuthModal
           onLogin={(user) => {
             setActiveProfileId(user.id);
+            migrateClientSessionHistoryToUser(user.id);
             setAuthModalOpen(false);
           }}
           onRegister={handleRegisterUser}
@@ -942,7 +927,6 @@ export default function App() {
             setUserProfileModalOpen(false);
           }}
           onCreateProfile={handleCreateProfile}
-          onUpdateProfileFolder={handleUpdateProfileFolder}
           onDeleteProfile={handleDeleteProfile}
           onClose={() => setUserProfileModalOpen(false)}
         />
@@ -980,7 +964,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>OmniManga Subdomain Tracking Platform • {config.subdomain}</p>
+          <p>Graywood Reader and Tracker • {config.subdomain}</p>
           <p className="flex items-center gap-2">
             <span>Automatic Chapter Scanner Active</span>
             <span>•</span>

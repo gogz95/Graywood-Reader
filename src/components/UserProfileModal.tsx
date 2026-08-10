@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { X, User, Plus, Check, Folder, Sparkles, Trash2, Edit2, Shield } from 'lucide-react';
+import { X, User, Plus, Trash2 } from 'lucide-react';
 
 interface UserProfileModalProps {
   profiles: UserProfile[];
   activeProfileId: string;
   isHostComputer?: boolean;
   onSelectProfile: (profileId: string) => void;
-  onCreateProfile: (name: string, avatar: string, storageFolderPath: string) => void;
-  onUpdateProfileFolder: (profileId: string, folderPath: string) => void;
+  onCreateProfile: (name: string, avatar: string) => void;
   onDeleteProfile: (profileId: string) => void;
   onClose: () => void;
 }
@@ -19,47 +18,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   isHostComputer = true,
   onSelectProfile,
   onCreateProfile,
-  onUpdateProfileFolder,
   onDeleteProfile,
   onClose,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAvatar, setNewAvatar] = useState('🥷');
-  const [newFolderPath, setNewFolderPath] = useState('C:\\Users\\Default\\MangaStorage');
 
   const avatarOptions = ['🥷', '🦸‍♂️', '🧙‍♂️', '🦊', '🐉', '⚡', '👑', '🔥', '⚔️', '🤖'];
-
-  // Native HTML5 File System Access API directory picker
-  const handleBrowseFolder = async (forProfileId?: string) => {
-    try {
-      if ('showDirectoryPicker' in window) {
-        const dirHandle = await (window as any).showDirectoryPicker();
-        const selectedPath = `C:\\Users\\LocalMangaStorage\\${dirHandle.name}`;
-        if (forProfileId) {
-          onUpdateProfileFolder(forProfileId, selectedPath);
-        } else {
-          setNewFolderPath(selectedPath);
-        }
-      } else {
-        const customPath = prompt('Enter or paste local storage folder path:', forProfileId ? profiles.find(p=>p.id===forProfileId)?.storageFolderPath : newFolderPath);
-        if (customPath) {
-          if (forProfileId) {
-            onUpdateProfileFolder(forProfileId, customPath);
-          } else {
-            setNewFolderPath(customPath);
-          }
-        }
-      }
-    } catch (err) {
-      console.log('Folder selection cancelled or unsupported:', err);
-    }
-  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    onCreateProfile(newName, newAvatar, newFolderPath);
+    onCreateProfile(newName, newAvatar);
     setNewName('');
     setIsCreating(false);
   };
@@ -70,7 +41,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="font-black text-slate-100 text-base flex items-center gap-2">
             <User className="w-5 h-5 text-amber-400" />
-            Individual User Profiles & Per-User Folder Storage
+            Individual User Profiles
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
@@ -123,27 +94,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1 pt-0.5">
-                          <Folder className="w-3 h-3 text-amber-400" />
-                          <span className="truncate max-w-[140px] font-mono">{profile.storageFolderPath}</span>
-                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-xs">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleBrowseFolder(profile.id);
-                      }}
-                      className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                    >
-                      <Folder className="w-3 h-3" />
-                      <span>Change Folder</span>
-                    </button>
-
-                    {profiles.length > 1 && (
+                  <div className="flex items-center justify-end border-t border-slate-800/80 pt-2 text-xs">
+                    {profiles.length > 1 && profile.id !== 'usr_admin' && profile.id !== 'usr_guest' && profile.role !== 'admin' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -200,26 +156,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 required
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-slate-200"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-300">Self-Selected Local Storage Directory:</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newFolderPath}
-                  onChange={(e) => setNewFolderPath(e.target.value)}
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-slate-200 font-mono text-xs"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleBrowseFolder()}
-                  className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5"
-                >
-                  <Folder className="w-4 h-4 text-amber-400" />
-                  <span>Browse...</span>
-                </button>
-              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">

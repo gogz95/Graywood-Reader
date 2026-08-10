@@ -3,7 +3,7 @@ export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
 export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'invert' | 'brightness' | 'oled';
 export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk';
 export type MangaType = 'manga' | 'manhwa' | 'manhua';
-export type AppNavTab = 'library' | 'browse' | 'reader' | 'tracker' | 'autoupdate' | 'sources' | 'settings';
+export type AppNavTab = 'library' | 'browse' | 'sources' | 'settings';
 
 
 export type SourceEngineType = 'madara' | 'mangathemesia' | 'mangadex' | 'foolslide' | 'wpcomics' | 'custom_html';
@@ -106,6 +106,7 @@ export interface AppSettings {
   captchaSolverEnabled: boolean;
   captchaApiKey: string;
   stealthMode: boolean;
+  preferredLanguage?: string;
   readerDefaults: ReaderSettings;
 }
 
@@ -174,6 +175,8 @@ export interface AutoUpdateLog {
   type: MangaType;
 }
 
+
+
 export interface DatabaseSyncConfig {
   subdomain: string;
   autoUpdateIntervalMinutes: number;
@@ -210,7 +213,6 @@ export interface UserProfile {
   name: string;
   avatar: string; // Emoji or avatar icon
   role: UserRole; // 'admin' (Host/Administrator) or 'user' (Individual User)
-  storageFolderPath: string; // Per-user selected local folder path
   createdAt: string;
 }
 
