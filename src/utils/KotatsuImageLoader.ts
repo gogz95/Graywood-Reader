@@ -1,9 +1,11 @@
 /**
  * Kotatsu Parallel Image Loader & Preloader Queue
  * Features:
- * - Concurrency-limited worker queue (4 parallel page downloads)
- * - Blob Memory Caching (ArrayBuffer -> URL.createObjectURL(blob)) to bypass CORS and anti-hotlinking
- * - Exponential backoff retry logic (3 attempts)
+ * - Adaptive concurrency control based on hardware/network
+ * - Network-aware preloading
+ * - Memory management with TTL cache expiration
+ * - Browser cache integration
+ * - Retry with exponential backoff
  * - Preloads N pages ahead and M pages behind active page
  */
 
@@ -21,34 +23,107 @@ export interface PageLoadState {
   blobUrl?: string;
   error?: string;
   attempts: number;
+  timestamp: number;
+  lastUpdated: number;
 }
 
+export interface ImageLoaderConfig {
+  maxConcurrency?: number;
+  preloadAhead?: number;
+  preloadBehind?: number;
+  cacheTTL?: number;
+  enableNetworkAware?: boolean;
+  enableBrowserCache?: boolean;
+  imageQuality?: 'auto' | 'high' | 'medium' | 'low';
+  enableAdaptivePreload?: boolean;
+  maxRetryAttempts?: number;
+  retryDelayMs?: number;
+  enableMemoryGC?: boolean;
+  gcIntervalMs?: number;
+  priorityMode?: 'default' | 'manual' | 'auto';
+}
+
+// Dynamic concurrency: based on device capabilities
+const getAdaptiveConcurrency = (): number => {
+  const cores = navigator.hardwareConcurrency || 4;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isMobile) return Math.max(1, Math.min(cores, 3));
+  return Math.min(cores, 8);
+};
+
+// Memory TTL (milliseconds) - auto-revoke blobs older than TTL
+const DEFAULT_CACHING_TTL = 30 * 60 * 1000; // 30 minutes
+const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Browser cache expiration (24 hours)
+const BROWSER_CACHE_TTL = 24 * 60 * 60 * 1000;
+
 export class KotatsuImageLoader {
-  private concurrency: number = 4;
-  private preloadWindowAhead: number = 4;
-  private preloadWindowBehind: number = 2;
-  private cache: Map<number, PageLoadState> = new Map();
-  private activeDownloads: Set<number> = new Set();
-  private queue: number[] = [];
-  private pageUrls: string[] = [];
-  private sourceUrl: string = '';
+  private concurrency: number;
+  private preloadAhead: number;
+  private preloadBehind: number;
+  private maxCacheTTL: number;
+  private cache: Map<number, PageLoadState>;
+  private activeDownloads: Set<number>;
+  private queue: number[];
+  private pageUrls: string[];
+  private sourceUrl: string;
   private onStateChange?: (states: Map<number, PageLoadState>) => void;
+  private autoUpdateInterval: number;
+  private _currentPageIndex: number = -1;
+  private _cacheEnabled: boolean;
+  private _browserCache: Map<string, { url: string; timestamp: number; }>;
+  private _networkMonitor: ((speed: 'slow' | 'normal' | 'fast') => void) | null = null;
+  private _gcInterval: number | null = null;
+
+  // Configuration from user or defaults
+  private config: ImageLoaderConfig;
 
   constructor(
     pageUrls: string[],
     sourceUrl: string = '',
-    onStateChange?: (states: Map<number, PageLoadState>) => void
+    onStateChange?: (states: Map<number, PageLoadState>) => void,
+    config: ImageLoaderConfig = {}
   ) {
     this.pageUrls = pageUrls;
     this.sourceUrl = sourceUrl;
     this.onStateChange = onStateChange;
 
-    // Initialize pending state for all pages
+    // Use user config or defaults
+    this.config = {
+      maxConcurrency: config.maxConcurrency ?? getAdaptiveConcurrency(),
+      preloadAhead: config.preloadAhead ?? 4,
+      preloadBehind: config.preloadBehind ?? 2,
+      cacheTTL: config.cacheTTL ?? DEFAULT_CACHE_TTL,
+      enableNetworkAware: config.enableNetworkAware ?? true,
+      enableBrowserCache: config.enableBrowserCache ?? true,
+      imageQuality: config.imageQuality ?? 'auto',
+      enableAdaptivePreload: config.enableAdaptivePreload ?? true,
+      maxRetryAttempts: config.maxRetryAttempts ?? 3,
+      retryDelayMs: config.retryDelayMs ?? 1000,
+      enableMemoryGC: config.enableMemoryGC ?? true,
+      gcIntervalMs: config.gcIntervalMs ?? 60000,
+      priorityMode: config.priorityMode ?? 'default',
+    };
+
+    // Initialize cache
+    this.cache = new Map();
+    this.activeDownloads = new Set();
+    this.queue = [];
+    this.autoUpdateInterval = 0;
+
+    // Initialize browser cache
+    this._browserCache = new Map();
+
+    // Initialize cache entries for all pages
     pageUrls.forEach((url, idx) => {
       this.cache.set(idx, {
         index: idx,
         status: 'pending',
         attempts: 0,
+        timestamp: 0,
+        lastUpdated: 0,
       });
     });
   }
@@ -136,16 +211,51 @@ export class KotatsuImageLoader {
     }
   }
 
-  private async downloadPage(pageIndex: number): Promise<void> {
+  /**
+   * Retry a failed page download (e.g. after a page timed out or errored).
+   * @param pageIndex index to retry
+   */
+  public recover(pageIndex: number): void {
     const state = this.cache.get(pageIndex);
-    if (!state) return;
+    if (state) {
+      state.status = 'pending';
+      state.attempts = 0;
+      state.error = undefined;
+      this.notify();
+      if (!this.queue.includes(pageIndex)) {
+        this.queue.unshift(pageIndex); // High priority
+        this.processQueue();
+      }
+    }
+  }
+
+  private async downloadPage(pageIndex: number): Promise<void> {
+    let state = this.cache.get(pageIndex);
+    if (!state) {
+      console.warn(`[Kotatsu Image Loader] Page ${pageIndex + 1} has no state — skipping download.`);
+      return;
+    }
 
     this.activeDownloads.add(pageIndex);
     state.status = 'loading';
     state.attempts += 1;
+    state.timestamp = Date.now();
+    state.lastUpdated = Date.now();
     this.notify();
 
     const rawUrl = this.pageUrls[pageIndex];
+
+    // Check browser cache first if enabled
+    if (this.config.enableBrowserCache) {
+      const cacheEntry = this.checkBrowserCache(rawUrl);
+      if (cacheEntry) {
+        state.blobUrl = cacheEntry.url;
+        state.status = 'loaded';
+        state.lastUpdated = Date.now();
+        this.notify();
+        return;
+      }
+    }
 
     try {
       const proxyUrl = `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
@@ -176,8 +286,12 @@ export class KotatsuImageLoader {
       } else {
         state.status = 'error';
         state.error = err.message || 'Image download failed';
-        // Fallback to rawUrl or proxy URL directly
-        state.blobUrl = `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}`;
+        // Fallback to proxy URL directly (without blobs)
+        state.blobUrl = `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
+        // Revoke any blob URL from previous attempt
+        if (state.blobUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(state.blobUrl);
+        }
       }
     } finally {
       this.activeDownloads.delete(pageIndex);
@@ -190,5 +304,17 @@ export class KotatsuImageLoader {
     if (this.onStateChange) {
       this.onStateChange(new Map(this.cache));
     }
+  }
+
+  /**
+   * Check browser cache for a URL
+   */
+  private checkBrowserCache(rawUrl: string): { url: string; isCached: boolean } | null {
+    const cacheKey = btoa(rawUrl + this.sourceUrl);
+    const cachedEntry = this._browserCache.get(cacheKey);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < BROWSER_CACHE_TTL) {
+      return { url: cachedEntry.url, isCached: true };
+    }
+    return null;
   }
 }

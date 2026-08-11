@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KotatsuImageLoader, PageLoadState } from '../utils/KotatsuImageLoader';
 import {
   MangaItem,
@@ -113,15 +113,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Toast notice
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const triggerToast = (msg: string) => {
+  const triggerToast = useCallback((msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 2500);
-  };
+  }, []);
 
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
 
-  const handleToggleFlag = async () => {
+  const handleToggleFlag = useCallback(async () => {
     const newFlagState = !isFlagged;
     let reason = flagReason;
     if (newFlagState && !reason) {
@@ -140,7 +140,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       });
       triggerToast(newFlagState ? '⚠️ Series flagged as broken' : '✓ Flag removed');
     } catch (e) {}
-  };
+  }, [isFlagged, flagReason, manga.id, triggerToast]);
 
   // Dynamically compute available scanlation group versions from manga.availableSources
   const availableScanGroups: ScanGroupOption[] = (manga.availableSources && manga.availableSources.length > 0)
@@ -155,7 +155,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const hasMultipleSources = availableScanGroups.length > 1;
 
   // Fetch chapter page image URLs
-  const fetchChapterPages = async (chNum: number) => {
+  const fetchChapterPages = useCallback(async (chNum: number) => {
     setLoading(true);
     setError(null);
     setCurrentPageIndex(0);
@@ -194,7 +194,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [initialChapterId, manga.id, manga.sourceUrl, settings.autoMarkRead, onMarkChapterRead]);
 
   useEffect(() => {
     fetchChapterPages(currentChapterNum);
@@ -230,7 +230,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   }, [isAutoScrolling, settings.autoScrollSpeed, settings.viewMode]);
 
   // Handle Scroll Progress & Auto-Next Chapter Trigger
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current || !chapterData) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     if (scrollHeight <= clientHeight) {
@@ -262,7 +262,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         }
       }, 3000);
     }
-  };
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, onMarkChapterRead, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum]);
 
   // Keyboard Navigation (Space for Auto-scroll, A/D, Arrow keys, F)
   useEffect(() => {
@@ -308,7 +308,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   }, [settings.viewMode, currentPageIndex, chapterData, settings.autoScrollSpeed]);
 
   // Handle Offline Download Chapter
-  const handleDownloadChapter = () => {
+  const handleDownloadChapter = useCallback(() => {
     setDownloading(true);
     setDownloadProgress(10);
 
@@ -323,49 +323,47 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         return prev + 25;
       });
     }, 350);
-  };
+  }, [currentChapterNum, triggerToast]);
 
   // Toggle bookmark for page
-  const toggleBookmarkPage = (pageIdx: number) => {
-    if (bookmarkedPages.includes(pageIdx)) {
-      setBookmarkedPages(bookmarkedPages.filter((p) => p !== pageIdx));
-      triggerToast(`Removed page ${pageIdx + 1} from bookmarks.`);
-    } else {
-      setBookmarkedPages([...bookmarkedPages, pageIdx]);
-      triggerToast(`Bookmarked page ${pageIdx + 1}!`);
-    }
-  };
+  const toggleBookmarkPage = useCallback((pageIdx: number) => {
+    setBookmarkedPages((prev) => {
+      const newBookmarks = prev.includes(pageIdx)
+        ? prev.filter((p) => p !== pageIdx)
+        : [...prev, pageIdx];
+      triggerToast(
+        prev.includes(pageIdx)
+          ? `Removed page ${pageIdx + 1} from bookmarks.`
+          : `Bookmarked page ${pageIdx + 1}!`
+      );
+      return newBookmarks;
+    });
+  }, [triggerToast]);
 
   // Canvas background style mapping
-  const bgStyleClass =
-    settings.bgColor === 'black'
-      ? 'bg-black text-slate-100'
-      : settings.bgColor === 'charcoal'
-      ? 'bg-zinc-950 text-slate-100'
-      : settings.bgColor === 'sepia'
-      ? 'bg-[#1c1813] text-[#e8d5b7]'
-      : settings.bgColor === 'white'
-      ? 'bg-slate-100 text-slate-900'
-      : 'bg-slate-950 text-slate-100';
+  const bgStyleClass = useMemo(() => {
+    if (settings.bgColor === 'black') return 'bg-black text-slate-100';
+    if (settings.bgColor === 'charcoal') return 'bg-zinc-950 text-slate-100';
+    if (settings.bgColor === 'sepia') return 'bg-[#1c1813] text-[#e8d5b7]';
+    if (settings.bgColor === 'white') return 'bg-slate-100 text-slate-900';
+    return 'bg-slate-950 text-slate-100';
+  }, [settings.bgColor]);
 
   // CSS Image Filters Mapping (Including OLED pitch black optimization!)
-  const imageFilterStyle: React.CSSProperties =
-    settings.imageFilter === 'oled'
-      ? { filter: 'contrast(130%) brightness(90%)' }
-      : settings.imageFilter === 'grayscale'
-      ? { filter: 'grayscale(100%)' }
-      : settings.imageFilter === 'sepia'
-      ? { filter: 'sepia(70%) contrast(105%)' }
-      : settings.imageFilter === 'invert'
-      ? { filter: 'invert(100%) hue-rotate(180deg)' }
-      : settings.imageFilter === 'brightness'
-      ? { filter: 'contrast(120%) brightness(110%)' }
-      : {};
+  const imageFilterStyle = useMemo(() => {
+    if (settings.imageFilter === 'oled') return { filter: 'contrast(130%) brightness(90%)' };
+    if (settings.imageFilter === 'grayscale') return { filter: 'grayscale(100%)' };
+    if (settings.imageFilter === 'sepia') return { filter: 'sepia(70%) contrast(105%)' };
+    if (settings.imageFilter === 'invert') return { filter: 'invert(100%) hue-rotate(180deg)' };
+    if (settings.imageFilter === 'brightness') return { filter: 'contrast(120%) brightness(110%)' };
+    return {};
+  }, [settings.imageFilter]);
 
-  const totalChaptersList = Array.from(
-    { length: Math.max(manga.latestChapter, manga.currentChapter, 10) },
-    (_, i) => i + 1
-  ).reverse();
+  const totalChaptersList = useMemo(() => {
+    return Array.from({
+      length: Math.max(manga.latestChapter, manga.currentChapter, 10),
+    }, (_, i) => i + 1).reverse();
+  }, [manga.latestChapter, manga.currentChapter]);
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col ${settings.imageFilter === 'oled' ? 'bg-black text-white' : bgStyleClass} font-sans select-none overflow-hidden`}>

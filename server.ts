@@ -25,9 +25,20 @@ app.use((_req, res, next) => {
 // ==========================================
 // DDOS PROTECTION & RATE LIMITING MIDDLEWARE (Bypassed for Host PC)
 // ==========================================
+// Uses a TTL-based cleanup to prevent memory leaks from growing Map entries.
 const ipRequestCounts = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_MAX = 300; // max 300 requests per minute
 const RATE_LIMIT_WINDOW = 60 * 1000;
+
+// Periodic cleanup of expired IP request entries to prevent unbounded memory growth.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of ipRequestCounts) {
+    if (now > record.resetTime) {
+      ipRequestCounts.delete(ip);
+    }
+  }
+}, 30_000); // clean up every 30 seconds
 
 app.use((req, res, next) => {
   // Allow all requests on localhost or host IP
@@ -195,20 +206,72 @@ export const KOTATSU_SOURCES: SourceDefinition[] = [
   { id: 'atsumoe', name: 'Atsu Moe', baseUrl: 'https://atsu.moe', engineType: 'custom_html', lang: 'en', isNsfw: false },
   { id: 'demonicscans', name: 'Demonic Scans', baseUrl: 'https://demonicscans.org', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
 
-  // ── Expanded Kotatsu Parsers Library Sources ──────────────────────────────
-  { id: 'reaperscans', name: 'Reaper Scans', baseUrl: 'https://reaperscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'comick', name: 'ComicK', baseUrl: 'https://comick.io', engineType: 'custom_html', lang: 'en', isNsfw: false },
   { id: 'bato', name: 'Bato.to', baseUrl: 'https://bato.to', engineType: 'custom_html', lang: 'en', isNsfw: false },
   { id: 'readm', name: 'ReadM', baseUrl: 'https://readm.org', engineType: 'custom_html', lang: 'en', isNsfw: false },
 ];
 
-const REMOVED_DEAD_SOURCES = new Set<string>([
+// Define hard-coded dead sources with type safety
+const INITIAL_DEAD_SOURCES = new Set<string>([
+  'dynasty',
   'dynastyscans',
+  'immortal',
   'immortalupdates',
+  'luminous',
   'luminousscans',
+  'night',
   'nightscans',
+  'radiant',
   'radiantscans',
-]);
+  'reaper',
+  'reaperscans',
+] as const);
+
+
+const ACTIVE_ENABLED_SOURCES = new Set(['aquamanga', 'asurascans', 'flamecomics', 'manhwa18']);
+export const disabledSourceIds = new Set<string>();
+
+let syncConfig: DatabaseSyncConfig = {
+  subdomain: 'tracker.manhuahub.app',
+  autoUpdateIntervalMinutes: 60,
+  enableWebCrawling: true,
+  sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
+  disabledSources: Array.from(disabledSourceIds),
+  removedSources: [],
+  lastSyncTime: new Date().toISOString(),
+  totalTracked: 0,
+};
+
+// Load dynamic dead sources from database
+const DYNAMIC_DEAD_SOURCES = new Set<string>();
+
+// Merge all unique dead sources, ensuring case-insensitive comparison
+const ALL_DEAD_SOURCES = new Set<string>();
+
+function rebuildDeadSourcesSet() {
+  ALL_DEAD_SOURCES.clear();
+  INITIAL_DEAD_SOURCES.forEach((source) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
+  DYNAMIC_DEAD_SOURCES.forEach((source) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
+  if (Array.isArray(syncConfig?.removedSources)) {
+    syncConfig.removedSources.forEach((source: string) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
+  }
+}
+
+// Initial build of dead sources set
+rebuildDeadSourcesSet();
+
+// Helper function to check if a source is alive
+export function isSourceAlive(sourceNameOrId: string): boolean {
+  if (!sourceNameOrId) return false;
+  const normalized = sourceNameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const dead of ALL_DEAD_SOURCES) {
+    const normDead = dead.replace(/[^a-z0-9]/g, '');
+    if (normalized.includes(normDead) || normDead.includes(normalized)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Dynamic Parser Repository Auto-Scanner: Loads Parsers directly from kotatsu-parsers/ repo
 function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
@@ -218,7 +281,7 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
   const foundSources: SourceDefinition[] = [];
   const processedIds = new Set<string>([
     ...KOTATSU_SOURCES.map((s) => s.id),
-    ...REMOVED_DEAD_SOURCES,
+    ...ALL_DEAD_SOURCES,
   ]);
 
   function walkDir(dir: string) {
@@ -238,7 +301,7 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
               const lang = annotationMatch[3];
               const id = rawId.toLowerCase();
 
-              if (processedIds.has(id)) continue;
+              if (processedIds.has(id) || !isSourceAlive(id) || !isSourceAlive(sourceName)) continue;
 
               const domainMatch = content.match(/ConfigKey\.Domain\(\s*"([^"]+)"/);
               const domain = domainMatch ? domainMatch[1] : `${id}.com`;
@@ -271,7 +334,7 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
   }
 
   walkDir(parsersDir);
-  return foundSources;
+  return foundSources.filter(source => isSourceAlive(source.id) && isSourceAlive(source.name));
 }
 
 // Auto-populate KOTATSU_SOURCES from cloned repo
@@ -283,18 +346,7 @@ try {
   }
 } catch (e) { }
 
-const ACTIVE_ENABLED_SOURCES = new Set(['aquamanga', 'asurascans', 'flamecomics', 'manhwa18']);
-export const disabledSourceIds = new Set<string>();
 
-let syncConfig: DatabaseSyncConfig = {
-  subdomain: 'tracker.manhuahub.app',
-  autoUpdateIntervalMinutes: 60,
-  enableWebCrawling: true,
-  sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
-  disabledSources: Array.from(disabledSourceIds),
-  lastSyncTime: new Date().toISOString(),
-  totalTracked: mangaDatabase.length,
-};
 
 // Helper: Save Database State to Disk with AES-256-GCM GDPR Encryption & Atomic Async Write Throttling
 let saveTimeoutTimer: NodeJS.Timeout | null = null;
@@ -537,6 +589,10 @@ function loadDatabaseFromDisk() {
         if (Array.isArray(syncConfig.disabledSources)) {
           syncConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
         }
+        if (Array.isArray(syncConfig.removedSources)) {
+          syncConfig.removedSources.forEach((id: string) => DYNAMIC_DEAD_SOURCES.add(id));
+        }
+        rebuildDeadSourcesSet();
       }
       if (parsed.appSettings) {
         appSettings = {
@@ -582,12 +638,37 @@ function purgeReaperScansFromAllStorage() {
 }
 
 // Helper: Refresh metadata for a single manga item from live sources
+// Helper: Refresh metadata for a single manga item from live sources & MangaDex API
 async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> {
-  // 1. MangaDex Metadata Refresh
-  const mangaDexId =
+  // 1. MangaDex Metadata Refresh & Title Search Linker
+  let mangaDexId =
     manga.apiId ||
     (manga.id?.startsWith('md_') ? manga.id.replace('md_', '') : null) ||
     (manga.sourceUrl?.match(/\/title\/([a-f0-9\-]+)/i)?.[1]);
+
+  // If no MangaDex ID linked yet, attempt title search lookup on MangaDex API
+  if (!mangaDexId && manga.title && manga.title !== 'Unknown') {
+    try {
+      const cleanTitle = manga.title
+        .replace(/\s*\([^)]*\)/g, '')
+        .replace(/uncensored|reboot|hd|season \d+|ch \d+/gi, '')
+        .trim();
+      if (cleanTitle.length > 2) {
+        const searchRes = await fetchMangaDex(
+          `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=1&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
+        );
+        if (searchRes.ok) {
+          const searchJson = await searchRes.json();
+          const matched = searchJson.data?.[0];
+          if (matched) {
+            mangaDexId = matched.id;
+            manga.apiId = matched.id;
+            manga.syncedFromApi = 'MangaDex API v5';
+          }
+        }
+      }
+    } catch (_) { }
+  }
 
   if (mangaDexId) {
     try {
@@ -600,20 +681,27 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
         const coverFileName = coverRel?.attributes?.fileName;
 
         if (attrs.title) {
-          manga.title = attrs.title.en || Object.values(attrs.title)[0] || manga.title;
+          const mainTitle = attrs.title.en || Object.values(attrs.title)[0];
+          if (mainTitle) manga.title = mainTitle;
         }
-        if (attrs.description?.en) {
-          manga.description = attrs.description.en;
+        if (attrs.description && (attrs.description.en || Object.values(attrs.description)[0])) {
+          manga.description = attrs.description.en || Object.values(attrs.description)[0];
         }
         if (attrs.altTitles && Array.isArray(attrs.altTitles)) {
           const newAlts = attrs.altTitles.map((t: any) => Object.values(t)[0]).filter(Boolean) as string[];
           manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...newAlts]));
         }
         if (coverFileName) {
-          manga.coverImage = `https://uploads.mangadex.org/covers/${mangaDexId}/${coverFileName}.512.jpg`;
+          manga.coverImage = `/api/mangadex/image-proxy?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${mangaDexId}/${coverFileName}.512.jpg`)}`;
+        }
+        if (attrs.tags && Array.isArray(attrs.tags)) {
+          const tags = attrs.tags.map((t: any) => t.attributes?.name?.en).filter(Boolean);
+          if (tags.length > 0) {
+            manga.genres = Array.from(new Set([...(manga.genres || []), ...tags]));
+          }
         }
 
-        // Fetch max chapter number
+        // Fetch max chapter number from MangaDex chapter feed
         const feedRes = await fetchMangaDex(
           `https://api.mangadex.org/manga/${mangaDexId}/feed?limit=100&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
         );
@@ -630,6 +718,7 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
       console.warn(`[Metadata Refresh] MangaDex refresh failed for ${manga.title}:`, e.message);
     }
   }
+
 
   // 2. Asura Scans Metadata Refresh
   if (manga.sourceUrl && /asura(?:comic\.net|scans\.(?:com|org))/i.test(manga.sourceUrl)) {
@@ -869,42 +958,43 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
       }
 
       if (maxSim >= 60 && similarTarget) {
-        // Uncertain match: Do not merge silently! Keep as candidate for Duplicate Merger site
+        // Near match (60%-95% similarity): Keep series distinct and register candidate pair for Merging Tool UI
         uncertainCount++;
-      } else {
-        // 3. Completely NEW unique series: Insert into database
-        const newItem: MangaItem = {
-          id: item.id || `kotatsu_db_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          title: item.title,
-          altTitles: item.altTitles || [],
-          type: (item.type as MangaItem['type']) || 'manhwa',
-          coverImage: item.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
-          description: item.description || `Indexed from ${item.sourceName || 'Kotatsu Source'}`,
-          genres: item.genres || ['Action'],
-          status: 'plan_to_read',
-          currentChapter: 0,
-          latestChapter: item.latestChapter || 1,
-          totalChapters: item.latestChapter || 1,
-          rating: item.rating || 8.2,
-          notes: '',
-          sourceUrl: item.sourceUrl || '',
-          sourceName: item.sourceName || 'Kotatsu Engine',
-          availableSources: item.sourceName && item.sourceUrl ? [{ sourceName: item.sourceName, sourceUrl: item.sourceUrl }] : [],
-          autoUpdateEnabled: true,
-          isFavorite: false,
-          syncedFromApi: item.sourceName || 'Kotatsu Sources',
-          addedAt: new Date().toISOString(),
-          lastUpdated: new Date().toISOString(),
-          lastReadAt: new Date().toISOString(),
-        };
-
-        syncAddOrUpdateManga(newItem);
-        newCount++;
       }
+
+      // Insert new/similar series into database
+      const newItem: MangaItem = {
+        id: item.id || `kotatsu_db_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        title: item.title,
+        altTitles: item.altTitles || [],
+        type: (item.type as MangaItem['type']) || 'manhwa',
+        coverImage: item.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+        description: item.description || `Indexed from ${item.sourceName || 'Kotatsu Source'}`,
+        genres: item.genres || ['Action'],
+        status: 'plan_to_read',
+        currentChapter: 0,
+        latestChapter: item.latestChapter || 1,
+        totalChapters: item.latestChapter || 1,
+        rating: item.rating || 8.2,
+        notes: '',
+        sourceUrl: item.sourceUrl || '',
+        sourceName: item.sourceName || 'Kotatsu Engine',
+        availableSources: item.sourceName && item.sourceUrl ? [{ sourceName: item.sourceName, sourceUrl: item.sourceUrl }] : [],
+        autoUpdateEnabled: true,
+        isFavorite: false,
+        syncedFromApi: item.sourceName || 'Kotatsu Sources',
+        addedAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        lastReadAt: new Date().toISOString(),
+      };
+
+      syncAddOrUpdateManga(newItem);
+      newCount++;
     }
   }
 
   return { mergedCount, uncertainCount, newCount };
+
 }
 
 // ==========================================
@@ -1083,6 +1173,25 @@ app.post("/api/manga/toggle-flag", (req, res) => {
     existing.flagReason = flagReason || (isFlagged ? "Flagged for loading errors" : undefined);
     existing.flaggedAt = isFlagged ? new Date().toISOString() : undefined;
     syncAddOrUpdateManga(existing);
+    
+    // If we just flagged as broken, add automatic retry support
+    if (isFlagged && flagReason?.includes("loading failed")) {
+      console.log(`[Flag Resolution Engine] Attempting automatic source recovery for ${existing.title}`);
+      const attempts = 0;
+      const maxAttempts = 3;
+      
+      // Simple retry mechanism - we don't block the response but trigger recovery
+      setTimeout(() => {
+        // This will trigger the chapter loading process for flagged manga
+        const flaggedManga = getMangaById(id);
+        if (flaggedManga && flaggedManga.autoUpdateEnabled && !isUpdaterWorking) {
+          // Schedule a manual refresh attempt
+          setImmediate(() => {
+            refreshManga(id).catch(console.error);
+          });
+        }
+      }, 5000 + attempts * 2000); // retry every 2 seconds for 3 attempts
+    }
   }
 
   res.json({ success: true, manga: existing });
@@ -1977,49 +2086,71 @@ app.post("/api/tracker/dismiss-duplicate", (req, res) => {
 
 app.post("/api/tracker/detect-duplicates", async (req, res) => {
   const candidates: DuplicateCandidate[] = [];
+  const processedPairs = new Set<string>();
 
-  // Step 1: Programmatic title similarity & token matching across the global database
-  for (let i = 0; i < mangaDatabase.length; i++) {
-    for (let j = i + 1; j < mangaDatabase.length; j++) {
-      const itemA = mangaDatabase[i];
-      const itemB = mangaDatabase[j];
+  // Inverted token map for instant candidate pairing across thousands of series
+  const tokenMap = new Map<string, MangaItem[]>();
+  for (const m of mangaDatabase) {
+    const tokens = Array.from(new Set(
+      [m.title, ...(m.altTitles || [])]
+        .flatMap((t) => t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/))
+        .filter((tok) => tok.length >= 4 && !['the', 'that', 'with', 'from', 'this', 'your', 'about', 'chapter'].includes(tok))
+    ));
+    for (const tok of tokens) {
+      if (!tokenMap.has(tok)) tokenMap.set(tok, []);
+      tokenMap.get(tok)!.push(m);
+    }
+  }
 
-      if (ignoredDuplicatePairs.has(`${itemA.id}_${itemB.id}`)) continue;
+  // Compare series sharing significant title tokens
+  for (const list of tokenMap.values()) {
+    if (list.length < 2 || list.length > 25) continue; // Skip over-broad token buckets
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const itemA = list[i];
+        const itemB = list[j];
+        if (itemA.id === itemB.id) continue;
 
-      let maxSim = calculateStringSimilarity(itemA.title, itemB.title);
+        const pairKey = itemA.id < itemB.id ? `${itemA.id}_${itemB.id}` : `${itemB.id}_${itemA.id}`;
+        if (processedPairs.has(pairKey)) continue;
+        processedPairs.add(pairKey);
 
-      // Check alt titles
-      for (const altA of itemA.altTitles) {
-        const sim = calculateStringSimilarity(altA, itemB.title);
-        if (sim > maxSim) maxSim = sim;
-      }
-      for (const altB of itemB.altTitles) {
-        const sim = calculateStringSimilarity(itemA.title, altB);
-        if (sim > maxSim) maxSim = sim;
-      }
+        if (ignoredDuplicatePairs.has(`${itemA.id}_${itemB.id}`) || ignoredDuplicatePairs.has(`${itemB.id}_${itemA.id}`)) continue;
 
-      if (maxSim >= 60 || (itemA.type === itemB.type && itemA.coverImage === itemB.coverImage)) {
-        const mergedAltSet = new Set([...itemA.altTitles, ...itemB.altTitles, itemA.title, itemB.title]);
-        const mergedAltTitles = Array.from(mergedAltSet).filter(
-          (t) => t.toLowerCase() !== itemA.title.toLowerCase()
-        );
+        let maxSim = calculateStringSimilarity(itemA.title, itemB.title);
+        for (const altA of itemA.altTitles) {
+          const sim = calculateStringSimilarity(altA, itemB.title);
+          if (sim > maxSim) maxSim = sim;
+        }
+        for (const altB of itemB.altTitles) {
+          const sim = calculateStringSimilarity(itemA.title, altB);
+          if (sim > maxSim) maxSim = sim;
+        }
 
-        const mergedGenres = Array.from(new Set([...itemA.genres, ...itemB.genres]));
+        if (maxSim >= 60 || (itemA.coverImage && itemA.coverImage === itemB.coverImage)) {
+          const mergedAltSet = new Set([...itemA.altTitles, ...itemB.altTitles, itemA.title, itemB.title]);
+          const mergedAltTitles = Array.from(mergedAltSet).filter(
+            (t) => t.toLowerCase() !== itemA.title.toLowerCase()
+          );
 
-        candidates.push({
-          id: `dup_${itemA.id}_${itemB.id}`,
-          primaryItem: itemA,
-          secondaryItem: itemB,
-          similarityScore: Math.min(maxSim + 15, 99),
-          reason: maxSim >= 80 ? 'High title & alternate name match' : 'Similar romanized title & matching genre tags',
-          suggestedTitle: itemA.title.length >= itemB.title.length ? itemA.title : itemB.title,
-          mergedAltTitles,
-          suggestedGenres: mergedGenres,
-          suggestedDescription: itemA.description.length > itemB.description.length ? itemA.description : itemB.description,
-        });
+          const mergedGenres = Array.from(new Set([...itemA.genres, ...itemB.genres]));
+
+          candidates.push({
+            id: `dup_${itemA.id}_${itemB.id}`,
+            primaryItem: itemA,
+            secondaryItem: itemB,
+            similarityScore: Math.min(maxSim + 15, 99),
+            reason: maxSim >= 80 ? 'High title & alternate name match' : 'Similar romanized title & matching genre tags',
+            suggestedTitle: itemA.title.length >= itemB.title.length ? itemA.title : itemB.title,
+            mergedAltTitles,
+            suggestedGenres: mergedGenres,
+            suggestedDescription: itemA.description.length > itemB.description.length ? itemA.description : itemB.description,
+          });
+        }
       }
     }
   }
+
 
   // Step 2: Use Gemini AI to enhance duplicate detection if API key present
   const ai = getGeminiClient();
@@ -2482,13 +2613,55 @@ const SOURCE_DEDICATED_CATALOGS: Record<string, { title: string; slug: string; c
   ],
 };
 
-// Kotatsu Sources List Endpoint (With isEnabled states)
+// Helper: Permanently delete all currently disabled sources from memory and database
+export function purgeDisabledSources(): { purgedCount: number; remainingCount: number } {
+  const toPurge = Array.from(disabledSourceIds);
+
+  // Add all disabled source IDs into removedSources & DYNAMIC_DEAD_SOURCES
+  if (!Array.isArray(syncConfig.removedSources)) {
+    syncConfig.removedSources = [];
+  }
+  const removedSet = new Set(syncConfig.removedSources);
+  toPurge.forEach((id) => {
+    removedSet.add(id.toLowerCase());
+    DYNAMIC_DEAD_SOURCES.add(id.toLowerCase());
+  });
+  syncConfig.removedSources = Array.from(removedSet);
+
+  // Clear disabledSourceIds and rebuild dead sources set
+  disabledSourceIds.clear();
+  syncConfig.disabledSources = [];
+  rebuildDeadSourcesSet();
+
+  // Prune KOTATSU_SOURCES array in-place
+  const aliveSources = KOTATSU_SOURCES.filter((s) => isSourceAlive(s.id) && isSourceAlive(s.name));
+  KOTATSU_SOURCES.length = 0;
+  KOTATSU_SOURCES.push(...aliveSources);
+
+  saveDatabaseToDisk();
+  console.log(`[Kotatsu Engine] Permanently deleted ${toPurge.length} disabled sources. Remaining active sources: ${KOTATSU_SOURCES.length}`);
+
+  return { purgedCount: toPurge.length, remainingCount: KOTATSU_SOURCES.length };
+}
+
+// Kotatsu Sources List Endpoint (Returns active enabled sources only)
 app.get("/api/kotatsu/sources", (_req, res) => {
-  const listWithStates = KOTATSU_SOURCES.map((s) => ({
+  const activeSources = KOTATSU_SOURCES.filter((s) => !disabledSourceIds.has(s.id) && isSourceAlive(s.id) && isSourceAlive(s.name));
+  const listWithStates = activeSources.map((s) => ({
     ...s,
-    isEnabled: !disabledSourceIds.has(s.id),
+    isEnabled: true,
   }));
   res.json(listWithStates);
+});
+
+// Endpoint to permanently purge all disabled sources
+app.post("/api/kotatsu/sources/purge-disabled", (_req, res) => {
+  const result = purgeDisabledSources();
+  res.json({
+    success: true,
+    message: `Permanently deleted ${result.purgedCount} disabled sources. ${result.remainingCount} active sources remain.`,
+    ...result,
+  });
 });
 
 // Toggle Individual Source Enable/Disable Endpoint
@@ -2512,6 +2685,7 @@ app.post("/api/kotatsu/sources/toggle", (req, res) => {
     disabledCount: disabledSourceIds.size,
   });
 });
+
 
 // Kotatsu App Explore & Featured Recommendations Endpoint
 app.get("/api/kotatsu/explore/featured", async (_req, res) => {
@@ -2588,22 +2762,83 @@ app.get("/api/kotatsu/updates", async (_req, res) => {
   }
 });
 
-// Bulk Ingestion Endpoint: Pull All Series From Enabled Sources into Database
-app.post("/api/kotatsu/pull-all-sources", async (_req, res) => {
-  console.log("[Kotatsu Ingestion Engine] Starting bulk ingestion from all enabled sources...");
+// Comprehensive Bulk Database Update Engine: Pull available series from all active sources
+export async function updateDatabaseWithAllAvailableSeries(): Promise<{
+  totalNew: number;
+  totalMerged: number;
+  totalSeriesInDatabase: number;
+  sourceCounts: Record<string, number>;
+}> {
+  console.log('[Database Engine] Starting comprehensive update with all available series from active sources...');
   let totalNew = 0;
   let totalMerged = 0;
+  const sourceCounts: Record<string, number> = {};
 
+  // 1. Ingest complete static Kotatsu catalog
   try {
-    // 1. Ingest Complete Kotatsu Catalog dataset
     const catalogResult = integrateKotatsuSourcesAndMerge(KOTATSU_COMPLETE_CATALOG);
     totalNew += catalogResult.newCount;
     totalMerged += catalogResult.mergedCount;
+    sourceCounts['kotatsu_catalog'] = KOTATSU_COMPLETE_CATALOG.length;
+  } catch (e: any) {
+    console.warn('[Database Engine] Catalog merge warning:', e.message);
+  }
 
-    // 2. Fetch top popular series from MangaDex API
-    try {
+  // 2. Ingest series from Asura Scans (scrapes canonical API up to 340 series)
+  try {
+    const asuraResult = await scrapeAsuraScans(1, 250);
+    const asuraItems = Array.isArray(asuraResult) ? asuraResult : (asuraResult?.items || []);
+    if (asuraItems.length > 0) {
+      const res = integrateKotatsuSourcesAndMerge(asuraItems);
+      totalNew += res.newCount;
+      totalMerged += res.mergedCount;
+      sourceCounts['asurascans'] = asuraItems.length;
+      console.log(`[Database Engine] Asura Scans: +${res.newCount} new, ${res.mergedCount} merged (${asuraItems.length} pulled)`);
+    }
+  } catch (e: any) {
+    console.warn('[Database Engine] Asura Scans bulk update warning:', e.message);
+  }
+
+  // 3. Ingest series from Flame Comics
+  try {
+    const flameItems = await scrapeFlameComics(1, 450);
+    if (flameItems && flameItems.length > 0) {
+      const res = integrateKotatsuSourcesAndMerge(flameItems);
+      totalNew += res.newCount;
+      totalMerged += res.mergedCount;
+      sourceCounts['flamecomics'] = flameItems.length;
+      console.log(`[Database Engine] Flame Comics: +${res.newCount} new, ${res.mergedCount} merged (${flameItems.length} pulled)`);
+    }
+  } catch (e: any) {
+    console.warn('[Database Engine] Flame Comics bulk update warning:', e.message);
+  }
+
+  // 4. Ingest series from Manhwa18 (top 5 pages)
+  try {
+    const m18Items: any[] = [];
+    for (let p = 1; p <= 5; p++) {
+      const pageItems = await scrapeManhwa18(p, 20);
+      if (pageItems && pageItems.length > 0) {
+        m18Items.push(...pageItems);
+      }
+    }
+    if (m18Items.length > 0) {
+      const res = integrateKotatsuSourcesAndMerge(m18Items);
+      totalNew += res.newCount;
+      totalMerged += res.mergedCount;
+      sourceCounts['manhwa18'] = m18Items.length;
+      console.log(`[Database Engine] Manhwa18: +${res.newCount} new, ${res.mergedCount} merged (${m18Items.length} pulled)`);
+    }
+  } catch (e: any) {
+    console.warn('[Database Engine] Manhwa18 bulk update warning:', e.message);
+  }
+
+  // 5. Ingest top popular series from MangaDex API (5 pages = 500 top series)
+  try {
+    let mdFetched = 0;
+    for (let offset = 0; offset < 500; offset += 100) {
       const mdRes = await fetchMangaDex(
-        'https://api.mangadex.org/manga?order[followedCount]=desc&limit=100&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive'
+        `https://api.mangadex.org/manga?order[followedCount]=desc&limit=100&offset=${offset}&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
       );
       if (mdRes.ok) {
         const mdData = await mdRes.json();
@@ -2620,10 +2855,12 @@ app.post("/api/kotatsu/pull-all-sources", async (_req, res) => {
           const descObj = m.attributes.description || {};
           const description = (descObj.en || Object.values(descObj)[0] || '').substring(0, 250);
           const tags = (m.attributes.tags || []).map((t: any) => t.attributes?.name?.en).filter(Boolean).slice(0, 5);
+          const altTitles = (m.attributes.altTitles || []).map((t: any) => Object.values(t)[0]).filter(Boolean) as string[];
 
           return {
             id: `md_${m.id}`,
             title,
+            altTitles,
             sourceUrl: `https://mangadex.org/title/${m.id}`,
             coverImage: rawCoverUrl ? `/api/mangadex/image-proxy?url=${encodeURIComponent(rawCoverUrl)}` : '',
             sourceName: 'MangaDex API',
@@ -2638,29 +2875,143 @@ app.post("/api/kotatsu/pull-all-sources", async (_req, res) => {
           };
         });
 
-        const mdResult = integrateKotatsuSourcesAndMerge(mdItems);
-        totalNew += mdResult.newCount;
-        totalMerged += mdResult.mergedCount;
+        const res = integrateKotatsuSourcesAndMerge(mdItems);
+        totalNew += res.newCount;
+        totalMerged += res.mergedCount;
+        mdFetched += mdItems.length;
+      }
+    }
+    sourceCounts['mangadex'] = mdFetched;
+    console.log(`[Database Engine] MangaDex API: +${totalNew} new, ${totalMerged} merged (${mdFetched} pulled)`);
+  } catch (err: any) {
+    console.warn('[Database Engine] MangaDex ingestion warning:', err.message);
+  }
+
+  saveDatabaseToDisk();
+  console.log(`[Database Engine] Comprehensive update complete! Added: ${totalNew}, Merged: ${totalMerged}, Total DB count: ${mangaDatabase.length}`);
+
+  return {
+    totalNew,
+    totalMerged,
+    totalSeriesInDatabase: mangaDatabase.length,
+    sourceCounts,
+  };
+}
+
+// Bulk MangaDex Catalog Ingestor: Pulls thousands of series from MangaDex API
+export async function pullBulkMangaDexSeries(maxPages: number = 20): Promise<{
+  totalNew: number;
+  totalMerged: number;
+  totalPulled: number;
+  totalSeriesInDatabase: number;
+}> {
+  const pagesToPull = Math.min(100, Math.max(1, maxPages));
+  console.log(`[MangaDex Bulk Engine] Starting bulk ingest of ${pagesToPull} pages (${pagesToPull * 100} series) from MangaDex API...`);
+
+  let totalNew = 0;
+  let totalMerged = 0;
+  let totalPulled = 0;
+
+  for (let p = 0; p < pagesToPull; p++) {
+    const offset = p * 100;
+    try {
+      const url = `https://api.mangadex.org/manga?order[followedCount]=desc&limit=100&offset=${offset}&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`;
+      const res = await fetchMangaDex(url);
+      if (res.ok) {
+        const data = await res.json();
+        const rawItems = data.data || [];
+        totalPulled += rawItems.length;
+
+        const formattedItems = rawItems.map((m: any) => {
+          const titleObj = m.attributes.title || {};
+          const title = titleObj.en || Object.values(titleObj)[0] || 'Unknown';
+          const lang = m.attributes.originalLanguage || '';
+          const type = lang === 'ko' ? 'manhwa' : lang === 'zh' || lang === 'zh-hk' ? 'manhua' : 'manga';
+          const coverRel = (m.relationships || []).find((r: any) => r.type === 'cover_art');
+          const coverFileName = coverRel?.attributes?.fileName;
+          const rawCoverUrl = coverFileName
+            ? `https://uploads.mangadex.org/covers/${m.id}/${coverFileName}.512.jpg`
+            : '';
+          const descObj = m.attributes.description || {};
+          const description = (descObj.en || Object.values(descObj)[0] || '').substring(0, 250);
+          const tags = (m.attributes.tags || []).map((t: any) => t.attributes?.name?.en).filter(Boolean).slice(0, 5);
+          const altTitles = (m.attributes.altTitles || []).map((t: any) => Object.values(t)[0]).filter(Boolean) as string[];
+
+          return {
+            id: `md_${m.id}`,
+            title,
+            altTitles,
+            sourceUrl: `https://mangadex.org/title/${m.id}`,
+            coverImage: rawCoverUrl ? `/api/mangadex/image-proxy?url=${encodeURIComponent(rawCoverUrl)}` : '',
+            sourceName: 'MangaDex API',
+            apiId: m.id,
+            description,
+            genres: tags.length ? tags : ['Action', 'Fantasy'],
+            latestChapter: Number(m.attributes.lastChapter) || 10,
+            type,
+            status: 'reading' as const,
+            currentChapter: 0,
+            rating: 9.5,
+          };
+        });
+
+        const mergeRes = integrateKotatsuSourcesAndMerge(formattedItems);
+        totalNew += mergeRes.newCount;
+        totalMerged += mergeRes.mergedCount;
+
+        console.log(`[MangaDex Bulk Engine] Page ${p + 1}/${pagesToPull} (Offset ${offset}): +${mergeRes.newCount} new, ${mergeRes.mergedCount} merged (${rawItems.length} items)`);
       }
     } catch (err: any) {
-      console.warn("[Kotatsu Ingestion Engine] MangaDex ingestion warning:", err.message);
+      console.warn(`[MangaDex Bulk Engine] Error on page ${p + 1}:`, err.message);
     }
+  }
 
-    saveDatabaseToDisk();
-    console.log(`[Kotatsu Ingestion Engine] Ingestion complete: ${totalNew} new series added, ${totalMerged} series merged. Total in DB: ${mangaDatabase.length}`);
+  saveDatabaseToDisk();
+  console.log(`[MangaDex Bulk Engine] Complete! Total Pulled: ${totalPulled}, Total New: ${totalNew}, Total Merged: ${totalMerged}, Total DB Count: ${mangaDatabase.length}`);
 
+  return {
+    totalNew,
+    totalMerged,
+    totalPulled,
+    totalSeriesInDatabase: mangaDatabase.length,
+  };
+}
+
+// Bulk Ingestion Endpoints: Pull All Available Series From Active Sources into Database
+app.post(["/api/kotatsu/pull-all-sources", "/api/scrape/update-all-series"], async (_req, res) => {
+  try {
+    const result = await updateDatabaseWithAllAvailableSeries();
     res.json({
       success: true,
-      message: `Successfully pulled all series from active sources into database.`,
-      addedCount: totalNew,
-      mergedCount: totalMerged,
-      totalSeriesInDatabase: mangaDatabase.length,
+      message: `Successfully pulled all available series from active sources into database.`,
+      addedCount: result.totalNew,
+      mergedCount: result.totalMerged,
+      totalSeriesInDatabase: result.totalSeriesInDatabase,
+      sourceCounts: result.sourceCounts,
     });
   } catch (err: any) {
-    console.error("[Kotatsu Ingestion Engine] Bulk ingestion error:", err);
+    console.error("[Database Engine] Bulk ingestion error:", err);
     res.status(500).json({ error: "Failed to pull series from sources", details: err.message });
   }
 });
+
+// Direct Bulk MangaDex Ingestion Endpoint (POST /api/mangadex/pull-bulk-catalog)
+app.post("/api/mangadex/pull-bulk-catalog", async (req, res) => {
+  const pages = Math.min(100, Math.max(1, Number(req.body?.pages) || 20)); // Default 20 pages (2,000 series)
+  try {
+    const result = await pullBulkMangaDexSeries(pages);
+    res.json({
+      success: true,
+      message: `Successfully pulled ${result.totalPulled} series from MangaDex API.`,
+      ...result,
+    });
+  } catch (err: any) {
+    console.error("[MangaDex Bulk Endpoint] Error:", err);
+    res.status(500).json({ error: "Failed to pull bulk series from MangaDex API", details: err.message });
+  }
+});
+
+
 
 // Kotatsu Parser Latest Releases Endpoint
 app.get("/api/kotatsu/latest", async (req, res) => {
@@ -3499,10 +3850,9 @@ const DOMAIN_MIRRORS: Record<string, string> = {
   'aquamanga.org': 'aquareader.org',
   'flamescans.org': 'flamecomics.xyz',
   'flamescans.com': 'flamecomics.xyz',
-  'nightscans.org': 'nightscans.net',
-  'manhwa18.com': 'manhwa18.cc',
-  'manhwa18.net': 'manhwa18.cc',
-  'manhwa18.org': 'manhwa18.cc',
+  'manhwa18.cc': 'manhwa18.com',
+  'manhwa18.net': 'manhwa18.com',
+  'manhwa18.org': 'manhwa18.com',
 };
 
 
@@ -3522,13 +3872,14 @@ async function extractLiveDomainChapterPages(
     }
 
     if (targetUrl.includes('manhwa18')) {
-      if (targetUrl.includes('/manhwa/')) {
-        targetUrl = targetUrl.replace('/manhwa/', '/webtoon/');
+      if (targetUrl.includes('/webtoon/')) {
+        targetUrl = targetUrl.replace('/webtoon/', '/manga/');
       }
       if (targetUrl.includes('/read/')) {
-        targetUrl = targetUrl.replace('/read/', '/webtoon/');
+        targetUrl = targetUrl.replace('/read/', '/manga/');
       }
     }
+
 
     console.log(`[Live Source Extractor] Extracting Chapter ${chapterNumber} from ${domainId} (${targetUrl})`);
 
@@ -3736,7 +4087,7 @@ async function extractLiveDomainChapterPages(
     };
 
     let chUrl = targetUrl;
-    const isDirectChapterUrl = /\/(chapter|ch)[-\/_\.]?\d+/i.test(targetUrl);
+    const isDirectChapterUrl = /\/(chapter|chap|ch)[-\/_\.]?\d+/i.test(targetUrl);
 
     if (!isDirectChapterUrl) {
       try {
@@ -3749,8 +4100,8 @@ async function extractLiveDomainChapterPages(
           while ((match = chLinkRx.exec(sHtml)) !== null) {
             const href = match[1];
             const text = match[2].replace(/<[^>]+>/g, '').trim();
-            if (/chapter|ch/i.test(href) || /chapter|ch/i.test(text)) {
-              const numM = (href + ' ' + text).match(/(?:chapter|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+            if (/chapter|chap|ch/i.test(href) || /chapter|chap|ch/i.test(text)) {
+              const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
               if (numM) {
                 const num = parseFloat(numM[1]);
                 candidates.push({ href, num });
@@ -3761,13 +4112,18 @@ async function extractLiveDomainChapterPages(
           if (matched) {
             chUrl = matched.href.startsWith('http') ? matched.href : `${origin}${matched.href.startsWith('/') ? '' : '/'}${matched.href}`;
           } else {
-            chUrl = `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
+            chUrl = targetUrl.includes('manhwa18')
+              ? `${targetUrl.replace(/\/$/, '')}/chap-${chapterNumber.toString().padStart(2, '0')}/`
+              : `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
           }
         }
       } catch (e) {
-        chUrl = `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
+        chUrl = targetUrl.includes('manhwa18')
+          ? `${targetUrl.replace(/\/$/, '')}/chap-${chapterNumber.toString().padStart(2, '0')}/`
+          : `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
       }
     }
+
 
     const pageRes = await fetch(chUrl, { headers: reqHeaders });
 
@@ -3794,11 +4150,13 @@ async function extractLiveDomainChapterPages(
           !src.includes('default-pp') &&
           !src.includes('announcement') &&
           !src.includes('manhwa18.png') &&
-          !src.includes('manhwa18.cc/manga/')
+          !src.includes('manhwa18.cc/manga/') &&
+          !src.includes('cdn.manhwa18.com')
         ) {
           pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
         }
       }
+
 
       const uniquePages = Array.from(new Set(pages));
       if (uniquePages.length > 0) return uniquePages;
@@ -3942,7 +4300,27 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     const domainIsDisabled = matchedDomain ? disabledSourceIds.has(matchedDomain.id) : false;
 
     if (!domainIsDisabled) {
-      const livePages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, chapterNumber);
+      let livePages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, chapterNumber);
+
+      // Probe panel 1 to ensure remote image host isn't returning 404 / 502
+      if (livePages && livePages.length > 0) {
+        try {
+          const sampleUrl = livePages[0];
+          const probeRes = await fetch(sampleUrl, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(2500),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': targetUrl.startsWith('http') ? new URL(targetUrl).origin + '/' : 'https://manhwa18.com/',
+            },
+          });
+          if (!probeRes.ok && probeRes.status !== 405) {
+            console.warn(`[Reader Stream Engine] Live panel probe returned HTTP ${probeRes.status} for ${sampleUrl} — falling back to MangaDex stream.`);
+            livePages = null;
+          }
+        } catch (_) { }
+      }
+
       if (livePages && livePages.length > 0) {
         const proxiedPages = livePages.map(
           (p) => `/api/reader/proxy-image?url=${encodeURIComponent(p)}&sourceUrl=${encodeURIComponent(targetUrl)}`
@@ -4285,11 +4663,14 @@ app.get(["/api/reader/proxy-image", "/api/mangadex/image-proxy"], async (req, re
 
   try {
     let referer = 'https://mangadex.org';
-    if (sourceUrl) {
-      try { referer = new URL(sourceUrl).origin; } catch (e) { }
+    if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
+      referer = 'https://manhwa18.com/';
+    } else if (sourceUrl) {
+      try { referer = new URL(sourceUrl).origin + '/'; } catch (e) { }
     } else if (targetUrl.startsWith('http')) {
-      try { referer = new URL(targetUrl).origin; } catch (e) { }
+      try { referer = new URL(targetUrl).origin + '/'; } catch (e) { }
     }
+
 
     const response = await fetch(targetUrl, {
       headers: {

@@ -183,6 +183,7 @@ export interface DatabaseSyncConfig {
   enableWebCrawling: boolean;
   sources: string[];
   disabledSources?: string[];
+  removedSources?: string[];
   lastSyncTime: string | null;
   totalTracked: number;
 }

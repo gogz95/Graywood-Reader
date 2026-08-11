@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MangaItem } from '../types';
 import {
   BarChart3,

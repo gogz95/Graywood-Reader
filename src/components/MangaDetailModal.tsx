@@ -50,7 +50,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
 
-  const handleToggleFlag = async () => {
+    const handleToggleFlag = useCallback(async () => {
     const newFlagState = !isFlagged;
     let reason = flagReason;
     if (newFlagState && !reason) {
@@ -72,9 +72,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
         onUpdateManga(data.manga);
       }
     } catch (e) {}
-  };
+  }, [manga.id]);
 
-  const handleRefreshMetadata = async () => {
+  const handleRefreshMetadata = useCallback(async () => {
     setIsRefreshingMetadata(true);
     setRefreshMsg(null);
     try {
@@ -94,7 +94,8 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
     } finally {
       setIsRefreshingMetadata(false);
     }
-  };
+  }, [manga.id]);
+
   const [similarSeries, setSimilarSeries] = useState<{ title: string; type: string; reason: string }[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
 
