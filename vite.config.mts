@@ -14,7 +14,11 @@ export default defineConfig(() => {
     build: {
       target: 'esnext',
       minify: 'esbuild',
+      cssMinify: true,
+      sourcemap: false,
+      reportCompressedSize: true,
       cssCodeSplit: true,
+      assetsInlineLimit: 4096,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -26,6 +30,19 @@ export default defineConfig(() => {
             }
             if (id.includes('node_modules/motion')) {
               return 'motion-animations';
+            }
+            // Split heavy view components into their own async chunks
+            if (id.includes('src/components/ReaderView')) {
+              return 'reader-view';
+            }
+            if (id.includes('src/components/KotatsuSourcesView')) {
+              return 'sources-view';
+            }
+            if (id.includes('src/components/BrowseView')) {
+              return 'browse-view';
+            }
+            if (id.includes('src/components/SettingsModal')) {
+              return 'settings-modal';
             }
           },
         },

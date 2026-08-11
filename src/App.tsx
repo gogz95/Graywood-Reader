@@ -1,15 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 
 import { Navbar } from './components/Navbar';
-import { LibraryView } from './components/LibraryView';
-import { AutoUpdateView } from './components/AutoUpdateView';
-import { OpenApiFinderView } from './components/OpenApiFinderView';
-import { DuplicateFinderView } from './components/DuplicateFinderView';
 import { MangaDetailModal } from './components/MangaDetailModal';
 import { AddEditModal } from './components/AddEditModal';
-import { ReaderView } from './components/ReaderView';
 import { ChapterListModal } from './components/ChapterListModal';
-import { SettingsModal } from './components/SettingsModal';
+
+// Lazy-loaded tab views — only the active tab's JS is fetched & rendered
+const LibraryView = lazy(() => import('./components/LibraryView').then(m => ({ default: m.LibraryView })));
+const AutoUpdateView = lazy(() => import('./components/AutoUpdateView').then(m => ({ default: m.AutoUpdateView })));
+const OpenApiFinderView = lazy(() => import('./components/OpenApiFinderView').then(m => ({ default: m.OpenApiFinderView })));
+const DuplicateFinderView = lazy(() => import('./components/DuplicateFinderView').then(m => ({ default: m.DuplicateFinderView })));
+const ReaderView = lazy(() => import('./components/ReaderView').then(m => ({ default: m.ReaderView })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const BrowseView = lazy(() => import('./components/BrowseView').then(m => ({ default: m.BrowseView })));
+const KotatsuSourcesView = lazy(() => import('./components/KotatsuSourcesView').then(m => ({ default: m.KotatsuSourcesView })));
+
+// Lightweight modals remain eager (tiny bundles)
+import { AnalyticsModal } from './components/AnalyticsModal';
+import { UserProfileModal } from './components/UserProfileModal';
+import { AuthModal } from './components/AuthModal';
+import { AdminPanelModal } from './components/AdminPanelModal';
+import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
+import { FlagCategory } from './components/FlagIssueModal';
 import {
   MangaItem,
   AutoUpdateLog,
@@ -20,15 +32,6 @@ import {
   AppNavTab,
 } from './types';
 import { INITIAL_MANGA_DATABASE } from './data/initialManga';
-
-import { AnalyticsModal } from './components/AnalyticsModal';
-import { UserProfileModal } from './components/UserProfileModal';
-import { AuthModal } from './components/AuthModal';
-import { AdminPanelModal } from './components/AdminPanelModal';
-import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
-import { FlagCategory } from './components/FlagIssueModal';
-import { BrowseView } from './components/BrowseView';
-import { KotatsuSourcesView } from './components/KotatsuSourcesView';
 import { UserProfile, UserRole } from './types';
 
 
@@ -43,6 +46,13 @@ const GUEST_PROFILE: UserProfile = {
   role: 'user',
   createdAt: new Date().toISOString(),
 };
+
+// Lightweight skeleton shown while lazy chunk loads
+const ViewFallback = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="w-8 h-8 border-3 border-accent/30 border-t-accent rounded-full animate-spin" />
+  </div>
+);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppNavTab>('library');
@@ -821,6 +831,7 @@ export default function App() {
 
       {/* Main View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-24 md:pb-6">
+        <Suspense fallback={<ViewFallback />}>
         {activeTab === 'library' && (
           <LibraryView
             mangaList={myLibraryList}
@@ -873,6 +884,7 @@ export default function App() {
             onSelectManga={handleSelectMangaDetail}
           />
         )}
+        </Suspense>
       </main>
 
       {/* Detail Drawer Modal */}
@@ -909,6 +921,7 @@ export default function App() {
 
       {/* Fullscreen Kotatsu Reader Mode View */}
       {readerTarget && (
+        <Suspense fallback={null}>
         <ReaderView
           manga={readerTarget.manga}
           initialChapterNumber={readerTarget.chapterNumber}
@@ -918,6 +931,7 @@ export default function App() {
           onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
           onReport={handleReportMangaIssue}
         />
+        </Suspense>
       )}
 
       {/* Chapter List Modal */}
@@ -932,6 +946,7 @@ export default function App() {
 
       {/* Kotatsu Settings Modal (Contains Duplicates Merger & DB Sync) */}
       {isSettingsOpen && (
+        <Suspense fallback={null}>
         <SettingsModal
           settings={appSettings}
           onSaveSettings={handleSaveSettings}
@@ -958,6 +973,7 @@ export default function App() {
           onRunAutoUpdate={handleRunAutoUpdate}
           isUpdating={isUpdating}
         />
+        </Suspense>
       )}
 
 

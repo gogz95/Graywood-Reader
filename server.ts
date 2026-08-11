@@ -5606,7 +5606,12 @@ async function startServer() {
   // 2. Serve built production dist folder if available (ultra-fast sub-10ms response time)
   const distPath = path.join(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath, { maxAge: "7d", etag: true }));
+    // Hashed assets in /dist/assets have content-hash filenames → safe to cache aggressively
+    app.use('/assets', (req, res, next) => {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      next();
+    });
+    app.use(express.static(distPath, { maxAge: "7d", etag: true, index: false }));
     // SPA fallback for all non-API GET routes (Express 4 & 5 compatible)
     app.use((req, res, next) => {
       if (req.method === 'GET' && !req.path.startsWith('/api/')) {
