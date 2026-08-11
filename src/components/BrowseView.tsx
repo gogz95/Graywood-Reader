@@ -174,30 +174,30 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Header Controls Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div className="bg-surface border border-edge rounded-3xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-edge pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-md">
+            <div className="p-2.5 rounded-2xl bg-accent/10 text-accent border border-accent/20 shadow-md">
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-100 flex items-center gap-2">
+              <h2 className="text-xl font-black text-primary flex items-center gap-2">
                 Unified Catalog
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-accent/20 text-accent border border-accent/30">
                   {filteredManga.length} Series
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Aggregated catalog grouping all series across all active connected Kotatsu sources in one place</p>
+              <p className="text-xs text-secondary">Aggregated catalog grouping all series across all active connected Kotatsu sources in one place</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {/* View Mode Toggle */}
-            <div className="flex items-center p-1 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="flex items-center p-1 bg-app rounded-xl border border-edge">
               <button
                 onClick={() => setViewDensity('grid')}
                 className={`p-1.5 rounded-lg transition-all ${
-                  viewDensity === 'grid' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  viewDensity === 'grid' ? 'bg-accent text-accent-fg font-bold' : 'text-secondary hover:text-primary'
                 }`}
                 title="Grid View"
               >
@@ -206,7 +206,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               <button
                 onClick={() => setViewDensity('list')}
                 className={`p-1.5 rounded-lg transition-all ${
-                  viewDensity === 'list' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  viewDensity === 'list' ? 'bg-accent text-accent-fg font-bold' : 'text-secondary hover:text-primary'
                 }`}
                 title="List Table View"
               >
@@ -216,7 +216,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
             <button
               onClick={handleResetFilters}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-all"
+              className="px-3 py-2 rounded-xl bg-elevated hover:bg-elevated text-secondary font-bold text-xs flex items-center gap-1.5 border border-edge-strong transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Filters</span>
@@ -228,7 +228,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Search Bar Input */}
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
             <input
               type="text"
               placeholder="Search title, genre, author..."
@@ -237,14 +237,14 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 setLocalSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-app border border-edge rounded-xl pl-9 pr-3 py-2 text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </div>
 
           {/* Language Filter Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-cyan-400" />
+            <label className="text-[11px] font-bold text-secondary flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-info" />
               Language Preference:
             </label>
             <select
@@ -253,7 +253,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 setSelectedLanguage(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="w-full bg-app border border-edge rounded-xl p-2 text-xs text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-info/50"
             >
               <option value="en">🇬🇧 English (Preferred)</option>
               <option value="all">🌐 All Languages</option>
@@ -267,14 +267,14 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
           {/* Sort By Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-              <ArrowUpDown className="w-3 h-3 text-amber-400" />
+            <label className="text-[11px] font-bold text-secondary flex items-center gap-1">
+              <ArrowUpDown className="w-3 h-3 text-accent" />
               Sort Results By:
             </label>
             <select
               value={sortBy}
               onChange={(e: any) => setSortBy(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-app border border-edge rounded-xl p-2 text-xs text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
             >
               <option value="rating_desc">⭐️ User Rating (Highest First)</option>
               <option value="title_asc">🔤 Title (A - Z)</option>
@@ -286,11 +286,11 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
           {/* Type Filter Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-400">Comic Format Type:</label>
+            <label className="text-[11px] font-bold text-secondary">Comic Format Type:</label>
             <select
               value={selectedType}
               onChange={(e: any) => setSelectedType(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-app border border-edge rounded-xl p-2 text-xs text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
             >
               <option value="all">All Formats (Manhwa, Manhua, Manga)</option>
               <option value="manhwa">🇰🇷 Korean Manhwa</option>
@@ -301,11 +301,11 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
           {/* Reading Status Dropdown */}
           <div className="space-y-1">
-            <label className="text-[11px] font-bold text-slate-400">Reading Status:</label>
+            <label className="text-[11px] font-bold text-secondary">Reading Status:</label>
             <select
               value={selectedStatus}
               onChange={(e: any) => setSelectedStatus(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-app border border-edge rounded-xl p-2 text-xs text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
             >
               <option value="all">All Statuses</option>
               <option value="reading">📖 Reading</option>
@@ -319,17 +319,17 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
         {/* Source Provider Filter Pills */}
         {availableSources.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-800/60">
-            <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
-              <Layers className="w-3 h-3 text-amber-400" />
+          <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-edge/60">
+            <span className="text-[11px] font-bold text-secondary mr-1 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-accent" />
               Source:
             </span>
             <button
               onClick={() => setSelectedSourceName('all')}
               className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
                 selectedSourceName === 'all'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-black'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                  ? 'bg-accent text-accent-fg border-accent shadow-md font-black'
+                  : 'bg-app text-secondary border-edge hover:border-edge-strong'
               }`}
             >
               All Sources
@@ -340,8 +340,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 onClick={() => setSelectedSourceName(selectedSourceName === src ? 'all' : src)}
                 className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
                   selectedSourceName === src
-                    ? 'bg-purple-500/30 text-purple-200 border-purple-500/50 shadow-md font-black'
-                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                    ? 'bg-accent-2/30 text-accent-2 border-accent-2/50 shadow-md font-black'
+                    : 'bg-app text-secondary border-edge hover:border-edge-strong'
                 }`}
               >
                 {src}
@@ -351,18 +351,18 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         )}
 
         {/* Quick Filter Toggle Pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 text-xs">
-          <span className="font-bold text-slate-400 mr-1 text-[11px]">Quick Filters:</span>
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-edge/80 text-xs">
+          <span className="font-bold text-secondary mr-1 text-[11px]">Quick Filters:</span>
 
           <button
             onClick={() => setFavoritesOnly(!favoritesOnly)}
             className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
               favoritesOnly
-                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md font-black'
-                : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                ? 'bg-accent text-accent-fg border-accent shadow-md font-black'
+                : 'bg-app text-secondary border-edge hover:border-edge-strong'
             }`}
           >
-            <Star className={`w-3.5 h-3.5 ${favoritesOnly ? 'fill-slate-950' : 'text-amber-400'}`} />
+            <Star className={`w-3.5 h-3.5 ${favoritesOnly ? 'fill-accent-fg' : 'text-accent'}`} />
             <span>Favorites Only</span>
           </button>
 
@@ -372,8 +372,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             onClick={() => setUnreadOnly(!unreadOnly)}
             className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
               unreadOnly
-                ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md font-black'
-                : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                ? 'bg-info text-accent-fg border-info shadow-md font-black'
+                : 'bg-app text-secondary border-edge hover:border-edge-strong'
             }`}
           >
             <span>🔔 Unread Chapters</span>
@@ -382,13 +382,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           {/* Genre Badges Pills */}
           {availableGenres.length > 0 && (
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full">
-              <span className="text-slate-500">|</span>
+              <span className="text-muted">|</span>
               <button
                 onClick={() => setSelectedGenre('all')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
                   selectedGenre === 'all'
-                    ? 'bg-slate-200 text-slate-950 border-slate-100 font-black'
-                    : 'bg-slate-950 text-slate-400 border-slate-800'
+                    ? 'bg-accent text-accent-fg border-accent font-black shadow-sm'
+                    : 'bg-app text-secondary border-edge'
                 }`}
               >
                 All Genres
@@ -399,8 +399,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                   onClick={() => setSelectedGenre(selectedGenre === genre ? 'all' : genre)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
                     selectedGenre === genre
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-black'
-                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                      ? 'bg-accent/20 text-accent border-accent/40 font-black'
+                      : 'bg-app text-secondary border-edge hover:border-edge-strong'
                   }`}
                 >
                   {genre}
@@ -413,17 +413,17 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
       {/* Empty State */}
       {filteredManga.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 text-slate-500 flex items-center justify-center mx-auto">
+        <div className="bg-surface border border-edge rounded-3xl p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-app border border-edge text-muted flex items-center justify-center mx-auto">
             <BookOpen className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-extrabold text-slate-200">No Matching Series Found</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <h3 className="text-base font-extrabold text-primary">No Matching Series Found</h3>
+          <p className="text-xs text-secondary max-w-sm mx-auto">
             No series in your catalog match the current filters. Try resetting filters or adding new series!
           </p>
           <button
             onClick={handleResetFilters}
-            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
+            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs"
           >
             Reset Filters
           </button>
@@ -434,13 +434,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           {displayMangaPage.map((manga) => (
             <div
               key={manga.id}
-              className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-all group"
+              className="bg-surface border border-edge hover:border-accent/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-all group"
             >
               <div>
                 {/* Cover Image */}
                 <div
                   onClick={() => onSelectManga(manga)}
-                  className="relative aspect-[3/4] w-full overflow-hidden bg-slate-950 cursor-pointer"
+                  className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
                 >
                   <img
                     src={manga.coverImage}
@@ -448,24 +448,24 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
 
                   {/* Type Badge */}
                   <span
                     className={`absolute top-2 left-2 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase backdrop-blur-md ${
                       manga.type === 'manhwa'
-                        ? 'bg-blue-950/90 text-blue-300 border border-blue-500/40'
+                        ? 'bg-blue-950/90 text-info border border-info/40'
                         : manga.type === 'manhua'
-                        ? 'bg-red-950/90 text-red-300 border border-red-500/40'
-                        : 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/40'
+                        ? 'bg-red-950/90 text-danger border border-danger/40'
+                        : 'bg-emerald-950/90 text-success border border-success/40'
                     }`}
                   >
                     {manga.type}
                   </span>
 
                   {/* Rating Badge */}
-                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-950/90 text-amber-400 border border-slate-800 flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-400" />
+                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-app/90 text-accent border border-edge flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-accent" />
                     <span>{manga.rating}</span>
                   </span>
                 </div>
@@ -474,14 +474,14 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 <div className="p-3.5 space-y-1.5">
                   <h4
                     onClick={() => onSelectManga(manga)}
-                    className="text-xs font-bold text-slate-100 truncate cursor-pointer group-hover:text-amber-400 transition-colors"
+                    className="text-xs font-bold text-primary truncate cursor-pointer group-hover:text-accent transition-colors"
                   >
                     {manga.title}
                   </h4>
 
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <div className="flex items-center justify-between text-[11px] text-secondary">
                     <span>Ch. {manga.currentChapter} / {manga.latestChapter}</span>
-                    <span className="text-amber-400/90 font-mono font-semibold text-[10px] truncate max-w-[120px]" title={manga.availableSources?.map(s => s.sourceName).join(' • ') || manga.sourceName}>
+                    <span className="text-accent/90 font-mono font-semibold text-[10px] truncate max-w-[120px]" title={manga.availableSources?.map(s => s.sourceName).join(' • ') || manga.sourceName}>
                       {manga.availableSources && manga.availableSources.length > 1
                         ? `${manga.availableSources.length} Sources`
                         : manga.sourceName || 'Kotatsu Source'}
@@ -495,24 +495,24 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 {isReaderAvailable(manga) ? (
                   <button
                     onClick={() => onOpenReader(manga)}
-                    className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all"
+                    className="flex-1 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all"
                   >
-                    <Play className="w-3 h-3 fill-slate-950" />
+                    <Play className="w-3 h-3 fill-accent-fg" />
                     <span>Read</span>
                   </button>
                 ) : (
                   <button
                     onClick={() => onSelectManga(manga)}
-                    className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1 border border-slate-700 transition-all"
+                    className="flex-1 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center justify-center gap-1 border border-edge-strong transition-all"
                   >
-                    <BookOpen className="w-3 h-3 text-amber-400" />
+                    <BookOpen className="w-3 h-3 text-accent" />
                     <span>View Info</span>
                   </button>
                 )}
 
                 <button
                   onClick={() => onOpenChapters(manga)}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700"
+                  className="p-2 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-bold border border-edge-strong"
                   title="View Chapters List"
                 >
                   <BookOpen className="w-3.5 h-3.5" />
@@ -523,11 +523,11 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
       ) : (
         /* TABLE LIST VIEW */
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+        <div className="bg-surface border border-edge rounded-3xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
+                <tr className="bg-app border-b border-edge text-secondary font-bold uppercase text-[10px]">
                   <th className="py-3 px-4">Series Title</th>
                   <th className="py-3 px-3">Format</th>
                   <th className="py-3 px-3">Read Progress</th>
@@ -536,44 +536,44 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-edge/60">
                 {displayMangaPage.map((manga) => (
-                  <tr key={manga.id} className="hover:bg-slate-800/40 transition-colors">
+                  <tr key={manga.id} className="hover:bg-elevated/40 transition-colors">
                     <td className="py-3 px-4 flex items-center gap-3">
                       <img
                         src={manga.coverImage}
                         alt={manga.title}
-                        className="w-10 h-12 object-cover rounded-lg bg-slate-950 border border-slate-800"
+                        className="w-10 h-12 object-cover rounded-lg bg-app border border-edge"
                       />
                       <div className="min-w-0">
                         <div
                           onClick={() => onSelectManga(manga)}
-                          className="font-bold text-slate-100 hover:text-amber-400 cursor-pointer text-xs truncate"
+                          className="font-bold text-primary hover:text-accent cursor-pointer text-xs truncate"
                         >
                           {manga.title}
                         </div>
-                        <div className="text-[10px] text-slate-500 truncate">
+                        <div className="text-[10px] text-muted truncate">
                           {(manga.genres || []).slice(0, 3).join(', ')}
                         </div>
                       </div>
                     </td>
 
                     <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-800 text-slate-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-elevated text-secondary">
                         {manga.type}
                       </span>
                     </td>
 
-                    <td className="py-3 px-3 font-mono font-semibold text-slate-300">
+                    <td className="py-3 px-3 font-mono font-semibold text-secondary">
                       Ch. {manga.currentChapter} / {manga.latestChapter}
                     </td>
 
-                    <td className="py-3 px-3 font-bold text-amber-400 flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-amber-400" />
+                    <td className="py-3 px-3 font-bold text-accent flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-accent" />
                       <span>{manga.rating}</span>
                     </td>
 
-                    <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                    <td className="py-3 px-3 text-secondary font-mono text-[11px]">
                       {manga.sourceName}
                     </td>
 
@@ -581,14 +581,14 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                       {isReaderAvailable(manga) ? (
                         <button
                           onClick={() => onOpenReader(manga)}
-                          className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-black text-xs"
+                          className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-black text-xs"
                         >
                           Read
                         </button>
                       ) : (
                         <button
                           onClick={() => onSelectManga(manga)}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold text-xs border border-slate-700"
+                          className="px-3 py-1.5 rounded-lg bg-elevated text-secondary font-bold text-xs border border-edge-strong"
                         >
                           View Info
                         </button>
@@ -604,10 +604,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
       {/* PAGE-BY-PAGE PAGINATION CONTROLS (50 items per page) */}
       {totalPages > 1 && (
-        <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl">
-          <div className="text-xs font-mono text-slate-400">
-            Showing Page <span className="font-bold text-amber-400">{currentPage}</span> of{' '}
-            <span className="font-bold text-slate-200">{totalPages}</span> ({filteredManga.length} series)
+        <div className="sticky bottom-4 z-20 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-surface/95 backdrop-blur-md border border-edge rounded-2xl shadow-2xl">
+          <div className="text-xs font-mono text-secondary">
+            Showing Page <span className="font-bold text-accent">{currentPage}</span> of{' '}
+            <span className="font-bold text-primary">{totalPages}</span> ({filteredManga.length} series)
           </div>
 
           <div className="flex items-center gap-2">
@@ -617,12 +617,12 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               disabled={currentPage <= 1}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 font-bold text-xs text-slate-200 border border-slate-700 transition-all active:scale-95"
+              className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-40 font-bold text-xs text-primary border border-edge-strong transition-all active:scale-95"
             >
               Previous Page
             </button>
 
-            <span className="px-3 py-2 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-bold text-xs">
+            <span className="px-3 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 font-mono font-bold text-xs">
               Page {currentPage} / {totalPages}
             </span>
 
@@ -632,7 +632,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
               disabled={currentPage >= totalPages}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-40 font-black text-xs text-slate-950 shadow-md transition-all active:scale-95"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 disabled:opacity-40 font-black text-xs text-accent-fg shadow-md transition-all active:scale-95"
             >
               Next Page
             </button>

@@ -43,12 +43,13 @@ interface KotatsuSourcesViewProps {
 }
 
 const ENGINE_META: Record<SourceEngineType, { label: string; color: string; icon: string }> = {
-  mangadex:      { label: 'MangaDex API',  color: 'bg-orange-500/20 text-orange-300 border-orange-500/30',   icon: '🔶' },
-  madara:        { label: 'Madara (WP)',    color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',         icon: '🔵' },
-  mangathemesia: { label: 'MangaThemesia', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30',   icon: '🔮' },
-  foolslide:     { label: 'FoolSlide',     color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '🟢' },
-  wpcomics:      { label: 'WP Comics',     color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',          icon: '🔷' },
-  custom_html:   { label: 'Custom HTML',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       icon: '🟡' },
+  // NO-THEME — per-engine category colors are intentionally literal
+  mangadex:      { label: 'MangaDex API',  color: 'bg-orange-500/20 text-orange-300 border-orange-500/30',   icon: '🔶' }, // NO-THEME
+  madara:        { label: 'Madara (WP)',    color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',         icon: '🔵' }, // NO-THEME
+  mangathemesia: { label: 'MangaThemesia', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30',   icon: '🔮' }, // NO-THEME
+  foolslide:     { label: 'FoolSlide',     color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: '🟢' }, // NO-THEME
+  wpcomics:      { label: 'WP Comics',     color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',          icon: '🔷' }, // NO-THEME
+  custom_html:   { label: 'Custom HTML',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       icon: '🟡' }, // NO-THEME
 };
 
 type ViewSection = 'all' | 'popular' | 'latest' | 'search' | 'expanded';
@@ -400,10 +401,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       <div
         key={r.id}
         onClick={() => openSeriesDetail(r)}
-        className="group bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-purple-500/60 hover:shadow-xl hover:shadow-purple-500/10 transition-all flex flex-col cursor-pointer"
+        className="group bg-app border border-edge rounded-2xl overflow-hidden hover:border-accent-2/60 hover:shadow-xl hover:shadow-accent-2/10 transition-all flex flex-col cursor-pointer"
       >
         {/* Cover */}
-        <div className="relative aspect-[3/4] bg-slate-900 overflow-hidden">
+        <div className="relative aspect-[3/4] bg-surface overflow-hidden">
           {r.coverImage ? (
             <img
               src={r.coverImage}
@@ -416,8 +417,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/40 to-slate-900">
-              <BookOpen className="w-10 h-10 text-purple-400/40" />
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/40 to-surface">
+              <BookOpen className="w-10 h-10 text-accent-2/40" />
             </div>
           )}
           <div className="absolute top-2 left-2">
@@ -427,7 +428,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </div>
           {r.type && (
             <div className="absolute top-2 right-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-950/80 text-slate-300 border border-slate-700/80 backdrop-blur-sm">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-app/80 text-secondary border border-edge-strong/80 backdrop-blur-sm">
                 {r.type === 'manhwa' ? '🇰🇷' : r.type === 'manhua' ? '🇨🇳' : '🇯🇵'} {r.type}
               </span>
             </div>
@@ -436,19 +437,19 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
         {/* Info */}
         <div className="p-3 flex flex-col gap-2 flex-1">
-          <div className="font-bold text-slate-100 text-sm leading-tight line-clamp-2 group-hover:text-purple-300 transition-colors">
+          <div className="font-bold text-primary text-sm leading-tight line-clamp-2 group-hover:text-accent-2 transition-colors">
             {r.title}
           </div>
           {r.latestChapter && (
-            <div className="text-[11px] text-slate-400 flex items-center gap-1">
-              <BookOpen className="w-3 h-3 text-amber-400" />
+            <div className="text-[11px] text-secondary flex items-center gap-1">
+              <BookOpen className="w-3 h-3 text-accent" />
               Ch. {r.latestChapter}+
             </div>
           )}
           {r.genres && r.genres.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {r.genres.slice(0, 3).map(g => (
-                <span key={g} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                <span key={g} className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-secondary border border-edge">
                   {g}
                 </span>
               ))}
@@ -461,19 +462,19 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               title={isAdded ? 'Already tracked' : 'Add to Tracker (not My Library)'}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 isAdded
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-                  : 'bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 hover:border-purple-500/60'
+                  ? 'bg-success/20 text-success border border-success/30 cursor-default'
+                  : 'bg-accent-2/20 hover:bg-accent-2/40 text-accent-2 border border-accent-2/30 hover:border-accent-2/60'
               }`}
             >
-              <Plus className={`w-3.5 h-3.5 ${isAdded ? 'text-emerald-400' : ''}`} />
+              <Plus className={`w-3.5 h-3.5 ${isAdded ? 'text-success' : ''}`} />
               {isAdded ? 'Tracked' : 'Track'}
             </button>
             <button
               onClick={(e) => readNow(r, e)}
               title="Open in Reader"
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-amber-500/80 to-orange-500/80 hover:from-amber-500 hover:to-orange-500 text-slate-950 text-xs font-black transition-all"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-accent/80 to-accent-2/80 hover:from-accent-bright hover:to-accent-2 text-accent-fg text-xs font-black transition-all"
             >
-              <Play className="w-3.5 h-3.5 fill-slate-950" />
+              <Play className="w-3.5 h-3.5 fill-accent-fg" />
               <span>Read</span>
             </button>
           </div>
@@ -483,29 +484,29 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative pb-16">
+    <div className="min-h-screen bg-app text-primary flex flex-col relative pb-16">
       {/* Toast Banner */}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-amber-500 text-slate-950 font-black px-4 py-2.5 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-bounce">
-          <Zap className="w-4 h-4 fill-slate-950" />
+        <div className="fixed bottom-6 right-6 bg-accent text-accent-fg font-black px-4 py-2.5 rounded-xl shadow-2xl z-50 flex items-center gap-2 animate-bounce">
+          <Zap className="w-4 h-4 fill-accent-fg" />
           <span>{toast}</span>
         </div>
       )}
 
       {/* Header Banner */}
-      <div className="bg-slate-900/80 border-b border-slate-800 backdrop-blur-md sticky top-0 z-30 px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-surface/80 border-b border-edge backdrop-blur-md sticky top-0 z-30 px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-accent-2 to-accent-2 flex items-center justify-center shadow-lg shadow-accent-2/20">
             <Globe className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-lg font-black text-white flex items-center gap-2">
               Sources
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-accent-2/20 text-accent-2 border border-accent-2/30">
                 v2.5 Redo
               </span>
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-secondary">
               Enable & disable sources • Active sources stay on top, disabled move down to bottom
             </p>
           </div>
@@ -517,7 +518,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           <select
             value={selectedLangFilter}
             onChange={(e) => setSelectedLangFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+            className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent-2/50"
             title="Filter Kotatsu sources by language"
           >
             <option value="en">🇬🇧 English (Preferred)</option>
@@ -532,20 +533,20 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           <button
             onClick={handlePullAllSources}
             disabled={isPullingAll}
-            className="px-3.5 py-2 rounded-xl bg-purple-600/90 hover:bg-purple-500 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 border border-purple-400/40"
+            className="px-3.5 py-2 rounded-xl bg-accent-2/90 hover:bg-accent-2 text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 border border-accent-2/40"
             title="Pull all series from active sources directly into SQLite & database.json"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-amber-300 ${isPullingAll ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-accent ${isPullingAll ? 'animate-spin' : ''}`} />
             <span>{isPullingAll ? 'Ingesting Series...' : 'Pull All Series Into Database'}</span>
           </button>
 
           <button
             onClick={handleClearAppCache}
             disabled={isClearingCache}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+            className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated border border-edge-strong text-primary hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
             title="Purge local storage, image proxy cache, and dynamic canvas buffers"
           >
-            <Trash2 className={`w-3.5 h-3.5 text-rose-400 ${isClearingCache ? 'animate-spin' : ''}`} />
+            <Trash2 className={`w-3.5 h-3.5 text-danger ${isClearingCache ? 'animate-spin' : ''}`} />
             <span>{isClearingCache ? 'Clearing...' : 'Clear App Cache'}</span>
           </button>
         </div>
@@ -553,16 +554,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Sidebar: Source Extensions List */}
-        <div className="w-full md:w-80 bg-slate-900/60 border-r border-slate-800 p-3 flex flex-col gap-3 shrink-0">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-400 px-1">
+        <div className="w-full md:w-80 bg-surface/60 border-r border-edge p-3 flex flex-col gap-3 shrink-0">
+          <div className="flex items-center justify-between text-xs font-bold text-secondary px-1">
             <span className="flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-purple-400" />
+              <Layers className="w-3.5 h-3.5 text-accent-2" />
               Parsers ({filteredSources.length})
             </span>
             <button
               onClick={() => setNsfwVisible(!nsfwVisible)}
               className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
-                nsfwVisible ? 'bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold' : 'bg-slate-800 text-slate-400 border-slate-700'
+                nsfwVisible ? 'bg-danger/20 text-danger border-danger/30 font-bold' : 'bg-elevated text-secondary border-edge-strong'
               }`}
             >
               {nsfwVisible ? '18+ Shown' : '18+ Hidden'}
@@ -570,11 +571,11 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </div>
 
           {/* Status Filter Bar (All / Enabled / Disabled) */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
+          <div className="flex items-center gap-1 bg-app p-1 rounded-xl border border-edge text-[11px] font-bold">
             <button
               onClick={() => setStatusFilter('all')}
               className={`flex-1 py-1 rounded-lg transition-all text-center ${
-                statusFilter === 'all' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                statusFilter === 'all' ? 'bg-accent-2 text-white shadow-sm' : 'text-secondary hover:text-primary'
               }`}
             >
               All ({sources.length})
@@ -582,7 +583,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             <button
               onClick={() => setStatusFilter('enabled')}
               className={`flex-1 py-1 rounded-lg transition-all text-center ${
-                statusFilter === 'enabled' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                statusFilter === 'enabled' ? 'bg-success text-white shadow-sm' : 'text-secondary hover:text-primary'
               }`}
             >
               ON ({enabledCount})
@@ -590,7 +591,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             <button
               onClick={() => setStatusFilter('disabled')}
               className={`flex-1 py-1 rounded-lg transition-all text-center ${
-                statusFilter === 'disabled' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                statusFilter === 'disabled' ? 'bg-danger text-white shadow-sm' : 'text-secondary hover:text-primary'
               }`}
             >
               OFF ({disabledCount})
@@ -602,7 +603,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             <button
               onClick={() => setEngineFilter('all')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
-                engineFilter === 'all' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800'
+                engineFilter === 'all' ? 'bg-accent-2 text-white shadow-sm' : 'bg-elevated/80 text-secondary hover:bg-elevated'
               }`}
             >
               All
@@ -612,7 +613,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                 key={key}
                 onClick={() => setEngineFilter(key as SourceEngineType)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
-                  engineFilter === key ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-800/80 text-slate-400 hover:bg-slate-800'
+                  engineFilter === key ? 'bg-accent-2 text-white shadow-sm' : 'bg-elevated/80 text-secondary hover:bg-elevated'
                 }`}
               >
                 <span>{meta.icon}</span>
@@ -623,8 +624,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
           {/* Sources List: Enabled on Top, Disabled at Bottom */}
           {isFetchingSources ? (
-            <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
-              <RefreshCw className="w-5 h-5 animate-spin text-purple-400" />
+            <div className="p-8 text-center text-xs text-muted flex flex-col items-center gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin text-accent-2" />
               <span>Loading Kotatsu parsers...</span>
             </div>
           ) : (
@@ -633,7 +634,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                 const isSelected = selectedSource?.id === s.id;
                 const isPinned = pinnedSourceIds.has(s.id);
                 const isDisabled = disabledSourceIds.has(s.id);
-                const meta = ENGINE_META[s.engineType] || { label: s.engineType, color: 'bg-slate-800 text-slate-300', icon: '🌐' };
+                const meta = ENGINE_META[s.engineType] || { label: s.engineType, color: 'bg-elevated text-secondary', icon: '🌐' };
 
                 return (
                   <div
@@ -641,22 +642,22 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     onClick={() => setSelectedSource(s)}
                     className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
                       isDisabled
-                        ? 'bg-slate-950/30 border-slate-900 opacity-60 grayscale'
+                        ? 'bg-app/30 border-edge opacity-60 grayscale'
                         : isSelected
-                        ? 'bg-purple-950/40 border-purple-500/60 shadow-lg shadow-purple-500/10'
-                        : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
+                        ? 'bg-purple-950/40 border-accent-2/60 shadow-lg shadow-accent-2/10'
+                        : 'bg-app/60 border-edge/80 hover:bg-surface hover:border-edge-strong'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="text-base">{meta.icon}</span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className={`font-bold text-xs truncate ${isDisabled ? 'text-slate-500 line-through' : isSelected ? 'text-purple-300' : 'text-slate-200'}`}>
+                          <span className={`font-bold text-xs truncate ${isDisabled ? 'text-muted line-through' : isSelected ? 'text-accent-2' : 'text-primary'}`}>
                             {s.name}
                           </span>
-                          {isPinned && <Pin className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />}
+                          {isPinned && <Pin className="w-3 h-3 text-accent fill-accent shrink-0" />}
                           {isDisabled && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
                               DISABLED
                             </span>
                           )}
@@ -665,9 +666,9 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                           <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${meta.color}`}>
                             {meta.label}
                           </span>
-                          <span className="text-[9px] text-slate-500 uppercase font-mono">{s.lang}</span>
+                          <span className="text-[9px] text-muted uppercase font-mono">{s.lang}</span>
                           {s.isNsfw && (
-                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
                               18+
                             </span>
                           )}
@@ -682,20 +683,20 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         title={isDisabled ? 'Click to Enable source' : 'Click to Disable source'}
                         className={`p-1 rounded-lg transition-all ${
                           isDisabled
-                            ? 'text-slate-600 hover:text-emerald-400'
-                            : 'text-emerald-400 hover:text-rose-400'
+                            ? 'text-muted hover:text-success'
+                            : 'text-success hover:text-danger'
                         }`}
                       >
-                        <Power className={`w-4 h-4 ${isDisabled ? 'text-slate-600' : 'text-emerald-400 fill-emerald-400/20'}`} />
+                        <Power className={`w-4 h-4 ${isDisabled ? 'text-muted' : 'text-success fill-success/20'}`} />
                       </button>
 
                       {/* Pin Button */}
                       <button
                         onClick={(e) => togglePinSource(s.id, e)}
                         title={isPinned ? 'Unpin source' : 'Pin source to top'}
-                        className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-all"
+                        className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-elevated text-secondary hover:text-accent transition-all"
                       >
-                        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-accent text-accent' : ''}`} />
                       </button>
                     </div>
                   </div>
@@ -710,22 +711,22 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           {selectedSource ? (
             <>
               {/* Selected Source Toolbar */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+              <div className="bg-surface/80 border border-edge rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-lg">
+                  <div className="w-10 h-10 rounded-xl bg-accent-2/10 border border-accent-2/30 flex items-center justify-center text-lg">
                     {ENGINE_META[selectedSource.engineType]?.icon || '🌐'}
                   </div>
                   <div>
                     <h2 className="text-base font-black text-white flex items-center gap-2">
                       {selectedSource.name}
                       {disabledSourceIds.has(selectedSource.id) ? (
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-danger/20 text-danger border border-danger/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-danger" />
                           SOURCE DISABLED
                         </span>
                       ) : (
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-success/20 text-success border border-success/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
                           ACTIVE PARSER
                         </span>
                       )}
@@ -735,13 +736,13 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         href={selectedSource.baseUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold"
+                        className="text-xs text-accent-2 hover:text-accent-2 flex items-center gap-1 font-semibold"
                       >
                         <ExternalLink className="w-3 h-3" />
                         {selectedSource.baseUrl}
                       </a>
-                      <span className="text-slate-600">•</span>
-                      <span className="text-xs text-slate-400">Language: {selectedSource.lang.toUpperCase()}</span>
+                      <span className="text-muted">•</span>
+                      <span className="text-xs text-secondary">Language: {selectedSource.lang.toUpperCase()}</span>
                     </div>
                   </div>
                 </div>
@@ -752,25 +753,25 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     onClick={(e) => toggleSourceEnabled(selectedSource.id, selectedSource.name, e)}
                     className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all ${
                       disabledSourceIds.has(selectedSource.id)
-                        ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
-                        : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/40'
+                        ? 'bg-success/20 hover:bg-success/30 text-success border-success/40'
+                        : 'bg-danger/20 hover:bg-danger/30 text-danger border-danger/40'
                     }`}
                   >
                     <Power className="w-3.5 h-3.5" />
                     <span>{disabledSourceIds.has(selectedSource.id) ? 'Enable Source' : 'Disable Source'}</span>
                   </button>
 
-                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 flex-wrap">
+                  <div className="flex items-center gap-1 bg-app p-1 rounded-xl border border-edge flex-wrap">
                     <button
                       onClick={() => {
                         setActiveTab('all');
                         setCurrentPage(1);
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        activeTab === 'all' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+                        activeTab === 'all' ? 'bg-accent-2 text-white shadow-md' : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      <Grid className="w-3.5 h-3.5 text-indigo-300" />
+                      <Grid className="w-3.5 h-3.5 text-accent-2" />
                       <span>All Categories</span>
                     </button>
                     <button
@@ -779,10 +780,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         setCurrentPage(1);
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        activeTab === 'popular' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+                        activeTab === 'popular' ? 'bg-accent-2 text-white shadow-md' : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <Sparkles className="w-3.5 h-3.5 text-accent" />
                       <span>Popular Only</span>
                     </button>
                     <button
@@ -791,10 +792,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         setCurrentPage(1);
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        activeTab === 'latest' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+                        activeTab === 'latest' ? 'bg-accent-2 text-white shadow-md' : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                      <Zap className="w-3.5 h-3.5 text-info" />
                       <span>Latest Only</span>
                     </button>
 
@@ -804,10 +805,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                         setCurrentPage(1);
                       }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        activeTab === 'expanded' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-slate-200'
+                        activeTab === 'expanded' ? 'bg-accent text-accent-fg shadow-md font-black' : 'text-secondary hover:text-primary'
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5 text-amber-400" />
+                      <Layers className="w-3.5 h-3.5 text-accent" />
                       <span>Expanded View (50/page)</span>
                     </button>
                   </div>
@@ -816,7 +817,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
               {/* Search Input Bar */}
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-secondary absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -826,20 +827,20 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     else setActiveTab('all');
                   }}
                   placeholder={`Search titles on ${selectedSource.name}...`}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
+                  className="w-full bg-surface border border-edge rounded-xl pl-10 pr-4 py-2.5 text-xs text-primary placeholder-muted focus:outline-none focus:border-accent-2 transition-colors"
                 />
               </div>
 
               {/* Disabled Warning Banner */}
               {disabledSourceIds.has(selectedSource.id) && (
-                <div className="bg-rose-950/30 border border-rose-500/30 rounded-2xl p-3.5 text-xs text-rose-300 flex items-center justify-between gap-3">
+                <div className="bg-rose-950/30 border border-danger/30 rounded-2xl p-3.5 text-xs text-danger flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Power className="w-4 h-4 text-rose-400 shrink-0" />
+                    <Power className="w-4 h-4 text-danger shrink-0" />
                     <span>This source is currently <strong>Disabled</strong>. Active sources remain on top; disabled sources move down to the bottom of the list.</span>
                   </div>
                   <button
                     onClick={(e) => toggleSourceEnabled(selectedSource.id, selectedSource.name, e)}
-                    className="px-3 py-1 rounded-lg bg-rose-500 text-slate-950 font-black text-[11px] whitespace-nowrap hover:bg-rose-400 transition-all"
+                    className="px-3 py-1 rounded-lg bg-danger text-accent-fg font-black text-[11px] whitespace-nowrap hover:bg-danger transition-all"
                   >
                     Enable Now
                   </button>
@@ -847,19 +848,19 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               )}
 
               {isLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3 text-slate-500">
-                  <RefreshCw className="w-8 h-8 animate-spin text-purple-400" />
+                <div className="flex-1 flex flex-col items-center justify-center p-12 gap-3 text-muted">
+                  <RefreshCw className="w-8 h-8 animate-spin text-accent-2" />
                   <span className="text-xs font-semibold">Streaming top and latest series categories from {selectedSource.name}...</span>
                 </div>
               ) : searchQuery.trim() ? (
                 /* Search Results View */
                 <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-extrabold text-slate-200 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-purple-400" />
+                  <h3 className="text-sm font-extrabold text-primary flex items-center gap-2">
+                    <Search className="w-4 h-4 text-accent-2" />
                     Search Results for "{searchQuery}" ({searchResults.length})
                   </h3>
                   {searchResults.length === 0 ? (
-                    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+                    <div className="bg-surface/40 border border-edge rounded-2xl p-12 text-center text-secondary">
                       No series found for "{searchQuery}"
                     </div>
                   ) : (
@@ -873,13 +874,13 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-amber-400" />
+                      <Layers className="w-4 h-4 text-accent" />
                       {selectedSource.name} — Full Catalog
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30">
                         Page {currentPage}{totalPages ? ` of ${totalPages}` : ''}
                       </span>
                       {totalSeriesCount !== null && (
-                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-accent-2/20 text-accent-2 border border-accent-2/30">
                           {totalSeriesCount} Total Series
                         </span>
                       )}
@@ -887,7 +888,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                   </div>
 
                   {expandedResults.length === 0 ? (
-                    <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-400">
+                    <div className="bg-surface/40 border border-edge rounded-2xl p-12 text-center text-xs text-secondary">
                       No series found for this catalog page.
                     </div>
                   ) : (
@@ -904,16 +905,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-black text-white flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <Sparkles className="w-4 h-4 text-accent" />
                           Top Popular Series on {selectedSource.name}
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
                             {popularResults.length} Series
                           </span>
                         </h3>
                       </div>
 
                       {popularResults.length === 0 ? (
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-500">
+                        <div className="bg-surface/40 border border-edge rounded-2xl p-8 text-center text-xs text-muted">
                           No popular series loaded for this source.
                         </div>
                       ) : (
@@ -929,16 +930,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-black text-white flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-cyan-400" />
+                          <Zap className="w-4 h-4 text-info" />
                           Latest Uploaded Chapters on {selectedSource.name}
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-info/10 text-info border border-info/20">
                             {latestResults.length} Series
                           </span>
                         </h3>
                       </div>
 
                       {latestResults.length === 0 ? (
-                        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-500">
+                        <div className="bg-surface/40 border border-edge rounded-2xl p-8 text-center text-xs text-muted">
                           No latest uploads loaded for this source.
                         </div>
                       ) : (
@@ -952,14 +953,14 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               )}
 
               {/* Pagination Toolbar */}
-              <div className="flex items-center justify-between border-t border-slate-800/80 pt-4 mt-2">
+              <div className="flex items-center justify-between border-t border-edge/80 pt-4 mt-2">
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage <= 1 || isLoading}
                   className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                     currentPage <= 1 || isLoading
-                      ? 'bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800/50'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm'
+                      ? 'bg-surface text-muted cursor-not-allowed border border-edge/50'
+                      : 'bg-elevated hover:bg-elevated text-primary border border-edge-strong shadow-sm'
                   }`}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -967,11 +968,11 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-slate-300 font-mono bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl shadow-inner">
+                  <span className="text-xs font-black text-secondary font-mono bg-surface border border-edge px-4 py-2 rounded-xl shadow-inner">
                     Page {currentPage}{totalPages ? ` / ${totalPages}` : ''}
                   </span>
                   {totalSeriesCount !== null && (
-                    <span className="text-[11px] text-slate-500 font-mono">{totalSeriesCount} series</span>
+                    <span className="text-[11px] text-muted font-mono">{totalSeriesCount} series</span>
                   )}
                 </div>
 
@@ -980,8 +981,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                   disabled={isLoading || (totalPages !== null && currentPage >= totalPages)}
                   className={`px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 ${
                     isLoading || (totalPages !== null && currentPage >= totalPages)
-                      ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-800/50'
-                      : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'
+                      ? 'bg-elevated text-muted cursor-not-allowed border border-edge/50'
+                      : 'bg-gradient-to-r from-accent-2 to-accent-2 hover:from-accent-2 hover:to-accent-2'
                   }`}
                 >
                   <span>Next</span>
@@ -990,7 +991,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center p-12 text-slate-500">
+            <div className="flex-1 flex items-center justify-center p-12 text-muted">
               Select a Kotatsu source from the left sidebar to view its top and latest series categories.
             </div>
           )}

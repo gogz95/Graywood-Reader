@@ -1,61 +1,220 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --accent-primary: #f59e0b;
-    --accent-secondary: #f97316;
-    --accent-text: #fef3c7;
-    --bg-main: #020617;
-    --safe-area-top: env(safe-area-inset-top, 0px);
-    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-area-left: env(safe-area-inset-left, 0px);
-    --safe-area-right: env(safe-area-inset-right, 0px);
-  }
+/* ═══════════════════════════════════════════════════════════════════════════
+   OmniManga Adaptive Design System
+   Every surface, border, text level and interactive color is driven by CSS
+   custom properties re-defined per theme class on <body>. Tailwind utilities
+   (bg-app, bg-surface, text-primary, bg-accent, …) are wired to these
+   variables through the `@theme inline` block, so any component styled with
+   the tokens re-colors instantly on theme change.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
+:root {
+  color-scheme: dark;
+
+  /* ── Default theme · Cyber Amber ─────────────────────────────────────── */
+  --bg-app: #020617;
+  --bg-surface: #0f172a;
+  --bg-elevated: #1e293b;
+  --bg-inset: #0b1120;
+
+  --edge: #1e293b;
+  --edge-strong: #334155;
+
+  --text-1: #f1f5f9; /* primary   */
+  --text-2: #c3cfdf; /* secondary */
+  --text-3: #64748b; /* muted     */
+
+  --accent: #f59e0b;
+  --accent-bright: #fbbf24;
+  --accent-deep: #d97706;
+  --accent-2: #f97316;
+  --accent-fg: #0d1322; /* text/icons placed on top of accent fills */
+
+  /* Semantic status colors (stable across themes) */
+  --ok: #34d399;
+  --bad: #f87171;
+  --warn: #fbbf24;
+  --info: #38bdf8;
+
+  /* Device safe-area insets (notch / home indicator) */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* ── Kotatsu Emerald ─────────────────────────────────────────────────────── */
+body.theme-emerald {
+  --bg-app: #050f0b;
+  --bg-surface: #0a1a13;
+  --bg-elevated: #12261c;
+  --bg-inset: #06130e;
+  --edge: #17372a;
+  --edge-strong: #245540;
+  --text-1: #edf7f2;
+  --text-2: #c5ddd1;
+  --text-3: #6d8f80;
+  --accent: #10b981;
+  --accent-bright: #34d399;
+  --accent-deep: #059669;
+  --accent-2: #14b8a6;
+  --accent-fg: #05130d;
+}
+
+/* ── AMOLED Dark ─────────────────────────────────────────────────────────── */
+body.theme-amoled {
+  --bg-app: #000000;
+  --bg-surface: #0b0b0d;
+  --bg-elevated: #18181b;
+  --bg-inset: #050506;
+  --edge: #212125;
+  --edge-strong: #34343a;
+  --text-1: #f4f4f5;
+  --text-2: #c6c6cd;
+  --text-3: #77777f;
+  --accent: #e4e4e7;
+  --accent-bright: #ffffff;
+  --accent-deep: #a1a1aa;
+  --accent-2: #a1a1aa;
+  --accent-fg: #0a0a0c;
+}
+
+/* ── Royal Violet ────────────────────────────────────────────────────────── */
+body.theme-violet {
+  --bg-app: #0b0618;
+  --bg-surface: #140c28;
+  --bg-elevated: #1e1338;
+  --bg-inset: #0e081e;
+  --edge: #2b1d4f;
+  --edge-strong: #3f2c70;
+  --text-1: #f2edfb;
+  --text-2: #cfc5e8;
+  --text-3: #867aae;
+  --accent: #a855f7;
+  --accent-bright: #c084fc;
+  --accent-deep: #7e22ce;
+  --accent-2: #6366f1;
+  --accent-fg: #150826;
+}
+
+/* ── Neon Cyber ──────────────────────────────────────────────────────────── */
+body.theme-cyberpunk {
+  --bg-app: #03101a;
+  --bg-surface: #081b28;
+  --bg-elevated: #0f2937;
+  --bg-inset: #04141f;
+  --edge: #133a4d;
+  --edge-strong: #1d546d;
+  --text-1: #e8f6fc;
+  --text-2: #c0dfeb;
+  --text-3: #6c92a5;
+  --accent: #06b6d4;
+  --accent-bright: #22d3ee;
+  --accent-deep: #0891b2;
+  --accent-2: #3b82f6;
+  --accent-fg: #041018;
+}
+
+/* ── Expose tokens as Tailwind color utilities ───────────────────────────── */
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-inset: var(--bg-inset);
+
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+
+  --color-primary: var(--text-1);
+  --color-secondary: var(--text-2);
+  --color-muted: var(--text-3);
+
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-2: var(--accent-2);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-success: var(--ok);
+  --color-danger: var(--bad);
+  --color-warning: var(--warn);
+  --color-info: var(--info);
+}
+
+@layer base {
   /* Optimize touch interactions & eliminate tap delays on mobile browsers */
   html {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
+    background-color: var(--bg-app);
   }
 
   body {
+    background-color: var(--bg-app);
+    color: var(--text-1);
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 
-  body.theme-emerald {
-    --accent-primary: #10b981;
-    --accent-secondary: #14b8a6;
-    --accent-text: #d1fae5;
-    --bg-main: #022c22;
+  ::selection {
+    background-color: var(--accent);
+    color: var(--accent-fg);
   }
 
-  body.theme-amoled {
-    --accent-primary: #e4e4e7;
-    --accent-secondary: #a1a1aa;
-    --accent-text: #ffffff;
-    --bg-main: #000000;
-  }
-
-  body.theme-violet {
-    --accent-primary: #a855f7;
-    --accent-secondary: #6366f1;
-    --accent-text: #f3e8ff;
-    --bg-main: #0f0728;
-  }
-
-  body.theme-cyberpunk {
-    --accent-primary: #06b6d4;
-    --accent-secondary: #3b82f6;
-    --accent-text: #cffafe;
-    --bg-main: #03131a;
+  /* Keyboard accessibility: visible focus ring for interactive controls */
+  button:focus-visible,
+  a:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 }
 
-/* Custom scrollbar behavior */
+/* ── Theme-aware gradient helpers ────────────────────────────────────────── */
+.bg-accent-grad {
+  background-image: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+}
+.text-accent-grad {
+  background-image: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Safe-area padding helpers (bottom navigation, sheets) ───────────────── */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.375rem);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ── Themed scrollbars ───────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--edge-strong);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent);
+}
+*::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+/* Custom scrollbar behavior (opt-out) */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -70,9 +229,12 @@ img {
   height: auto;
 }
 
-/* Touch-optimized button min sizes for mobile phones & tablets */
+/* Touch-optimized control sizes on phone-class viewports */
 @media (max-width: 768px) {
-  button, a, input, select {
+  button,
+  a,
+  input,
+  select {
     min-height: 38px;
   }
 }

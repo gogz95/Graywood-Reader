@@ -54,7 +54,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'OmniManga Sync & Kotatsu Reader',
-    backgroundColor: '#090d16',
+    backgroundColor: '#020617',
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,

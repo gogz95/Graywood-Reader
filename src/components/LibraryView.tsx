@@ -112,57 +112,57 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     <div className="space-y-6">
       {/* Top Banner Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <div className="p-4 rounded-xl bg-surface/90 border border-edge flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-100">{mangaList.length}</div>
-            <div className="text-xs text-slate-400 font-medium">Total Tracked</div>
+            <div className="text-2xl font-black text-primary">{mangaList.length}</div>
+            <div className="text-xs text-secondary font-medium">Total Tracked</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <div className="p-4 rounded-xl bg-surface/90 border border-edge flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-success/10 text-success border border-success/20">
             <Flame className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-100">{totalReading}</div>
-            <div className="text-xs text-slate-400 font-medium">Active Reading</div>
+            <div className="text-2xl font-black text-primary">{totalReading}</div>
+            <div className="text-xs text-secondary font-medium">Active Reading</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
+        <div className="p-4 rounded-xl bg-surface/90 border border-edge flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-accent-2/10 text-accent-2 border border-accent-2/20">
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-2xl font-black text-orange-400">{totalUnreadChapters}</div>
-            <div className="text-xs text-slate-400 font-medium">Chapters Ahead</div>
+            <div className="text-2xl font-black text-accent-2">{totalUnreadChapters}</div>
+            <div className="text-xs text-secondary font-medium">Chapters Ahead</div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+        <div className="p-4 rounded-xl bg-surface/90 border border-edge flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-info/10 text-info border border-info/20">
             <CheckCircle className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-100">{totalCompleted}</div>
-            <div className="text-xs text-slate-400 font-medium">Completed</div>
+            <div className="text-2xl font-black text-primary">{totalCompleted}</div>
+            <div className="text-xs text-secondary font-medium">Completed</div>
           </div>
         </div>
       </div>
 
       {/* Control Bar: Filters, Sort, View toggle */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-4">
+      <div className="bg-surface/90 border border-edge rounded-xl p-4 space-y-4">
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-semibold">
           <button
             onClick={() => setStatusFilter('all')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'all'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             All ({mangaList.length})
@@ -171,8 +171,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('reading')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'reading'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             Reading ({totalReading})
@@ -181,8 +181,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('favorites')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'favorites'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             ★ Favorites ({mangaList.filter((m) => m.isFavorite).length})
@@ -191,8 +191,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('flagged')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
               statusFilter === 'flagged'
-                ? 'bg-red-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-red-400 hover:bg-slate-800'
+                ? 'bg-danger text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-danger hover:bg-elevated'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
@@ -202,8 +202,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('plan_to_read')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'plan_to_read'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             Plan to Read ({mangaList.filter((m) => m.status === 'plan_to_read').length})
@@ -212,8 +212,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('completed')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'completed'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             Completed ({totalCompleted})
@@ -222,8 +222,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             onClick={() => setStatusFilter('on_hold')}
             className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
               statusFilter === 'on_hold'
-                ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                ? 'bg-accent text-accent-fg font-bold shadow-sm'
+                : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
             On Hold ({mangaList.filter((m) => m.status === 'on_hold').length})
@@ -231,16 +231,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Secondary Filter Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-slate-800/80 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/80 pt-3">
           {/* Origin Type Filter */}
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400 font-medium mr-1">Type:</span>
+            <span className="text-secondary font-medium mr-1">Type:</span>
             <button
               onClick={() => setTypeFilter('all')}
               className={`px-2.5 py-1 rounded-md transition-all ${
                 typeFilter === 'all'
-                  ? 'bg-slate-700 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-elevated text-white font-semibold'
+                  : 'text-secondary hover:text-primary'
               }`}
             >
               All
@@ -249,8 +249,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               onClick={() => setTypeFilter('manhwa')}
               className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${
                 typeFilter === 'manhwa'
-                  ? 'bg-slate-700 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-elevated text-white font-semibold'
+                  : 'text-secondary hover:text-primary'
               }`}
             >
               <span>🇰🇷</span> Manhwa
@@ -259,8 +259,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               onClick={() => setTypeFilter('manhua')}
               className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${
                 typeFilter === 'manhua'
-                  ? 'bg-slate-700 text-white font-semibold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-elevated text-white font-semibold'
+                  : 'text-secondary hover:text-primary'
               }`}
             >
               <span>🇨🇳</span> Manhua
@@ -269,13 +269,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
           {/* Sort & View Mode Controls */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <ArrowUpDown className="w-3.5 h-3.5 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-secondary">
+              <ArrowUpDown className="w-3.5 h-3.5 text-accent" />
               <span>Sort:</span>
               <select
                 value={sortBy}
                 onChange={(e: any) => setSortBy(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:outline-none focus:border-amber-500/50"
+                className="bg-app border border-edge rounded px-2 py-1 text-primary focus:outline-none focus:border-accent/50"
               >
                 <option value="updated">Recently Updated</option>
                 <option value="title">Title A-Z</option>
@@ -284,17 +284,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+            <div className="flex items-center bg-app border border-edge rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-slate-800 text-amber-400' : 'text-slate-400'}`}
+                className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-elevated text-accent' : 'text-secondary'}`}
                 title="Grid View"
               >
                 <Layers className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-slate-800 text-amber-400' : 'text-slate-400'}`}
+                className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary'}`}
                 title="Table View"
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -306,19 +306,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* Main Manga List */}
       {sortedList.length === 0 ? (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mx-auto">
+        <div className="bg-surface/60 border border-edge rounded-2xl p-12 text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-accent/10 text-accent border border-accent/20 flex items-center justify-center mx-auto">
             <BookOpen className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-bold text-slate-200">No series found</h3>
-            <p className="text-sm text-slate-400 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-primary">No series found</h3>
+            <p className="text-sm text-secondary max-w-sm mx-auto">
               No Manhwa or Manhua matched your current filters or search query "{searchQuery}".
             </p>
           </div>
           <button
             onClick={onAddNew}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-fg hover:bg-accent-bright transition-all"
           >
             <Plus className="w-4 h-4" />
             Add New Series
@@ -337,12 +337,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             return (
               <div
                 key={manga.id}
-                className="group bg-slate-900 border border-slate-800/80 hover:border-slate-700 rounded-xl overflow-hidden shadow-lg transition-all duration-200 hover:-translate-y-1 flex flex-col relative"
+                className="group bg-surface border border-edge/80 hover:border-edge-strong rounded-xl overflow-hidden shadow-lg transition-all duration-200 hover:-translate-y-1 flex flex-col relative"
               >
                 {/* Cover Image Container */}
                 <div
                   onClick={() => onSelectManga(manga)}
-                  className="relative aspect-[3/4] w-full overflow-hidden bg-slate-950 cursor-pointer"
+                  className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
                 >
                   <img
                     src={manga.coverImage}
@@ -350,30 +350,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-black/30" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30" />
 
                   {/* Badges Overlay */}
                   <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border backdrop-blur-md shadow-md ${
                         manga.type === 'manhwa'
-                          ? 'bg-blue-950/80 text-blue-300 border-blue-500/30'
+                          ? 'bg-blue-950/80 text-info border-info/30'
                           : manga.type === 'manhua'
-                          ? 'bg-red-950/80 text-red-300 border-red-500/30'
-                          : 'bg-purple-950/80 text-purple-300 border-purple-500/30'
+                          ? 'bg-red-950/80 text-danger border-danger/30'
+                          : 'bg-purple-950/80 text-accent-2 border-accent-2/30'
                       }`}
                     >
                       {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
                     </span>
 
                     {hasNewChapter && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-slate-950 shadow-md animate-pulse">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md animate-pulse">
                         +{manga.latestChapter - manga.currentChapter} New
                       </span>
                     )}
 
                     {manga.isFlagged && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-600/90 text-white border border-red-400 shadow-md flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-danger/90 text-white border border-danger shadow-md flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         <span>FLAGGED</span>
                       </span>
@@ -381,8 +381,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   </div>
 
                   {/* Rating Badge */}
-                  <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded border border-slate-800 text-xs font-bold text-amber-400">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-app/80 backdrop-blur-md px-2 py-0.5 rounded border border-edge text-xs font-bold text-accent">
+                    <Star className="w-3 h-3 fill-accent text-accent" />
                     <span>{manga.rating}</span>
                   </div>
                 </div>
@@ -392,31 +392,31 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <div className="space-y-1">
                     <h4
                       onClick={() => onSelectManga(manga)}
-                      className="text-sm font-bold text-slate-100 line-clamp-1 hover:text-amber-400 cursor-pointer transition-colors"
+                      className="text-sm font-bold text-primary line-clamp-1 hover:text-accent cursor-pointer transition-colors"
                       title={manga.title}
                     >
                       {manga.title}
                     </h4>
-                    <p className="text-[11px] text-slate-400 line-clamp-1">
+                    <p className="text-[11px] text-secondary line-clamp-1">
                       {manga.altTitles[0] || manga.sourceName}
                     </p>
                   </div>
 
                   {/* Chapter Progress */}
-                  <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
+                  <div className="space-y-1.5 pt-1 border-t border-edge/80">
                     <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="text-slate-400">Ch. {manga.currentChapter}</span>
-                      <span className="text-slate-500 text-[11px]">of {manga.latestChapter}</span>
+                      <span className="text-secondary">Ch. {manga.currentChapter}</span>
+                      <span className="text-muted text-[11px]">of {manga.latestChapter}</span>
                     </div>
 
-                    <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-app overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${
                           progress === 100
-                            ? 'bg-emerald-500'
+                            ? 'bg-success'
                             : hasNewChapter
-                            ? 'bg-gradient-to-r from-orange-500 to-amber-400'
-                            : 'bg-amber-500'
+                            ? 'bg-gradient-to-r from-accent-2 to-accent-bright'
+                            : 'bg-accent'
                         }`}
                         style={{ width: `${progress}%` }}
                       />
@@ -428,18 +428,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     {isReaderAvailable(manga) ? (
                       <button
                         onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-xs transition-all shadow-md"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-extrabold text-xs transition-all shadow-md"
                         title="Open Webtoon Reader for next chapter"
                       >
-                        <BookOpen className="w-3.5 h-3.5 fill-slate-950" />
+                        <BookOpen className="w-3.5 h-3.5 fill-accent-fg" />
                         <span>Read Ch. {manga.currentChapter + 1}</span>
                       </button>
                     ) : (
                       <button
                         onClick={() => onSelectManga(manga)}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all border border-slate-700"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs transition-all border border-edge-strong"
                       >
-                        <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                        <BookOpen className="w-3.5 h-3.5 text-accent" />
                         <span>View Info</span>
                       </button>
                     )}
@@ -447,7 +447,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => onOpenChapters(manga)}
-                        className="flex-1 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-semibold transition-colors border border-slate-700/80"
+                        className="flex-1 py-1 rounded-md bg-elevated hover:bg-elevated text-secondary hover:text-white text-[11px] font-semibold transition-colors border border-edge-strong/80"
                         title="View full chapter list"
                       >
                         All Chapters
@@ -455,7 +455,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                       <button
                         onClick={() => onIncrementChapter(manga.id)}
-                        className="px-2 py-1 rounded-md bg-slate-800 hover:bg-emerald-500 hover:text-slate-950 text-slate-300 text-[11px] font-bold transition-all border border-slate-700/80"
+                        className="px-2 py-1 rounded-md bg-elevated hover:bg-success hover:text-accent-fg text-secondary text-[11px] font-bold transition-all border border-edge-strong/80"
                         title="Quick mark +1 read without opening reader"
                       >
                         +1
@@ -463,7 +463,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                       <button
                         onClick={() => onQuickEdit(manga)}
-                        className="p-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors border border-slate-800"
+                        className="p-1 rounded-md bg-elevated/80 hover:bg-elevated text-secondary hover:text-primary transition-colors border border-edge"
                         title="Edit series"
                       >
                         <Edit2 className="w-3 h-3" />
@@ -477,10 +477,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       ) : (
         /* TABLE VIEW */
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div className="bg-surface border border-edge rounded-xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider">
+            <table className="w-full text-left text-xs text-secondary">
+              <thead className="bg-app text-secondary font-semibold border-b border-edge uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Title</th>
                   <th className="py-3 px-4">Type</th>
@@ -491,26 +491,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-edge/80">
                 {sortedList.map((manga) => {
                   const hasNew = manga.latestChapter > manga.currentChapter;
                   return (
-                    <tr key={manga.id} className="hover:bg-slate-800/40 transition-colors">
+                    <tr key={manga.id} className="hover:bg-elevated/40 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <img
                             src={manga.coverImage}
                             alt={manga.title}
-                            className="w-9 h-12 rounded object-cover bg-slate-950"
+                            className="w-9 h-12 rounded object-cover bg-app"
                           />
                           <div>
                             <div
                               onClick={() => onSelectManga(manga)}
-                              className="font-bold text-slate-100 hover:text-amber-400 cursor-pointer line-clamp-1"
+                              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1"
                             >
                               {manga.title}
                             </div>
-                            <div className="text-[11px] text-slate-400 line-clamp-1">
+                            <div className="text-[11px] text-secondary line-clamp-1">
                               {manga.altTitles[0] || 'No alt title'}
                             </div>
                           </div>
@@ -520,62 +520,62 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             manga.type === 'manhwa'
-                              ? 'bg-blue-950 text-blue-300 border border-blue-500/20'
-                              : 'bg-red-950 text-red-300 border border-red-500/20'
+                              ? 'bg-blue-950 text-info border border-info/20'
+                              : 'bg-red-950 text-danger border border-danger/20'
                           }`}
                         >
                           {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
                         </span>
                       </td>
                       <td className="py-3 px-4 capitalize">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
                           {manga.status.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-200">Ch. {manga.currentChapter}</span>
-                          <span className="text-slate-500">/ {manga.latestChapter}</span>
+                          <span className="font-bold text-primary">Ch. {manga.currentChapter}</span>
+                          <span className="text-muted">/ {manga.latestChapter}</span>
                           {hasNew && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-orange-500 text-slate-950 font-bold">
+                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-2 text-accent-fg font-bold">
                               NEW
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-bold text-amber-400">★ {manga.rating}</td>
-                      <td className="py-3 px-4 text-slate-400">{manga.sourceName}</td>
+                      <td className="py-3 px-4 font-bold text-accent">★ {manga.rating}</td>
+                      <td className="py-3 px-4 text-secondary">{manga.sourceName}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
-                            className="px-2.5 py-1 rounded bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 transition-all text-xs flex items-center gap-1"
+                            className="px-2.5 py-1 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs flex items-center gap-1"
                           >
-                            <BookOpen className="w-3 h-3 fill-slate-950" />
+                            <BookOpen className="w-3 h-3 fill-accent-fg" />
                             Read Ch. {manga.currentChapter + 1}
                           </button>
                           <button
                             onClick={() => onOpenChapters(manga)}
-                            className="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white transition-all text-xs"
+                            className="px-2 py-1 rounded bg-elevated text-secondary hover:text-white transition-all text-xs"
                           >
                             Chapters
                           </button>
                           <button
                             onClick={() => onIncrementChapter(manga.id)}
-                            className="px-2 py-1 rounded bg-slate-800 text-emerald-400 hover:bg-emerald-950 transition-all text-xs font-bold"
+                            className="px-2 py-1 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs font-bold"
                             title="Quick mark +1 read"
                           >
                             +1
                           </button>
                           <button
                             onClick={() => onQuickEdit(manga)}
-                            className="p-1 rounded bg-slate-800 text-slate-300 hover:text-white"
+                            className="p-1 rounded bg-elevated text-secondary hover:text-white"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => onDeleteManga(manga.id)}
-                            className="p-1 rounded bg-slate-800 text-red-400 hover:bg-red-950"
+                            className="p-1 rounded bg-elevated text-danger hover:bg-red-950"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

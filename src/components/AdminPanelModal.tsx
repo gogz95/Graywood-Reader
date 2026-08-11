@@ -52,87 +52,87 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 space-y-6 shadow-2xl relative my-0 sm:my-auto">
+    <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 space-y-6 shadow-2xl relative my-0 sm:my-auto">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center justify-between border-b border-edge pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <div className="p-2.5 rounded-2xl bg-accent/10 text-accent border border-accent/20">
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
+              <h2 className="text-lg font-black text-primary flex items-center gap-2">
                 Host & Administrator Command Panel
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-slate-950">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-accent text-accent-fg">
                   FULL ACCESS
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-secondary">
                 Logged in as <strong>{currentUser.name}</strong> ({currentUser.email}). Manage user accounts, permissions, and system storage.
               </p>
             </div>
           </div>
 
-          <button onClick={onClose} className="p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white">
+          <button onClick={onClose} className="p-2 rounded-full bg-elevated text-secondary hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Global Admin Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-1">
-            <div className="text-slate-400 font-bold">Total Registered Users</div>
-            <div className="text-xl font-black text-amber-400 font-mono">{allUsers.length} Users</div>
+          <div className="p-3.5 bg-app rounded-2xl border border-edge space-y-1">
+            <div className="text-secondary font-bold">Total Registered Users</div>
+            <div className="text-xl font-black text-accent font-mono">{allUsers.length} Users</div>
           </div>
 
-          <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-1">
-            <div className="text-slate-400 font-bold">Administrator Count</div>
-            <div className="text-xl font-black text-purple-400 font-mono">
+          <div className="p-3.5 bg-app rounded-2xl border border-edge space-y-1">
+            <div className="text-secondary font-bold">Administrator Count</div>
+            <div className="text-xl font-black text-accent-2 font-mono">
               {allUsers.filter((u) => u.role === 'admin').length} Admins
             </div>
           </div>
 
-          <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-1">
-            <div className="text-slate-400 font-bold">Global Database Series</div>
-            <div className="text-xl font-black text-emerald-400 font-mono">{mangaList.length} Series</div>
+          <div className="p-3.5 bg-app rounded-2xl border border-edge space-y-1">
+            <div className="text-secondary font-bold">Global Database Series</div>
+            <div className="text-xl font-black text-success font-mono">{mangaList.length} Series</div>
           </div>
 
-          <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-1">
-            <div className="text-slate-400 font-bold">Privacy Enforcement</div>
-            <div className="text-xl font-black text-cyan-400 font-mono">Active RBAC</div>
+          <div className="p-3.5 bg-app rounded-2xl border border-edge space-y-1">
+            <div className="text-secondary font-bold">Privacy Enforcement</div>
+            <div className="text-xl font-black text-info font-mono">Active RBAC</div>
           </div>
         </div>
 
         {/* User Account Management Table */}
         <div className="space-y-3">
-          <div className="text-sm font-extrabold text-slate-200 flex items-center justify-between">
+          <div className="text-sm font-extrabold text-primary flex items-center justify-between">
             <span>User Accounts & Per-User Isolation</span>
-            <span className="text-xs text-slate-400 font-normal">Standard users only see their own private data</span>
+            <span className="text-xs text-secondary font-normal">Standard users only see their own private data</span>
           </div>
 
           <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
             {allUsers.map((u) => (
               <div
                 key={u.id}
-                className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                className="p-3.5 rounded-2xl bg-app border border-edge flex items-center justify-between gap-3 text-xs"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-2xl p-2 rounded-xl bg-slate-900 border border-slate-800">{u.avatar}</span>
+                  <span className="text-2xl p-2 rounded-xl bg-surface border border-edge">{u.avatar}</span>
                   <div className="min-w-0">
-                    <div className="font-bold text-slate-100 flex items-center gap-2 truncate">
+                    <div className="font-bold text-primary flex items-center gap-2 truncate">
                       <span>{u.name}</span>
-                      <span className="text-slate-400 font-mono text-[11px]">(@{u.username})</span>
+                      <span className="text-secondary font-mono text-[11px]">(@{u.username})</span>
                       <span
                         className={`px-2 py-0.2 rounded text-[10px] font-bold ${
                           u.role === 'admin'
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                            : 'bg-slate-800 text-slate-400'
+                            ? 'bg-accent-2/20 text-accent-2 border border-accent-2/30'
+                            : 'bg-elevated text-secondary'
                         }`}
                       >
                         {u.role === 'admin' ? '🛡️ Administrator' : '👤 Private User'}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-400 font-mono truncate pt-0.5">
+                    <div className="text-[11px] text-secondary font-mono truncate pt-0.5">
                       {u.email}
                     </div>
                   </div>
@@ -141,7 +141,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onSwitchUserView(u)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs"
+                    className="px-3 py-1.5 rounded-xl bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs"
                     title="Impersonate or inspect user view as Admin"
                   >
                     Inspect View
@@ -151,7 +151,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <>
                       <button
                         onClick={() => onPromoteUser(u.id, 'admin')}
-                        className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                        className="px-2.5 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-semibold"
                       >
                         Make Admin
                       </button>
@@ -161,7 +161,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           setUserToDelete(u);
                           setConfirmInput('');
                         }}
-                        className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                        className="p-2 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger border border-danger/30"
                         title="Delete User Account (Requires Confirmation)"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -176,47 +176,47 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
         {/* DOUBLE CONFIRMATION MODAL OVERLAY */}
         {userToDelete && (
-          <div className="fixed inset-0 z-60 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-red-500/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center gap-3 text-red-400 border-b border-slate-800 pb-3">
-                <div className="p-2.5 rounded-2xl bg-red-500/10 border border-red-500/20">
+          <div className="fixed inset-0 z-60 bg-app/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-surface border border-danger/40 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center gap-3 text-danger border-b border-edge pb-3">
+                <div className="p-2.5 rounded-2xl bg-danger/10 border border-danger/20">
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-100">Confirm Permanent User Deletion</h3>
-                  <p className="text-xs text-red-400 font-semibold">This action cannot be undone!</p>
+                  <h3 className="text-base font-black text-primary">Confirm Permanent User Deletion</h3>
+                  <p className="text-xs text-danger font-semibold">This action cannot be undone!</p>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-1 text-xs">
-                <div className="flex items-center gap-2 font-bold text-slate-100">
+              <div className="p-3 bg-app rounded-2xl border border-edge space-y-1 text-xs">
+                <div className="flex items-center gap-2 font-bold text-primary">
                   <span className="text-xl">{userToDelete.avatar}</span>
                   <span>{userToDelete.name} (@{userToDelete.username})</span>
                 </div>
-                <div className="text-slate-400 font-mono text-[11px]">{userToDelete.email}</div>
+                <div className="text-secondary font-mono text-[11px]">{userToDelete.email}</div>
               </div>
 
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-secondary">
                 Are you sure you want to permanently purge user account <strong>{userToDelete.name}</strong> and all associated library data?
               </p>
 
               <div className="space-y-1 text-xs">
-                <label className="font-bold text-slate-300 block">
-                  To confirm, type <span className="font-mono text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">{userToDelete.username}</span> below:
+                <label className="font-bold text-secondary block">
+                  To confirm, type <span className="font-mono text-danger bg-danger/10 px-1.5 py-0.5 rounded border border-danger/20">{userToDelete.username}</span> below:
                 </label>
                 <input
                   type="text"
                   value={confirmInput}
                   onChange={(e) => setConfirmInput(e.target.value)}
                   placeholder={`Type '${userToDelete.username}' to enable delete`}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-app border border-edge text-primary placeholder-muted focus:outline-none focus:border-danger font-mono"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800 text-xs">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-edge text-xs">
                 <button
                   onClick={() => setUserToDelete(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold"
+                  className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated text-secondary font-bold"
                 >
                   Cancel
                 </button>
@@ -224,7 +224,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <button
                   onClick={handleConfirmDelete}
                   disabled={confirmInput.trim() !== userToDelete.username || isDeleting}
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black flex items-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-xl bg-danger hover:bg-danger text-white font-black flex items-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-4 h-4" />
                   {isDeleting ? 'Purging Account...' : 'Permanently Delete User'}
@@ -235,10 +235,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end border-t border-slate-800 pt-4">
+        <div className="flex items-center justify-end border-t border-edge pt-4">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs"
+            className="px-5 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs"
           >
             Close Admin Panel
           </button>

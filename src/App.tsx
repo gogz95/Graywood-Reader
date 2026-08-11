@@ -392,10 +392,15 @@ export default function App() {
   }, []);
 
 
-  // Synchronize App Theme on body element
+  // Synchronize App Theme on body element (+ browser chrome / PWA color)
   useEffect(() => {
     if (appSettings.appTheme) {
       document.body.className = `theme-${appSettings.appTheme}`;
+      requestAnimationFrame(() => {
+        const bg = getComputedStyle(document.body).getPropertyValue('--bg-app').trim();
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (bg && meta) meta.setAttribute('content', bg);
+      });
     }
   }, [appSettings.appTheme]);
 
@@ -736,7 +741,7 @@ export default function App() {
   const unreadCount = mangaList.filter((m) => m.latestChapter > m.currentChapter).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950 flex flex-col">
+    <div className="min-h-screen bg-app text-primary font-sans antialiased flex flex-col">
       {/* Top Fixed Header & Tab Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -965,13 +970,13 @@ export default function App() {
 
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-edge bg-surface/60 py-6 pb-24 md:pb-6 text-center text-xs text-muted">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>Graywood Reader and Tracker • {config.subdomain}</p>
           <p className="flex items-center gap-2">
             <span>Automatic Chapter Scanner Active</span>
             <span>•</span>
-            <span className="text-amber-400 font-bold">{mangaList.length} Series Tracked</span>
+            <span className="text-accent font-bold">{mangaList.length} Series Tracked</span>
           </p>
         </div>
       </footer>

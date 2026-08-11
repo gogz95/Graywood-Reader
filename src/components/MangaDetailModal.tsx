@@ -132,13 +132,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
+    <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
         {/* Header / Hero Cover Bar */}
-        <div className="relative p-6 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800/80">
+        <div className="relative p-6 bg-gradient-to-r from-app via-surface to-app border-b border-edge/80">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -147,7 +147,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
             <img
               src={manga.coverImage}
               alt={manga.title}
-              className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-slate-950 shadow-xl border border-slate-800"
+              className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-app shadow-xl border border-edge"
             />
 
             <div className="space-y-2 flex-1 min-w-0">
@@ -155,8 +155,8 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                 <span
                   className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase ${
                     manga.type === 'manhwa'
-                      ? 'bg-blue-950 text-blue-300 border border-blue-500/30'
-                      : 'bg-red-950 text-red-300 border border-red-500/30'
+                      ? 'bg-blue-950 text-info border border-info/30'
+                      : 'bg-red-950 text-danger border border-danger/30'
                   }`}
                 >
                   {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
@@ -166,11 +166,11 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                   onClick={() => setIsFavorite(!isFavorite)}
                   className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
                     isFavorite
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-accent/20 text-accent border border-accent/30'
+                      : 'bg-elevated text-secondary'
                   }`}
                 >
-                  <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+                  <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-accent text-accent' : ''}`} />
                   <span>{isFavorite ? 'Favorite' : 'Add Favorite'}</span>
                 </button>
 
@@ -178,20 +178,20 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                   onClick={handleToggleFlag}
                   className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
                     isFlagged
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/40 shadow-sm'
-                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                      ? 'bg-danger/20 text-danger border border-danger/40 shadow-sm'
+                      : 'bg-elevated text-secondary hover:text-primary'
                   }`}
                   title="Flag series for loading errors or broken content"
                 >
-                  <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-red-400 fill-red-400/20' : 'text-slate-400'}`} />
+                  <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
                   <span>{isFlagged ? `Flagged: ${flagReason || 'Error'}` : 'Flag Issue'}</span>
                 </button>
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-black text-slate-100">{manga.title}</h2>
+              <h2 className="text-xl sm:text-2xl font-black text-primary">{manga.title}</h2>
 
               {manga.altTitles.length > 0 && (
-                <p className="text-xs text-slate-400 font-mono">
+                <p className="text-xs text-secondary font-mono">
                   Alt Names: {manga.altTitles.join(' • ')}
                 </p>
               )}
@@ -199,7 +199,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
               {/* Genre Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {manga.genres.map((g, idx) => (
-                  <span key={idx} className="px-2 py-0.5 rounded text-[11px] bg-slate-800 text-slate-300">
+                  <span key={idx} className="px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
                     {g}
                   </span>
                 ))}
@@ -213,9 +213,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                       onClose();
                       onOpenReader(manga, manga.currentChapter + 1);
                     }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center gap-1.5 shadow-lg shadow-accent/20 transition-all hover:scale-105"
                   >
-                    <BookOpen className="w-4 h-4 fill-slate-950" />
+                    <BookOpen className="w-4 h-4 fill-accent-fg" />
                     <span>Read Chapter {manga.currentChapter + 1} Now</span>
                   </button>
                 )}
@@ -225,9 +225,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                     onClose();
                     onOpenChapters(manga);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all"
+                  className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 transition-all"
                 >
-                  <Globe className="w-3.5 h-3.5 text-amber-400" />
+                  <Globe className="w-3.5 h-3.5 text-accent" />
                   <span>Browse All Chapters</span>
                 </button>
 
@@ -236,7 +236,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                     href={manga.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200"
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-secondary hover:text-primary"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     <span>External Site</span>
@@ -246,20 +246,20 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                 <button
                   onClick={handleRefreshMetadata}
                   disabled={isRefreshingMetadata}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-bold text-xs flex items-center gap-1.5 transition-all"
+                  className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-50 text-primary font-bold text-xs flex items-center gap-1.5 transition-all"
                   title="Fetch latest metadata, chapter counts, covers, and rating from live sources"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 text-info ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
                   <span>{isRefreshingMetadata ? 'Refreshing...' : 'Refresh Metadata'}</span>
                 </button>
 
                 {refreshMsg && (
-                  <span className="text-xs font-bold text-emerald-400 animate-pulse">{refreshMsg}</span>
+                  <span className="text-xs font-bold text-success animate-pulse">{refreshMsg}</span>
                 )}
                 {/* Available Sources List */}
                 <div className="space-y-1.5 pt-2">
-                  <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <div className="text-xs font-bold text-secondary flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-info" />
                     <span>Found Across Sources ({manga.availableSources?.length || (manga.sourceName ? 1 : 0)}):</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -270,14 +270,14 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                           href={src.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 hover:border-cyan-500/50 text-cyan-300 text-xs font-semibold flex items-center gap-1 transition-all"
+                          className="px-2.5 py-1 rounded-lg bg-app border border-edge hover:border-info/50 text-info text-xs font-semibold flex items-center gap-1 transition-all"
                         >
                           <span>{src.sourceName}</span>
-                          <ExternalLink className="w-3 h-3 text-slate-500" />
+                          <ExternalLink className="w-3 h-3 text-muted" />
                         </a>
                       ))
                     ) : (
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 text-xs font-semibold">
+                      <span className="px-2.5 py-1 rounded-lg bg-app border border-edge text-secondary text-xs font-semibold">
                         {manga.sourceName || 'Kotatsu Source'}
                       </span>
                     )}
@@ -292,34 +292,34 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
         <div className="p-6 space-y-6 text-xs sm:text-sm">
           {/* Synopsis */}
           <div className="space-y-1.5">
-            <h4 className="font-bold text-slate-200">Synopsis</h4>
-            <p className="text-slate-300 leading-relaxed bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+            <h4 className="font-bold text-primary">Synopsis</h4>
+            <p className="text-secondary leading-relaxed bg-app p-3.5 rounded-xl border border-edge">
               {manga.description || 'No synopsis provided.'}
             </p>
           </div>
 
           {/* Quick Chapter Progress Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-app/60 p-4 rounded-xl border border-edge">
             <div>
-              <label className="block font-bold text-slate-300 mb-2">
+              <label className="block font-bold text-secondary mb-2">
                 Reading Chapter Progress:
               </label>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setCurrentChapter(Math.max(0, currentChapter - 1))}
-                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                  className="p-2 rounded-lg bg-elevated hover:bg-elevated text-primary"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
 
                 <div className="text-center min-w-[100px]">
-                  <span className="text-xl font-black text-amber-400">Ch. {currentChapter}</span>
-                  <span className="text-xs text-slate-500 block">of {manga.latestChapter}</span>
+                  <span className="text-xl font-black text-accent">Ch. {currentChapter}</span>
+                  <span className="text-xs text-muted block">of {manga.latestChapter}</span>
                 </div>
 
                 <button
                   onClick={() => setCurrentChapter(currentChapter + 1)}
-                  className="p-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
+                  className="p-2 rounded-lg bg-accent hover:bg-accent-bright text-accent-fg font-bold"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -327,13 +327,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-bold text-slate-300 mb-2">
+              <label className="block font-bold text-secondary mb-2">
                 Reading Status:
               </label>
               <select
                 value={status}
                 onChange={(e: any) => setStatus(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                className="w-full bg-surface border border-edge-strong rounded-lg p-2.5 text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
               >
                 <option value="reading">Reading</option>
                 <option value="plan_to_read">Plan to Read</option>
@@ -346,27 +346,27 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
 
           {/* Personal Notes */}
           <div className="space-y-1.5">
-            <label className="block font-bold text-slate-300">Reading Notes & Arc Thoughts:</label>
+            <label className="block font-bold text-secondary">Reading Notes & Arc Thoughts:</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add personal reading notes..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </div>
 
           {/* Gemini AI Recommendations */}
-          <div className="pt-2 border-t border-slate-800 space-y-3">
+          <div className="pt-2 border-t border-edge space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="font-bold text-slate-200 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
+              <h4 className="font-bold text-primary flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent" />
                 Gemini AI Similar Series Recommendations
               </h4>
               <button
                 onClick={handleFetchSimilar}
                 disabled={loadingSimilar}
-                className="px-3 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold transition-all"
+                className="px-3 py-1 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 text-xs font-bold transition-all"
               >
                 {loadingSimilar ? 'Analyzing...' : 'Generate Recommendations'}
               </button>
@@ -375,12 +375,12 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
             {similarSeries.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                 {similarSeries.map((s, idx) => (
-                  <div key={idx} className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                  <div key={idx} className="p-3 rounded-lg bg-app border border-edge space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-100">{s.title}</span>
-                      <span className="text-[10px] uppercase font-bold text-amber-400">{s.type}</span>
+                      <span className="font-bold text-primary">{s.title}</span>
+                      <span className="text-[10px] uppercase font-bold text-accent">{s.type}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400">{s.reason}</p>
+                    <p className="text-[11px] text-secondary">{s.reason}</p>
                   </div>
                 ))}
               </div>
@@ -389,10 +389,10 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+        <div className="p-4 bg-app border-t border-edge flex items-center justify-between gap-3">
           <button
             onClick={() => onDeleteManga(manga.id)}
-            className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-300 font-bold text-xs flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 text-danger font-bold text-xs flex items-center gap-1.5 transition-all"
           >
             <Trash2 className="w-4 h-4" />
             Delete
@@ -404,7 +404,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                 onClose();
                 onEditManga(manga);
               }}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5"
             >
               <Edit className="w-4 h-4" />
               Edit Details
@@ -412,7 +412,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
 
             <button
               onClick={handleSaveQuickChanges}
-              className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg transition-all"
+              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs shadow-lg transition-all"
             >
               Save Progress
             </button>
