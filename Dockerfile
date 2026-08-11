@@ -4,15 +4,18 @@
 # ==============================================================================
 
 # ── STAGE 1: Build Frontend Assets & Install Dependencies ──────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
 # Install native build tools required by better-sqlite3
-RUN apk add --no-checked --no-cache python3 make g++ gcc
+RUN apk add --no-cache python3 make g++
 
 # Copy package manifests
 COPY package*.json ./
+
+# Skip downloading the Electron binary (not needed for server builds)
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 # Install all dependencies (including devDependencies for Vite & TypeScript)
 RUN npm ci
@@ -25,7 +28,7 @@ RUN npm run build
 
 
 # ── STAGE 2: Production Runner ────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -34,21 +37,21 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-# Install runtime dependencies for SQLite
-RUN apk add --no-cache sqlite-dev
-
 # Copy package manifests
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Install production dependencies only.
+# Build tools are installed temporarily in case better-sqlite3 has no
+# prebuilt binary for this platform, then removed to keep the image small.
+RUN apk add --no-cache python3 make g++ libstdc++ && \
+    npm ci --omit=dev && \
+    apk del python3 make g++
 
 # Copy built frontend assets and server entry points
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/sqlite-db.ts ./sqlite-db.ts
 COPY --from=builder /app/src ./src
-COPY --from=builder /app/data ./data
 COPY --from=builder /app/BUGS.md ./BUGS.md
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
@@ -58,7 +61,7 @@ RUN mkdir -p /app/data/storage
 # Expose server port
 EXPOSE 3000
 
-# Mountable persistent storage volume for SQLite & database.json
+# Mountable persistent storage volume for SQLite database & storage files
 VOLUME ["/app/data"]
 
 # Healthcheck probe

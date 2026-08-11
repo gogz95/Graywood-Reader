@@ -59,7 +59,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      // webSecurity stays enabled (default) — all content is served same-origin
+      // from the local server, and remote images go through the server-side proxy.
     },
   });
 

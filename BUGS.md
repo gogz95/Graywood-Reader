@@ -27,20 +27,6 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
-### [BUG-003] Page and chapter counter
-- **Status**: `open`
-- **Priority**: `medium`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts`
-- **Submitted-By**: Guest Reader (2026-08-10)
-- **Description**: Needs to be able to be turned on or off and more transparent
-- **Steps to Reproduce**:
-  1. Open application
-  2. Trigger reported scenario
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
 _No active bugs._
 
 ---
@@ -48,6 +34,15 @@ _No active bugs._
 ## Fixed Bugs (Archive)
 
 > Bugs that have been resolved are moved here for historical reference.
+
+### [BUG-003] Page and chapter counter
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts`
+- **Submitted-By**: Guest Reader (2026-08-10)
+- **Description**: Needs to be able to be turned on or off and more transparent
+- **Fixed in**: 2026-08-11 — Added a "Per-Page Number Counter" toggle in Settings → Reader (controls the `showPageNumberOverlay` setting, previously had no UI toggle). Both the persistent chapter/page badge and the per-page counter are now semi-transparent (`bg-slate-900/50` / `bg-slate-950/40` with softened borders & text) and the badge no longer intercepts clicks. Files: `src/components/SettingsModal.tsx`, `src/components/ReaderView.tsx`.
 
 ### [BUG-001] Disabled sources still being toggled via old localStorage state
 - **Status**: `fixed`

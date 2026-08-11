@@ -7,3 +7,22 @@ dist
 scratch/
 test-*.cjs
 coverage
+
+# Local runtime state — never bake into images
+data/
+logs/
+database.json
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+
+# Vendored reference repos (not part of the Node app image)
+kotatsu-app/
+kotatsu-parsers/
+
+# Editor / agent metadata
+.vscode/
+.agents/
+.antigravity/

@@ -132,8 +132,8 @@ export class KotatsuImageLoader {
    * Update active reader viewport index & schedule sliding preload window
    */
   public setActiveIndex(currentIndex: number): void {
-    const start = Math.max(0, currentIndex - this.preloadWindowBehind);
-    const end = Math.min(this.pageUrls.length - 1, currentIndex + this.preloadWindowAhead);
+    const start = Math.max(0, currentIndex - this.preloadBehind);
+    const end = Math.min(this.pageUrls.length - 1, currentIndex + this.preloadAhead);
 
     // Build priority list: active page first, then forward window, then backward window
     const priorityList: number[] = [currentIndex];

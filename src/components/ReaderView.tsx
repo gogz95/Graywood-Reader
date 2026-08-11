@@ -146,7 +146,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const availableScanGroups: ScanGroupOption[] = (manga.availableSources && manga.availableSources.length > 0)
     ? manga.availableSources.map((src, idx) => ({
         id: `src_${idx}`,
-        name: src,
+        name: src.sourceName,
         quality: '1080p Web',
         releaseDate: 'Active Source',
       }))
@@ -375,11 +375,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       )}
 
-      {/* Persistent Page & Chapter Badge Indicator */}
+      {/* Persistent Page & Chapter Badge Indicator (BUG-003: toggleable & semi-transparent) */}
       {settings.showPersistentPageBadge && chapterData && (
-        <div className="fixed top-14 left-4 z-40 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-200 text-xs font-mono font-bold shadow-xl flex items-center gap-2">
-          <span className="text-amber-400">Ch. {currentChapterNum}</span>
-          <span className="text-slate-500">•</span>
+        <div className="fixed top-14 left-4 z-40 px-3 py-1.5 rounded-xl bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 text-slate-200/90 text-xs font-mono font-bold shadow-lg flex items-center gap-2 pointer-events-none transition-opacity">
+          <span className="text-amber-400/90">Ch. {currentChapterNum}</span>
+          <span className="text-slate-500/80">•</span>
           <span>Page {currentPageIndex + 1} / {chapterData.pages.length}</span>
         </div>
       )}
@@ -872,7 +872,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               Retry Chapter
             </button>
           </div>
-        ) : chapterData && (settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless') ? (
+        ) : chapterData && settings.viewMode === 'webtoon' ? (
           /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */
           <div className="flex flex-col items-center w-full py-4 space-y-0 relative">
             {/* Phone/Tablet Center Touch Overlay for HUD Toggle */}
@@ -891,7 +891,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               className="w-full mx-auto flex flex-col items-center shadow-2xl relative z-20"
               style={{
                 maxWidth: settings.maxWidth,
-                gap: `${(settings.viewMode === 'webtoon-seamless' || settings.noPanelSpacing) ? 0 : settings.pageGap}px`
+                gap: `${settings.noPanelSpacing ? 0 : settings.pageGap}px`
               }}
             >
               {chapterData.pages.map((pageSrc, idx) => {
@@ -899,7 +899,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 const displaySrc = pageState?.blobUrl || pageSrc;
                 const isLoading = pageState?.status === 'loading';
                 const isError = pageState?.status === 'error';
-                const isSeamless = settings.viewMode === 'webtoon-seamless' || settings.noPanelSpacing || settings.pageGap === 0;
+                const isSeamless = settings.noPanelSpacing || settings.pageGap === 0;
 
                 return (
                   <div
@@ -948,7 +948,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     )}
 
                     {settings.showPageNumberOverlay && (
-                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-950/80 backdrop-blur-md text-[10px] text-slate-300 font-mono border border-slate-800 pointer-events-none">
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-950/40 backdrop-blur-[2px] text-[10px] text-slate-300/80 font-mono border border-slate-800/40 pointer-events-none">
                         Page {idx + 1} / {chapterData.pages.length}
                       </div>
                     )}

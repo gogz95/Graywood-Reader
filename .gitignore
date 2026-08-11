@@ -6,3 +6,12 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime state (SQLite is the canonical store; JSON snapshot is a backup artifact)
+/data/
+/logs/
+/database.json
+/database.json.tmp
+*.db
+*.db-wal
+*.db-shm

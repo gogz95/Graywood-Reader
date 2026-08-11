@@ -150,10 +150,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                   {u.id !== currentUser.id && u.id !== 'usr_admin' && u.id !== 'usr_guest' && u.role !== 'admin' && (
                     <>
                       <button
-                        onClick={() => onPromoteUser(u.id, u.role === 'admin' ? 'user' : 'admin')}
+                        onClick={() => onPromoteUser(u.id, 'admin')}
                         className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
                       >
-                        {u.role === 'admin' ? 'Demote to User' : 'Make Admin'}
+                        Make Admin
                       </button>
 
                       <button

@@ -1,8 +1,10 @@
 import express from "express";
+import compression from "compression";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { createServer as createViteServer } from "vite";
+import dns from "dns";
+import net from "net";
 import { GoogleGenAI } from "@google/genai";
 import { INITIAL_MANGA_DATABASE } from "./src/data/initialManga";
 import { KOTATSU_COMPLETE_CATALOG } from "./src/data/kotatsuCompleteDataset";
@@ -16,9 +18,59 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 app.use(express.json({ limit: "10mb" }));
 
+// Response compression (shrinks the multi-MB library payloads by ~80%)
+app.use(compression());
+
 // Expose custom pagination headers to browser fetch (needed for reading X-Total-Pages)
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Total-Pages');
+  next();
+});
+
+// Baseline security response headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  next();
+});
+
+// =========================================================
+// HOST-ONLY GATE FOR GLOBAL SETTINGS & DESTRUCTIVE OPERATIONS
+// =========================================================
+// Per-user library CRUD stays open to all users, but anything that mutates
+// global server state (settings, config, backups, bulk syncs, source toggles,
+// crawler) is restricted to the host computer. Without a token/session system
+// this prevents any LAN/remote client from overwriting the whole database.
+const HOST_ONLY_PATHS = new Set<string>([
+  '/api/config',
+  '/api/settings',
+  '/api/settings/backup/export',
+  '/api/settings/backup/import',
+  '/api/settings/cache/clear',
+  '/api/manga/sync-from-apis',
+  '/api/manga/refresh-all-metadata',
+  '/api/kotatsu/sync-database',
+  '/api/kotatsu/sources/toggle',
+  '/api/kotatsu/sources/purge-disabled',
+  '/api/crawler/bypass-fetch',
+]);
+// GET requests to host-only paths are allowed (read-only config/health info),
+// except these sensitive exports which leak the full database.
+const SENSITIVE_GET_PATHS = new Set<string>([
+  '/api/settings/backup/export',
+]);
+
+app.use((req, res, next) => {
+  if (!HOST_ONLY_PATHS.has(req.path)) return next();
+  if (req.method === 'GET' && !SENSITIVE_GET_PATHS.has(req.path)) return next();
+  if (!isHostRequest(req)) {
+    return res.status(403).json({
+      error: "Forbidden",
+      message: "Global settings and administrative operations are restricted to the host computer.",
+    });
+  }
   next();
 });
 
@@ -67,7 +119,37 @@ app.use((req, res, next) => {
 // =========================================================
 // GDPR ARTICLE 32 CRYPTOGRAPHIC ENCRYPTION & SECURITY ENGINE
 // =========================================================
-const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || "omnimanga-gdpr-aes256-secret-key-32b!";
+// Secret resolution order:
+//   1. ENCRYPTION_SECRET environment variable (recommended for production)
+//   2. data/.encryption-secret file (auto-generated, never committed to git)
+// The legacy hardcoded default is seeded into the file on first run ONLY so
+// previously-encrypted PII remains decryptable. Rotate by setting the env var.
+function resolveEncryptionSecret(): string {
+  if (process.env.ENCRYPTION_SECRET && process.env.ENCRYPTION_SECRET.trim()) {
+    return process.env.ENCRYPTION_SECRET.trim();
+  }
+  const secretPath = path.join(process.cwd(), 'data', '.encryption-secret');
+  try {
+    if (fs.existsSync(secretPath)) {
+      const existing = fs.readFileSync(secretPath, 'utf8').trim();
+      if (existing) return existing;
+    }
+  } catch (err) {
+    console.error('[Security Engine] Failed to read secret file:', err);
+  }
+  // First run: seed with the legacy default key for backward compatibility.
+  const legacyDefault = 'omnimanga-gdpr-aes256-secret-key-32b!';
+  try {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, legacyDefault + '\n', { mode: 0o600 });
+    console.warn('[Security Engine] Seeded data/.encryption-secret with the legacy default key so existing encrypted PII stays decryptable. Set ENCRYPTION_SECRET in your environment to rotate it.');
+  } catch (err) {
+    console.error('[Security Engine] Failed to seed secret file:', err);
+  }
+  return legacyDefault;
+}
+
+const ENCRYPTION_SECRET = resolveEncryptionSecret();
 const ALGORITHM = "aes-256-gcm";
 
 export function encryptPII(text: string): string {
@@ -103,9 +185,37 @@ export function decryptPII(encryptedData: string): string {
   }
 }
 
+// Password hashing uses salted scrypt (memory-hard KDF). Legacy unsalted
+// SHA-256 hashes are still accepted for verification for backward compatibility.
 export function hashPassword(password: string): string {
   if (!password) return "";
-  return crypto.createHash("sha256").update(password + ENCRYPTION_SECRET).digest("hex");
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt:${salt}:${hash}`;
+}
+
+export function isAlreadyHashed(value: string): boolean {
+  return (
+    value.startsWith('scrypt:') ||
+    value.startsWith('enc:') ||
+    /^[a-f0-9]{64}$/i.test(value) // legacy SHA-256 hex digest
+  );
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  if (!password || !stored) return false;
+  try {
+    if (stored.startsWith('scrypt:')) {
+      const [, salt, hash] = stored.split(':');
+      if (!salt || !hash) return false;
+      const check = crypto.scryptSync(password, salt, 64).toString('hex');
+      return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
+    }
+    // Legacy SHA-256 fallback
+    return stored === crypto.createHash('sha256').update(password + ENCRYPTION_SECRET).digest('hex');
+  } catch (err) {
+    return false;
+  }
 }
 
 // Initialize Gemini Client
@@ -348,45 +458,69 @@ try {
 
 
 
-// Helper: Save Database State to Disk with AES-256-GCM GDPR Encryption & Atomic Async Write Throttling
+// Helper: Persist App State to SQLite (Profiles / Settings / Config / Logs).
+// Manga rows are persisted directly by the sync* data-access functions below.
+// PII fields are AES-256-GCM encrypted & passwords scrypt-hashed before storage.
 let saveTimeoutTimer: NodeJS.Timeout | null = null;
+
+function buildEncryptedProfiles() {
+  return userProfiles.map((p) => ({
+    ...p,
+    email: encryptPII(p.email || ''),
+    storageFolderPath: p.storageFolderPath && !String(p.storageFolderPath).startsWith('enc:')
+      ? encryptPII(String(p.storageFolderPath))
+      : (p.storageFolderPath || ''),
+    password: p.password ? (isAlreadyHashed(p.password) ? p.password : hashPassword(p.password)) : '',
+  }));
+}
+
+function buildEncryptedSettings() {
+  return {
+    ...appSettings,
+    captchaApiKey: appSettings.captchaApiKey && !appSettings.captchaApiKey.startsWith('enc:')
+      ? encryptPII(appSettings.captchaApiKey)
+      : (appSettings.captchaApiKey || ''),
+  };
+}
 
 function saveDatabaseToDisk() {
   if (saveTimeoutTimer) clearTimeout(saveTimeoutTimer);
 
   saveTimeoutTimer = setTimeout(() => {
     try {
-      const encryptedProfiles = userProfiles.map((p) => ({
-        ...p,
-        email: encryptPII(p.email || ''),
-        password: p.password ? hashPassword(p.password) : '',
-      }));
-
-      const encryptedSettings = {
-        ...appSettings,
-        captchaApiKey: appSettings.captchaApiKey ? encryptPII(appSettings.captchaApiKey) : '',
-      };
-
-      const dataToSave = {
-        version: 1,
-        gdprEncrypted: true,
-        lastSaved: new Date().toISOString(),
-        mangaDatabase,
-        userProfiles: encryptedProfiles,
-        autoUpdateLogs,
-        syncConfig,
-        appSettings: encryptedSettings,
-      };
-
-      // Atomic write via temporary file
-      const tempPath = `${DB_FILE_PATH}.tmp`;
-      fs.writeFileSync(tempPath, JSON.stringify(dataToSave, null, 2), "utf-8");
-      fs.renameSync(tempPath, DB_FILE_PATH);
-      console.log(`[GDPR Database Engine] Atomically saved AES-256-GCM encrypted database.json (${userProfiles.length} user PII profiles secured).`);
+      SqliteDb.replaceAllProfiles(buildEncryptedProfiles());
+      SqliteDb.setSetting('appSettings', JSON.stringify(buildEncryptedSettings()));
+      SqliteDb.setSetting('syncConfig', JSON.stringify(syncConfig));
+      SqliteDb.replaceAllLogs(autoUpdateLogs);
     } catch (err) {
-      console.error("[GDPR Database Engine] Error writing database.json to disk:", err);
+      console.error("[SQLite Engine] Error persisting app state:", err);
     }
   }, 100);
+}
+
+// Legacy JSON snapshot writer — used only for graceful-shutdown backups and
+// explicit exports. SQLite (data/manga.db) is the canonical persistent store.
+function writeLegacyJsonSnapshot(reason: string) {
+  try {
+    const dataToSave = {
+      version: 1,
+      gdprEncrypted: true,
+      lastSaved: new Date().toISOString(),
+      mangaDatabase,
+      userProfiles: buildEncryptedProfiles(),
+      autoUpdateLogs,
+      syncConfig,
+      appSettings: buildEncryptedSettings(),
+    };
+
+    // Atomic write via temporary file
+    const tempPath = `${DB_FILE_PATH}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(dataToSave, null, 2), "utf-8");
+    fs.renameSync(tempPath, DB_FILE_PATH);
+    console.log(`[GDPR Database Engine] Wrote legacy JSON snapshot (${reason}) with ${mangaDatabase.length} series & ${userProfiles.length} encrypted profiles.`);
+  } catch (err) {
+    console.error("[GDPR Database Engine] Error writing legacy JSON snapshot:", err);
+  }
 }
 
 // ==========================================
@@ -436,37 +570,111 @@ export function syncResetManga(items: MangaItem[]) {
   saveDatabaseToDisk();
 }
 
-function reconcileDatabasesOnStartup() {
-  const sqliteItems = SqliteDb.getAllManga();
-  const sqliteMap = new Map<string, MangaItem>(sqliteItems.map((m) => [m.id, m]));
-  const jsonMap = new Map<string, MangaItem>(mangaDatabase.map((m) => [m.id, m]));
+function applySyncConfigRestored(config: DatabaseSyncConfig) {
+  syncConfig = config;
+  // Restore the persisted disabled-source set so toggles survive restarts.
+  disabledSourceIds.clear();
+  if (Array.isArray(syncConfig.disabledSources)) {
+    syncConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
+  }
+  if (Array.isArray(syncConfig.removedSources)) {
+    syncConfig.removedSources.forEach((id: string) => DYNAMIC_DEAD_SOURCES.add(id));
+  }
+  rebuildDeadSourcesSet();
+}
 
-  let needsSave = false;
+// Helper: Load App State from SQLite on Startup (with one-time legacy JSON migration)
+function loadDatabaseFromDisk() {
+  try {
+    // 1. Manga library: SQLite is the canonical store.
+    //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)
+    mangaDatabase = SqliteDb.getAllManga();
+    syncConfig.totalTracked = mangaDatabase.length;
 
-  const missingInSqlite: MangaItem[] = [];
-  for (const [id, item] of jsonMap.entries()) {
-    if (!sqliteMap.has(id)) {
-      missingInSqlite.push(item);
-      sqliteMap.set(id, item);
-      needsSave = true;
+    // 2. Detect whether app state already lives in SQLite; otherwise perform a
+    //    one-time migration of profiles/settings/config/logs from database.json.
+    const storedProfiles = SqliteDb.getAllProfiles();
+    const storedSettingsJson = SqliteDb.getSetting('appSettings');
+    const storedConfigJson = SqliteDb.getSetting('syncConfig');
+    const storedLogs = SqliteDb.getAllLogs();
+
+    let legacyParsed: any = null;
+    const needsLegacyMigration = storedProfiles.length === 0 && !storedSettingsJson;
+    if (needsLegacyMigration && fs.existsSync(DB_FILE_PATH)) {
+      try {
+        legacyParsed = JSON.parse(fs.readFileSync(DB_FILE_PATH, "utf-8"));
+        console.log(`[SQLite Engine] Performing one-time legacy migration from database.json...`);
+      } catch (err) {
+        console.error("[SQLite Engine] Failed to parse legacy database.json:", err);
+      }
     }
-  }
-  if (missingInSqlite.length > 0) {
-    SqliteDb.bulkUpsertManga(missingInSqlite);
-  }
 
-  for (const [id, item] of sqliteMap.entries()) {
-    if (!jsonMap.has(id)) {
-      mangaDatabase.push(item);
-      jsonMap.set(id, item);
-      needsSave = true;
+    // 3. User Profiles
+    if (storedProfiles.length > 0) {
+      userProfiles = storedProfiles.map((p: any) => ({
+        ...p,
+        email: decryptPII(p.email || ''),
+        storageFolderPath: p.storageFolderPath ? decryptPII(p.storageFolderPath) : undefined,
+      }));
+    } else if (legacyParsed?.userProfiles && Array.isArray(legacyParsed.userProfiles)) {
+      userProfiles = legacyParsed.userProfiles.map((p: any) => ({
+        ...p,
+        email: decryptPII(p.email || ''),
+        storageFolderPath: p.storageFolderPath ? decryptPII(p.storageFolderPath) : undefined,
+      }));
     }
-  }
 
-  // Keep the persisted disabled-source set (restored in loadDatabaseFromDisk).
-  if (needsSave) {
-    saveDatabaseToDisk();
-    console.log(`[Database Engine] Reconciled SQLite (${SqliteDb.getMangaCount()} series) & database.json (${mangaDatabase.length} series) seamlessly.`);
+    // 4. Sync Config (subdomain, update interval, disabled sources...)
+    if (storedConfigJson) {
+      try { applySyncConfigRestored({ ...syncConfig, ...JSON.parse(storedConfigJson) }); } catch (e) { }
+    } else if (legacyParsed?.syncConfig) {
+      applySyncConfigRestored({ ...syncConfig, ...legacyParsed.syncConfig });
+    }
+
+    // 5. App Settings (reader defaults, network, AI keys...)
+    if (storedSettingsJson) {
+      try {
+        const parsedSettings = JSON.parse(storedSettingsJson);
+        appSettings = {
+          ...appSettings,
+          ...parsedSettings,
+          captchaApiKey: decryptPII(parsedSettings.captchaApiKey || ''),
+        };
+      } catch (e) { }
+    } else if (legacyParsed?.appSettings) {
+      appSettings = {
+        ...appSettings,
+        ...legacyParsed.appSettings,
+        captchaApiKey: decryptPII(legacyParsed.appSettings.captchaApiKey || ''),
+      };
+    }
+
+    // 6. Auto-Update Logs
+    if (storedLogs.length > 0) {
+      autoUpdateLogs = storedLogs.map((l: any) => ({
+        id: l.id,
+        mangaId: l.mangaId || '',
+        mangaTitle: l.mangaTitle || '',
+        previousChapter: Number(l.previousChapter) || 0,
+        newChapter: Number(l.newChapter) || 0,
+        source: l.sourceName || '',
+        timestamp: l.timestamp || new Date().toISOString(),
+        type: l.type || 'manhwa',
+      }));
+    } else if (legacyParsed?.autoUpdateLogs && Array.isArray(legacyParsed.autoUpdateLogs)) {
+      autoUpdateLogs = legacyParsed.autoUpdateLogs;
+    }
+
+    // 7. Persist migrated legacy state into SQLite immediately.
+    if (legacyParsed) {
+      saveDatabaseToDisk();
+    }
+
+    console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${mangaDatabase.length} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
+
+    purgeReaperScansFromAllStorage();
+  } catch (err) {
+    console.error("[SQLite Engine] Error loading app state on startup:", err);
   }
 }
 
@@ -561,56 +769,6 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
     refreshedCount: updatedItems.length,
     remainingCount: mangaDatabase.length,
   };
-}
-
-// Helper: Load Database State from Disk on Startup & Decrypt
-function loadDatabaseFromDisk() {
-  try {
-    if (fs.existsSync(DB_FILE_PATH)) {
-      const rawData = fs.readFileSync(DB_FILE_PATH, "utf-8");
-      const parsed = JSON.parse(rawData);
-
-      if (parsed.mangaDatabase && Array.isArray(parsed.mangaDatabase)) {
-        mangaDatabase = parsed.mangaDatabase;
-      }
-      if (parsed.userProfiles && Array.isArray(parsed.userProfiles)) {
-        userProfiles = parsed.userProfiles.map((p: any) => ({
-          ...p,
-          email: decryptPII(p.email || ''),
-        }));
-      }
-      if (parsed.autoUpdateLogs && Array.isArray(parsed.autoUpdateLogs)) {
-        autoUpdateLogs = parsed.autoUpdateLogs;
-      }
-      if (parsed.syncConfig) {
-        syncConfig = parsed.syncConfig;
-        // Restore the persisted disabled-source set so toggles survive restarts.
-        disabledSourceIds.clear();
-        if (Array.isArray(syncConfig.disabledSources)) {
-          syncConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
-        }
-        if (Array.isArray(syncConfig.removedSources)) {
-          syncConfig.removedSources.forEach((id: string) => DYNAMIC_DEAD_SOURCES.add(id));
-        }
-        rebuildDeadSourcesSet();
-      }
-      if (parsed.appSettings) {
-        appSettings = {
-          ...parsed.appSettings,
-          captchaApiKey: decryptPII(parsed.appSettings.captchaApiKey || ''),
-        };
-      }
-      console.log(`[GDPR Database Engine] Loaded & decrypted persistent database.json (${mangaDatabase.length} series, ${userProfiles.length} encrypted profiles).`);
-    } else {
-      console.log(`[GDPR Database Engine] No database.json found. Creating initial AES-256 encrypted database.json file...`);
-      saveDatabaseToDisk();
-    }
-
-    reconcileDatabasesOnStartup();
-    purgeReaperScansFromAllStorage();
-  } catch (err) {
-    console.error("[GDPR Database Engine] Error reading database.json from disk:", err);
-  }
 }
 
 // Helper: Purge any residual Reaper Scans items from memory & SQLite
@@ -1177,20 +1335,20 @@ app.post("/api/manga/toggle-flag", (req, res) => {
     // If we just flagged as broken, add automatic retry support
     if (isFlagged && flagReason?.includes("loading failed")) {
       console.log(`[Flag Resolution Engine] Attempting automatic source recovery for ${existing.title}`);
-      const attempts = 0;
-      const maxAttempts = 3;
-      
       // Simple retry mechanism - we don't block the response but trigger recovery
       setTimeout(() => {
-        // This will trigger the chapter loading process for flagged manga
-        const flaggedManga = getMangaById(id);
-        if (flaggedManga && flaggedManga.autoUpdateEnabled && !isUpdaterWorking) {
-          // Schedule a manual refresh attempt
+        // Trigger a metadata refresh for the flagged series (non-blocking)
+        const flaggedManga = SqliteDb.getMangaById(id);
+        if (flaggedManga && flaggedManga.autoUpdateEnabled) {
           setImmediate(() => {
-            refreshManga(id).catch(console.error);
+            refreshSingleMangaMetadata(flaggedManga)
+              .then((updated) => {
+                if (updated) syncAddOrUpdateManga(updated);
+              })
+              .catch(console.error);
           });
         }
-      }, 5000 + attempts * 2000); // retry every 2 seconds for 3 attempts
+      }, 5000);
     }
   }
 
@@ -1256,44 +1414,153 @@ async function fetchMangaDex(url: string, options: any = {}): Promise<any> {
   return response;
 }
 
-// Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
-const handleImageProxyRequest = async (req: express.Request, res: express.Response) => {
-  const imageUrl = req.query.url as string;
-  if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
-    return res.status(400).send('Invalid or missing image URL for proxy');
+// =========================================================
+// SSRF PROTECTION FOR OUTBOUND PROXY FETCHES
+// Blocks private/loopback/link-local/cloud-metadata targets and
+// non-HTTP protocols so the image proxy can never be abused to scan
+// the local network or internal services.
+// =========================================================
+const MAX_PROXY_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB hard cap per proxied image
+
+function isPrivateOrReservedIp(ip: string): boolean {
+  const normalized = ip.toLowerCase().replace(/^::ffff:/, '').replace(/^\[|\]$/g, '');
+  if (normalized === '::1' || normalized === '::' || normalized === 'localhost') return true;
+  if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+  const parts = normalized.split('.').map(Number);
+  if (parts.length === 4 && parts.every((p) => Number.isInteger(p) && p >= 0 && p <= 255)) {
+    const [a, b] = parts;
+    if (a === 10 || a === 127 || a === 0) return true;          // RFC1918 / loopback / "this"
+    if (a === 172 && b >= 16 && b <= 31) return true;            // RFC1918
+    if (a === 192 && b === 168) return true;                     // RFC1918
+    if (a === 169 && b === 254) return true;                     // link-local / cloud metadata
+    if (a === 100 && b >= 64 && b <= 127) return true;           // CGNAT
+  }
+  return false;
+}
+
+async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
+  const parsed = new URL(rawUrl);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Blocked non-HTTP proxy target protocol: ${parsed.protocol}`);
+  }
+  const host = parsed.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) {
+    if (isPrivateOrReservedIp(host)) {
+      throw new Error(`Blocked private/reserved IP proxy target: ${host}`);
+    }
+  } else {
+    const lookups = await dns.promises.lookup(host, { all: true });
+    for (const entry of lookups) {
+      if (isPrivateOrReservedIp(entry.address)) {
+        throw new Error(`Blocked host resolving to private/reserved IP: ${host}`);
+      }
+    }
+  }
+  return parsed;
+}
+
+async function streamProxiedImage(response: Response): Promise<Buffer> {
+  const declaredLength = Number(response.headers.get('content-length') || 0);
+  if (declaredLength > MAX_PROXY_IMAGE_BYTES) {
+    throw new Error(`Proxied image exceeds size cap (${declaredLength} bytes)`);
   }
 
-  let referer = 'https://mangadex.org';
+  const chunks: Buffer[] = [];
+  let received = 0;
+  for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+    received += chunk.length;
+    if (received > MAX_PROXY_IMAGE_BYTES) {
+      throw new Error('Proxied image exceeded size cap during streaming');
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+// Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
+const handleImageProxyRequest = async (req: express.Request, res: express.Response) => {
+  let targetUrl = req.query.url as string;
+  const sourceUrl = req.query.sourceUrl as string;
+
+  if (!targetUrl) {
+    return res.status(400).json({ error: "Missing required 'url' parameter" });
+  }
+
+  // Unwrap nested proxy URLs if passed recursively to prevent HTTP 400 loops
+  let unwrapGuard = 0;
+  while (
+    unwrapGuard++ < 5 &&
+    (targetUrl.includes('/api/mangadex/image-proxy?url=') ||
+      targetUrl.includes('/api/reader/proxy-image?url=') ||
+      targetUrl.includes('/api/proxy/image?url='))
+  ) {
+    const match = targetUrl.match(/[?&]url=([^&]+)/);
+    if (match && match[1]) {
+      try { targetUrl = decodeURIComponent(match[1]); } catch (e) { break; }
+    } else {
+      break;
+    }
+  }
+
+  // If local SVG panel image, redirect directly
+  if (targetUrl.startsWith('/api/reader/panel-image')) {
+    return res.redirect(targetUrl);
+  }
+
+  // Only absolute http(s) URLs are proxyable
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    return res.status(400).json({ error: 'Proxy target must be an absolute http(s) URL' });
+  }
+
+  // SSRF guard: never allow internal/private targets
   try {
-    const parsed = new URL(imageUrl);
-    referer = `${parsed.protocol}//${parsed.hostname}`;
-  } catch (_) { }
+    await assertSafeProxyTarget(targetUrl);
+  } catch (err: any) {
+    console.warn(`[Proxy Image Engine] Blocked unsafe proxy target: ${err?.message || err}`);
+    return res.status(403).json({ error: 'Blocked proxy target', message: String(err?.message || err) });
+  }
 
   try {
-    const imgRes = await fetch(imageUrl, {
+    let referer = 'https://mangadex.org';
+    if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
+      referer = 'https://manhwa18.com/';
+    } else if (sourceUrl) {
+      try { referer = new URL(sourceUrl).origin + '/'; } catch (e) { }
+    } else {
+      try { referer = new URL(targetUrl).origin + '/'; } catch (e) { }
+    }
+
+    const response = await fetch(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
         'Referer': referer,
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
+      signal: AbortSignal.timeout(20000),
     });
 
-    if (imgRes.ok) {
-      res.setHeader('Content-Type', imgRes.headers.get('content-type') || 'image/jpeg');
-      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-      const arrayBuffer = await imgRes.arrayBuffer();
-      return res.send(Buffer.from(arrayBuffer));
+    if (!response.ok) {
+      console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
+      return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
     }
-  } catch (err: any) {
-    console.error("[Universal Image Proxy] Error proxying image:", imageUrl, err.message);
-  }
 
-  // Fallback placeholder image if remote image is unreachable
-  res.redirect('https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&auto=format&fit=crop&q=80');
+    const buffer = await streamProxiedImage(response);
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(buffer);
+  } catch (err: any) {
+    console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
+    // Fallback placeholder panel if remote image is unreachable
+    res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
+  }
 };
 
 app.get("/api/mangadex/image-proxy", handleImageProxyRequest);
 app.get("/api/proxy/image", handleImageProxyRequest);
+app.get("/api/reader/proxy-image", handleImageProxyRequest);
 
 app.get("/api/mangadex/search", async (req, res) => {
   const query = (req.query.q as string || '').trim();
@@ -1719,8 +1986,18 @@ app.get("/api/mangadex/chapter-pages/:chapterId", async (req, res) => {
         pages: pageUrls,
       };
 
-      // Cache for 15 minutes
-      atHomeCache.set(chapterId, { data: responsePayload, expiry: Date.now() + 15 * 60 * 1000 });
+      // Cache for 15 minutes — evict expired entries & cap total size so the
+      // cache Map never grows unboundedly.
+      const nowMs = Date.now();
+      for (const [key, entry] of atHomeCache) {
+        if (entry.expiry <= nowMs) atHomeCache.delete(key);
+      }
+      while (atHomeCache.size >= 500) {
+        const oldestKey = atHomeCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        atHomeCache.delete(oldestKey);
+      }
+      atHomeCache.set(chapterId, { data: responsePayload, expiry: nowMs + 15 * 60 * 1000 });
 
       return res.json(responsePayload);
     }
@@ -4628,77 +4905,6 @@ app.get("/api/reader/panel-image", (req, res) => {
   res.send(svg);
 });
 
-// Universal Kotatsu Image Proxy with Anti-Hotlink Header Injection & CORS
-app.get(["/api/reader/proxy-image", "/api/mangadex/image-proxy"], async (req, res) => {
-  let targetUrl = req.query.url as string;
-  const sourceUrl = req.query.sourceUrl as string;
-
-  if (!targetUrl) {
-    return res.status(400).json({ error: "Missing required 'url' parameter" });
-  }
-
-  // Unwrap nested proxy URLs if passed recursively to prevent HTTP 400 loops
-  while (targetUrl.includes('/api/mangadex/image-proxy?url=') || targetUrl.includes('/api/reader/proxy-image?url=')) {
-    try {
-      const match = targetUrl.match(/url=([^&]+)/);
-      if (match && match[1]) {
-        targetUrl = decodeURIComponent(match[1]);
-      } else {
-        break;
-      }
-    } catch (e) {
-      break;
-    }
-  }
-
-  // If local SVG panel image, redirect directly
-  if (targetUrl.startsWith('/api/reader/panel-image')) {
-    return res.redirect(targetUrl);
-  }
-
-  // If targetUrl is relative path, resolve to absolute URL
-  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-    targetUrl = `http://127.0.0.1:${PORT}${targetUrl.startsWith('/') ? '' : '/'}${targetUrl}`;
-  }
-
-  try {
-    let referer = 'https://mangadex.org';
-    if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
-      referer = 'https://manhwa18.com/';
-    } else if (sourceUrl) {
-      try { referer = new URL(sourceUrl).origin + '/'; } catch (e) { }
-    } else if (targetUrl.startsWith('http')) {
-      try { referer = new URL(targetUrl).origin + '/'; } catch (e) { }
-    }
-
-
-    const response = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-        'Referer': referer,
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-    });
-
-    if (!response.ok) {
-      // If fetching external fails, redirect to dynamic panel generator
-      console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
-      return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
-    }
-
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-    res.send(buffer);
-  } catch (err: any) {
-    console.error(`[Proxy Image Engine] Detailed Error fetching target image (${targetUrl}):`, err.stack || err.message || err);
-    res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
-  }
-});
-
 // Mark Chapter as Read
 app.post("/api/reader/mark-read", (req, res) => {
   const { mangaId, chapterNumber } = req.body;
@@ -4763,6 +4969,14 @@ app.post('/api/crawler/bypass-fetch', async (req, res) => {
   const { targetUrl } = req.body;
   if (!targetUrl) return res.status(400).json({ error: 'targetUrl is required' });
 
+  // SSRF guard: crawler targets must be public http(s) hosts (never LAN/metadata IPs)
+  try {
+    await assertSafeProxyTarget(String(targetUrl));
+  } catch (err: any) {
+    console.warn(`[Cloudflare Bypass Engine] Blocked unsafe crawler target: ${err?.message || err}`);
+    return res.status(403).json({ error: 'Blocked crawler target', message: String(err?.message || err) });
+  }
+
   try {
     console.log(`[Cloudflare Bypass Engine] Fetching target URL: ${targetUrl}`);
 
@@ -4825,6 +5039,10 @@ app.post('/api/crawler/bypass-fetch', async (req, res) => {
 
 // GDPR Article 15: Right to Access & Data Portability Export
 app.get("/api/gdpr/export-data/:userId", (req, res) => {
+  // Without a real session/token system, GDPR data operations are host-only.
+  if (!isHostRequest(req)) {
+    return res.status(403).json({ error: "Forbidden", message: "GDPR data operations are restricted to the host computer." });
+  }
   const { userId } = req.params;
   const user = userProfiles.find((u) => u.id === userId);
   if (!user) return res.status(404).json({ error: "User not found" });
@@ -4852,6 +5070,10 @@ app.get("/api/gdpr/export-data/:userId", (req, res) => {
 
 // GDPR Article 17: Right to Erasure / Right to be Forgotten
 app.delete("/api/gdpr/erase-data/:userId", (req, res) => {
+  // Without a real session/token system, GDPR data operations are host-only.
+  if (!isHostRequest(req)) {
+    return res.status(403).json({ error: "Forbidden", message: "GDPR data operations are restricted to the host computer." });
+  }
   const { userId } = req.params;
   userProfiles = userProfiles.filter((u) => u.id !== userId);
   mangaDatabase = mangaDatabase.filter((m) => m.userId !== userId);
@@ -4932,20 +5154,18 @@ app.post("/api/settings/cache/clear", (req, res) => {
 // ==========================================
 
 export function isHostRequest(req: express.Request): boolean {
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || req.socket.remoteAddress || '127.0.0.1';
-  return (
-    clientIp === '127.0.0.1' ||
-    clientIp === '::1' ||
-    clientIp === '::ffff:127.0.0.1' ||
-    clientIp.includes('127.0.0.1') ||
-    clientIp === 'localhost'
-  );
+  // SECURITY: Never trust the raw X-Forwarded-For header here — it is trivially
+  // spoofable by any remote client. Use only the Express-resolved socket IP.
+  // If you deploy behind a reverse proxy, configure `app.set('trust proxy', 1)`
+  // so Express safely resolves req.ip from the trusted proxy chain.
+  const clientIp = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  return clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
 }
 
 // Host PC Client Context Endpoint
 app.get("/api/auth/client-context", (req, res) => {
   const isHost = isHostRequest(req);
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.ip || req.socket.remoteAddress || '127.0.0.1';
+  const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
   res.json({
     isHost,
     clientIp,
@@ -4954,7 +5174,7 @@ app.get("/api/auth/client-context", (req, res) => {
 });
 
 // Restrict all Admin operations strictly to the Host Computer
-app.use("/api/admin/*", (req, res, next) => {
+app.use("/api/admin", (req, res, next) => {
   if (!isHostRequest(req)) {
     return res.status(403).json({
       error: "Forbidden",
@@ -5154,18 +5374,24 @@ app.get("/api/bugs", (_req, res) => {
 // ==========================================
 
 async function startServer() {
-  // 1. Fast load persistent database from disk
+  // 1. Fast load persistent database from SQLite
   loadDatabaseFromDisk();
 
   // 2. Serve built production dist folder if available (ultra-fast sub-10ms response time)
   const distPath = path.join(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath, { maxAge: "7d", etag: true }));
-    app.get("*", (req, res, next) => {
-      if (req.path.startsWith('/api/')) return next();
-      res.sendFile(path.join(distPath, "index.html"));
+    // SPA fallback for all non-API GET routes (Express 4 & 5 compatible)
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+        return res.sendFile(path.join(distPath, "index.html"));
+      }
+      next();
     });
   } else {
+    // Vite is a devDependency — import it dynamically so production builds
+    // without dev dependencies never need it at runtime.
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -5176,7 +5402,7 @@ async function startServer() {
   // 3. Start listening immediately (sub-50ms launch time)
   app.listen(PORT, HOST, () => {
     console.log(`[Fast Launch Engine] Subdomain Tracker running on http://${HOST}:${PORT}`);
-    console.log(`[Fast Launch Engine] Persistent database ready at database.json (${mangaDatabase.length} series)`);
+    console.log(`[Fast Launch Engine] SQLite database ready (${mangaDatabase.length} series)`);
   });
 
   // 4. Non-blocking background catalog sync & Rate-Spaced Auto-Updater
@@ -5190,3 +5416,32 @@ async function startServer() {
 }
 
 startServer();
+
+// =========================================================
+// GRACEFUL SHUTDOWN — flush pending state & write legacy JSON backup
+// =========================================================
+let isShuttingDown = false;
+function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[Shutdown] Received ${signal}. Flushing state & writing legacy JSON backup...`);
+  try {
+    if (saveTimeoutTimer) {
+      clearTimeout(saveTimeoutTimer);
+      saveTimeoutTimer = null;
+    }
+    // Final synchronous SQLite flush of app state
+    SqliteDb.replaceAllProfiles(buildEncryptedProfiles());
+    SqliteDb.setSetting('appSettings', JSON.stringify(buildEncryptedSettings()));
+    SqliteDb.setSetting('syncConfig', JSON.stringify(syncConfig));
+    SqliteDb.replaceAllLogs(autoUpdateLogs);
+    // Portable legacy snapshot (kept for backward compatibility with tooling)
+    writeLegacyJsonSnapshot(`graceful shutdown via ${signal}`);
+  } catch (err) {
+    console.error('[Shutdown] Error while flushing state:', err);
+  }
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

@@ -223,6 +223,9 @@ export default function App() {
       tapZonesEnabled: true,
       cropWhiteMargins: true,
       showPageNumberOverlay: true,
+      showPersistentPageBadge: true,
+      autoNextChapter: true,
+      mangaFitMode: 'fit-height',
       preloadCount: 3,
     },
   });

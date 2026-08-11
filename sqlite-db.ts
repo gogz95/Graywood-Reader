@@ -64,6 +64,11 @@ try { db.exec('ALTER TABLE manga ADD COLUMN flaggedAt TEXT'); } catch(e) {}
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch(e) {}
 
+// Schema extensions for app-state persistence (profiles, logs, KV settings)
+try { db.exec('ALTER TABLE profiles ADD COLUMN password TEXT'); } catch (e) {}
+try { db.exec('ALTER TABLE logs ADD COLUMN mangaId TEXT'); } catch (e) {}
+try { db.exec('ALTER TABLE logs ADD COLUMN type TEXT'); } catch (e) {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY,
@@ -150,6 +155,39 @@ const stmtToggleFlag = db.prepare(`
 
 const stmtDeleteManga = db.prepare(`
   DELETE FROM manga WHERE id = ?
+`);
+
+// ── KV Settings Store (appSettings / syncConfig JSON blobs) ─────────────────
+const stmtGetSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+const stmtSetSetting = db.prepare(`
+  INSERT INTO settings (key, value) VALUES (@key, @value)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value
+`);
+
+// ── User Profile Persistence ─────────────────────────────────────────────────
+const stmtGetAllProfiles = db.prepare('SELECT * FROM profiles ORDER BY createdAt ASC');
+const stmtDeleteAllProfiles = db.prepare('DELETE FROM profiles');
+const stmtDeleteProfile = db.prepare('DELETE FROM profiles WHERE id = ?');
+const stmtUpsertProfile = db.prepare(`
+  INSERT INTO profiles (id, name, username, email, avatar, role, password, storageFolderPath, createdAt)
+  VALUES (@id, @name, @username, @email, @avatar, @role, @password, @storageFolderPath, @createdAt)
+  ON CONFLICT(id) DO UPDATE SET
+    name = excluded.name,
+    username = excluded.username,
+    email = excluded.email,
+    avatar = excluded.avatar,
+    role = excluded.role,
+    password = excluded.password,
+    storageFolderPath = excluded.storageFolderPath,
+    createdAt = excluded.createdAt
+`);
+
+// ── Auto-Update Log Persistence ──────────────────────────────────────────────
+const stmtGetAllLogs = db.prepare('SELECT * FROM logs ORDER BY timestamp DESC');
+const stmtDeleteAllLogs = db.prepare('DELETE FROM logs');
+const stmtInsertLog = db.prepare(`
+  INSERT OR REPLACE INTO logs (id, mangaId, mangaTitle, sourceName, previousChapter, newChapter, timestamp, status, details, type)
+  VALUES (@id, @mangaId, @mangaTitle, @sourceName, @previousChapter, @newChapter, @timestamp, @status, @details, @type)
 `);
 
 // Helper Serializers & Deserializers
@@ -300,6 +338,85 @@ export const SqliteDb = {
   getMangaCount(): number {
     const row = db.prepare('SELECT COUNT(*) as count FROM manga').get() as { count: number };
     return row.count;
+  },
+
+  // ── KV Settings Store ──────────────────────────────────────────────────────
+  getSetting(key: string): string | null {
+    const row = stmtGetSetting.get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  },
+
+  setSetting(key: string, value: string) {
+    stmtSetSetting.run({ key, value });
+  },
+
+  // ── Profiles ───────────────────────────────────────────────────────────────
+  getAllProfiles(): any[] {
+    return stmtGetAllProfiles.all();
+  },
+
+  upsertProfile(profile: any) {
+    stmtUpsertProfile.run({
+      id: profile.id,
+      name: profile.name || '',
+      username: profile.username || '',
+      email: profile.email || '',
+      avatar: profile.avatar || '',
+      role: profile.role || 'user',
+      password: profile.password || '',
+      storageFolderPath: profile.storageFolderPath || '',
+      createdAt: profile.createdAt || new Date().toISOString(),
+    });
+  },
+
+  deleteProfile(id: string) {
+    stmtDeleteProfile.run(id);
+  },
+
+  replaceAllProfiles(profiles: any[]) {
+    const transaction = db.transaction((list: any[]) => {
+      stmtDeleteAllProfiles.run();
+      for (const p of list) {
+        stmtUpsertProfile.run({
+          id: p.id,
+          name: p.name || '',
+          username: p.username || '',
+          email: p.email || '',
+          avatar: p.avatar || '',
+          role: p.role || 'user',
+          password: p.password || '',
+          storageFolderPath: p.storageFolderPath || '',
+          createdAt: p.createdAt || new Date().toISOString(),
+        });
+      }
+    });
+    transaction(profiles);
+  },
+
+  // ── Auto-Update Logs ───────────────────────────────────────────────────────
+  getAllLogs(): any[] {
+    return stmtGetAllLogs.all();
+  },
+
+  replaceAllLogs(logs: any[]) {
+    const transaction = db.transaction((list: any[]) => {
+      stmtDeleteAllLogs.run();
+      for (const l of list) {
+        stmtInsertLog.run({
+          id: l.id,
+          mangaId: l.mangaId || '',
+          mangaTitle: l.mangaTitle || '',
+          sourceName: l.source || l.sourceName || '',
+          previousChapter: l.previousChapter ?? 0,
+          newChapter: l.newChapter ?? 0,
+          timestamp: l.timestamp || new Date().toISOString(),
+          status: l.status || 'updated',
+          details: l.details || '',
+          type: l.type || 'manhwa',
+        });
+      }
+    });
+    transaction(logs);
   }
 };
 

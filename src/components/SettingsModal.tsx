@@ -252,7 +252,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Zap className="w-4 h-4 text-orange-400" />
             <span>Auto-Update Feed</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500" title="Admin access required" />}
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-slate-500" />
+              </span>
+            )}
           </button>
 
           <button
@@ -266,7 +270,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Cpu className="w-4 h-4 text-emerald-400" />
             <span>Sources & Network</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500" title="Admin access required" />}
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-slate-500" />
+              </span>
+            )}
           </button>
 
           <button
@@ -280,7 +288,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <GitMerge className="w-4 h-4 text-purple-400" />
             <span>Duplicate Merger</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500" title="Admin access required" />}
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-slate-500" />
+              </span>
+            )}
             {duplicateCandidates.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-500 text-white">
                 {duplicateCandidates.length}
@@ -299,7 +311,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Globe className="w-4 h-4 text-cyan-400" />
             <span>Tracker Domain</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500" title="Admin access required" />}
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-slate-500" />
+              </span>
+            )}
           </button>
 
           <button
@@ -313,7 +329,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Download className="w-4 h-4 text-amber-400" />
             <span>Backups & Storage</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-slate-500" title="Admin access required" />}
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-slate-500" />
+              </span>
+            )}
           </button>
         </div>
 
@@ -429,6 +449,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setFormData({
                           ...formData,
                           readerDefaults: { ...formData.readerDefaults, showPersistentPageBadge: e.target.checked },
+                        })
+                      }
+                      className="w-5 h-5 accent-amber-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-slate-700 transition-all">
+                    <div>
+                      <div className="font-bold text-slate-200">Per-Page Number Counter</div>
+                      <div className="text-[11px] text-slate-400">Show the small "Page X / Y" counter on each reader page</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.readerDefaults.showPageNumberOverlay}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          readerDefaults: { ...formData.readerDefaults, showPageNumberOverlay: e.target.checked },
                         })
                       }
                       className="w-5 h-5 accent-amber-500"
@@ -739,7 +777,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
                     <a
-                      href="/api/gdpr/export-data/usr_admin"
+                      href={`/api/gdpr/export-data/${encodeURIComponent(activeProfile?.id || 'usr_admin')}`}
                       download
                       className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"
                     >
@@ -749,9 +787,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm("Are you sure you want to request permanent erasure of your personal data under GDPR Article 17 (Right to be Forgotten)?")) {
-                          alert("GDPR Data Erasure Request submitted. All PII records and personal reading entries have been purged.");
+                      onClick={async () => {
+                        const targetId = activeProfile?.id;
+                        if (!targetId) return;
+                        if (confirm(`Are you sure you want to permanently erase all data for "${activeProfile?.name}" under GDPR Article 17 (Right to be Forgotten)? This cannot be undone.`)) {
+                          try {
+                            const res = await fetch(`/api/gdpr/erase-data/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+                            const data = await res.json().catch(() => ({}));
+                            alert(res.ok ? (data.message || 'Erasure complete. All PII records and personal reading entries have been purged.') : `Erasure failed: ${data.message || data.error || res.statusText}`);
+                          } catch (e) {
+                            alert('Erasure request failed. Check that you are on the host computer.');
+                          }
                         }
                       }}
                       className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold flex items-center gap-1.5 transition-all"

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   manhuasync:
     build:
@@ -13,12 +11,12 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
-      - ENCRYPTION_SECRET=omnimanga-gdpr-aes256-secret-key-32b!
+      # Provide a strong unique secret (>=32 chars). If unset, the server
+      # manages its own key in /app/data/.encryption-secret.
+      # - ENCRYPTION_SECRET=${ENCRYPTION_SECRET:?set ENCRYPTION_SECRET in your environment}
       - STORAGE_PATH=/app/data/storage
     volumes:
       - ./data:/app/data
-      - ./database.json:/app/database.json
-      - ./BUGS.md:/app/BUGS.md
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
       interval: 30s

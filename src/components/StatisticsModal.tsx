@@ -39,7 +39,7 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onC
 
   const sourceCounts: Record<string, number> = {};
   mangaList.forEach((m) => {
-    const src = m.source || 'MangaDex';
+    const src = m.sourceName || 'MangaDex';
     sourceCounts[src] = (sourceCounts[src] || 0) + 1;
   });
 
