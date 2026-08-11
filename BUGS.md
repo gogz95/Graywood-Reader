@@ -56,7 +56,7 @@ _No active bugs._
   3. A wrong, unrelated series' chapters/pages are shown.
 - **Expected**: Only the correct series should be loaded, or a placeholder with the correct title if the source can't be resolved.
 - **Actual**: A random/first-match MangaDex series with a similar title is loaded.
-- **Fixed in**: 2026-08-11 — The fallback now fetches up to 10 candidates, validates each against the intended title + altTitles (exact normalized identity or `calculateStringSimilarity`), and only proceeds if the best candidate scores ≥ 70%. If no confident match is found it logs a warning and falls through to the generated placeholder (correct title) instead of guessing. File: `server.ts`.
+- **Fixed in**: 2026-08-11 — MangaDex has been removed as a reading source entirely. It remains available for metadata/enrichment/covers but is **never** used to resolve chapter images. The handler resolves reading from the series' own live source URL, and otherwise falls through to a generated placeholder panel with the correct title. `hasWorkingReaderSource()` in `types.ts` now returns `false` for a series that only has a MangaDex `apiId` without a live source URL. This supersedes the earlier similarity-gated fallback fix.
 
 ### [BUG-005] Catalog had no 18+ filtering and showed duplicate series
 - **Status**: `fixed`
@@ -64,7 +64,15 @@ _No active bugs._
 - **Auto-fix**: `ask`
 - **File(s)`: `src/components/BrowseView.tsx`
 - **Description**: The "Unified Catalog" mixed 18+/adult series (genres `18+`/`Adult`/`Ecchi`/... and sources like Manhwa18) into the same list with no way to hide or isolate them, and the same series could appear multiple times (across sources or duplicated within a source).
-- **Fixed in**: 2026-08-11 — Added a "18+ / Adult" content-rating filter (`All` / `Hide 18+` / `Show 18+ Only`) driven by an `isAdultManga()` helper (genre- or SOURCE-based detection), and deduplicated the catalog by normalized title, keeping the best representative (favorites, most `availableSources`, apiId/sourceUrl, latest chapter, rating) so a series is never shown twice. Files: `src/components/BrowseView.tsx`.
+- **Fixed in**: 2026-08-11 — Expanded 18+ detection with a comprehensive `isAdultManga()` helper that checks genres, source name/url, `syncedFromApi`, and `availableSources` (plus many additional adult genre tags). Reworked dedup with `dedupeCatalog()`: keys on `apiId` when present (source-independent), groups same-title entries into buckets, only merges when there is no apiId conflict (two series with DIFFERENT apiIds sharing a title stay separate), and calls `mergeMangaItems()` which unions `availableSources`/`altTitles`/`genres`, keeps the highest chapter & rating, and prefers the readable variant — so duplicates are **merged, not dropped**, and no sources or alt-titles are lost. Files: `src/components/BrowseView.tsx`.
+
+### [BUG-006] MangaDex used for reading when no live source available
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts` (`/api/reader/chapter-pages`), `src/types.ts` (`hasWorkingReaderSource`)
+- **Description**: Series with only a MangaDex `apiId` (no live source) would load MangaDex feed chapters in the reader. This produced wrong content for adult/explicit series excluded from MangaDex reader feeds, and non-existent/chapter-empty reads.
+- **Fixed in**: 2026-08-11 — MangaDex reading is permanently disabled (see BUG-004). Exported `isMangaDexSourceLink()` in `types.ts` checks both `sourceName` and `sourceUrl` for MangaDex references. `hasWorkingReaderSource()` now returns `false` for any source that matches `isMangaDexSourceLink()` — including merged entries where the base `availableSources` contain a mix of MangaDex + other sources (the other source is promoted for reading). Server-side guard in `server.ts` blocks `mangadex.org` URLs from entering the live crawler resolution. Metadata features (search, enrichment, covers via `/api/mangadex/*`) remain fully operational.
 
 
 ### [BUG-001] Disabled sources still being toggled via old localStorage state

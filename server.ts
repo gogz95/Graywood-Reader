@@ -4484,7 +4484,8 @@ class KotatsuImageEngine {
 
 const kotatsuImageEngine = new KotatsuImageEngine();
 
-// Get chapter page image URLs with automatic MangaDex & Live Source Stream Resolution
+// Get chapter page image URLs. MangaDex is used for METADATA only and is intentionally
+// NOT used as a reading source — see the resolution order inside the handler.
 app.get("/api/reader/chapter-pages", async (req, res) => {
   const mangaId = req.query.mangaId as string;
   const chapterNumber = Math.max(1, parseFloat(req.query.chapterNumber as string) || 1);
@@ -4494,84 +4495,18 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
   const mangaTitle = manga ? manga.title : 'Webtoon Series';
   const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 200;
 
-  // 1. AUTOMATIC MANGADEX LIVE STREAM RESOLUTION
-  const mangaDexId =
-    manga?.apiId ||
-    (mangaId?.startsWith('md_') ? mangaId.replace('md_', '') : null) ||
-    (manga?.sourceUrl?.match(/\/title\/([a-f0-9\-]+)/i)?.[1]);
-
-  if (mangaDexId) {
-    try {
-      console.log(`[Reader Stream Engine] Resolving live MangaDex chapter feed for ${mangaTitle} (${mangaDexId}), Chapter ${chapterNumber}...`);
-
-      let targetChapterUuid = chapterId && chapterId.length > 20 && !chapterId.startsWith('ch_') ? chapterId : '';
-
-      if (!targetChapterUuid) {
-        // Fetch chapter feed from MangaDex API (with english filter + fallback)
-        let feedRes = await fetchMangaDex(
-          `https://api.mangadex.org/manga/${mangaDexId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=100&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
-        );
-
-        if (feedRes.ok) {
-          let feedData = await feedRes.json();
-          let chapters = feedData.data || [];
-          if (chapters.length === 0) {
-            const fallbackRes = await fetchMangaDex(
-              `https://api.mangadex.org/manga/${mangaDexId}/feed?limit=100&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
-            );
-            if (fallbackRes.ok) {
-              feedData = await fallbackRes.json();
-              chapters = feedData.data || [];
-            }
-          }
-
-          const matchedCh = chapters.find((c: any) => parseFloat(c.attributes.chapter) === chapterNumber) || chapters[0];
-          if (matchedCh) {
-            targetChapterUuid = matchedCh.id;
-          }
-        }
-      }
-
-      if (targetChapterUuid) {
-        // Fetch At-Home server CDN page URLs
-        const atHomeRes = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${targetChapterUuid}`);
-        if (atHomeRes.ok) {
-          const atHomeData = await atHomeRes.json();
-          const baseUrl = atHomeData.baseUrl;
-          const hash = atHomeData.chapter.hash;
-          const pageFiles: string[] = atHomeData.chapter.data || [];
-
-          if (baseUrl && hash && pageFiles.length > 0) {
-            const pages = pageFiles.map((file) => {
-              const rawUrl = `${baseUrl}/data/${hash}/${file}`;
-              return `/api/mangadex/image-proxy?url=${encodeURIComponent(rawUrl)}`;
-            });
-
-            console.log(`[Reader Stream Engine] Successfully loaded ${pages.length} live MangaDex pages for Chapter ${chapterNumber}`);
-            return res.json({
-              chapterId: targetChapterUuid,
-              mangaId: mangaId || `md_${mangaDexId}`,
-              mangaTitle,
-              chapterNumber,
-              title: `Chapter ${chapterNumber}`,
-              scanGroup: 'MangaDex API v5 CDN',
-              selectedGroup: 'MangaDex Official',
-              pages,
-              totalChapters,
-              nextChapterNumber: chapterNumber < totalChapters ? chapterNumber + 1 : null,
-              prevChapterNumber: chapterNumber > 1 ? chapterNumber - 1 : null,
-            });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("[Reader Stream Engine] MangaDex live page resolution error:", err);
-    }
-  }
+  // 1. MangaDex is used for METADATA only (search/enrichment/covers) and is intentionally
+  //    NOT used as a reading source. Reading is resolved from the series' own live source
+  //    below, or falls back to a generated placeholder panel with the correct title.
 
   // 2. LIVE DOMAIN SOURCE CRAWLER RESOLUTION (KOTATSU IMAGE ENGINE)
   const targetUrl = (req.query.url as string) || manga?.sourceUrl || '';
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+
+  // MangaDex host is metadata-only — never use it as a live crawling source.
+  if (targetUrl && targetUrl.toLowerCase().includes('mangadex.org')) {
+    console.warn(`[Reader Stream Engine] Blocked reading attempt via MangaDex source URL "${targetUrl}" — MangaDex is metadata-only.`);
+    // Falls through to generated placeholder (step 4).
+  } else if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
     const matchedDomain = REGISTERED_LIVE_DOMAINS.find((d) => targetUrl.includes(d.domain));
     const domainId = matchedDomain ? matchedDomain.id : 'general';
     const domainIsDisabled = matchedDomain ? disabledSourceIds.has(matchedDomain.id) : false;
@@ -4592,7 +4527,7 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
             },
           });
           if (!probeRes.ok && probeRes.status !== 405) {
-            console.warn(`[Reader Stream Engine] Live panel probe returned HTTP ${probeRes.status} for ${sampleUrl} — falling back to MangaDex stream.`);
+            console.warn(`[Reader Stream Engine] Live panel probe returned HTTP ${probeRes.status} for ${sampleUrl} — live source is unreachable; using generated placeholder.`);
             livePages = null;
           }
         } catch (_) { }
@@ -4624,115 +4559,9 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     }
   }
 
-  // 3. MANGADEX TITLE SEARCH FALLBACK (If direct source extraction failed)
-  if (mangaTitle && mangaTitle !== 'Webtoon Series') {
-    try {
-      const cleanTitle = mangaTitle.replace(/\s*\([^)]*\)/g, '').trim();
-      const titlesToTry = [cleanTitle];
-      if (cleanTitle.toLowerCase().startsWith('xtra')) {
-        titlesToTry.push(cleanTitle.replace(/xtra/i, 'Extra'));
-      }
-
-      // Normalize a title for strict identity comparison (accent-insensitive, alnum only).
-      const normalizeForId = (s: string) =>
-        (s || '')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]/g, '');
-
-      // The set of expected, normalized names for the intended series (main title + alt titles).
-      // We only trust a MangaDex fallback match if it aligns with one of these, preventing us
-      // from silently fetching a COMPLETELY DIFFERENT series with a similar title.
-      const expectedNorms = new Set<string>();
-      expectedNorms.add(normalizeForId(cleanTitle));
-      (manga?.altTitles || []).forEach((a) => expectedNorms.add(normalizeForId(a)));
-
-      for (const t of titlesToTry) {
-        console.log(`[Reader Stream Engine] Attempting validated MangaDex API fallback search for title "${t}"...`);
-        const searchRes = await fetchMangaDex(
-          `https://api.mangadex.org/manga?title=${encodeURIComponent(t)}&limit=10`
-        );
-        if (searchRes.ok) {
-          const searchData = await searchRes.json();
-          const candidates: any[] = searchData.data || [];
-
-          // Pick the best candidate that plausibly corresponds to the intended series.
-          let bestCandidate: any = null;
-          let bestScore = 0;
-          for (const cand of candidates) {
-            const titleObj = cand.attributes?.title || {};
-            const candTitles = Object.values(titleObj).map((v: any) => String(v));
-            const candAlts = (cand.attributes?.altTitles || []).map((o: any) => Object.values(o)[0]).map((v: any) => String(v));
-
-            // Exact normalized identity against the intended title/alt-titles -> perfect match.
-            if (candTitles.concat(candAlts).map(normalizeForId).some((n) => expectedNorms.has(n))) {
-              bestCandidate = cand;
-              bestScore = 100;
-              break;
-            }
-
-            // Otherwise score by best string similarity among all candidate names.
-            for (const name of candTitles.concat(candAlts)) {
-              const sim = calculateStringSimilarity(cleanTitle, name);
-              if (sim > bestScore) {
-                bestScore = sim;
-                bestCandidate = cand;
-              }
-            }
-          }
-
-          // Confidence gate: only use the candidate if it clearly matches the intended series.
-          // If we cannot confidently identify the series, DO NOT guess — fall through to the
-          // generated placeholder panels (correct title) instead of showing a wrong series.
-          if (bestCandidate && bestScore >= 70) {
-            const foundId = bestCandidate.id;
-            const feedRes = await fetchMangaDex(
-              `https://api.mangadex.org/manga/${foundId}/feed?order[chapter]=asc&limit=100`
-            );
-            if (feedRes.ok) {
-              const feedData = await feedRes.json();
-              const chapters = feedData.data || [];
-              const matchedCh = chapters.find((c: any) => parseFloat(c.attributes.chapter) === chapterNumber) || chapters[0];
-              if (matchedCh) {
-                const atHomeRes = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${matchedCh.id}`);
-                if (atHomeRes.ok) {
-                  const atHomeData = await atHomeRes.json();
-                  const baseUrl = atHomeData.baseUrl;
-                  const hash = atHomeData.chapter.hash;
-                  const pageFiles: string[] = atHomeData.chapter.data || [];
-                  if (baseUrl && hash && pageFiles.length > 0) {
-                    const pages = pageFiles.map((file) => `/api/mangadex/image-proxy?url=${encodeURIComponent(`${baseUrl}/data/${hash}/${file}`)}`);
-                    console.log(`[Reader Stream Engine] MangaDex search fallback successfully loaded ${pages.length} live pages for "${t}" Chapter ${chapterNumber}`);
-                    return res.json({
-                      chapterId: matchedCh.id,
-                      mangaId: mangaId || `md_${foundId}`,
-                      mangaTitle,
-                      chapterNumber,
-                      title: `Chapter ${chapterNumber}`,
-                      scanGroup: 'MangaDex API Fallback',
-                      selectedGroup: 'MangaDex API Fallback',
-                      pages,
-                      totalChapters,
-                      nextChapterNumber: chapterNumber < totalChapters ? chapterNumber + 1 : null,
-                      prevChapterNumber: chapterNumber > 1 ? chapterNumber - 1 : null,
-                    });
-                  }
-                }
-              }
-            }
-          } else {
-            console.warn(
-              `[Reader Stream Engine] MangaDex fallback search for "${t}" did not confidently match the intended series (best score ${bestScore}) — skipping to avoid fetching the wrong series.`
-            );
-          }
-        }
-      }
-    } catch (e) {
-      console.warn(`[Reader Stream Engine] MangaDex title search fallback error:`, e);
-    }
-  }
-
+  // 3. MangaDex is NOT used for reading (metadata only). If the live source above could
+  //    not be resolved, fall through to a generated placeholder panel with the correct
+  //    title instead of guessing a series from a title search.
 
   // 4. Dynamic Fallback Panel Generator
   const pageCount = 14;

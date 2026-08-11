@@ -248,6 +248,13 @@ export interface ReadingAnalytics {
   activities: DailyReadingActivity[];
 }
 
+// True when a source link points at MangaDex. MangaDex is metadata-only (search,
+// enrichment, chapter-lists, covers) and must NOT be used to enable reading.
+export function isMangaDexSourceLink(name?: string, url?: string): boolean {
+  const lc = `${name || ''} ${url || ''}`.toLowerCase();
+  return lc.includes('mangadex') || (url || '').toLowerCase().includes('mangadex.org');
+}
+
 export function hasWorkingReaderSource(manga: {
   sourceName?: string;
   syncedFromApi?: string;
@@ -256,7 +263,16 @@ export function hasWorkingReaderSource(manga: {
   availableSources?: MangaSourceLink[];
 }): boolean {
   if (!manga) return false;
-  return Boolean(manga.sourceUrl || manga.apiId || (manga.availableSources && manga.availableSources.length > 0));
+  // A series is only readable if it has a direct live source URL from a NON-MangaDex source.
+  if (manga.sourceUrl && !isMangaDexSourceLink(manga.sourceName, manga.sourceUrl)) return true;
+  if (
+    manga.availableSources &&
+    manga.availableSources.some(
+      (s) => s && s.sourceUrl && !isMangaDexSourceLink(s.sourceName, s.sourceUrl)
+    )
+  )
+    return true;
+  return false;
 }
 
 
