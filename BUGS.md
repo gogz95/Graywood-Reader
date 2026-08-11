@@ -35,6 +35,19 @@ _No active bugs._
 
 > Bugs that have been resolved are moved here for historical reference.
 
+### [BUG-007] Wrong chapter silently substituted across sources (e.g. Omniscient Reader's Viewpoint always loaded chapter 255)
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts` (`extractLiveDomainChapterPages`, `fetchAsuraChapterList`, `/api/reader/chapters/:mangaId`)
+- **Description**: For Asura-series, requesting any chapter that the source no longer hosts (many Asura titles drop older chapters, e.g. Omniscient Reader's Viewpoint only hosts 255+) fell through the broken match chain `exactNumber || slug.includes(number) || chapters[chapters.length-1]` and silently loaded the LAST chapter in the list for every requested chapter. Because the chapter list was also fabricated (`for c in 1..latestChapter`), clicking *any* chapter below the hosted range returned the same wrong chapter (reported as "always loads chapter 255").
+- **Root causes fixed**:
+  1. Removed every wrong-chapter fallback (`chapters[chapters.length - 1]`, `|| chapters[0]`, `candidates[0]`, `chMatches[n-1]`) — a missing chapter now returns `null` (correct-title placeholder) instead of a wrong chapter.
+  2. Replaced the broken substring `slug.includes(number)` match with an exact `number` match plus an ANCHORED slug regex (`(?:^|[_-]|ch(?:apter)?[_-]?)N(?:$|[_.-])`) so hashes that merely *contain* a digit no longer match wrong chapters (e.g. requesting chapter 5 no longer matches 255/305).
+  3. The chapter-list endpoint now returns each source's REAL chapters (unified `fetchLiveChapterList()` for Asura / Flame / Dynasty / generic HTML sources), so the UI only lists chapters that actually exist on the source.
+- **Scope (all sources)**: The same fix is applied to every live-source extractor — Asura (official API), Flame (Next.js API), Dynasty (series-page HTML), and the generic universal HTML resolver used by all other registered + unregistered sources. New shared helpers: `normalizeLiveTargetUrl()`, `fetchFlameSeriesContext()`, `mapFlameChapters()`, `fetchFlameChapterList()`, `fetchDynastyChapterList()`, `fetchGenericChapterList()`, `fetchLiveChapterList()`, `matchResolvedChapter()`, `extractPanelImages()` (also adds `data-srcset` handling for lazily-loaded images).
+- **Fixed in**: 2026-08-11 — Added the shared enumerator/matcher helpers and rewired `extractLiveDomainChapterPages` + `/api/reader/chapters/:mangaId`. Verified with `tsc --noEmit` (clean) and a 15-case logic test across Asura/Flame/Dynasty/generic (missing chapters → NOT FOUND; existing chapters → exact match; substring bug neutralized).
+
 ### [BUG-003] Page and chapter counter
 - **Status**: `fixed`
 - **Priority**: `medium`

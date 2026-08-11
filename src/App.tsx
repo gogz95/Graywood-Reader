@@ -478,6 +478,11 @@ export default function App() {
 
   // Increment Chapter (+1)
   const handleIncrementChapter = async (id: string) => {
+    if (activeProfile.role === 'admin') {
+      // Host Administrator never keeps read-chapter history.
+      console.log("[Host Admin] Chapter progress is not tracked for the Host Administrator.");
+      return;
+    }
     let nextCh = 1;
     setMangaList((prev) =>
       prev.map((m) => {
@@ -677,7 +682,26 @@ export default function App() {
   };
 
   const handleOpenReader = (manga: MangaItem, chapterNumber?: number, chapterId?: string) => {
-    const ch = chapterNumber !== undefined ? chapterNumber : manga.currentChapter || 1;
+    const isHostAdmin = activeProfile.role === 'admin';
+    const isGuestClient = activeProfile.id === 'usr_guest';
+
+    let ch: number;
+    if (chapterId) {
+      // Explicit chapter picked from the chapter list — always honor it.
+      ch = chapterNumber || 1;
+    } else if (isHostAdmin) {
+      // Host Administrator never tracks progress; always open the first chapter.
+      ch = 1;
+    } else if (isGuestClient) {
+      // Clients (guest) start at the first real chapter on their first connect,
+      // resuming only from their own locally-saved progress, if any.
+      const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
+      ch = saved > 0 ? saved : 1;
+    } else {
+      // Registered returning user: resume from tracked progress.
+      ch = chapterNumber !== undefined ? chapterNumber : manga.currentChapter || 1;
+    }
+
     setReaderTarget({ manga, chapterNumber: ch, chapterId });
     updateUrl(`/reader/${manga.id}/${ch}`);
   };
@@ -702,6 +726,12 @@ export default function App() {
   const handleMarkChapterRead = async (mangaId: string, chapterNumber: number) => {
     if (isIncognito) {
       console.log("[Incognito] Private reading mode active - read history suppressed.");
+      return;
+    }
+
+    if (activeProfile.role === 'admin') {
+      // Host Administrator never keeps read-chapter history.
+      console.log("[Host Admin] Read progress is not tracked for the Host Administrator.");
       return;
     }
 

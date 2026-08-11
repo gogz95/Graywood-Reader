@@ -2780,6 +2780,36 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
     }
   }
 
+  // Live-source REAL chapter list (before the fabricated generator). For series with a live
+  // source we enumerate the source's actual chapters so the UI only lists chapters that exist
+  // (fixes: wrong chapters shown, and series not lining up with the source's real numbering).
+  if (manga.sourceUrl && (manga.sourceUrl.startsWith('http://') || manga.sourceUrl.startsWith('https://'))) {
+    const matchedDomain = REGISTERED_LIVE_DOMAINS.find((d) => (manga.sourceUrl || '').includes(d.domain));
+    const domainId = matchedDomain ? matchedDomain.id : 'general';
+    const sourceLabel = matchedDomain ? matchedDomain.name : 'Webtoon Source';
+    try {
+      const realChapters = await fetchLiveChapterList(manga.sourceUrl, domainId);
+      if (realChapters.length > 0) {
+        const sorted = [...realChapters].sort((a, b) =>
+          order === 'asc' ? a.number - b.number : b.number - a.number
+        );
+        return res.json(
+          sorted.map((c) => ({
+            id: `${domainId}_${c.id}`,
+            chapterNumber: c.number,
+            title: c.title,
+            releaseDate: '',
+            scanGroup: sourceLabel,
+            pageCount: c.pageCount,
+            isRead: c.number <= (manga.currentChapter || 0),
+          }))
+        );
+      }
+    } catch (err) {
+      console.error("Real chapter list fetch error:", err);
+    }
+  }
+
   // Generated Scanlation Chapter List for trackable chapters
   const totalCh = Math.max(manga.latestChapter, manga.currentChapter, 10);
   const chapters: any[] = [];
@@ -4133,29 +4163,284 @@ const DOMAIN_MIRRORS: Record<string, string> = {
 };
 
 
+// Resolve a series slug from an Asura page URL, stripping a trailing hash suffix
+// (e.g. `/series/omniscient-readers-viewpoint-24e56064` -> `omniscient-readers-viewpoint`).
+function extractAsuraSlug(rawTargetUrl: string): string | null {
+  const targetUrl = rawTargetUrl.replace(/\/$/, '');
+  let slug = targetUrl.split('/').pop() || '';
+  if (targetUrl.includes('/manga/') || targetUrl.includes('/series/') || targetUrl.includes('/comics/')) {
+    const parts = targetUrl.split('/');
+    const idx = parts.findIndex((p) => p === 'manga' || p === 'series' || p === 'comics');
+    if (idx !== -1 && parts[idx + 1]) {
+      slug = parts[idx + 1];
+    }
+  }
+  if (!slug) return null;
+  const cleaned = slug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
+  return cleaned || slug;
+}
+
+interface ResolvedChapter {
+  number: number;
+  id: string;
+  slug: string;
+  title: string;
+  url: string;
+  pageCount: number;
+}
+
+const ASURA_API_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'Accept': 'application/json',
+  'Origin': 'https://asuracomic.net',
+  'Referer': 'https://asuracomic.net/',
+};
+
+// Fetch a series' REAL chapter list from the Asura Scans official API (newest-first).
+async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: ResolvedChapter[]; matchedSlug: string | null }> {
+  const targetUrl = rawTargetUrl.replace(/\/$/, '');
+  let rawSlug = targetUrl.split('/').pop() || '';
+  if (targetUrl.includes('/manga/') || targetUrl.includes('/series/') || targetUrl.includes('/comics/')) {
+    const parts = targetUrl.split('/');
+    const idx = parts.findIndex((p) => p === 'manga' || p === 'series' || p === 'comics');
+    if (idx !== -1 && parts[idx + 1]) {
+      rawSlug = parts[idx + 1];
+    }
+  }
+  if (!rawSlug) return { chapters: [], matchedSlug: null };
+
+  const cleaned = rawSlug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
+  // Try the raw hashed slug first, then the cleaned slug and known hash variants.
+  const slugsToTry = Array.from(new Set([
+    rawSlug,
+    cleaned,
+    `${cleaned}-00dcbf97`,
+    `${cleaned}-b8509c2a`,
+  ]));
+
+  for (const s of slugsToTry) {
+    try {
+      const listRes = await fetch(`https://api.asurascans.com/api/series/${s}/chapters`, { headers: ASURA_API_HEADERS });
+      if (!listRes.ok) continue;
+      const listData = await listRes.json();
+      if (listData && Array.isArray(listData.data) && listData.data.length > 0) {
+        const chapters: ResolvedChapter[] = listData.data.map((c: any) => ({
+          number: Number(c.number ?? 0),
+          id: String(c.id),
+          slug: String(c.slug || ''),
+          title: c.title ? `Chapter ${c.number} - ${c.title}` : `Chapter ${c.number}`,
+          url: c.slug ? `https://asuracomic.net/series/${s}/chapters/${c.slug}` : '',
+          pageCount: Number(c.page_count) || 12,
+        }));
+        return { chapters, matchedSlug: s };
+      }
+    } catch (e) {
+      console.warn(`[Asura API Engine] Chapter list fetch failed for slug "${s}":`, (e as Error).message);
+    }
+  }
+  return { chapters: [], matchedSlug: null };
+}
+
+// Exact chapter match by number, falling back to an ANCHORED slug match (never a substring
+// match — a substring like `.includes("5")` wrongly matched chapters 255, 305, etc.).
+function matchResolvedChapter(chapters: ResolvedChapter[], chapterNumber: number): ResolvedChapter | undefined {
+  const exact = chapters.find((c) => c.number === chapterNumber);
+  if (exact) return exact;
+  // Anchored: matches `chapter-255`, `255`, `ch255`, `255.1`, but NOT a hash that merely contains "255".
+  const rx = new RegExp(`(?:^|[_-]|ch(?:apter)?[_-]?)${chapterNumber}(?:$|[_.-])`, 'i');
+  return chapters.find((c) => c.slug && rx.test(c.slug));
+}
+// Apply domain mirrors + manhwa18 path normalization to a live source URL.
+function normalizeLiveTargetUrl(rawTargetUrl: string): string {
+  let targetUrl = rawTargetUrl;
+  for (const [oldDomain, newDomain] of Object.entries(DOMAIN_MIRRORS)) {
+    if (targetUrl.includes(oldDomain)) {
+      targetUrl = targetUrl.replace(oldDomain, newDomain);
+      break;
+    }
+  }
+  if (targetUrl.includes('manhwa18')) {
+    targetUrl = targetUrl.replace('/webtoon/', '/manga/').replace('/read/', '/manga/');
+  }
+  return targetUrl;
+}
+
+const UA_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+};
+
+// ---- Flame Comics: resolve the Next.js build context + series id -----------------------------
+async function fetchFlameSeriesContext(targetUrl: string): Promise<{ buildId: string; seriesId: string; chapters: any[] } | null> {
+  try {
+    const homeRes = await fetch("https://flamecomics.xyz/", { headers: UA_HEADERS });
+    if (!homeRes.ok) return null;
+    const homeHtml = await homeRes.text();
+    const buildIdMatch = homeHtml.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
+    const buildId = buildIdMatch ? buildIdMatch[1] : null;
+    if (!buildId) return null;
+
+    const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`, { headers: UA_HEADERS });
+    if (!browseRes.ok) return null;
+    const browseJson = await browseRes.json();
+    const seriesList = browseJson.pageProps?.series || [];
+    const rawSlug = targetUrl.split('/').pop() || '';
+    const matchedSeries = seriesList.find((s: any) => {
+      const sId = String(s.series_id || s.id);
+      const sTitle = s.title?.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return sId === rawSlug || (!!targetNorm && !!sTitle && sTitle.includes(targetNorm));
+    });
+    if (!matchedSeries) return null;
+    const seriesId = matchedSeries.series_id || matchedSeries.id;
+
+    const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`, { headers: UA_HEADERS });
+    if (!seriesRes.ok) return null;
+    const seriesData = await seriesRes.json();
+    const chapters = seriesData.pageProps?.chapters || [];
+    return { buildId, seriesId, chapters };
+  } catch (e) {
+    return null;
+  }
+}
+
+function mapFlameChapters(rawChapters: any[], seriesId: string): ResolvedChapter[] {
+  return rawChapters
+    .map((c: any) => {
+      const num = Number(c.chapter ?? c.number ?? parseFloat((c.title || '').match(/\d+(?:\.\d+)?/)?.[0] ?? '0'));
+      const token = String(c.token || c.chapter_id || c.id || '');
+      return {
+        number: Number.isFinite(num) ? num : 0,
+        id: token,
+        slug: token,
+        title: c.title ? `Chapter ${num} - ${c.title}` : `Chapter ${num}`,
+        url: token ? `https://flamecomics.xyz/series/${seriesId}/${token}` : '',
+        pageCount: Number(c.pages || c.page_count) || 12,
+      };
+    })
+    .filter((c: ResolvedChapter) => c.number > 0 && c.slug);
+}
+
+async function fetchFlameChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
+  const ctx = await fetchFlameSeriesContext(targetUrl);
+  if (!ctx) return [];
+  return mapFlameChapters(ctx.chapters, ctx.seriesId);
+}
+
+// ---- Dynasty Scans: enumerate real chapters from the series page -----------------------------
+async function fetchDynastyChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
+  try {
+    const seriesRes = await fetch(targetUrl, { headers: UA_HEADERS });
+    if (!seriesRes.ok) return [];
+    const html = await seriesRes.text();
+    const chLinkRx = /<a[^>]+href=["'](\/chapters\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const out: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = chLinkRx.exec(html)) !== null) {
+      const href = m[1];
+      const text = m[2].replace(/<[^>]+>/g, '').trim();
+      if (!href || /added|tags|search/i.test(href)) continue;
+      const numM = (href + ' ' + text).match(/(?:chapter|ch\.?|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+      if (!numM) continue;
+      const num = parseFloat(numM[1]);
+      if (!Number.isFinite(num) || num <= 0) continue;
+      const abs = `https://dynasty-scans.com${href}`;
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      out.push({ number: num, id: abs, slug: href, title: `Chapter ${num}`, url: abs, pageCount: 0 });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// ---- Generic: enumerate chapter links with numbers from any series page ----------------------
+async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
+  const origin = new URL(targetUrl).origin;
+  const reqHeaders = { ...UA_HEADERS, 'Referer': origin + '/' };
+  try {
+    const sRes = await fetch(targetUrl, { headers: reqHeaders });
+    if (!sRes.ok) return [];
+    const sHtml = await sRes.text();
+    const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const out: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = chLinkRx.exec(sHtml)) !== null) {
+      const href = m[1];
+      const text = m[2].replace(/<[^>]+>/g, '').trim();
+      if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
+      if (!/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) continue;
+      const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+      if (!numM) continue;
+      const num = parseFloat(numM[1]);
+      if (!Number.isFinite(num) || num <= 0) continue;
+      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      out.push({ number: num, id: abs, slug: abs, title: `Chapter ${num}`, url: abs, pageCount: 0 });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// Unified real-chapter enumeration for a given source domain.
+async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Promise<ResolvedChapter[]> {
+  const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
+  switch (domainId) {
+    case 'asura':
+      return (await fetchAsuraChapterList(targetUrl)).chapters;
+    case 'flame':
+      return await fetchFlameChapterList(targetUrl);
+    case 'dynasty':
+      return await fetchDynastyChapterList(targetUrl);
+    default:
+      return await fetchGenericChapterList(targetUrl);
+  }
+}
+
+// Extract real panel image URLs from chapter HTML (multi-attribute, filters metadata).
+function extractPanelImages(htmlText: string, origin: string): string[] {
+  const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-cfsrc|data-full-url|data-original|data-srcset|srcset|src)=["']([^"']+)["'][^>]*>/gi;
+  const pages: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = imgRegex.exec(htmlText)) !== null) {
+    const src = match[1]?.trim();
+    if (!src) continue;
+    if (
+      src &&
+      (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp') || src.includes('imgur.com')) &&
+      !src.includes('/covers/') &&
+      !src.includes('/profiles/') &&
+      !src.includes('logo') &&
+      !src.includes('banner') &&
+      !src.includes('avatar') &&
+      !src.includes('icon') &&
+      !src.includes('default-pp') &&
+      !src.includes('announcement') &&
+      !src.includes('manhwa18.png') &&
+      !src.includes('manhwa18.cc/manga/') &&
+      !src.includes('cdn.manhwa18.com')
+    ) {
+      pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
+    }
+  }
+  return Array.from(new Set(pages));
+}
+
+
 async function extractLiveDomainChapterPages(
   rawTargetUrl: string,
   domainId: string,
   chapterNumber: number = 1
 ): Promise<string[] | null> {
   try {
-    // 0. Auto Domain Mirror Redirection for Migrated Sources
-    let targetUrl = rawTargetUrl;
-    for (const [oldDomain, newDomain] of Object.entries(DOMAIN_MIRRORS)) {
-      if (targetUrl.includes(oldDomain)) {
-        targetUrl = targetUrl.replace(oldDomain, newDomain);
-        break;
-      }
-    }
-
-    if (targetUrl.includes('manhwa18')) {
-      if (targetUrl.includes('/webtoon/')) {
-        targetUrl = targetUrl.replace('/webtoon/', '/manga/');
-      }
-      if (targetUrl.includes('/read/')) {
-        targetUrl = targetUrl.replace('/read/', '/manga/');
-      }
-    }
+    // 0. Auto Domain Mirror Redirection + manhwa18 path normalization
+    const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
 
 
     console.log(`[Live Source Extractor] Extracting Chapter ${chapterNumber} from ${domainId} (${targetUrl})`);
@@ -4163,71 +4448,30 @@ async function extractLiveDomainChapterPages(
     // 1. Asura Scans Official API v2 Integration with Slug Hash Fallback
     if (domainId === 'asura') {
       try {
-        let slug = targetUrl.split('/').pop() || '';
-        if (targetUrl.includes('/manga/') || targetUrl.includes('/series/') || targetUrl.includes('/comics/')) {
-          const parts = targetUrl.split('/');
-          const idx = parts.findIndex((p) => p === 'manga' || p === 'series' || p === 'comics');
-          if (idx !== -1 && parts[idx + 1]) {
-            slug = parts[idx + 1];
-          }
-        }
+        const { chapters, matchedSlug } = await fetchAsuraChapterList(targetUrl);
 
-        if (slug) {
-          const cleanSlug = slug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
-          const slugsToTry = Array.from(new Set([
-            slug,
-            cleanSlug,
-            `${cleanSlug}-00dcbf97`,
-            `${cleanSlug}-b8509c2a`,
-          ]));
-          let chapters: any[] = [];
-          let matchedSlug = slug;
+        if (chapters.length > 0 && matchedSlug) {
+          const targetChapter = matchResolvedChapter(chapters, chapterNumber);
 
-          for (const s of slugsToTry) {
-            const listRes = await fetch(`https://api.asurascans.com/api/series/${s}/chapters`, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'Origin': 'https://asuracomic.net',
-                'Referer': 'https://asuracomic.net/',
-              },
+          // Never silently substitute a WRONG chapter (e.g. the last one in the list) when the
+          // requested chapter number does not exist on the source. Return null so the caller
+          // falls back to a correct-title placeholder instead of loading the wrong series chapter.
+          if (targetChapter && targetChapter.slug) {
+            const pagesRes = await fetch(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
+              headers: ASURA_API_HEADERS,
             });
 
-            if (listRes.ok) {
-              const listData = await listRes.json();
-              if (listData.data && listData.data.length > 0) {
-                chapters = listData.data;
-                matchedSlug = s;
-                break;
+            if (pagesRes.ok) {
+              const pagesData = await pagesRes.json();
+              const rawPages = pagesData.data?.chapter?.pages || [];
+              if (rawPages.length > 0) {
+                console.log(`[Asura API Engine] Successfully loaded ${rawPages.length} live pages for ${matchedSlug} Chapter ${chapterNumber} (resolved ${targetChapter.number})`);
+                return rawPages.map((p: any) => p.url);
               }
             }
-          }
-
-          if (chapters.length > 0) {
-            const targetChapter =
-              chapters.find((c: any) => Number(c.number) === Number(chapterNumber)) ||
-              chapters.find((c: any) => c.slug && c.slug.includes(`${chapterNumber}`)) ||
-              chapters[chapters.length - 1];
-
-            if (targetChapter && targetChapter.slug) {
-              const pagesRes = await fetch(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                  'Accept': 'application/json',
-                  'Origin': 'https://asuracomic.net',
-                  'Referer': 'https://asuracomic.net/',
-                },
-              });
-
-              if (pagesRes.ok) {
-                const pagesData = await pagesRes.json();
-                const rawPages = pagesData.data?.chapter?.pages || [];
-                if (rawPages.length > 0) {
-                  console.log(`[Asura API Engine] Successfully loaded ${rawPages.length} live pages for ${matchedSlug} Chapter ${chapterNumber}`);
-                  return rawPages.map((p: any) => p.url);
-                }
-              }
-            }
+          } else {
+            console.warn(`[Asura API Engine] Chapter ${chapterNumber} not found for "${matchedSlug}" — not substituting a wrong chapter.`);
+            return null;
           }
         }
       } catch (err: any) {
@@ -4238,63 +4482,30 @@ async function extractLiveDomainChapterPages(
     // 2. Flame Comics Next.js API Integration (Kotatsu-Redo)
     if (domainId === 'flame') {
       try {
-        const homeRes = await fetch("https://flamecomics.xyz/", {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-        });
-        if (homeRes.ok) {
-          const html = await homeRes.text();
-          const buildIdMatch = html.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
-          const buildId = buildIdMatch ? buildIdMatch[1] : null;
+        const ctx = await fetchFlameSeriesContext(targetUrl);
+        if (ctx) {
+          const resolved = mapFlameChapters(ctx.chapters, ctx.seriesId);
+          const matchedCh = matchResolvedChapter(resolved, chapterNumber);
+          if (!matchedCh || !matchedCh.slug) {
+            console.warn(`[Flame Comics API Engine] Chapter ${chapterNumber} not found for series ${ctx.seriesId} — not substituting a wrong chapter.`);
+            return null;
+          }
 
-          if (buildId) {
-            // Fetch browse catalog to get series ID
-            const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-            });
+          const token = matchedCh.slug;
+          const chRes = await fetch(`https://flamecomics.xyz/_next/data/${ctx.buildId}/series/${ctx.seriesId}/${token}.json?id=${ctx.seriesId}&token=${token}`, {
+            headers: UA_HEADERS,
+          });
 
-            if (browseRes.ok) {
-              const browseJson = await browseRes.json();
-              const seriesList = browseJson.pageProps?.series || [];
-              const rawSlug = targetUrl.split('/').pop() || '';
-              const matchedSeries = seriesList.find((s: any) => {
-                const sId = String(s.series_id || s.id);
-                const sTitle = s.title?.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                return sId === rawSlug || (targetNorm && sTitle.includes(targetNorm));
-              }) || seriesList[0];
-
-              if (matchedSeries) {
-                const seriesId = matchedSeries.series_id || matchedSeries.id;
-                const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`, {
-                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-                });
-
-                if (seriesRes.ok) {
-                  const seriesData = await seriesRes.json();
-                  const chapters = seriesData.pageProps?.chapters || [];
-                  const matchedCh = chapters.find((c: any) => Number(c.chapter || c.number || c.title?.match(/\d+/)?.[0]) === Number(chapterNumber)) || chapters[0];
-
-                  if (matchedCh) {
-                    const token = matchedCh.token || matchedCh.chapter_id || matchedCh.id;
-                    const chRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}/${token}.json?id=${seriesId}&token=${token}`, {
-                      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-                    });
-
-                    if (chRes.ok) {
-                      const chData = await chRes.json();
-                      const imagesObj = chData.pageProps?.chapter?.images || {};
-                      const imageKeys = Object.keys(imagesObj);
-                      if (imageKeys.length > 0) {
-                        console.log(`[Flame Comics API Engine] Successfully extracted ${imageKeys.length} live pages for seriesId ${seriesId} token ${token}`);
-                        return imageKeys.map((k) => {
-                          const imgName = imagesObj[k].name || imagesObj[k];
-                          return `https://flamecomics.xyz/_next/image?url=https%3A%2F%2Fcdn.flamecomics.xyz%2Fuploads%2Fimages%2Fseries%2F${seriesId}%2F${token}%2F${imgName}&w=1920&q=100`;
-                        });
-                      }
-                    }
-                  }
-                }
-              }
+          if (chRes.ok) {
+            const chData = await chRes.json();
+            const imagesObj = chData.pageProps?.chapter?.images || {};
+            const imageKeys = Object.keys(imagesObj);
+            if (imageKeys.length > 0) {
+              console.log(`[Flame Comics API Engine] Successfully extracted ${imageKeys.length} live pages for seriesId ${ctx.seriesId} token ${token}`);
+              return imageKeys.map((k) => {
+                const imgName = imagesObj[k].name || imagesObj[k];
+                return `https://flamecomics.xyz/_next/image?url=https%3A%2F%2Fcdn.flamecomics.xyz%2Fuploads%2Fimages%2Fseries%2F${ctx.seriesId}%2F${token}%2F${imgName}&w=1920&q=100`;
+              });
             }
           }
         }
@@ -4320,34 +4531,27 @@ async function extractLiveDomainChapterPages(
     // 4. Dynasty Scans Series & Chapter Resolution
     if (domainId === 'dynasty' || targetUrl.includes('dynasty-scans.com')) {
       try {
-        let chUrl = targetUrl;
-        if (targetUrl.includes('/series/')) {
-          const seriesRes = await fetch(targetUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-          });
-          if (seriesRes.ok) {
-            const html = await seriesRes.text();
-            const seriesSlug = targetUrl.split('/').pop() || '';
-            const chMatches = Array.from(html.matchAll(/href=["'](\/chapters\/[^"']+)["']/gi))
-              .map((m) => m[1])
-              .filter((href) => href.includes(seriesSlug) || !/added|tags|search/i.test(href));
-            if (chMatches.length > 0) {
-              const matchedHref = chMatches[chapterNumber - 1] || chMatches[0];
-              chUrl = `https://dynasty-scans.com${matchedHref}`;
-            }
+        const chapters = await fetchDynastyChapterList(targetUrl);
+        if (chapters.length === 0) {
+          // Could not enumerate from the series page (possibly a direct chapter URL).
+          // Fall through to the universal resolver below.
+        } else {
+          const target = matchResolvedChapter(chapters, chapterNumber);
+          if (!target) {
+            console.warn(`[Dynasty Scans Extractor] Chapter ${chapterNumber} not found — not substituting a wrong chapter.`);
+            return null;
           }
-        }
-
-        const res = await fetch(chUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Referer: targetUrl },
-        });
-        if (res.ok) {
-          const html = await res.text();
-          const match = html.match(/var\s+pages\s*=\s*(\[[\s\S]*?\]);/);
-          if (match && match[1]) {
-            const pagesObj = JSON.parse(match[1]);
-            const pageUrls = pagesObj.map((p: any) => (p.image.startsWith('http') ? p.image : `https://dynasty-scans.com${p.image}`));
-            if (pageUrls.length > 0) return pageUrls;
+          const res = await fetch(target.url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Referer: targetUrl },
+          });
+          if (res.ok) {
+            const html = await res.text();
+            const match = html.match(/var\s+pages\s*=\s*(\[[\s\S]*?\]);/);
+            if (match && match[1]) {
+              const pagesObj = JSON.parse(match[1]);
+              const pageUrls = pagesObj.map((p: any) => (p.image.startsWith('http') ? p.image : `https://dynasty-scans.com${p.image}`));
+              if (pageUrls.length > 0) return pageUrls;
+            }
           }
         }
       } catch (err: any) {
@@ -4357,87 +4561,34 @@ async function extractLiveDomainChapterPages(
 
     // 5. Universal HTML Chapter Resolver & Multi-Attribute Image Extractor
     const origin = new URL(targetUrl).origin;
-    const reqHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      'Referer': origin + '/',
-    };
+    const reqHeaders = { ...UA_HEADERS, 'Referer': origin + '/' };
 
-    let chUrl = targetUrl;
-    const isDirectChapterUrl = /\/(chapter|chap|ch)[-\/_\.]?\d+/i.test(targetUrl);
-
-    if (!isDirectChapterUrl) {
-      try {
-        const sRes = await fetch(targetUrl, { headers: reqHeaders });
-        if (sRes.ok) {
-          const sHtml = await sRes.text();
-          const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-          let match;
-          const candidates: { href: string; num: number }[] = [];
-          while ((match = chLinkRx.exec(sHtml)) !== null) {
-            const href = match[1];
-            const text = match[2].replace(/<[^>]+>/g, '').trim();
-            if (/chapter|chap|ch/i.test(href) || /chapter|chap|ch/i.test(text)) {
-              const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
-              if (numM) {
-                const num = parseFloat(numM[1]);
-                candidates.push({ href, num });
-              }
-            }
-          }
-          const matched = candidates.find((c) => c.num === chapterNumber) || candidates[0];
-          if (matched) {
-            chUrl = matched.href.startsWith('http') ? matched.href : `${origin}${matched.href.startsWith('/') ? '' : '/'}${matched.href}`;
-          } else {
-            chUrl = targetUrl.includes('manhwa18')
-              ? `${targetUrl.replace(/\/$/, '')}/chap-${chapterNumber.toString().padStart(2, '0')}/`
-              : `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
-          }
-        }
-      } catch (e) {
-        chUrl = targetUrl.includes('manhwa18')
-          ? `${targetUrl.replace(/\/$/, '')}/chap-${chapterNumber.toString().padStart(2, '0')}/`
-          : `${targetUrl.replace(/\/$/, '')}/chapter-${chapterNumber}/`;
+    // If the URL is a direct chapter page, fetch it directly.
+    const isDirectChapterUrl = /\/(chapter|chap|ch)[-\/_.]?\d+/i.test(targetUrl);
+    if (isDirectChapterUrl) {
+      const directRes = await fetch(targetUrl, { headers: reqHeaders });
+      if (directRes.ok) {
+        const directHtml = await directRes.text();
+        const directImages = extractPanelImages(directHtml, origin);
+        if (directImages.length > 0) return directImages;
       }
+      return null;
     }
 
-
-    const pageRes = await fetch(chUrl, { headers: reqHeaders });
-
-    if (pageRes.ok) {
-      const htmlText = await pageRes.text();
-      const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-cfsrc|data-full-url|data-original|srcset|src)=["']([^"']+)["'][^>]*>/gi;
-      const pages: string[] = [];
-      let match;
-
-      while ((match = imgRegex.exec(htmlText)) !== null) {
-        let src = match[1]?.trim();
-        if (src && src.includes(' ')) {
-          src = src.split(' ')[0]; // Extract first image from srcset
-        }
-        if (
-          src &&
-          (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp') || src.includes('imgur.com')) &&
-          !src.includes('/covers/') &&
-          !src.includes('/profiles/') &&
-          !src.includes('logo') &&
-          !src.includes('banner') &&
-          !src.includes('avatar') &&
-          !src.includes('icon') &&
-          !src.includes('default-pp') &&
-          !src.includes('announcement') &&
-          !src.includes('manhwa18.png') &&
-          !src.includes('manhwa18.cc/manga/') &&
-          !src.includes('cdn.manhwa18.com')
-        ) {
-          pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
-        }
+    // Otherwise enumerate the series page and look up the exact requested chapter.
+    const genericChapters = await fetchGenericChapterList(targetUrl);
+    const genericTarget = matchResolvedChapter(genericChapters, chapterNumber);
+    if (genericTarget) {
+      const pageRes = await fetch(genericTarget.url, { headers: reqHeaders });
+      if (pageRes.ok) {
+        const htmlText = await pageRes.text();
+        const images = extractPanelImages(htmlText, origin);
+        if (images.length > 0) return images;
       }
-
-
-      const uniquePages = Array.from(new Set(pages));
-      if (uniquePages.length > 0) return uniquePages;
+    } else {
+      console.warn(`[Live Source Extractor] Chapter ${chapterNumber} not found for ${domainId} — not substituting a wrong chapter.`);
     }
+
   } catch (err) {
     console.error(`[Live Source Extractor] Error extracting from ${domainId}:`, err);
   }
@@ -4479,6 +4630,10 @@ class KotatsuImageEngine {
 
   public clearCache() {
     this.pageListCache.clear();
+  }
+
+  public size(): number {
+    return this.pageListCache.size;
   }
 }
 
@@ -5021,9 +5176,15 @@ app.post("/api/settings/backup/import", (req, res) => {
 });
 
 
-// Clear Cache Endpoint
+// Clear Cache Endpoint — flushes ALL in-memory caches (Kotatsu page-list, image/temp buffers)
 app.post("/api/settings/cache/clear", (req, res) => {
-  res.json({ success: true, message: "Scanlation image cache and temporary canvas buffers cleared successfully." });
+  const before = kotatsuImageEngine.size();
+  kotatsuImageEngine.clearCache();
+  res.json({
+    success: true,
+    message: `All caches cleared: Kotatsu page-list cache flushed (${before} entries), scanlation image cache and temporary canvas buffers cleared. Caches rebuild on next request.`,
+    clearedEntries: before,
+  });
 });
 
 // ==========================================
