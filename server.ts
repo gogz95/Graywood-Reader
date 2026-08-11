@@ -4423,8 +4423,8 @@ function extractPanelImages(htmlText: string, origin: string): string[] {
       !src.includes('default-pp') &&
       !src.includes('announcement') &&
       !src.includes('manhwa18.png') &&
-      !src.includes('manhwa18.cc/manga/') &&
-      !src.includes('cdn.manhwa18.com')
+      !src.includes('manhwa18.cc/manga/')
+      // NOTE: intentionally NOT excluding cdn.manhwa18.com — that domain hosts real chapter images.
     ) {
       pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
     }
