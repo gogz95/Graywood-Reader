@@ -2,22 +2,33 @@ import React, { useState } from 'react';
 import { Bug, X, Send, AlertTriangle, CheckCircle, FileText, Code2, AlertCircle } from 'lucide-react';
 import { UserProfile } from '../types';
 
+export interface BugReportInitialData {
+  title?: string;
+  description?: string;
+  file?: string;
+  stepsToReproduce?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+}
+
 interface SubmitBugModalProps {
   currentUser?: UserProfile;
   onClose: () => void;
   onBugSubmitted?: (bugId: string) => void;
+  /** Optional pre-filled context (e.g. from the Flag Issue modal). */
+  initialData?: BugReportInitialData;
 }
 
 export const SubmitBugModal: React.FC<SubmitBugModalProps> = ({
   currentUser,
   onClose,
   onBugSubmitted,
+  initialData,
 }) => {
-  const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
-  const [file, setFile] = useState('server.ts');
-  const [description, setDescription] = useState('');
-  const [stepsToReproduce, setStepsToReproduce] = useState('');
+  const [title, setTitle] = useState(initialData?.title || '');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>(initialData?.priority || 'medium');
+  const [file, setFile] = useState(initialData?.file || 'server.ts');
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [stepsToReproduce, setStepsToReproduce] = useState(initialData?.stepsToReproduce || '');
   const [expected, setExpected] = useState('');
   const [actual, setActual] = useState('');
   const [submitting, setSubmitting] = useState(false);

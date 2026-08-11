@@ -12,6 +12,7 @@ import {
   Trash2,
   BookOpen,
   CheckCircle,
+  Check,
   Clock,
   Zap,
   Globe,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from 'lucide-react';
+import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 
 interface MangaDetailModalProps {
   manga: MangaItem;
@@ -29,6 +31,8 @@ interface MangaDetailModalProps {
   onEditManga: (manga: MangaItem) => void;
   onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
   onOpenChapters: (manga: MangaItem) => void;
+  /** Opens the bug-reporting tool pre-filled for the flagged series. */
+  onReport: (category: FlagCategory, manga: MangaItem) => void;
 }
 
 export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
@@ -39,6 +43,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   onEditManga,
   onOpenReader,
   onOpenChapters,
+  onReport,
 }) => {
   const [currentChapter, setCurrentChapter] = useState(manga.currentChapter);
   const [status, setStatus] = useState<ReadingStatus>(manga.status);
@@ -47,32 +52,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   const [isFavorite, setIsFavorite] = useState(Boolean(manga.isFavorite));
   const [isFlagged, setIsFlagged] = useState(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState(manga.flagReason || '');
+  const [showFlagDropdown, setShowFlagDropdown] = useState(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
-
-    const handleToggleFlag = useCallback(async () => {
-    const newFlagState = !isFlagged;
-    let reason = flagReason;
-    if (newFlagState && !reason) {
-      const inputReason = prompt('Enter reason for flagging this series (e.g. Images loading failed / Missing chapters):', 'Failed to load chapter pages');
-      if (inputReason === null) return;
-      reason = inputReason || 'Reported loading error';
-    }
-
-    setIsFlagged(newFlagState);
-    setFlagReason(reason);
-    try {
-      const res = await fetch('/api/manga/toggle-flag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: manga.id, isFlagged: newFlagState, flagReason: reason })
-      });
-      const data = await res.json();
-      if (data.success && data.manga) {
-        onUpdateManga(data.manga);
-      }
-    } catch (e) {}
-  }, [manga.id]);
 
   const handleRefreshMetadata = useCallback(async () => {
     setIsRefreshingMetadata(true);
@@ -174,18 +156,74 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                   <span>{isFavorite ? 'Favorite' : 'Add Favorite'}</span>
                 </button>
 
-                <button
-                  onClick={handleToggleFlag}
-                  className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
-                    isFlagged
-                      ? 'bg-danger/20 text-danger border border-danger/40 shadow-sm'
-                      : 'bg-elevated text-secondary hover:text-primary'
-                  }`}
-                  title="Flag series for loading errors or broken content"
-                >
-                  <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
-                  <span>{isFlagged ? `Flagged: ${flagReason || 'Error'}` : 'Flag Issue'}</span>
-                </button>
+                {/* Flag Issue Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFlagDropdown(!showFlagDropdown)}
+                    className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
+                      isFlagged
+                        ? 'bg-danger/20 text-danger border border-danger/40 shadow-sm'
+                        : 'bg-elevated text-secondary hover:text-primary'
+                    }`}
+                    title="Flag series for loading errors or broken content"
+                  >
+                    <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
+                    <span>{isFlagged ? `Flagged: ${flagReason || 'Error'}` : 'Flag Issue'}</span>
+                  </button>
+                  {showFlagDropdown && (
+                    <div className="absolute left-0 top-full mt-1 z-[999] w-60 bg-surface border border-edge rounded-xl shadow-2xl overflow-hidden">
+                      <div className="p-2 border-b border-edge">
+                        <p className="text-[11px] font-bold text-primary">What went wrong?</p>
+                      </div>
+                      {FLAG_CATEGORIES.map((cat) => (
+                        <button
+                          key={cat.id}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowFlagDropdown(false);
+                            try {
+                              await fetch('/api/manga/toggle-flag', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
+                              });
+                            } catch (_) {}
+                            setIsFlagged(true);
+                            setFlagReason(cat.flagReason);
+                            onUpdateManga({ ...manga, isFlagged: true, flagReason: cat.flagReason, flaggedAt: new Date().toISOString() });
+                            onReport(cat, manga);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-primary hover:bg-danger/10 hover:text-danger transition-colors text-left border-b border-edge/50 last:border-0"
+                        >
+                          <span className="p-1 rounded bg-danger/10 text-danger">{cat.icon}</span>
+                          <span>
+                            <span className="block font-bold">{cat.label}</span>
+                            <span className="block text-[10px] text-secondary">{cat.description}</span>
+                          </span>
+                        </button>
+                      ))}
+                      {isFlagged && (
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowFlagDropdown(false);
+                            try {
+                              await fetch('/api/manga/toggle-flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: manga.id, isFlagged: false }) });
+                            } catch (_) {}
+                            setIsFlagged(false);
+                            setFlagReason('');
+                            onUpdateManga({ ...manga, isFlagged: false, flagReason: undefined, flaggedAt: undefined });
+                          }}
+                          className="w-full px-3 py-2 text-xs font-bold text-secondary hover:text-danger hover:bg-danger/10 transition-colors text-center border-t border-edge flex items-center justify-center gap-1.5"
+                        >
+                          <Check className="w-3 h-3" /> Remove Flag
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-primary">{manga.title}</h2>

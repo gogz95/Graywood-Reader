@@ -60,6 +60,41 @@ const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const BROWSER_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 export class KotatsuImageLoader {
+  // Fix #18: IndexedDB-backed persistent image cache (survives page reloads)
+  private static dbPromise: Promise<IDBDatabase> | null = null;
+
+  private static getImageCacheDB(): Promise<IDBDatabase> {
+    if (KotatsuImageLoader.dbPromise) return KotatsuImageLoader.dbPromise;
+    KotatsuImageLoader.dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open('kotatsu-image-cache', 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore('images', { keyPath: 'url' }); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => { console.warn('[Image Cache] IndexedDB unavailable, using in-memory only'); reject(req.error); };
+    });
+    return KotatsuImageLoader.dbPromise.catch(() => { KotatsuImageLoader.dbPromise = null; return Promise.reject(new Error('IDB unavailable')); });
+  }
+
+  private async getCachedBlobUrl(rawUrl: string): Promise<string | null> {
+    try {
+      const db = await KotatsuImageLoader.getImageCacheDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('images', 'readonly');
+        const store = tx.objectStore('images');
+        const req = store.get(rawUrl);
+        req.onsuccess = () => resolve(req.result?.blobUrl || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch { return null; }
+  }
+
+  private async setCachedBlobUrl(rawUrl: string, blobUrl: string): Promise<void> {
+    try {
+      const db = await KotatsuImageLoader.getImageCacheDB();
+      const tx = db.transaction('images', 'readwrite');
+      tx.objectStore('images').put({ url: rawUrl, blobUrl, timestamp: Date.now() });
+    } catch { /* silent fail */ }
+  }
+
   private concurrency: number;
   private preloadAhead: number;
   private preloadBehind: number;
@@ -187,17 +222,25 @@ export class KotatsuImageLoader {
   }
 
   /**
-   * Clean up Blob URLs to free browser RAM
+   * Clean up all blob URLs and internal resources to prevent memory leaks.
+   * Call this when the reader is closed or the loader is no longer needed.
    */
   public destroy(): void {
+    // Revoke all active blob URLs
     this.cache.forEach((state) => {
-      if (state.blobUrl && state.blobUrl.startsWith('blob:')) {
+      if (state.blobUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(state.blobUrl);
       }
     });
     this.cache.clear();
-    this.queue = [];
+    this.queue.length = 0;
     this.activeDownloads.clear();
+    this._browserCache.clear();
+    if (this._gcInterval) {
+      clearInterval(this._gcInterval);
+      this._gcInterval = null;
+    }
+    this._currentPageIndex = -1;
   }
 
   private processQueue(): void {
@@ -249,6 +292,7 @@ export class KotatsuImageLoader {
     if (this.config.enableBrowserCache) {
       const cacheEntry = this.checkBrowserCache(rawUrl);
       if (cacheEntry) {
+        if (state.blobUrl?.startsWith('blob:')) { URL.revokeObjectURL(state.blobUrl); }
         state.blobUrl = cacheEntry.url;
         state.status = 'loaded';
         state.lastUpdated = Date.now();
@@ -257,16 +301,41 @@ export class KotatsuImageLoader {
       }
     }
 
+    // Fix #18: Check IndexedDB persistent cache
+    const cachedIdxDB = await this.getCachedBlobUrl(rawUrl);
+    if (cachedIdxDB) {
+      if (state.blobUrl?.startsWith('blob:')) { URL.revokeObjectURL(state.blobUrl); }
+      state.blobUrl = cachedIdxDB;
+      state.status = 'loaded';
+      state.lastUpdated = Date.now();
+      this.notify();
+      return;
+    }
+
     try {
-      const proxyUrl = `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
-      const response = await fetch(proxyUrl);
+      // Fix #4: Don't double-proxy URLs that are already proxied
+      const isAlreadyProxied = rawUrl.startsWith('/api/') || rawUrl.startsWith('/api/reader/proxy-image');
+      const fetchUrl = isAlreadyProxied
+        ? rawUrl
+        : `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
+      
+      const response = await fetch(fetchUrl);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Failed to fetch image panel`);
       }
 
       const blob = await response.blob();
+      
+      // Fix #17: Revoke previous blob URL before creating a new one
+      if (state.blobUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(state.blobUrl);
+      }
+      
       const blobUrl = URL.createObjectURL(blob);
+
+      // Fix #18: Persist to IndexedDB for offline reuse
+      this.setCachedBlobUrl(rawUrl, blobUrl).catch(() => {});
 
       state.status = 'loaded';
       state.blobUrl = blobUrl;
@@ -287,11 +356,15 @@ export class KotatsuImageLoader {
         state.status = 'error';
         state.error = err.message || 'Image download failed';
         // Fallback to proxy URL directly (without blobs)
-        state.blobUrl = `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
-        // Revoke any blob URL from previous attempt
+        // Fix #4: Don't double-wrap already-proxied fallback URLs
+        const fallbackUrl = rawUrl.startsWith('/api/')
+          ? rawUrl
+          : `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
+        // Fix #17: Revoke old blob before replacing with raw proxy URL
         if (state.blobUrl?.startsWith('blob:')) {
           URL.revokeObjectURL(state.blobUrl);
         }
+        state.blobUrl = fallbackUrl;
       }
     } finally {
       this.activeDownloads.delete(pageIndex);

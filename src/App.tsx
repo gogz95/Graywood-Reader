@@ -25,7 +25,8 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
-import { SubmitBugModal } from './components/SubmitBugModal';
+import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
+import { FlagCategory } from './components/FlagIssueModal';
 import { BrowseView } from './components/BrowseView';
 import { KotatsuSourcesView } from './components/KotatsuSourcesView';
 import { UserProfile, UserRole } from './types';
@@ -150,6 +151,7 @@ export default function App() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editingManga, setEditingManga] = useState<MangaItem | null>(null);
   const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
+  const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
 
   // Reader Mode state
   const [readerTarget, setReaderTarget] = useState<{ manga: MangaItem; chapterNumber: number; chapterId?: string } | null>(null);
@@ -723,6 +725,24 @@ export default function App() {
     setChapterListTarget(manga);
   };
 
+  const handleOpenSubmitBug = () => {
+    setBugModalInitialData(undefined);
+    setSubmitBugModalOpen(true);
+  };
+
+  // Called by the Flag Issue modal after a user picks a category: opens the bug-reporting tool
+  // pre-filled with the chosen category and the flagged series context.
+  const handleReportMangaIssue = (category: FlagCategory, manga: MangaItem) => {
+    setBugModalInitialData({
+      title: `[${category.label}] ${manga.title}`,
+      description: `Flagged issue: ${category.label}.\n\nSeries: ${manga.title} (${manga.id})\nSource: ${manga.sourceName || manga.sourceUrl || 'unknown'}\nFlag reason: ${category.flagReason}`,
+      file: 'server.ts (Live Source Extractor)',
+      stepsToReproduce: `1. Open series "${manga.title}"\n2. Trigger reading / metadata load\n3. Observe: ${category.label}`,
+      priority: 'high',
+    });
+    setSubmitBugModalOpen(true);
+  };
+
   const handleMarkChapterRead = async (mangaId: string, chapterNumber: number) => {
     if (isIncognito) {
       console.log("[Incognito] Private reading mode active - read history suppressed.");
@@ -796,7 +816,7 @@ export default function App() {
         onOpenProfileModal={() => setUserProfileModalOpen(true)}
         onOpenAuthModal={() => setAuthModalOpen(true)}
         onOpenAdminPanel={() => setAdminPanelOpen(true)}
-        onOpenSubmitBugModal={() => setSubmitBugModalOpen(true)}
+        onOpenSubmitBugModal={handleOpenSubmitBug}
       />
 
       {/* Main View Container */}
@@ -871,6 +891,7 @@ export default function App() {
           }}
           onOpenReader={handleOpenReader}
           onOpenChapters={handleOpenChapters}
+          onReport={handleReportMangaIssue}
         />
       )}
 
@@ -895,6 +916,7 @@ export default function App() {
           defaultSettings={appSettings.readerDefaults}
           onClose={handleCloseReader}
           onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
+          onReport={handleReportMangaIssue}
         />
       )}
 
@@ -990,6 +1012,7 @@ export default function App() {
       {submitBugModalOpen && (
         <SubmitBugModal
           currentUser={activeProfile}
+          initialData={bugModalInitialData}
           onClose={() => setSubmitBugModalOpen(false)}
         />
       )}

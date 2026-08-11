@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KotatsuImageLoader, PageLoadState } from '../utils/KotatsuImageLoader';
+import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 import {
   MangaItem,
   ChapterData,
@@ -43,6 +44,8 @@ interface ReaderViewProps {
   defaultSettings?: ReaderSettings;
   onClose: () => void;
   onMarkChapterRead: (chapterNum: number) => void;
+  /** Opens the bug-reporting tool pre-filled for the flagged series. */
+  onReport: (category: FlagCategory, manga: MangaItem) => void;
 }
 
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -52,6 +55,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   defaultSettings,
   onClose,
   onMarkChapterRead,
+  onReport,
 }) => {
   const [currentChapterNum, setCurrentChapterNum] = useState<number>(initialChapterNumber || 1);
   const [chapterData, setChapterData] = useState<ChapterData | null>(null);
@@ -120,27 +124,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
-
-  const handleToggleFlag = useCallback(async () => {
-    const newFlagState = !isFlagged;
-    let reason = flagReason;
-    if (newFlagState && !reason) {
-      const inputReason = prompt('Flag reason (e.g. Blank images / Broken chapter / Source offline):', 'Failed to load chapter pages');
-      if (inputReason === null) return;
-      reason = inputReason || 'Reported loading error';
-    }
-
-    setIsFlagged(newFlagState);
-    setFlagReason(reason);
-    try {
-      await fetch('/api/manga/toggle-flag', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: manga.id, isFlagged: newFlagState, flagReason: reason })
-      });
-      triggerToast(newFlagState ? '⚠️ Series flagged as broken' : '✓ Flag removed');
-    } catch (e) {}
-  }, [isFlagged, flagReason, manga.id, triggerToast]);
+  const [showFlagDropdown, setShowFlagDropdown] = useState<boolean>(false);
 
   // Dynamically compute available scanlation group versions from manga.availableSources
   const availableScanGroups: ScanGroupOption[] = (manga.availableSources && manga.availableSources.length > 0)
@@ -545,15 +529,75 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <Sliders className="w-4 h-4" />
             </button>
 
-            <button
-              onClick={handleToggleFlag}
-              className={`p-2 rounded-lg transition-all ${
-                isFlagged ? 'bg-danger text-white font-bold animate-pulse' : 'bg-elevated/80 text-secondary hover:bg-elevated hover:text-danger'
-              }`}
-              title={isFlagged ? `Flagged: ${flagReason}` : "Flag Series / Report Loading Error"}
-            >
-              <AlertTriangle className="w-4 h-4" />
-            </button>
+            {/* Flag Issue Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFlagDropdown(!showFlagDropdown)}
+                className={`p-2 rounded-lg transition-all ${
+                  isFlagged ? 'bg-danger text-white font-bold animate-pulse' : 'bg-elevated/80 text-secondary hover:bg-elevated hover:text-danger'
+                }`}
+                title={isFlagged ? `Flagged: ${flagReason}` : "Flag Series / Report Loading Error"}
+              >
+                <AlertTriangle className="w-4 h-4" />
+              </button>
+              {showFlagDropdown && (
+                <div className="absolute right-0 top-full mt-1 z-[999] w-60 bg-surface border border-edge rounded-xl shadow-2xl overflow-hidden">
+                  <div className="p-2 border-b border-edge">
+                    <p className="text-[11px] font-bold text-primary">What went wrong?</p>
+                  </div>
+                  {FLAG_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowFlagDropdown(false);
+                        try {
+                          await fetch('/api/manga/toggle-flag', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
+                          });
+                        } catch (_) {}
+                        setIsFlagged(true);
+                        setFlagReason(cat.flagReason);
+                        triggerToast('⚠️ Series flagged');
+                        onReport(cat, manga);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-primary hover:bg-danger/10 hover:text-danger transition-colors text-left border-b border-edge/50 last:border-0"
+                    >
+                      <span className="p-1 rounded bg-danger/10 text-danger">{cat.icon}</span>
+                      <span>
+                        <span className="block font-bold">{cat.label}</span>
+                        <span className="block text-[10px] text-secondary">{cat.description}</span>
+                      </span>
+                    </button>
+                  ))}
+                  {isFlagged && (
+                    <button
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowFlagDropdown(false);
+                        try {
+                          await fetch('/api/manga/toggle-flag', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: manga.id, isFlagged: false }),
+                          });
+                        } catch (_) {}
+                        setIsFlagged(false);
+                        setFlagReason('');
+                        triggerToast('✓ Flag removed');
+                      }}
+                      className="w-full px-3 py-2 text-xs font-bold text-secondary hover:text-danger hover:bg-danger/10 transition-colors text-center border-t border-edge flex items-center justify-center gap-1.5"
+                    >
+                      <Check className="w-3 h-3" /> Remove Flag
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             <button
               onClick={() => {
@@ -819,7 +863,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={handleToggleFlag}
+                onClick={() => setShowFlagDropdown(!showFlagDropdown)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   isFlagged
                     ? 'bg-danger text-white shadow-md'
@@ -916,7 +960,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       className={`w-full h-auto block object-contain transition-opacity duration-300 ${
                         isSeamless ? 'm-0 p-0 border-0' : ''
                       } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'}`}
-                      loading={idx < 4 ? 'eager' : 'lazy'}
+                      loading="eager"
                     />
 
                     {/* Preloader Spinner Overlay */}
