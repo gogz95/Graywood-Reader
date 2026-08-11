@@ -18,6 +18,39 @@ import {
   List,
 } from 'lucide-react';
 
+// Content rating helpers for 18+ / adult filtering in the Unified Catalog.
+const ADULT_GENRES = new Set(['18+', 'adult', 'ecchi', 'hentai', 'smut', 'mature', 'pornhwa', 'yaoi', 'yuri']);
+const NSFW_SOURCE_KEYWORDS = ['manhwa18', 'pornwa', 'nsfw'];
+
+function isAdultManga(m: MangaItem): boolean {
+  if (m.genres && m.genres.some((g) => ADULT_GENRES.has(String(g).toLowerCase()))) return true;
+  const src = `${m.sourceName || ''} ${m.sourceUrl || ''}`.toLowerCase();
+  return NSFW_SOURCE_KEYWORDS.some((k) => src.includes(k));
+}
+
+// Normalize a title into a stable dedup key (accent-insensitive, alphanumeric only).
+function normalizeTitleKey(t: string): string {
+  return (t || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// Pick the best representative entry when the same series appears multiple times.
+function pickBestRepresentative(a: MangaItem, b: MangaItem): MangaItem {
+  const score = (m: MangaItem) => {
+    let s = 0;
+    if (m.isFavorite) s += 10000;
+    s += (m.availableSources?.length || 0) * 1000;
+    if (m.apiId || m.sourceUrl) s += 500;
+    s += (m.latestChapter || 0);
+    s += (m.rating || 0) * 10;
+    return s;
+  };
+  return score(a) >= score(b) ? a : b;
+}
+
 interface BrowseViewProps {
   mangaList: MangaItem[];
   searchQuery: string;
@@ -55,6 +88,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<ReadingStatus | 'all'>('all');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedSourceName, setSelectedSourceName] = useState<string>('all');
+  const [contentRating, setContentRating] = useState<'all' | 'hide' | 'only'>('all');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
 
@@ -83,60 +117,85 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     return Array.from(genresSet).sort();
   }, [mangaList]);
 
-  // Filtered & Sorted Manga Collection
+  // Filtered, Deduplicated & Sorted Manga Collection
   const filteredManga = useMemo(() => {
-    return mangaList
-      .filter((m) => {
-        // Search query matching (title, alt titles, genres, description)
-        const q = (localSearch || searchQuery).trim().toLowerCase();
-        if (q) {
-          const matchTitle = m.title.toLowerCase().includes(q);
-          const matchAlt = (m.altTitles || []).some((alt) => alt.toLowerCase().includes(q));
-          const matchGenre = (m.genres || []).some((g) => g.toLowerCase().includes(q));
-          const matchDesc = m.description.toLowerCase().includes(q);
-          if (!matchTitle && !matchAlt && !matchGenre && !matchDesc) return false;
-        }
+    // 1. Apply all active filters
+    const filtered = mangaList.filter((m) => {
+      // Search query matching (title, alt titles, genres, description)
+      const q = (localSearch || searchQuery).trim().toLowerCase();
+      if (q) {
+        const matchTitle = m.title.toLowerCase().includes(q);
+        const matchAlt = (m.altTitles || []).some((alt) => alt.toLowerCase().includes(q));
+        const matchGenre = (m.genres || []).some((g) => g.toLowerCase().includes(q));
+        const matchDesc = m.description.toLowerCase().includes(q);
+        if (!matchTitle && !matchAlt && !matchGenre && !matchDesc) return false;
+      }
 
-        // Language Filter
-        if (selectedLanguage !== 'all') {
-          if (selectedLanguage === 'en' && m.type === 'manga' && m.title.includes('[JP]')) return false;
-          if (selectedLanguage === 'ko' && m.type !== 'manhwa') return false;
-          if (selectedLanguage === 'zh' && m.type !== 'manhua') return false;
-          if (selectedLanguage === 'ja' && m.type !== 'manga') return false;
-        }
+      // Language Filter
+      if (selectedLanguage !== 'all') {
+        if (selectedLanguage === 'en' && m.type === 'manga' && m.title.includes('[JP]')) return false;
+        if (selectedLanguage === 'ko' && m.type !== 'manhwa') return false;
+        if (selectedLanguage === 'zh' && m.type !== 'manhua') return false;
+        if (selectedLanguage === 'ja' && m.type !== 'manga') return false;
+      }
 
-        // Source filter
-        if (selectedSourceName !== 'all' && m.sourceName !== selectedSourceName) return false;
+      // Source filter
+      if (selectedSourceName !== 'all' && m.sourceName !== selectedSourceName) return false;
 
-        // Type filter
-        if (selectedType !== 'all' && m.type !== selectedType) return false;
+      // Type filter
+      if (selectedType !== 'all' && m.type !== selectedType) return false;
 
-        // Reading Status filter
-        if (selectedStatus !== 'all' && m.status !== selectedStatus) return false;
+      // Reading Status filter
+      if (selectedStatus !== 'all' && m.status !== selectedStatus) return false;
 
-        // Genre filter
-        if (selectedGenre !== 'all' && !(m.genres || []).includes(selectedGenre)) return false;
+      // Genre filter
+      if (selectedGenre !== 'all' && !(m.genres || []).includes(selectedGenre)) return false;
 
-        // Favorites filter
-        if (favoritesOnly && !m.isFavorite) return false;
+      // Content rating (18+/adult) filter
+      const isAdult = isAdultManga(m);
+      if (contentRating === 'hide' && isAdult) return false;
+      if (contentRating === 'only' && !isAdult) return false;
+
+      // Favorites filter
+      if (favoritesOnly && !m.isFavorite) return false;
 
 
 
-        // Unread filter
-        if (unreadOnly && m.currentChapter >= m.latestChapter) return false;
+      // Unread filter
+      if (unreadOnly && m.currentChapter >= m.latestChapter) return false;
 
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'title_asc') return a.title.localeCompare(b.title);
-        if (sortBy === 'title_desc') return b.title.localeCompare(a.title);
-        if (sortBy === 'rating_desc') return (b.rating || 0) - (a.rating || 0);
-        if (sortBy === 'latest_chap_desc') return b.latestChapter - a.latestChapter;
-        if (sortBy === 'updated_desc') {
-          return new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime();
-        }
-        return 0;
-      });
+      return true;
+    });
+
+    // 2. Deduplicate by normalized title so the same series never appears multiple times
+    //    (across different sources OR duplicated within the same source).
+    const seen = new Map<string, MangaItem>();
+    for (const m of filtered) {
+      const key = normalizeTitleKey(m.title);
+      if (!key) {
+        // Untitled/unparseable: keep with a unique key so it is never dropped.
+        seen.set(`__untitled__${m.id}`, m);
+        continue;
+      }
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, m);
+      } else {
+        seen.set(key, pickBestRepresentative(existing, m));
+      }
+    }
+
+    // 3. Sort the deduplicated set
+    return Array.from(seen.values()).sort((a, b) => {
+      if (sortBy === 'title_asc') return a.title.localeCompare(b.title);
+      if (sortBy === 'title_desc') return b.title.localeCompare(a.title);
+      if (sortBy === 'rating_desc') return (b.rating || 0) - (a.rating || 0);
+      if (sortBy === 'latest_chap_desc') return b.latestChapter - a.latestChapter;
+      if (sortBy === 'updated_desc') {
+        return new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime();
+      }
+      return 0;
+    });
   }, [
     mangaList,
     localSearch,
@@ -146,6 +205,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     selectedStatus,
     selectedGenre,
     selectedSourceName,
+    contentRating,
     favoritesOnly,
     unreadOnly,
     sortBy,
@@ -164,6 +224,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     setSelectedStatus('all');
     setSelectedGenre('all');
     setSelectedSourceName('all');
+    setContentRating('all');
     setFavoritesOnly(false);
     setUnreadOnly(false);
     setSortBy('rating_desc');
@@ -313,6 +374,26 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               <option value="plan_to_read">📌 Plan to Read</option>
               <option value="on_hold">⏸️ On Hold</option>
               <option value="dropped">❌ Dropped</option>
+            </select>
+          </div>
+
+          {/* Content Rating (18+ / Adult) Filter Dropdown */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-secondary flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-danger" />
+              18+ / Adult:
+            </label>
+            <select
+              value={contentRating}
+              onChange={(e: any) => {
+                setContentRating(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-app border border-edge rounded-xl p-2 text-xs text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-danger/40"
+            >
+              <option value="all">All (Safe + 18+)</option>
+              <option value="hide">🙈 Hide 18+ Content</option>
+              <option value="only">🔞 Show 18+ Only</option>
             </select>
           </div>
         </div>

@@ -44,6 +44,29 @@ _No active bugs._
 - **Description**: Needs to be able to be turned on or off and more transparent
 - **Fixed in**: 2026-08-11 — Added a "Per-Page Number Counter" toggle in Settings → Reader (controls the `showPageNumberOverlay` setting, previously had no UI toggle). Both the persistent chapter/page badge and the per-page counter are now semi-transparent (`bg-slate-900/50` / `bg-slate-950/40` with softened borders & text) and the badge no longer intercepts clicks. Files: `src/components/SettingsModal.tsx`, `src/components/ReaderView.tsx`.
 
+### [BUG-004] Wrong series fetched when entering reading mode
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)`: `server.ts` (`/api/reader/chapter-pages`)
+- **Description**: When a series had no `apiId` and direct live-source extraction failed (e.g. 18+ Manhwa18 series blocked by anti-bot), the MangaDex title-search fallback grabbed `searchData.data?.[0]` (the FIRST search result) and silently fetched a completely different series with a similar title.
+- **Steps to Reproduce**:
+  1. Open a series whose sourceUrl can't be extracted and that has no `apiId`.
+  2. Enter reading mode.
+  3. A wrong, unrelated series' chapters/pages are shown.
+- **Expected**: Only the correct series should be loaded, or a placeholder with the correct title if the source can't be resolved.
+- **Actual**: A random/first-match MangaDex series with a similar title is loaded.
+- **Fixed in**: 2026-08-11 — The fallback now fetches up to 10 candidates, validates each against the intended title + altTitles (exact normalized identity or `calculateStringSimilarity`), and only proceeds if the best candidate scores ≥ 70%. If no confident match is found it logs a warning and falls through to the generated placeholder (correct title) instead of guessing. File: `server.ts`.
+
+### [BUG-005] Catalog had no 18+ filtering and showed duplicate series
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)`: `src/components/BrowseView.tsx`
+- **Description**: The "Unified Catalog" mixed 18+/adult series (genres `18+`/`Adult`/`Ecchi`/... and sources like Manhwa18) into the same list with no way to hide or isolate them, and the same series could appear multiple times (across sources or duplicated within a source).
+- **Fixed in**: 2026-08-11 — Added a "18+ / Adult" content-rating filter (`All` / `Hide 18+` / `Show 18+ Only`) driven by an `isAdultManga()` helper (genre- or SOURCE-based detection), and deduplicated the catalog by normalized title, keeping the best representative (favorites, most `availableSources`, apiId/sourceUrl, latest chapter, rating) so a series is never shown twice. Files: `src/components/BrowseView.tsx`.
+
+
 ### [BUG-001] Disabled sources still being toggled via old localStorage state
 - **Status**: `fixed`
 - **Priority**: `medium`

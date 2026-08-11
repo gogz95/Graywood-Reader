@@ -4633,16 +4633,60 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
         titlesToTry.push(cleanTitle.replace(/xtra/i, 'Extra'));
       }
 
+      // Normalize a title for strict identity comparison (accent-insensitive, alnum only).
+      const normalizeForId = (s: string) =>
+        (s || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '');
+
+      // The set of expected, normalized names for the intended series (main title + alt titles).
+      // We only trust a MangaDex fallback match if it aligns with one of these, preventing us
+      // from silently fetching a COMPLETELY DIFFERENT series with a similar title.
+      const expectedNorms = new Set<string>();
+      expectedNorms.add(normalizeForId(cleanTitle));
+      (manga?.altTitles || []).forEach((a) => expectedNorms.add(normalizeForId(a)));
+
       for (const t of titlesToTry) {
-        console.log(`[Reader Stream Engine] Attempting MangaDex API fallback search for title "${t}"...`);
+        console.log(`[Reader Stream Engine] Attempting validated MangaDex API fallback search for title "${t}"...`);
         const searchRes = await fetchMangaDex(
-          `https://api.mangadex.org/manga?title=${encodeURIComponent(t)}&limit=1`
+          `https://api.mangadex.org/manga?title=${encodeURIComponent(t)}&limit=10`
         );
         if (searchRes.ok) {
           const searchData = await searchRes.json();
-          const foundManga = searchData.data?.[0];
-          if (foundManga) {
-            const foundId = foundManga.id;
+          const candidates: any[] = searchData.data || [];
+
+          // Pick the best candidate that plausibly corresponds to the intended series.
+          let bestCandidate: any = null;
+          let bestScore = 0;
+          for (const cand of candidates) {
+            const titleObj = cand.attributes?.title || {};
+            const candTitles = Object.values(titleObj).map((v: any) => String(v));
+            const candAlts = (cand.attributes?.altTitles || []).map((o: any) => Object.values(o)[0]).map((v: any) => String(v));
+
+            // Exact normalized identity against the intended title/alt-titles -> perfect match.
+            if (candTitles.concat(candAlts).map(normalizeForId).some((n) => expectedNorms.has(n))) {
+              bestCandidate = cand;
+              bestScore = 100;
+              break;
+            }
+
+            // Otherwise score by best string similarity among all candidate names.
+            for (const name of candTitles.concat(candAlts)) {
+              const sim = calculateStringSimilarity(cleanTitle, name);
+              if (sim > bestScore) {
+                bestScore = sim;
+                bestCandidate = cand;
+              }
+            }
+          }
+
+          // Confidence gate: only use the candidate if it clearly matches the intended series.
+          // If we cannot confidently identify the series, DO NOT guess — fall through to the
+          // generated placeholder panels (correct title) instead of showing a wrong series.
+          if (bestCandidate && bestScore >= 70) {
+            const foundId = bestCandidate.id;
             const feedRes = await fetchMangaDex(
               `https://api.mangadex.org/manga/${foundId}/feed?order[chapter]=asc&limit=100`
             );
@@ -4677,6 +4721,10 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
                 }
               }
             }
+          } else {
+            console.warn(
+              `[Reader Stream Engine] MangaDex fallback search for "${t}" did not confidently match the intended series (best score ${bestScore}) — skipping to avoid fetching the wrong series.`
+            );
           }
         }
       }
