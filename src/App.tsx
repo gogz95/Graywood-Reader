@@ -38,7 +38,7 @@ const GUEST_PROFILE: UserProfile = {
   id: 'usr_guest',
   name: 'Guest Reader',
   username: 'guest',
-  email: 'guest@omnimanga.app',
+  email: 'guest@graywood.app',
   avatar: '👤',
   role: 'user',
   createdAt: new Date().toISOString(),
@@ -205,7 +205,7 @@ export default function App() {
     sourceTimeoutSeconds: 15,
     anilistConnected: true,
     mangadexConnected: true,
-    customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; OmniManga-Sync)',
+    customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
     enableCloudflareBypass: true,
     flareSolverrUrl: 'http://localhost:8191/v1',
     captchaSolverEnabled: true,
@@ -275,10 +275,10 @@ export default function App() {
   // Device-Specific Cache Helper (Stores preferences per device)
   const getDeviceId = (): string => {
     try {
-      let devId = localStorage.getItem('omnimanga_device_id');
+      let devId = localStorage.getItem('graywood_device_id');
       if (!devId) {
         devId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        localStorage.setItem('omnimanga_device_id', devId);
+        localStorage.setItem('graywood_device_id', devId);
       }
       return devId;
     } catch (_) {
@@ -296,7 +296,7 @@ export default function App() {
           setActiveProfileId('usr_guest');
         } else {
           // Check per-device cached profile for host PC
-          const cachedProfileId = localStorage.getItem(`omnimanga_${getDeviceId()}_active_profile`);
+          const cachedProfileId = localStorage.getItem(`graywood_${getDeviceId()}_active_profile`);
           if (cachedProfileId && profiles.some((p) => p.id === cachedProfileId)) {
             setActiveProfileId(cachedProfileId);
           }
@@ -308,7 +308,7 @@ export default function App() {
   };
 
   // ── CLIENT-SIDE SESSION READING HISTORY ENGINE ─────────────────────────────────────
-  const CLIENT_SESSION_STORAGE_KEY = 'omnimanga_client_session_reading_history';
+  const CLIENT_SESSION_STORAGE_KEY = 'graywood_client_session_reading_history';
 
   const getClientSessionHistory = (): Record<string, { currentChapter: number; lastReadAt: string }> => {
     try {
@@ -380,7 +380,7 @@ export default function App() {
     } else {
       // Save active profile to device-specific cache for non-guest users
       try {
-        localStorage.setItem(`omnimanga_${getDeviceId()}_active_profile`, activeProfileId);
+        localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, activeProfileId);
       } catch (_) {}
     }
   }, [activeProfileId]);

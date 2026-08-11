@@ -1,9 +1,9 @@
-// OmniManga Service Worker v2
+// Graywood Reader Service Worker v2
 // Strategy:
 //  - /api/* requests are NEVER intercepted or cached (always live server data)
 //  - Navigations are network-first with a cached index.html fallback (offline shell)
 //  - Same-origin static assets are cache-first with background revalidation
-const CACHE_NAME = 'omnimanga-reader-v2';
+const CACHE_NAME = 'graywood-reader-v2';
 const CORE_ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -1,6 +1,6 @@
 /**
  * ui-retoken.mjs — one-shot migration of hardcoded Tailwind palette classes
- * to the OmniManga adaptive design tokens (see src/index.css).
+ * to the Graywood Reader adaptive design tokens (see src/index.css).
  *
  * - Lines containing `NO-THEME` are skipped (literal preview swatches, etc.)
  * - Opacity modifiers and variant prefixes (hover:, focus:, md:, …) preserved.

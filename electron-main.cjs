@@ -26,7 +26,7 @@ const PORT = process.env.PORT || 3000;
 const SERVER_URL = `http://localhost:${PORT}`;
 
 function startServer() {
-  writeLog('Starting OmniManga Kotatsu backend server...');
+  writeLog('Starting Graywood Reader backend server...');
   serverProcess = spawn('npx', ['tsx', 'server.ts'], {
     cwd: __dirname,
     shell: true,
@@ -53,7 +53,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: 'OmniManga Sync & Kotatsu Reader',
+    title: 'Graywood Reader',
     backgroundColor: '#020617',
     autoHideMenuBar: true,
     webPreferences: {

@@ -1,6 +1,6 @@
-# OmniManga Kotatsu Reader - Windows PowerShell Launcher
+# Graywood Reader - Windows PowerShell Launcher
 Write-Host "=========================================================" -ForegroundColor Cyan
-Write-Host "   OmniManga Sync & Kotatsu Webtoon Reader (Windows)     " -ForegroundColor Yellow
+Write-Host "   Graywood Reader (Windows)                              " -ForegroundColor Yellow
 Write-Host "=========================================================" -ForegroundColor Cyan
 Write-Host ""
 

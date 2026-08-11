@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   OmniManga Adaptive Design System
+   Graywood Reader Adaptive Design System
    Every surface, border, text level and interactive color is driven by CSS
    custom properties re-defined per theme class on <body>. Tailwind utilities
    (bg-app, bg-surface, text-primary, bg-accent, …) are wired to these

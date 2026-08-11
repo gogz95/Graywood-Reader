@@ -1,5 +1,5 @@
 # ==============================================================================
-# MULTI-STAGE DOCKERFILE FOR MANHUASYNC / OMNIMANGA SUBDOMAIN TRACKER
+# MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # Cross-Platform Deployment (Linux / Windows Docker Desktop / Kubernetes / Coolify)
 # ==============================================================================
 

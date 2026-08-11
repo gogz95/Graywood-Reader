@@ -1,4 +1,4 @@
-# OmniManga — Manga, Manhwa & Manhua Tracker & Reader
+# Graywood Reader
 
 A self-hosted manga library tracker with an integrated Kotatsu-style reader. Track series across dozens of scanlation sources, get automatic chapter-update scans, read in a full-featured webtoon/manga reader, and manage multiple user profiles — all from a single Node + React app backed by SQLite.
 

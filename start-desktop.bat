@@ -1,10 +1,10 @@
 @echo off
-title OmniManga Kotatsu Reader
+title Graywood Reader
 
 if not exist logs mkdir logs
 
 echo =========================================================
-echo    OmniManga Sync and Kotatsu Webtoon Reader
+echo    Graywood Reader
 echo =========================================================
 echo.
 

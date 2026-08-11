@@ -138,7 +138,7 @@ function resolveEncryptionSecret(): string {
     console.error('[Security Engine] Failed to read secret file:', err);
   }
   // First run: seed with the legacy default key for backward compatibility.
-  const legacyDefault = 'omnimanga-gdpr-aes256-secret-key-32b!';
+  const legacyDefault = 'graywood-reader-gdpr-aes256-secret-key-32b!';
   try {
     fs.mkdirSync(path.dirname(secretPath), { recursive: true });
     fs.writeFileSync(secretPath, legacyDefault + '\n', { mode: 0o600 });
@@ -256,7 +256,7 @@ let userProfiles: UserProfile[] = [
     id: 'usr_guest',
     name: 'Guest Reader',
     username: 'guest',
-    email: 'guest@omnimanga.app',
+    email: 'guest@graywood.app',
     avatar: '👤',
     role: 'user',
     createdAt: new Date().toISOString(),
@@ -5157,7 +5157,7 @@ let appSettings = {
   sourceTimeoutSeconds: 15,
   anilistConnected: true,
   mangadexConnected: true,
-  customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; OmniManga-Sync)',
+  customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
   // Automated Cloudflare & Captcha Solver Config
   enableCloudflareBypass: true,
   flareSolverrUrl: 'http://localhost:8191/v1',
@@ -5335,7 +5335,7 @@ app.get("/api/settings/backup/export", (req, res) => {
   };
 
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', 'attachment; filename="kotatsu_omnimanga_backup.json"');
+  res.setHeader('Content-Disposition', 'attachment; filename="graywood_reader_backup.json"');
   res.send(JSON.stringify(backup, null, 2));
 });
 

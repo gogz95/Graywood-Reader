@@ -1,6 +1,6 @@
 {
-  "appId": "com.omnimanga.kotatsu.tracker",
-  "productName": "OmniManga Kotatsu Reader",
+  "appId": "com.graywood.reader",
+  "productName": "Graywood Reader",
   "directories": {
     "output": "dist-electron"
   },
@@ -27,6 +27,6 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "OmniManga Kotatsu Reader"
+    "shortcutName": "Graywood Reader"
   }
 }

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "short_name": "OmniManga",
-  "name": "OmniManga — Manga, Manhwa & Manhua Tracker",
+  "short_name": "Graywood Reader",
+  "name": "Graywood Reader",
   "description": "Self-hosted manga library tracker with an integrated Kotatsu-style reader, live source sync and multi-user profiles.",
   "icons": [
     {

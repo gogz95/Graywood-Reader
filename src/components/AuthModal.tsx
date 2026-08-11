@@ -59,7 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       id: 'usr_guest_' + Date.now(),
       name: 'Guest Reader',
       username: 'guest',
-      email: 'guest@omnimanga.app',
+      email: 'guest@graywood.app',
       password: '',
       avatar: '🥷',
       role: 'user',
