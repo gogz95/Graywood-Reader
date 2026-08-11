@@ -228,11 +228,14 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     setIsLoading(true);
 
     try {
+      // Normalize any response into a plain array (some endpoints return { items, totalCount })
+      const toArray = (data: any): any[] => Array.isArray(data) ? data : (data?.items || []);
+
       if (q.trim()) {
         // Search query mode
         const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&q=${encodeURIComponent(q)}&page=${pageNum}&limit=20`);
         if (res.ok) {
-          setSearchResults(await res.json());
+          setSearchResults(toArray(await res.json()));
           const tp = res.headers.get('X-Total-Pages');
           if (tp) setTotalPages(Number(tp));
         }
@@ -240,7 +243,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         // Expanded View Mode: 20 items per page (matches Asura's native page size)
         const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`);
         if (res.ok) {
-          setExpandedResults(await res.json());
+          setExpandedResults(toArray(await res.json()));
           const tp = res.headers.get('X-Total-Pages');
           const tc = res.headers.get('X-Total-Count');
           if (tp) setTotalPages(Number(tp));
@@ -254,11 +257,11 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         ]);
 
         if (popRes.ok) {
-          setPopularResults(await popRes.json());
+          setPopularResults(toArray(await popRes.json()));
           const tp = popRes.headers.get('X-Total-Pages');
           if (tp) setTotalPages(Number(tp));
         }
-        if (latRes.ok) setLatestResults(await latRes.json());
+        if (latRes.ok) setLatestResults(toArray(await latRes.json()));
       }
     } catch (e) {
       console.error('[Kotatsu Engine] Error fetching category data:', e);

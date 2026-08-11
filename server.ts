@@ -172,7 +172,7 @@ export const KOTATSU_SOURCES: SourceDefinition[] = [
   { id: 'mangadex', name: 'MangaDex API v5', baseUrl: 'https://mangadex.org', engineType: 'mangadex', lang: 'en', isNsfw: false },
 
   // ── MangaThemesia Engine Sites ─────────────────────────────────────────────
-  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asurascans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asuracomic.net', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'flamecomics', name: 'Flame Comics', baseUrl: 'https://flamecomics.xyz', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
 
   // ── Madara / WP-Manga Engine ───────────────────────────────────────────────
@@ -264,10 +264,10 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
                 isNsfw,
               });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   walkDir(parsersDir);
@@ -281,7 +281,7 @@ try {
     KOTATSU_SOURCES.push(...repoSources);
     console.log(`[Kotatsu Engine] Loaded ${repoSources.length} additional parsers directly from kotatsu-parsers repository (Total: ${KOTATSU_SOURCES.length} sources)`);
   }
-} catch (e) {}
+} catch (e) { }
 
 const ACTIVE_ENABLED_SOURCES = new Set(['aquamanga', 'asurascans', 'flamecomics', 'manhwa18']);
 export const disabledSourceIds = new Set<string>();
@@ -411,9 +411,7 @@ function reconcileDatabasesOnStartup() {
     }
   }
 
-  disabledSourceIds.clear();
-  syncConfig.disabledSources = [];
-
+  // Keep the persisted disabled-source set (restored in loadDatabaseFromDisk).
   if (needsSave) {
     saveDatabaseToDisk();
     console.log(`[Database Engine] Reconciled SQLite (${SqliteDb.getMangaCount()} series) & database.json (${mangaDatabase.length} series) seamlessly.`);
@@ -477,23 +475,29 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
   mangaDatabase = itemsToKeep;
   console.log(`[Active Sources Engine] Purged ${purgedIds.length} series belonging to disabled sources. Active series remaining: ${mangaDatabase.length}`);
 
-  // 2. Refresh metadata for all remaining active series
+  // 2. Refresh metadata for all remaining active series (bounded concurrency to avoid hammering APIs)
   const updatedItems: MangaItem[] = [];
 
-  for (const item of mangaDatabase) {
-    let updated = await refreshSingleMangaMetadata({ ...item });
+  const METADATA_BATCH = 5;
+  for (let i = 0; i < mangaDatabase.length; i += METADATA_BATCH) {
+    const batch = mangaDatabase.slice(i, i + METADATA_BATCH);
+    const results = await Promise.all(
+      batch.map(async (item) => {
+        let updated = await refreshSingleMangaMetadata({ ...item }).catch(() => ({ ...item }));
 
-    // Clean up altTitles & ensure non-empty description
-    const altSet = new Set((updated.altTitles || []).filter((a) => a && a.toLowerCase() !== updated.title.toLowerCase()));
-    updated.altTitles = Array.from(altSet);
-    if (!updated.description || updated.description.trim() === '') {
-      updated.description = `${updated.title} is an active series tracked via ${updated.sourceName || 'Webtoon Source'}.`;
-    }
-    if (!updated.genres || updated.genres.length === 0) {
-      updated.genres = ['Action', 'Fantasy'];
-    }
-
-    updatedItems.push(updated);
+        // Clean up altTitles & ensure non-empty description
+        const altSet = new Set((updated.altTitles || []).filter((a) => a && a.toLowerCase() !== updated.title.toLowerCase()));
+        updated.altTitles = Array.from(altSet);
+        if (!updated.description || updated.description.trim() === '') {
+          updated.description = `${updated.title} is an active series tracked via ${updated.sourceName || 'Webtoon Source'}.`;
+        }
+        if (!updated.genres || updated.genres.length === 0) {
+          updated.genres = ['Action', 'Fantasy'];
+        }
+        return updated;
+      })
+    );
+    updatedItems.push(...results);
   }
 
   // 3. Persist refreshed items to SQLite and database.json
@@ -528,6 +532,11 @@ function loadDatabaseFromDisk() {
       }
       if (parsed.syncConfig) {
         syncConfig = parsed.syncConfig;
+        // Restore the persisted disabled-source set so toggles survive restarts.
+        disabledSourceIds.clear();
+        if (Array.isArray(syncConfig.disabledSources)) {
+          syncConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
+        }
       }
       if (parsed.appSettings) {
         appSettings = {
@@ -601,7 +610,7 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
           manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...newAlts]));
         }
         if (coverFileName) {
-          manga.coverImage = `https://uploads.mangadex.org/covers/${mangaDexId}/${coverFileName}.256.jpg`;
+          manga.coverImage = `https://uploads.mangadex.org/covers/${mangaDexId}/${coverFileName}.512.jpg`;
         }
 
         // Fetch max chapter number
@@ -623,7 +632,9 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
   }
 
   // 2. Asura Scans Metadata Refresh
-  if (manga.sourceUrl && manga.sourceUrl.includes('asuracomic')) {
+  if (manga.sourceUrl && /asura(?:comic\.net|scans\.(?:com|org))/i.test(manga.sourceUrl)) {
+    // Normalize any legacy/mirror asurascans domain to the live canonical domain
+    manga.sourceUrl = manga.sourceUrl.replace(/asurascans\.(?:com|org)/gi, 'asuracomic.net');
     try {
       let slug = manga.sourceUrl.split('/').pop() || '';
       if (manga.sourceUrl.includes('/manga/') || manga.sourceUrl.includes('/series/') || manga.sourceUrl.includes('/comics/')) {
@@ -640,6 +651,7 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
 
         for (const s of slugsToTry) {
           const res = await fetch(`https://api.asurascans.com/api/series/${s}`, {
+            signal: AbortSignal.timeout(12000),
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
               'Accept': 'application/json',
@@ -675,12 +687,12 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
   // 3. Flame Comics Metadata Refresh
   if (manga.sourceUrl && manga.sourceUrl.includes('flamecomics')) {
     try {
-      const homeRes = await fetch("https://flamecomics.xyz/");
+      const homeRes = await fetch("https://flamecomics.xyz/", { signal: AbortSignal.timeout(12000) });
       if (homeRes.ok) {
         const html = await homeRes.text();
         const buildId = html.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/)?.[1];
         if (buildId) {
-          const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`);
+          const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`, { signal: AbortSignal.timeout(12000) });
           if (browseRes.ok) {
             const browseJson = await browseRes.json();
             const seriesList = browseJson.pageProps?.series || [];
@@ -694,7 +706,7 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
 
             if (matchedSeries) {
               const seriesId = matchedSeries.series_id || matchedSeries.id;
-              const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`);
+              const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`, { signal: AbortSignal.timeout(12000) });
               if (seriesRes.ok) {
                 const seriesData = await seriesRes.json();
                 const props = seriesData.pageProps || {};
@@ -1146,7 +1158,7 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
   try {
     const parsed = new URL(imageUrl);
     referer = `${parsed.protocol}//${parsed.hostname}`;
-  } catch (_) {}
+  } catch (_) { }
 
   try {
     const imgRes = await fetch(imageUrl, {
@@ -2688,7 +2700,12 @@ app.get("/api/kotatsu/latest", async (req, res) => {
       }
     }
 
-    const items = await getSourcePopularSeries(sourceDef);
+    const result = await getSourcePopularSeries(sourceDef);
+    // Normalize: getSourcePopularSeries may return { items, totalCount } or a bare array
+    const items = Array.isArray(result) ? result : (result?.items || []);
+    const totalCount = Array.isArray(result) ? items.length : (result?.totalCount ?? items.length);
+    res.setHeader('X-Total-Count', String(totalCount));
+    res.setHeader('X-Total-Pages', String(Math.ceil(totalCount / limit)));
     return res.json(items);
   } catch (e) {
     res.json([]);
@@ -2701,190 +2718,79 @@ app.get("/api/kotatsu/latest", async (req, res) => {
 
 const SCRAPER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// ── 1. ASURA SCANS – HTML Scraper (asurascans.com/browse?page=N)
-// Asura embeds ~20 series per browse page via Astro island JSON props.
-// We aggregate enough remote pages to fill the requested limit.
+// ── 1. ASURA SCANS – JSON API Scraper (api.asurascans.com/api/series) ──
+// The asuracomic.net /browse page is a client-rendered shell (no inline data),
+// so we scrape the canonical JSON catalog API instead. It returns
+//   { data: Series[], meta: { total, per_page, has_more } }
+// with offset-based pagination and full metadata per series.
 // Returns: { items, totalCount } so callers can expose pagination state.
 async function scrapeAsuraScans(page: number, limit: number): Promise<{ items: any[]; totalCount: number }> {
-  const ASURA_PER_PAGE = 20;   // items embedded per /browse?page=N
-  const ASURA_TOTAL   = 340;   // fallback if totalCount not in HTML
+  const ASURA_API = 'https://api.asurascans.com/api/series';
+  const ASURA_PER_PAGE = 20;    // series returned per API page
+  const ASURA_TOTAL = 340;    // fallback if totalCount not in API response
 
-  const firstRemote = Math.floor(((page - 1) * limit) / ASURA_PER_PAGE) + 1;
-  const lastRemote  = Math.ceil((page * limit) / ASURA_PER_PAGE);
-  const globalOffset = (page - 1) * limit;
+  const safeOffset = Math.max(0, (page - 1) * limit);
+  const wanted = Math.max(1, Math.min(limit, ASURA_PER_PAGE * 4));
 
   const collected: any[] = [];
   let detectedTotal = ASURA_TOTAL;
 
-  // Bracket-depth counter: extracts the JSON array starting at `startIndex`
-  // from `html`. This handles arbitrarily nested/large JSON reliably.
-  function extractJsonArray(html: string, startIndex: number): string | null {
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = startIndex; i < html.length; i++) {
-      const ch = html[i];
-      if (escape) { escape = false; continue; }
-      if (ch === '\\' && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '[' || ch === '{') depth++;
-      else if (ch === ']' || ch === '}') {
-        depth--;
-        if (depth === 0) return html.slice(startIndex, i + 1);
-      }
-    }
-    return null;
-  }
-
-  for (let remotePage = firstRemote; remotePage <= lastRemote; remotePage++) {
+  // Paginate through the JSON API (20 series per page) starting at our requested offset,
+  // collecting exactly `wanted` series for this user page.
+  let offset = safeOffset;
+  while (collected.length < wanted) {
+    let json: any;
     try {
-      const browseUrl = remotePage === 1
-        ? 'https://asurascans.com/browse'
-        : `https://asurascans.com/browse?page=${remotePage}`;
-
-      const htmlRes = await fetch(browseUrl, {
+      const res = await fetch(`${ASURA_API}?offset=${offset}`, {
         signal: AbortSignal.timeout(12000),
         headers: {
           'User-Agent': SCRAPER_UA,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          'Referer': 'https://asurascans.com/',
+          'Accept': 'application/json',
+          'Origin': 'https://asuracomic.net',
+          'Referer': 'https://asuracomic.net/',
         },
       });
-
-      if (!htmlRes.ok) {
-        console.warn(`[Asura] Page ${remotePage} returned HTTP ${htmlRes.status}`);
+      if (!res.ok) {
+        console.warn(`[Asura] API returned HTTP ${res.status} at offset ${offset}`);
         break;
       }
-
-      const html = await htmlRes.text();
-      console.log(`[Asura] Page ${remotePage}: HTML length = ${html.length} chars`);
-
-      // ── Detect totalCount ─────────────────────────────────────────────────
-      const totalMatch = html.match(/"totalCount":\[0,(\d+)\]/);
-      if (totalMatch) detectedTotal = Number(totalMatch[1]);
-
-      // ── Strategy 1: bracket-count extract "initialSeries":[1, [...]] ──────
-      let foundItems = false;
-      const MARKER = '"initialSeries":[1,';
-      const markerIdx = html.indexOf(MARKER);
-      if (markerIdx !== -1) {
-        const arrayStart = markerIdx + MARKER.length;
-        const rawArray = extractJsonArray(html, arrayStart);
-        if (rawArray) {
-          try {
-            const raw = JSON.parse(rawArray);
-            for (const entry of raw) {
-              const s = entry[1] || {};
-              const id = s.id?.[1] || s.slug?.[1] || '';
-              if (!id) continue;
-              foundItems = true;
-              collected.push({
-                id: `asura_${id}`,
-                title: s.title?.[1] || 'Unknown',
-                sourceUrl: s.public_url?.[1]
-                  ? `https://asurascans.com${s.public_url[1]}`
-                  : `https://asurascans.com/comics/${s.slug?.[1]}`,
-                coverImage: s.cover?.[1] || '',
-                sourceName: 'Asura Scans',
-                description: (s.description?.[1] || '').replace(/<[^>]+>/g, '').substring(0, 200),
-                genres: (s.genres?.[1] || []).map((g: any) => g[1]?.name?.[1]).filter(Boolean),
-                latestChapter: s.chapter_count?.[1] || 1,
-                type: s.type?.[1] || 'manhwa',
-                rating: s.rating?.[1] || 9.0,
-              });
-            }
-            console.log(`[Asura] Strategy 1 (bracket-count): extracted ${collected.length} items so far`);
-          } catch (parseErr) {
-            console.error(`[Asura] JSON parse error on page ${remotePage}:`, parseErr);
-          }
-        }
-      }
-
-      // ── Strategy 2: extract any "slug":[0,"..."] + "title":[0,"..."] pairs
-      if (!foundItems) {
-        console.log(`[Asura] Falling back to Strategy 2 (slug/title pairs) for page ${remotePage}`);
-        const slugRx = /"slug":\[0,"([^"]+)"\].*?"title":\[0,"([^"]+)"\].*?"cover":\[0,"([^"]+)"\]/gs;
-        let sm: RegExpExecArray | null;
-        while ((sm = slugRx.exec(html)) !== null) {
-          const slug = sm[1];
-          const title = sm[2];
-          const cover = sm[3];
-          if (!slug || !title || slug.length > 100) continue;
-          collected.push({
-            id: `asura_${slug}`,
-            title,
-            sourceUrl: `https://asurascans.com/comics/${slug}`,
-            coverImage: cover,
-            sourceName: 'Asura Scans',
-            description: '',
-            genres: ['Action', 'Fantasy'],
-            latestChapter: 1,
-            type: 'manhwa',
-            rating: 9.0,
-          });
-          foundItems = true;
-        }
-        if (foundItems) console.log(`[Asura] Strategy 2: extracted ${collected.length} items`);
-      }
-
-      // ── Strategy 3: parse /comics/ anchor links directly from HTML ─────────
-      if (!foundItems) {
-        console.log(`[Asura] Falling back to Strategy 3 (anchor links) for page ${remotePage}`);
-        const coverRx = /<img[^>]+src="(https:\/\/cdn\.asurascans\.com[^"]+)"[^>]*>/gi;
-        const covers: string[] = [];
-        let cm: RegExpExecArray | null;
-        while ((cm = coverRx.exec(html)) !== null) covers.push(cm[1]);
-
-        const linkRx = /href="(https:\/\/asurascans\.com\/comics\/[^"]+)"[^>]*>\s*([^<]{3,120})</gi;
-        let lm: RegExpExecArray | null;
-        const seen = new Set<string>();
-        let ci = 0;
-        while ((lm = linkRx.exec(html)) !== null) {
-          const href = lm[1];
-          const title = lm[2].trim();
-          if (seen.has(href) || !title || /nav|login|register/i.test(title)) continue;
-          seen.add(href);
-          collected.push({
-            id: `asura_${href.split('/').pop()}`,
-            title,
-            sourceUrl: href,
-            coverImage: covers[ci++] || '',
-            sourceName: 'Asura Scans',
-            description: '',
-            genres: ['Action'],
-            latestChapter: 1,
-            type: 'manhwa',
-            rating: 9.0,
-          });
-          foundItems = true;
-        }
-        if (foundItems) console.log(`[Asura] Strategy 3: extracted ${collected.length} items`);
-      }
-
-      if (!foundItems) {
-        console.warn(`[Asura] All strategies failed for page ${remotePage}. HTML snippet: ${html.substring(0, 500)}`);
-        break;
-      }
-
-      // Polite delay between Asura page requests
-      if (remotePage < lastRemote) {
-        await new Promise(r => setTimeout(r, 800));
-      }
+      json = await res.json();
     } catch (e) {
-      console.error(`[Asura] Error fetching remote page ${remotePage}:`, (e as Error).message);
+      console.error(`[Asura] Error fetching API at offset ${offset}:`, (e as Error).message);
       break;
     }
+
+    const data: any[] = Array.isArray(json?.data) ? json.data : [];
+    if (json?.meta?.total) detectedTotal = Number(json.meta.total);
+    if (data.length === 0) break;
+
+    for (const s of data) {
+      if (collected.length >= wanted) break;
+      const slug = s.slug || s.id || '';
+      if (!slug) continue;
+      const pubPath = s.public_url || `/comics/${s.slug || slug}`;
+      collected.push({
+        id: `asura_${slug}`,
+        title: s.title || 'Unknown',
+        sourceUrl: `https://asuracomic.net${pubPath}`,
+        coverImage: s.cover || '',
+        sourceName: 'Asura Scans',
+        description: (s.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
+        genres: (Array.isArray(s.genres) ? s.genres : []).map((g: any) => g?.name).filter(Boolean),
+        latestChapter: s.chapter_count ? Number(s.chapter_count) : 1,
+        type: s.type || 'manhwa',
+        rating: typeof s.rating === 'number' ? Number(s.rating.toFixed(1)) : 9.0,
+      });
+    }
+
+    offset += data.length;
+    // Polite throttle between API page requests
+    await new Promise(r => setTimeout(r, 300));
   }
 
-  // Slice exactly the items that belong to the requested user page
-  const sliceStart = globalOffset - (firstRemote - 1) * ASURA_PER_PAGE;
-  const items = collected.slice(Math.max(0, sliceStart), sliceStart + limit);
-  console.log(`[Asura] Returning ${items.length} items for user page ${page} (totalCount: ${detectedTotal})`);
+  console.log(`[Asura] Collected ${collected.length} items for user page ${page} (totalCount: ${detectedTotal})`);
 
-  return { items, totalCount: detectedTotal };
+  return { items: collected, totalCount: detectedTotal };
 }
 
 // ── 2. FLAME COMICS (HTML series grid, all 1 page) ────────────────────────────
@@ -2906,7 +2812,7 @@ async function scrapeFlameComics(page: number, limit: number): Promise<any[]> {
     const seriesRx = /href="(https:\/\/flamecomics\.xyz\/series\/\d+)"[^>]*>([^<]{3,150})<\/a>/gi;
     const coverRx = /<img[^>]+src="([^"]+flamecomics[^"]+)"[^>]*>/gi;
     const countryRx = /\/(KR|CN|JP)\//;
-    
+
     const covers: string[] = [];
     let cm: RegExpExecArray | null;
     while ((cm = coverRx.exec(html)) !== null) {
@@ -3027,9 +2933,9 @@ app.post('/api/scrape/source-catalog', async (req, res) => {
   if (!sourceId) return res.status(400).json({ error: 'sourceId required' });
 
   const SCRAPE_CONFIGS: Record<string, { totalPages: number; limit: number; scraper: (p: number, l: number) => Promise<any[] | { items: any[]; totalCount: number }> }> = {
-    asurascans:  { totalPages: 17, limit: 20, scraper: scrapeAsuraScans },
-    flamecomics: { totalPages: 1,  limit: 200, scraper: scrapeFlameComics },
-    manhwa18:    { totalPages: 90, limit: 20, scraper: scrapeManhwa18 },
+    asurascans: { totalPages: 17, limit: 20, scraper: scrapeAsuraScans },
+    flamecomics: { totalPages: 1, limit: 200, scraper: scrapeFlameComics },
+    manhwa18: { totalPages: 90, limit: 20, scraper: scrapeManhwa18 },
   };
 
   const config = SCRAPE_CONFIGS[sourceId];
@@ -3307,6 +3213,97 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
 
   return { items: uniqueItems.slice(offset, offset + limit), totalCount: uniqueItems.length };
 }
+
+// =====================================================================
+// SOURCE AUDIT ENGINE — identify & disable sources that have no series
+// =====================================================================
+const sourceAuditStatus = new Map<string, { seriesCount: number; checkedAt: string }>();
+let sourceAuditRunning = false;
+
+// Count how many series a source can currently serve (static + live probe).
+export async function probeSourceSeriesCount(sourceDef: SourceDefinition): Promise<number> {
+  // 1. Static signals that already give this source content (no network needed).
+  const domain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+  const nameL = sourceDef.name.toLowerCase();
+  const idL = sourceDef.id.toLowerCase();
+
+  const staticCount =
+    (SOURCE_DEDICATED_CATALOGS[sourceDef.id] || []).length +
+    SqliteDb.getAllManga().filter((m: any) => {
+      const n = (m.sourceName || '').toLowerCase();
+      const u = (m.sourceUrl || '').toLowerCase();
+      return n.includes(idL) || n.includes(nameL) || (u || '').includes(domain);
+    }).length +
+    KOTATSU_COMPLETE_CATALOG.filter((c: any) =>
+      (c.source || '').toLowerCase().includes(idL) || (c.source || '').toLowerCase().includes(nameL)
+    ).length;
+
+  if (staticCount > 0) return staticCount;
+
+  // 2. Live probe of the source catalog (fast, short timeout).
+  try {
+    const result = await getSourcePopularSeries(sourceDef, 1, 2);
+    const items = Array.isArray(result) ? result : ((result?.items as any[]) || []);
+    return items.length;
+  } catch {
+    return 0;
+  }
+}
+
+// Audit every source (optionally a subset) and disable those that serve zero series.
+export async function auditAndDisableEmptySources(
+  concurrency = 8,
+  sourceList: SourceDefinition[] = KOTATSU_SOURCES
+): Promise<{ disabled: string[]; keptCount: number; total: number; alreadyRunning: boolean }> {
+  if (sourceAuditRunning) return { disabled: [], keptCount: 0, total: sourceList.length, alreadyRunning: true };
+  sourceAuditRunning = true;
+
+  const pending = sourceList.filter((s) => !disabledSourceIds.has(s.id));
+  const disabled: string[] = [];
+  let checkedCount = 0;
+
+  const worker = async () => {
+    let src: SourceDefinition | undefined;
+    while ((src = pending.shift()) !== undefined) {
+      const count = await probeSourceSeriesCount(src);
+      checkedCount++;
+      sourceAuditStatus.set(src.id, { seriesCount: count, checkedAt: new Date().toISOString() });
+      if (count === 0) {
+        disabledSourceIds.add(src.id);
+        disabled.push(src.id);
+      }
+    }
+  };
+
+  const n = Math.max(1, Math.min(concurrency, pending.length));
+  await Promise.all(Array.from({ length: n }, worker));
+
+  syncConfig.disabledSources = Array.from(disabledSourceIds);
+  saveDatabaseToDisk();
+  sourceAuditRunning = false;
+  console.log(`[Source Audit] Checked ${checkedCount} sources — disabled ${disabled.length} with zero series.`);
+  return { disabled, keptCount: checkedCount - disabled.length, total: checkedCount, alreadyRunning: false };
+}
+
+// POST /api/scrape/audit-sources — run the audit and disable empty sources
+app.post("/api/scrape/audit-sources", async (_req, res) => {
+  try {
+    const concurrency = Math.min(20, Math.max(1, Number(_req.query.concurrency) || 8));
+    const result = await auditAndDisableEmptySources(concurrency);
+    return res.json(result);
+  } catch (e: any) {
+    return res.status(500).json({ error: "Source audit failed", details: e.message });
+  }
+});
+
+// GET /api/scrape/audit-status — streaming progress of the audit + last results
+app.get("/api/scrape/audit-status", (_req, res) => {
+  res.json({
+    running: sourceAuditRunning,
+    disabledCount: disabledSourceIds.size,
+    status: Array.from(sourceAuditStatus.entries()).map(([id, s]) => ({ id, ...s })),
+  });
+});
 
 // Kotatsu Multi-Source Live Search Endpoint (Enhanced)
 app.get("/api/kotatsu/search", async (req, res) => {
