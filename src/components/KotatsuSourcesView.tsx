@@ -67,9 +67,9 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const [pinnedSourceIds, setPinnedSourceIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('kotatsu_pinned_sources');
-      return saved ? new Set(JSON.parse(saved)) : new Set(['mangadex', 'asurascans', 'flamecomics', 'weebcentral']);
+      return saved ? new Set(JSON.parse(saved)) : new Set(['asurascans', 'flamecomics', 'weebcentral', 'manhwa18']);
     } catch (e) {
-      return new Set(['mangadex', 'asurascans', 'flamecomics', 'weebcentral']);
+      return new Set(['asurascans', 'flamecomics', 'weebcentral', 'manhwa18']);
     }
   });
 
