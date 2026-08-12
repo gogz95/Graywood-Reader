@@ -292,7 +292,7 @@ export const KOTATSU_SOURCES: SourceDefinition[] = [
   // ── MangaDex (Official API v5) — Metadata Only ──────────────────────────────
   { id: 'mangadex', name: 'MangaDex API v5', baseUrl: 'https://mangadex.org', engineType: 'mangadex', lang: 'en', isNsfw: false },
   // ── Dedicated API / Custom Extractors ──────────────────────────────────────
-  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asuracomic.net', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asurascans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'flamecomics', name: 'Flame Comics', baseUrl: 'https://flamecomics.xyz', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'batoto', name: 'Bato.to', baseUrl: 'https://bato.to', engineType: 'custom_html', lang: 'en', isNsfw: false },
   { id: 'comickfun', name: 'ComickFun', baseUrl: 'https://comick.fun', engineType: 'custom_html', lang: 'en', isNsfw: false },
@@ -612,6 +612,11 @@ function applySyncConfigRestored(config: DatabaseSyncConfig) {
 // Helper: Load App State from SQLite on Startup (with one-time legacy JSON migration)
 function loadDatabaseFromDisk() {
   try {
+    // 0. One-time re-key of rows created by the old truncated-base64url source-ID
+    //    generator (which collapsed every series on a site into a single row).
+    //    Must run before mangaDatabase is loaded so the fixed IDs are used.
+    try { SqliteDb.rekeyCollidedSourceIds(); } catch (e) { console.warn("[SQLite Engine] rekeyCollidedSourceIds failed:", e); }
+
     // 1. Manga library: SQLite is the canonical store.
     //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)
     mangaDatabase = SqliteDb.getAllManga();
@@ -871,15 +876,28 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
         .trim();
       if (cleanTitle.length > 2) {
         const searchRes = await fetchMangaDex(
-          `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=1&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
+          `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=5&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`
         );
         if (searchRes.ok) {
           const searchJson = await searchRes.json();
-          const matched = searchJson.data?.[0];
-          if (matched) {
+          // Pick the best match by title similarity instead of blindly taking the
+          // first result. MangaDex's title search is a loose partial match, and for
+          // niche/18+ titles the top hit can be a completely unrelated series —
+          // binding it here silently overwrote correct metadata (e.g. "Announcer Raw").
+          const results: any[] = Array.isArray(searchJson.data) ? searchJson.data : [];
+          let matched: any = null;
+          let bestSim = 0;
+          for (const cand of results) {
+            const candTitle = cand?.attributes?.title?.en || Object.values(cand?.attributes?.title || {})[0] || '';
+            const sim = calculateStringSimilarity(cleanTitle, String(candTitle));
+            if (sim > bestSim) { bestSim = sim; matched = cand; }
+          }
+          if (matched && bestSim >= 60) {
             mangaDexId = matched.id;
             manga.apiId = matched.id;
             manga.syncedFromApi = 'MangaDex API v5';
+          } else if (matched) {
+            console.warn(`[Metadata Refresh] MangaDex best match for "${manga.title}" scored ${bestSim} — below threshold (60), NOT linking.`);
           }
         }
       }
@@ -938,8 +956,8 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
 
   // 2. Asura Scans Metadata Refresh
   if (manga.sourceUrl && /asura(?:comic\.net|scans\.(?:com|org))/i.test(manga.sourceUrl)) {
-    // Normalize any legacy/mirror asurascans domain to the live canonical domain
-    manga.sourceUrl = manga.sourceUrl.replace(/asurascans\.(?:com|org)/gi, 'asuracomic.net');
+    // Normalize any legacy/mirror asura domain to the live canonical domain
+    manga.sourceUrl = manga.sourceUrl.replace(/asuracomic\.net/gi, 'asurascans.com').replace(/asurascans\.(?:com|org)/gi, 'asurascans.com');
     try {
       let slug = manga.sourceUrl.split('/').pop() || '';
       if (manga.sourceUrl.includes('/manga/') || manga.sourceUrl.includes('/series/') || manga.sourceUrl.includes('/comics/')) {
@@ -951,8 +969,9 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
       }
 
       if (slug) {
-        const cleanSlug = slug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
-        const slugsToTry = Array.from(new Set([slug, cleanSlug, `${cleanSlug}-00dcbf97`, `${cleanSlug}-b8509c2a`]));
+        // Strip the site-wide rotating token; the API resolves the bare slug.
+        const cleanSlug = slug.replace(/-[0-9a-f]{8}$/i, '') || slug;
+        const slugsToTry = Array.from(new Set([cleanSlug, slug]));
 
         for (const s of slugsToTry) {
           const res = await fetch(`https://api.asurascans.com/api/series/${s}`, {
@@ -960,8 +979,8 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
               'Accept': 'application/json',
-              'Origin': 'https://asuracomic.net',
-              'Referer': 'https://asuracomic.net/',
+              'Origin': 'https://asurascans.com',
+              'Referer': 'https://asurascans.com/',
             },
           });
 
@@ -1004,9 +1023,11 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
             const rawSlug = manga.sourceUrl.split('/').pop() || '';
             const matchedSeries = seriesList.find((s: any) => {
               const sId = String(s.series_id || s.id);
-              const sTitle = s.title?.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const sTitle = (s.title?.toLowerCase().replace(/[^a-z0-9]/g, '') || '');
               const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return sId === rawSlug || (targetNorm && sTitle.includes(targetNorm));
+              if (sId === rawSlug) return true;
+              if (targetNorm && sTitle === targetNorm) return true;
+              return targetNorm.length >= 5 && !!sTitle && sTitle.includes(targetNorm);
             });
 
             if (matchedSeries) {
@@ -2766,7 +2787,7 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
   }
 
   if (liveSourceUrl && (liveSourceUrl.startsWith('http://') || liveSourceUrl.startsWith('https://')) && !liveSourceUrl.toLowerCase().includes('mangadex.org')) {
-    const matchedDomain = REGISTERED_LIVE_DOMAINS.find((d) => (liveSourceUrl || '').includes(d.domain));
+    const matchedDomain = matchLiveDomain(liveSourceUrl || '');
     const domainId = matchedDomain ? matchedDomain.id : 'general';
     const sourceLabel = matchedDomain ? matchedDomain.name : 'Webtoon Source';
     try {
@@ -3201,6 +3222,17 @@ app.get("/api/kotatsu/latest", async (req, res) => {
 
 const SCRAPER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+// Generate a stable, collision-free id for a scraped source item by hashing the
+// FULL href. Previously only the first 16 base64url chars of the URL were used,
+// which — because every URL on a site shares the "https://<domain>" prefix —
+// produced the SAME id for every series on a site, collapsing them all into one
+// DB row (e.g. every manhwa18.com series became "manhwa18_aHR0cHM6Ly9tYW5o",
+// so clicking any series resolved to a single entry — "Announcer Raw").
+function generateSourceScrapeId(prefix: string, href: string): string {
+  const normalized = href.replace(/\/+$/, '');
+  return `${prefix}_${crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 24)}`;
+}
+
 // ── 1. ASURA SCANS – JSON API Scraper (api.asurascans.com/api/series) ──
 // The asuracomic.net /browse page is a client-rendered shell (no inline data),
 // so we scrape the canonical JSON catalog API instead. It returns
@@ -3229,8 +3261,8 @@ async function scrapeAsuraScans(page: number, limit: number): Promise<{ items: a
         headers: {
           'User-Agent': SCRAPER_UA,
           'Accept': 'application/json',
-          'Origin': 'https://asuracomic.net',
-          'Referer': 'https://asuracomic.net/',
+          'Origin': 'https://asurascans.com',
+          'Referer': 'https://asurascans.com/',
         },
       });
       if (!res.ok) {
@@ -3255,7 +3287,7 @@ async function scrapeAsuraScans(page: number, limit: number): Promise<{ items: a
       collected.push({
         id: `asura_${slug}`,
         title: s.title || 'Unknown',
-        sourceUrl: `https://asuracomic.net${pubPath}`,
+        sourceUrl: `https://asurascans.com${pubPath}`,
         coverImage: s.cover || '',
         sourceName: 'Asura Scans',
         description: (s.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
@@ -3358,7 +3390,7 @@ async function scrapeManhwa18(page: number, limit: number): Promise<any[]> {
       const cover = m[2];
       const title = m[3];
       results.push({
-        id: `manhwa18_${Buffer.from(href).toString('base64url').substring(0, 16)}`,
+        id: generateSourceScrapeId('manhwa18', href),
         title: title || 'Untitled',
         sourceUrl: href,
         coverImage: cover || '',
@@ -3385,7 +3417,7 @@ async function scrapeManhwa18(page: number, limit: number): Promise<any[]> {
         const title = t[2];
         if (href.includes('/manga/')) {
           results.push({
-            id: `manhwa18_${Buffer.from(href).toString('base64url').substring(0, 16)}`,
+            id: generateSourceScrapeId('manhwa18', href.startsWith('http') ? href : `https://manhwa18.com${href}`),
             title,
             sourceUrl: href.startsWith('http') ? href : `https://manhwa18.com${href}`,
             coverImage: covers[i] || '',
@@ -3584,7 +3616,7 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
         ) {
           seenTitles.add(normTitle);
           scrapedItems.push({
-            id: `live_${sourceDef.id}_${Buffer.from(href).toString('base64url').substring(0, 16)}`,
+            id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
             title,
             sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl.replace(/\/$/, '')}${href}`,
             coverImage: allImgs[scrapedItems.length] ||
@@ -3801,7 +3833,7 @@ app.get("/api/kotatsu/search", async (req, res) => {
           /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)
         ) {
           results.push({
-            id: `kotatsu_${sourceDef.id}_${Buffer.from(href).toString('base64url').substring(0, 16)}`,
+            id: generateSourceScrapeId(`kotatsu_${sourceDef.id}`, href),
             title,
             sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl}${href}`,
             coverImage: allImgs[results.length] ||
@@ -3946,6 +3978,20 @@ const REGISTERED_LIVE_DOMAINS: { id: string; domain: string; name: string }[] = 
   { id: 'mangatx',    domain: 'mangatx',       name: 'Manga TX' },
 ];
 
+// Match the live-domain registry against a URL, preferring the LONGEST matching
+// domain so that overlapping substrings resolve correctly (e.g. "manhwa18.cc"
+// must match manhwa18cc, not manhwa18; "manhuaplus.org" must match manhuaplusorg).
+function matchLiveDomain(url: string): { id: string; domain: string; name: string } | undefined {
+  const lower = (url || '').toLowerCase();
+  let best: { id: string; domain: string; name: string } | undefined;
+  for (const d of REGISTERED_LIVE_DOMAINS) {
+    if (lower.includes(d.domain.toLowerCase())) {
+      if (!best || d.domain.length > best.domain.length) best = d;
+    }
+  }
+  return best;
+}
+
 // Fix #6 + #22: Cloudflare / Bot Detection & Source Health Monitoring
 // Matches Kotatsu-Redo's CloudFlareHelper.checkResponseForProtection() pattern
 function detectBlockedResponse(html: string, statusCode: number): 'cloudflare' | 'captcha' | 'blocked' | 'none' {
@@ -3993,20 +4039,23 @@ class SourceCookieJar {
 const sourceCookieJar = new SourceCookieJar();
 
 const DOMAIN_MIRRORS: Record<string, string> = {
-  'asurascans.com': 'asuracomic.net',
-  'asurascans.org': 'asuracomic.net',
-  'aquamanga.com': 'aquareader.org',
-  'aquamanga.org': 'aquareader.org',
+  // Asura's canonical domain is asurascans.com; asuracomic.net now 301-redirects
+  // to the asurascans.com homepage (and ALL series URLs are lost in that redirect).
+  'asuracomic.net': 'asurascans.com',
+  'asurascans.org': 'asurascans.com',
+  'aquamanga.com': 'aquareader.net',
+  'aquamanga.org': 'aquareader.net',
   'flamescans.org': 'flamecomics.xyz',
   'flamescans.com': 'flamecomics.xyz',
-  'manhwa18.cc': 'manhwa18.com',
+  // manhwa18.net uses the same custom theme as manhwa18.com. manhwa18.cc/.org are
+  // SEPARATE Madara sites (per Kotatsu) and must NOT be rewritten to manhwa18.com.
   'manhwa18.net': 'manhwa18.com',
-  'manhwa18.org': 'manhwa18.com',
 };
 
 
-// Resolve a series slug from an Asura page URL, stripping a trailing hash suffix
-// (e.g. `/series/omniscient-readers-viewpoint-24e56064` -> `omniscient-readers-viewpoint`).
+// Resolve a series slug from an Asura page URL, stripping a trailing rotating
+// hash suffix (e.g. `/comics/omniscient-readers-viewpoint-24e56064` ->
+// `omniscient-readers-viewpoint`).
 function extractAsuraSlug(rawTargetUrl: string): string | null {
   const targetUrl = rawTargetUrl.replace(/\/$/, '');
   let slug = targetUrl.split('/').pop() || '';
@@ -4018,8 +4067,7 @@ function extractAsuraSlug(rawTargetUrl: string): string | null {
     }
   }
   if (!slug) return null;
-  const cleaned = slug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
-  return cleaned || slug;
+  return slug.replace(ASURA_SLUG_TOKEN_RX, '') || slug;
 }
 
 interface ResolvedChapter {
@@ -4034,11 +4082,18 @@ interface ResolvedChapter {
 const ASURA_API_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   'Accept': 'application/json',
-  'Origin': 'https://asuracomic.net',
-  'Referer': 'https://asuracomic.net/',
+  'Origin': 'https://asurascans.com',
+  'Referer': 'https://asurascans.com/',
 };
 
+// Asura appends a site-wide rotating token to every series slug
+// (`/comics/<slug>-00dcbf97`). It changes on every redeploy, so it must never be
+// hard-coded — the API accepts the bare slug (the server 302s stale tokens away).
+const ASURA_SLUG_TOKEN_RX = /-[0-9a-f]{8}$/i;
+
 // Fetch a series' REAL chapter list from the Asura Scans official API (newest-first).
+// The API resolves series by their BARE slug (token stripped); the old code tried
+// hard-coded token variants (-00dcbf97 / -b8509c2a) which go stale and fail.
 async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: ResolvedChapter[]; matchedSlug: string | null }> {
   const targetUrl = rawTargetUrl.replace(/\/$/, '');
   let rawSlug = targetUrl.split('/').pop() || '';
@@ -4051,14 +4106,8 @@ async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: 
   }
   if (!rawSlug) return { chapters: [], matchedSlug: null };
 
-  const cleaned = rawSlug.replace(/-(?:00dcbf97|b8509c2a|[a-f0-9]{8})$/i, '');
-  // Try the raw hashed slug first, then the cleaned slug and known hash variants.
-  const slugsToTry = Array.from(new Set([
-    rawSlug,
-    cleaned,
-    `${cleaned}-00dcbf97`,
-    `${cleaned}-b8509c2a`,
-  ]));
+  const cleaned = rawSlug.replace(ASURA_SLUG_TOKEN_RX, '') || rawSlug;
+  const slugsToTry = Array.from(new Set([cleaned, rawSlug]));
 
   for (const s of slugsToTry) {
     try {
@@ -4071,7 +4120,7 @@ async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: 
           id: String(c.id),
           slug: String(c.slug || ''),
           title: c.title ? `Chapter ${c.number} - ${c.title}` : `Chapter ${c.number}`,
-          url: c.slug ? `https://asuracomic.net/series/${s}/chapters/${c.slug}` : '',
+          url: c.slug ? `https://asurascans.com/series/${s}/chapters/${c.slug}` : '',
           pageCount: Number(c.page_count) || 12,
         }));
         return { chapters, matchedSlug: s };
@@ -4129,9 +4178,15 @@ async function fetchFlameSeriesContext(targetUrl: string): Promise<{ buildId: st
     const rawSlug = targetUrl.split('/').pop() || '';
     const matchedSeries = seriesList.find((s: any) => {
       const sId = String(s.series_id || s.id);
-      const sTitle = s.title?.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sTitle = (s.title?.toLowerCase().replace(/[^a-z0-9]/g, '') || '');
       const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return sId === rawSlug || (!!targetNorm && !!sTitle && sTitle.includes(targetNorm));
+      // 1) Exact numeric series id (Kotatsu's approach — unambiguous).
+      if (sId === rawSlug) return true;
+      // 2) Exact normalized-title equality.
+      if (targetNorm && sTitle === targetNorm) return true;
+      // 3) Substring fallback — only safe for reasonably long, unambiguous slugs
+      //    (a short slug like "solo" would otherwise match "Solo Leveling").
+      return targetNorm.length >= 5 && !!sTitle && sTitle.includes(targetNorm);
     });
     if (!matchedSeries) return null;
     const seriesId = matchedSeries.series_id || matchedSeries.id;
@@ -4241,12 +4296,19 @@ interface EngineSourceConfig {
   id: string; name: string; domain: string; engine: SourceEngine;
   lang: string; isNsfw: boolean;
   madaraDatePattern?: string; madaraPageSize?: number;
+  // Madara per-site overrides (mirrors Kotatsu's MadaraParser subclass overrides)
+  madaraWithoutAjax?: boolean;      // chapters already inline, no AJAX call
+  madaraSelectTestAsync?: string;   // node present => inline chapter list
+  madaraSelectChapter?: string;     // chapter row selector (default li.wp-manga-chapter)
+  madaraSelectBodyPage?: string;    // page container selector (default div.reading-content)
+  madaraPostReq?: boolean;          // use admin-ajax manga_get_chapters (default true)
 }
 
 const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [
   // ── Madara Engine (WP-Manga theme) — covers 50+ sources ──────────────────
   { id: 'manhwa18',    name: 'Manhwa18',          domain: 'manhwa18.com',    engine: 'manhwa18', lang: 'en', isNsfw: true },
-  { id: 'manhwa18cc',  name: 'Manhwa18.cc',        domain: 'manhwa18.cc',     engine: 'manhwa18', lang: 'en', isNsfw: true },
+  { id: 'manhwa18cc',  name: 'Manhwa18.cc',        domain: 'manhwa18.cc',     engine: 'madara', lang: 'en', isNsfw: true,
+    madaraSelectTestAsync: 'ul.row-content-chapter', madaraSelectChapter: 'li.a-h', madaraSelectBodyPage: 'div.read-content' },
   { id: 'aquamanga',   name: 'Aqua Manga',         domain: 'aquareader.net', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'manhuaplus',  name: 'Manhua Plus',        domain: 'manhuaplus.com',  engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'manhuaplusorg', name: 'ManhuaPlus.org',   domain: 'manhuaplus.org',  engine: 'madara', lang: 'en', isNsfw: false },
@@ -4293,29 +4355,94 @@ async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceCon
     const pageRes = await fetch(targetUrl, { headers });
     if (!pageRes.ok) return [];
     const html = await pageRes.text();
-    const idMatch = html.match(/id=["']manga-chapters-holder["'][^>]*data-id=["'](\d+)["']/i)
-      || html.match(/"post_id"\s*:\s*(\d+)/) || html.match(/"manga_id"\s*:\s*(\d+)/);
-    if (!idMatch) return [];
-    const mangaId = idMatch[1];
-    const formBody = `action=manga_get_chapters&manga=${mangaId}`;
-    const ajaxRes = await fetch(`${origin}/wp-admin/admin-ajax.php`, {
-      method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: formBody,
-    });
-    if (!ajaxRes.ok) return [];
-    const ajaxHtml = await ajaxRes.text();
-    const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    const chapters: ResolvedChapter[] = []; const seen = new Set<string>(); let m: RegExpExecArray | null; let idx = 0;
-    while ((m = chLinkRx.exec(ajaxHtml)) !== null) {
-      const href = m[1]; const text = m[2].replace(/<[^>]+>/g, '').trim();
-      if (!href || /^(#|javascript:)/i.test(href)) continue;
-      const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
-      const num = numM ? parseFloat(numM[1]) : (idx + 1);
-      if (!Number.isFinite(num) || num <= 0) continue;
-      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
-      if (seen.has(abs)) continue; seen.add(abs);
-      chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 }); idx++;
+    const $ = cheerio.load(html);
+
+    // Path 1 (Kotatsu): if the chapter list is already inline on the series page
+    // (selectTestAsync matches, or the site is withoutAjax), parse it directly.
+    const testAsync = config.madaraSelectTestAsync || 'div.listing-chapters_wrap';
+    const inline = $(testAsync).first();
+    const useInline = config.madaraWithoutAjax ? true : inline.length > 0;
+    let chaptersHtml: string | null = null;
+
+    if (useInline) {
+      chaptersHtml = html;
+    } else {
+      const holder = $('#manga-chapters-holder');
+      const mangaId = holder.attr('data-id')
+        || (html.match(/"post_id"\s*:\s*(\d+)/)?.[1])
+        || (html.match(/"manga_id"\s*:\s*(\d+)/)?.[1]);
+
+      if (mangaId) {
+        // Path 2 (Kotatsu): admin-ajax manga_get_chapters (config.madaraPostReq, default true)
+        if (config.madaraPostReq !== false) {
+          const formBody = `action=manga_get_chapters&manga=${mangaId}`;
+          const ajaxRes = await fetch(`${origin}/wp-admin/admin-ajax.php`, {
+            method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: formBody,
+          });
+          if (ajaxRes.ok) {
+            const ajaxHtml = await ajaxRes.text();
+            if (ajaxHtml.trim().length > 0) chaptersHtml = ajaxHtml;
+          }
+        }
+        // Path 3 (Kotatsu default): POST {mangaUrl}/ajax/chapters/ with empty body.
+        // Many current Madara sites use this relative route instead of admin-ajax.
+        if (!chaptersHtml) {
+          try {
+            const relRes = await fetch(`${targetUrl.replace(/\/$/, '')}/ajax/chapters/`, {
+              method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+            });
+            if (relRes.ok) {
+              const relHtml = await relRes.text();
+              if (relHtml.trim().length > 0) chaptersHtml = relHtml;
+            }
+          } catch (_) { /* fall to generic parse of the page */ }
+        }
+      } else {
+        // No holder/id found — the chapters may still be present inline with a
+        // different wrapper, so fall back to parsing the page HTML directly.
+        chaptersHtml = html;
+      }
     }
-    return chapters.reverse();
+
+    if (!chaptersHtml) return [];
+
+    const selectChapter = config.madaraSelectChapter || 'li.wp-manga-chapter';
+    const chDoc = cheerio.load(chaptersHtml);
+    const rows = chDoc(selectChapter).toArray();
+    const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    if (rows.length === 0) {
+      // Generic fallback: any anchor with a chapter-looking href/text.
+      const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      let m: RegExpExecArray | null;
+      let idx = 0;
+      while ((m = chLinkRx.exec(chaptersHtml)) !== null) {
+        const href = m[1]; const text = m[2].replace(/<[^>]+>/g, '').trim();
+        if (!href || /^(#|javascript:)/i.test(href)) continue;
+        if (!/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) continue;
+        const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+        const num = numM ? parseFloat(numM[1]) : (idx + 1);
+        if (!Number.isFinite(num) || num <= 0) continue;
+        const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+        if (seen.has(abs)) continue; seen.add(abs);
+        chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 }); idx++;
+      }
+    } else {
+      const rowsReversed = [...rows].reverse();
+      rowsReversed.forEach((rowEl, i) => {
+        const a = chDoc(rowEl).find('a').first();
+        const href = a.attr('href') || '';
+        if (!href || /^(#|javascript:)/i.test(href)) return;
+        const text = a.text().trim() || chDoc(rowEl).find('p').first().text().trim();
+        const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+        const num = numM ? parseFloat(numM[1]) : (i + 1);
+        if (!Number.isFinite(num) || num <= 0) return;
+        const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+        if (seen.has(abs)) return; seen.add(abs);
+        chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
+      });
+    }
+    return chapters;
   } catch (e) { console.warn(`[Madara Engine] Chapter list failed for ${config.name}:`, (e as Error).message); return []; }
 }
 
@@ -4332,14 +4459,22 @@ async function fetchMadaraChapterPages(targetUrl: string, chapterNumber: number,
     if (/id=["']chapter-protector-data["']/i.test(chHtml)) {
       console.warn(`[Madara Engine] Chapter protector (encrypted) — not supported for ${config.name}.`); return null;
     }
-    const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-cfsrc|src)=["']([^"']+)["'][^>]*>/gi;
-    const pages: string[] = []; let imgMatch: RegExpExecArray | null;
-    while ((imgMatch = imgRegex.exec(chHtml)) !== null) {
-      const src = imgMatch[1]?.trim();
-      if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/\/covers\/|logo|avatar|icon/i.test(src)) {
-        pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
-      }
-    }
+    const $ = cheerio.load(chHtml);
+    // Scope to the reading container (Kotatsu's selectBodyPage), falling back to
+    // the whole document so sites without a distinct container still work.
+    const bodySel = config.madaraSelectBodyPage || 'div.main-col-inner div.reading-content';
+    const container = $(bodySel).first().length > 0 ? $(bodySel).first() : null;
+    const pages: string[] = []; const seenImg = new Set<string>();
+    const extractFrom = (root: any) => {
+      root.find('img').each((_: number, el: any) => {
+        const src = ($(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-cfsrc') || $(el).attr('src') || '').trim();
+        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/\/covers\/|logo|avatar|icon/i.test(src)) {
+          const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
+          if (!seenImg.has(abs)) { seenImg.add(abs); pages.push(abs); }
+        }
+      });
+    };
+    if (container) extractFrom(container); else extractFrom($);
     if (pages.length > 0) { console.log(`[Madara Engine] ${pages.length} pages from ${config.name} Ch ${chapterNumber}`); return pages; }
     return null;
   } catch (e) { console.warn(`[Madara Engine] Page extraction failed for ${config.name}:`, (e as Error).message); return null; }
@@ -4542,6 +4677,40 @@ async function fetchMangaReaderChapterPages(chapterUrl: string): Promise<string[
   }
 }
 
+// MangaReader / ts-reader themed sites list chapters inside `#chapterlist > ul > li`
+// (Kotatsu's MangaReaderParser `selectChapter = "#chapterlist > ul > li"`). This is
+// far more reliable than the generic anchor regex, which requires the literal word
+// "chapter/chap/ch" in the href/text and drops chapters with unusual titles.
+async function fetchMangaReaderChapterList(seriesUrl: string): Promise<ResolvedChapter[]> {
+  try {
+    const origin = new URL(seriesUrl).origin;
+    const res = await fetch(seriesUrl, { headers: { ...UA_HEADERS, 'Referer': origin + '/' } });
+    if (!res.ok) return [];
+    const $ = cheerio.load(await res.text());
+    const lis = $('#chapterlist > ul > li, ul.chapter-list li, li.wp-manga-chapter').toArray();
+    if (lis.length === 0) return [];
+    const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    [...lis].reverse().forEach((li, i) => {
+      const a = $(li).find('a').first();
+      const href = a.attr('href') || '';
+      if (!href || /^(#|javascript:)/i.test(href)) return;
+      const text = a.text().trim() || a.attr('title') || '';
+      const numAttr = a.attr('data-num') || $(li).attr('data-num');
+      const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
+      const num = numAttr ? parseFloat(numAttr) : (numM ? parseFloat(numM[1]) : (i + 1));
+      if (!Number.isFinite(num) || num <= 0) return;
+      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+      if (seen.has(abs)) return; seen.add(abs);
+      chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
+    });
+    return chapters;
+  } catch (e) {
+    console.warn('[MangaReader Engine] Chapter list failed:', (e as Error).message);
+    return [];
+  }
+}
+
 async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Promise<ResolvedChapter[]> {
   const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
   
@@ -4549,6 +4718,14 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
   const engineConfig = getEngineConfig(domainId);
   if (engineConfig && engineConfig.engine === 'madara') {
     const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
+    if (chapters.length > 0) return chapters;
+  }
+  if (engineConfig && engineConfig.engine === 'mangareader') {
+    const chapters = await fetchMangaReaderChapterList(targetUrl);
+    if (chapters.length > 0) return chapters;
+  }
+  if (engineConfig && engineConfig.engine === 'hotcomics') {
+    const chapters = await fetchHotComicsChapterList(targetUrl, engineConfig.domain || domainId);
     if (chapters.length > 0) return chapters;
   }
   
@@ -4560,7 +4737,6 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
     case 'dynasty':
       return await fetchDynastyChapterList(targetUrl);
     case 'manhwa18':
-    case 'manhwa18cc':
       return await fetchManhwa18ChapterList(targetUrl, engineConfig?.domain || domainId);
     case 'hotcomics':
     case 'daycomics':
@@ -4616,6 +4792,14 @@ async function extractLiveDomainChapterPages(
     if (domainId === 'asura') {
       try {
         const { chapters, matchedSlug } = await fetchAsuraChapterList(targetUrl);
+
+        if (chapters.length === 0) {
+          // The API resolved nothing for this slug — the series is either not
+          // hosted on Asura anymore (common: Asura drops licensed/old titles) or
+          // the slug is stale. Surface it clearly instead of silently falling
+          // through to a placeholder that looks like a fetch failure.
+          console.warn(`[Asura API Engine] No chapters returned for "${targetUrl}" — the series may no longer be hosted on Asura Scans.`);
+        }
 
         if (chapters.length > 0 && matchedSlug) {
           const targetChapter = matchResolvedChapter(chapters, chapterNumber);
@@ -4706,7 +4890,7 @@ async function extractLiveDomainChapterPages(
       if (hcPages && hcPages.length > 0) return hcPages;
     }
     if (engCfg && engCfg.engine === 'mangareader') {
-      const mrChapters = await fetchGenericChapterList(targetUrl);
+      const mrChapters = await fetchMangaReaderChapterList(targetUrl);
       const mrTarget = matchResolvedChapter(mrChapters, chapterNumber);
       if (!mrTarget) {
         console.warn(`[MangaReader Engine] Ch ${chapterNumber} not found for ${engCfg.name} — not substituting a wrong chapter.`);
@@ -4883,7 +5067,7 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     console.warn(`[Reader Stream Engine] Blocked reading attempt via MangaDex source URL "${targetUrl}" — MangaDex is metadata-only.`);
     // Falls through to generated placeholder (step 4).
   } else if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-    const matchedDomain = REGISTERED_LIVE_DOMAINS.find((d) => targetUrl.includes(d.domain));
+    const matchedDomain = matchLiveDomain(targetUrl);
     const domainId = matchedDomain ? matchedDomain.id : 'general';
     const domainIsDisabled = matchedDomain ? disabledSourceIds.has(matchedDomain.id) : false;
 

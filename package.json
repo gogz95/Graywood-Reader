@@ -1,7 +1,7 @@
 {
   "name": "manhuasync-tracker",
-  "private": true,
   "version": "2.5.0",
+  "license": "GPL-3.0-or-later",
   "main": "electron-main.cjs",
   "engines": {
     "node": ">=22.12.0"

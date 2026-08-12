@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { MangaItem, UserProfile, AppSettings, AutoUpdateLog } from './src/types';
 
 // Ensure data directory exists
@@ -255,6 +256,34 @@ function mapMangaItemToRow(item: MangaItem) {
   };
 }
 
+// One-time migration: re-key rows created by the old truncated-base64url ID
+// generator (which produced the SAME id for every series on a site, so those
+// series collapsed into a single DB row). A row is detected as collided when its
+// id ends with exactly the first 16 base64url chars of its own sourceUrl — the
+// old generator's signature. It is re-keyed to a sha256 hash of the full href.
+export function rekeyCollidedSourceIds(): number {
+  const rows = db.prepare('SELECT id, sourceUrl FROM manga').all() as { id: string; sourceUrl: string | null }[];
+  const upd = db.prepare('UPDATE manga SET id = ? WHERE id = ?');
+  const tx = db.transaction((list: { id: string; sourceUrl: string | null }[]) => {
+    let rekeyed = 0;
+    for (const row of list) {
+      const srcUrl = (row.sourceUrl || '').replace(/\/+$/, '');
+      if (!srcUrl) continue;
+      const oldSig = Buffer.from(srcUrl).toString('base64url').substring(0, 16);
+      if (!row.id.endsWith('_' + oldSig)) continue;
+      const prefix = row.id.slice(0, row.id.length - 17); // strip `_` + 16 sig chars
+      const newId = `${prefix}_${crypto.createHash('sha256').update(srcUrl).digest('hex').slice(0, 24)}`;
+      if (newId !== row.id) {
+        try { upd.run(newId, row.id); rekeyed++; } catch (e) { /* ignore unique collisions */ }
+      }
+    }
+    return rekeyed;
+  });
+  const rekeyed = tx(rows);
+  if (rekeyed > 0) console.log(`[SQLite Engine] Re-keyed ${rekeyed} collided source rows to unique IDs.`);
+  return rekeyed;
+}
+
 // Data Migration Engine: Automatically imports existing database.json into SQLite
 export function migrateJsonToSqlite() {
   const jsonPath = path.join(__dirname, 'database.json');
@@ -291,6 +320,10 @@ export const SqliteDb = {
   getAllManga(): MangaItem[] {
     const rows = stmtGetAllManga.all();
     return rows.map(mapRowToMangaItem);
+  },
+
+  rekeyCollidedSourceIds(): number {
+    return rekeyCollidedSourceIds();
   },
 
   getMangaById(id: string): MangaItem | null {

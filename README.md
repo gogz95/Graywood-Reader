@@ -75,3 +75,21 @@ Notes:
 ## Known Issues
 
 See `BUGS.md` — it is the single source of truth for open bugs (currently none active).
+
+## License
+
+**Graywood Reader** is free software, released under the **GNU General Public
+License v3.0-or-later** (`GPL-3.0-or-later`). You may redistribute it and/or
+modify it freely, provided you preserve this license and the copyright notices.
+See [`LICENSE`](LICENSE) for the full text.
+
+This project builds upon and vendors several third-party projects. Their
+licenses and copyright notices are documented in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) and [`NOTICE`](NOTICE):
+
+- **kotatsu-parsers** (vendored) — GPL-3.0
+- **Mihon** (`source-api` abstractions) — Apache-2.0
+- **Suwayomi-Server** (reference) — MPL-2.0
+- **Kotatsu syncserver** (reference) — GPL-3.0
+- **Jellyfin / jellyfin-web** (reference only, not used) — GPL-2.0
+- **npm dependencies** — see `package.json` and the generated npm license report
