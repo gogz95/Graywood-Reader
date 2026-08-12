@@ -82,6 +82,15 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   const [loadingSimilar, setLoadingSimilar] = useState(false);
 
   const handleSaveQuickChanges = () => {
+    // Real metadata field the user can change here is the rating (star control).
+    // Record it as an override so a later metadata refresh preserves their rating.
+    const metadataOverrides = Array.from(
+      new Set<string>([
+        ...(manga.metadataOverrides || []),
+        ...(Number(rating) !== Number(manga.rating) ? ['rating'] : []),
+      ])
+    );
+
     onUpdateManga({
       ...manga,
       currentChapter,
@@ -89,6 +98,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
       rating,
       notes,
       isFavorite,
+      metadataOverrides,
       lastReadAt: new Date().toISOString(),
     });
     onClose();

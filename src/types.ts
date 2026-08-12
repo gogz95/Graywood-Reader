@@ -149,6 +149,13 @@ export interface MangaItem {
   flaggedAt?: string;
   userId?: string; // Owner User ID for privacy isolation
   chapters?: any[];
+  /**
+   * Names of metadata fields the user manually customized (e.g. 'title',
+   * 'description', 'coverImage', 'rating', 'genres', 'altTitles').
+   * Live metadata refreshes preserve these values so manual edits don't
+   * get overwritten. Chapter counters (latestChapter) are always refreshed.
+   */
+  metadataOverrides?: string[];
 }
 
 

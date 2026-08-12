@@ -16,6 +16,35 @@ interface AddEditModalProps {
   onSave: (mangaData: Partial<MangaItem>) => void;
 }
 
+// Descriptive metadata fields that could be overwritten by a later metadata refresh.
+const OVERRIDEABLE_METADATA = ['title', 'description', 'coverImage', 'genres', 'altTitles', 'rating'] as const;
+
+// Return the set of metadata fields that differ from the previous saved values.
+// These get recorded in `metadataOverrides` so refreshes preserve manual edits.
+function computeMetadataOverrides(
+  prev: MangaItem | null | undefined,
+  next: {
+    title: string;
+    altTitles: string[];
+    description: string;
+    coverImage: string;
+    genres: string[];
+    rating: number;
+  }
+): string[] {
+  if (!prev) return [];
+  const overridden = new Set<string>(prev.metadataOverrides || []);
+
+  if (prev.title !== next.title) overridden.add('title');
+  if (prev.altTitles.join('|') !== next.altTitles.join('|')) overridden.add('altTitles');
+  if (prev.description !== next.description) overridden.add('description');
+  if (prev.coverImage !== next.coverImage) overridden.add('coverImage');
+  if (prev.genres.join('|') !== next.genres.join('|')) overridden.add('genres');
+  if (Number(prev.rating) !== Number(next.rating)) overridden.add('rating');
+
+  return OVERRIDEABLE_METADATA.filter((field) => overridden.has(field));
+}
+
 export const AddEditModal: React.FC<AddEditModalProps> = ({
   initialManga,
   onClose,
@@ -72,18 +101,30 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
     const altTitles = altTitlesStr.split(',').map((s) => s.trim()).filter(Boolean);
     const genres = genresStr.split(',').map((s) => s.trim()).filter(Boolean);
 
-    onSave({
-      ...(initialManga || {}),
+    const nextMetadata = {
       title: title.trim(),
       altTitles,
-      type,
-      coverImage: coverImage.trim() || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
       description: description.trim(),
+      coverImage: coverImage.trim(),
       genres: genres.length ? genres : ['Action'],
+      rating: Number(rating) || 8.0,
+    };
+
+    onSave({
+      ...(initialManga || {}),
+      // Record which metadata fields the user customized so a later metadata
+      // refresh preserves them instead of overwriting the manual edits.
+      metadataOverrides: computeMetadataOverrides(initialManga, nextMetadata),
+      title: nextMetadata.title,
+      altTitles,
+      type,
+      coverImage: nextMetadata.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+      description: nextMetadata.description,
+      genres: nextMetadata.genres,
       status,
       currentChapter: Number(currentChapter) || 0,
       latestChapter: Number(latestChapter) || Number(currentChapter) || 1,
-      rating: Number(rating) || 8.0,
+      rating: nextMetadata.rating,
       sourceUrl: sourceUrl.trim(),
       sourceName: sourceName.trim() || 'Manual',
       notes: notes.trim(),

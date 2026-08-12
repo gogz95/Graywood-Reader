@@ -47,7 +47,8 @@ db.exec(`
     isFlagged INTEGER DEFAULT 0,
     flagReason TEXT,
     flaggedAt TEXT,
-    availableSources TEXT
+    availableSources TEXT,
+    metadataOverrides TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_manga_title ON manga(title);
@@ -61,6 +62,7 @@ try { db.exec('ALTER TABLE manga ADD COLUMN availableSources TEXT'); } catch(e) 
 try { db.exec('ALTER TABLE manga ADD COLUMN isFlagged INTEGER DEFAULT 0'); } catch(e) {}
 try { db.exec('ALTER TABLE manga ADD COLUMN flagReason TEXT'); } catch(e) {}
 try { db.exec('ALTER TABLE manga ADD COLUMN flaggedAt TEXT'); } catch(e) {}
+try { db.exec('ALTER TABLE manga ADD COLUMN metadataOverrides TEXT'); } catch(e) {}
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch(e) {}
 
@@ -108,12 +110,12 @@ const stmtUpsertManga = db.prepare(`
     id, title, altTitles, type, coverImage, description, genres, status,
     currentChapter, totalChapters, latestChapter, lastUpdated, rating,
     sourceUrl, sourceName, availableSources, autoUpdateEnabled, notes, addedAt, lastReadAt,
-    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt
+    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides
   ) VALUES (
     @id, @title, @altTitles, @type, @coverImage, @description, @genres, @status,
     @currentChapter, @totalChapters, @latestChapter, @lastUpdated, @rating,
     @sourceUrl, @sourceName, @availableSources, @autoUpdateEnabled, @notes, @addedAt, @lastReadAt,
-    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt
+    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides
   ) ON CONFLICT(id) DO UPDATE SET
     title=excluded.title,
     altTitles=excluded.altTitles,
@@ -138,7 +140,8 @@ const stmtUpsertManga = db.prepare(`
     isFavorite=excluded.isFavorite,
     isFlagged=excluded.isFlagged,
     flagReason=excluded.flagReason,
-    flaggedAt=excluded.flaggedAt
+    flaggedAt=excluded.flaggedAt,
+    metadataOverrides=excluded.metadataOverrides
 `);
 
 const stmtUpdateProgress = db.prepare(`
@@ -202,6 +205,7 @@ function mapRowToMangaItem(row: any): MangaItem {
     isFlagged: Boolean(row.isFlagged),
     flagReason: row.flagReason || undefined,
     flaggedAt: row.flaggedAt || undefined,
+    metadataOverrides: row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [],
     currentChapter: Number(row.currentChapter) || 0,
     latestChapter: Number(row.latestChapter) || 1,
     totalChapters: row.totalChapters ? Number(row.totalChapters) : null,
@@ -247,6 +251,7 @@ function mapMangaItemToRow(item: MangaItem) {
     isFlagged: item.isFlagged ? 1 : 0,
     flagReason: item.flagReason || null,
     flaggedAt: item.flaggedAt || (item.isFlagged ? new Date().toISOString() : null),
+    metadataOverrides: JSON.stringify(item.metadataOverrides || []),
   };
 }
 

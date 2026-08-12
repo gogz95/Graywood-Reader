@@ -27,6 +27,38 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-010] Manhwa18
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts`
+- **Submitted-By**: Guest Reader (2026-08-12)
+- **Description**: When reading any series or refreshing metadata only series that comes up is Announcer Raw
+- **Steps to Reproduce**:
+  1. In Sources click any series automatically pulls up announcer raw 
+- **Expected**: Get correct metadata and series 
+- **Actual**: Get announcer raw
+
+
+### [BUG-009] [Does not load pages] Legend of the Northern Blade
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-12)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Legend of the Northern Blade (kotatsu_db_1786481831767_4cra)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Legend of the Northern Blade"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 _No active bugs._
 
 ---
@@ -47,6 +79,17 @@ _No active bugs._
   3. The chapter-list endpoint now returns each source's REAL chapters (unified `fetchLiveChapterList()` for Asura / Flame / Dynasty / generic HTML sources), so the UI only lists chapters that actually exist on the source.
 - **Scope (all sources)**: The same fix is applied to every live-source extractor — Asura (official API), Flame (Next.js API), Dynasty (series-page HTML), and the generic universal HTML resolver used by all other registered + unregistered sources. New shared helpers: `normalizeLiveTargetUrl()`, `fetchFlameSeriesContext()`, `mapFlameChapters()`, `fetchFlameChapterList()`, `fetchDynastyChapterList()`, `fetchGenericChapterList()`, `fetchLiveChapterList()`, `matchResolvedChapter()`, `extractPanelImages()` (also adds `data-srcset` handling for lazily-loaded images).
 - **Fixed in**: 2026-08-11 — Added the shared enumerator/matcher helpers and rewired `extractLiveDomainChapterPages` + `/api/reader/chapters/:mangaId`. Verified with `tsc --noEmit` (clean) and a 15-case logic test across Asura/Flame/Dynasty/generic (missing chapters → NOT FOUND; existing chapters → exact match; substring bug neutralized).
+
+### [BUG-008] Manual metadata edits (title/description/cover/rating/genres) disappeared after a metadata refresh
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server.ts` (`refreshSingleMangaMetadata`), `src/components/AddEditModal.tsx`, `sqlite-db.ts`, `src/types.ts`
+- **Description**: Any metadata edits made through the "Edit Details" modal were silently overwritten the next time metadata was refreshed (single series refresh, bulk `/api/manga/refresh-all-metadata`, or the Settings purge/refresh engine). `refreshSingleMangaMetadata()` mutated `title`, `description`, `coverImage`, and `rating` directly from the live source and appended source `genres`/`altTitles`, clobbering curated values.
+- **Expected**: User-customized metadata persists across refreshes.
+- **Actual**: Refreshes replaced manual edits with whatever the live source returned.
+- **Fixed in**: 2026-08-12 — Added an optional `metadataOverrides?: string[]` field to `MangaItem` (persisted to SQLite via a new `metadataOverrides TEXT` column + migration). `AddEditModal` records which metadata fields the user actually changed, and `refreshSingleMangaMetadata` now snapshots those fields up-front and restores them afterward, so live refreshes never overwrite manual edits. `latestChapter` is intentionally excluded so chapter counters keep updating. Verified with `tsc --noEmit` (clean) and a production build (`exit 0`).
+
 
 ### [BUG-003] Page and chapter counter
 - **Status**: `fixed`

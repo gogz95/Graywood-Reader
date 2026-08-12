@@ -821,9 +821,41 @@ function purgeReaperScansFromAllStorage() {
   } catch (e) { }
 }
 
+// Descriptive metadata fields a live refresh may overwrite. Fields the user has
+// manually customized (recorded in `metadataOverrides`) are preserved so manual
+// edits never vanish when metadata is refreshed. `latestChapter` is intentionally
+// excluded — it is a live counter that should always keep updating.
+const OVERRIDEABLE_METADATA = ['title', 'description', 'coverImage', 'rating', 'genres', 'altTitles'] as const;
+
+// Copy the current values of any user-overridden metadata fields so they can be
+// restored after a live refresh mutates the manga object.
+function snapshotMetadataOverrides(manga: MangaItem): Record<string, any> {
+  const overridden = Array.isArray(manga.metadataOverrides) ? manga.metadataOverrides : [];
+  const snap: Record<string, any> = {};
+  for (const field of OVERRIDEABLE_METADATA) {
+    if (overridden.includes(field)) {
+      const value = (manga as any)[field];
+      snap[field] = Array.isArray(value) ? [...value] : value;
+    }
+  }
+  return snap;
+}
+
+// Re-apply user-overridden metadata fields (deep-copying arrays to avoid aliasing).
+function restoreMetadataOverrides(manga: MangaItem, snap: Record<string, any>) {
+  for (const field of OVERRIDEABLE_METADATA) {
+    if (!(field in snap)) continue;
+    const value = snap[field];
+    (manga as any)[field] = Array.isArray(value) ? [...value] : value;
+  }
+}
+
 // Helper: Refresh metadata for a single manga item from live sources
 // Helper: Refresh metadata for a single manga item from live sources & MangaDex API
 async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> {
+  // Preserve user-customized metadata so this refresh cannot clobber manual edits.
+  const metadataSnap = snapshotMetadataOverrides(manga);
+
   // 1. MangaDex Metadata Refresh & Title Search Linker
   let mangaDexId =
     manga.apiId ||
@@ -997,6 +1029,9 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
       console.warn(`[Metadata Refresh] Flame Comics refresh failed for ${manga.title}:`, e.message);
     }
   }
+
+  // Re-apply user overrides so manual metadata edits survive this refresh.
+  restoreMetadataOverrides(manga, metadataSnap);
 
   manga.lastUpdated = new Date().toISOString();
   SqliteDb.upsertManga(manga);
