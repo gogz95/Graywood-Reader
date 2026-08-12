@@ -62,9 +62,29 @@ const SENSITIVE_GET_PATHS = new Set<string>([
   '/api/settings/backup/export',
 ]);
 
+// Normalize a request path: collapse trailing slashes and decode %2F so that
+// `/api/config/`, `/api/settings//backup` etc. can never bypass the host gate.
+function normalizeGatePath(p: string): string {
+  let path = p;
+  while (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  try { path = decodeURIComponent(path); } catch { /* keep as-is on malformed input */ }
+  return path;
+}
+
+// Prefix-based host-gate: a request is protected if its (normalized) path equals
+// a host-only path OR falls under one of its sub-paths (e.g. /api/settings/*).
+function isHostOnlyPath(p: string): boolean {
+  const norm = normalizeGatePath(p);
+  for (const base of HOST_ONLY_PATHS) {
+    if (norm === base || norm.startsWith(base + '/')) return true;
+  }
+  return false;
+}
+
 app.use((req, res, next) => {
-  if (!HOST_ONLY_PATHS.has(req.path)) return next();
-  if (req.method === 'GET' && !SENSITIVE_GET_PATHS.has(req.path)) return next();
+  const path = normalizeGatePath(req.path);
+  if (!isHostOnlyPath(path)) return next();
+  if (req.method === 'GET' && !SENSITIVE_GET_PATHS.has(path)) return next();
   if (!isHostRequest(req)) {
     return res.status(403).json({
       error: "Forbidden",
@@ -217,6 +237,92 @@ export function verifyPassword(password: string, stored: string): boolean {
     return false;
   }
 }
+
+// Async scrypt verification (used by the login flow so the event loop isn't
+// blocked by the memory-hard KDF. The sync `verifyPassword` above is retained
+// for existing callers; this variant is drop-in equivalent but non-blocking.)
+export function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!password || !stored) return resolve(false);
+    if (stored.startsWith('scrypt:')) {
+      const [, salt, hash] = stored.split(':');
+      if (!salt || !hash) return resolve(false);
+      return crypto.scrypt(password, salt, 64, (err, derived) => {
+        if (err) return resolve(false);
+        return resolve(crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(derived)));
+      });
+    }
+    // Legacy SHA-256 fallback (no KDF, so resolve synchronously-safe).
+    return resolve(stored === crypto.createHash('sha256').update(password + ENCRYPTION_SECRET).digest('hex'));
+  });
+}
+
+// =========================================================
+// TOKEN-BASED AUTHENTICATION (opt-in, backward compatible)
+// =========================================================
+// The app runs fully open (host-only IP gate) by default, as it does today.
+// Set `REQUIRE_AUTH=1` (env) to lock down remote clients: they must exchange a
+// username/password for a signed token at /api/auth/login. Host/localhost
+// requests are ALWAYS allowed (Electron desktop shell + localhost dev), so the
+// existing frontend keeps working whether auth is on or off.
+// Tokens are self-contained HMAC-SHA256-signed blobs (no DB session store).
+const AUTH_ENABLED = process.env.REQUIRE_AUTH === '1' || process.env.REQUIRE_AUTH === 'true';
+const AUTH_TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS) || 7 * 24 * 60 * 60 * 1000; // default 7 days
+
+// Derive a stable signing key from the encryption secret (same secret, new purpose).
+const AUTH_SIGNING_KEY = crypto.createHash('sha256')
+  .update('auth-signing:' + ENCRYPTION_SECRET)
+  .digest();
+
+function signAuthToken(payload: Record<string, unknown>): string {
+  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + AUTH_TOKEN_TTL_MS }), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function verifyAuthToken(token: string): Record<string, unknown> | null {
+  if (!token) return null;
+  const dot = token.indexOf('.');
+  if (dot === -1) return null;
+  const body = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
+  // Constant-time comparison guards against signature forgery.
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (typeof payload.exp === 'number' && payload.exp < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+// Resolve the authenticated user (if any) from an Authorization header / query token.
+function resolveAuthUser(req: express.Request): UserProfile | null {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.query.auth_token as string) || '';
+  const payload = verifyAuthToken(token);
+  if (!payload || typeof payload.sub !== 'string') return null;
+  return userProfiles.find((u) => u.id === payload.sub) || null;
+}
+
+// Attach req.user for downstream handlers; never throws and never blocks.
+app.use((req, _res, next) => {
+  (req as any).user = resolveAuthUser(req);
+  next();
+});
+
+// Enforce auth for remote (non-host) clients only when auth is explicitly enabled.
+app.use((req, res, next) => {
+  if (!AUTH_ENABLED) return next();
+  // Public endpoints that must stay reachable without a token.
+  const publicPaths = ['/api/auth/login', '/api/auth/client-context', '/api/health'];
+  if (publicPaths.some((p) => req.path === p || req.path.startsWith(p + '/'))) return next();
+  if (isHostRequest(req)) return next();
+  if ((req as any).user) return next();
+  return res.status(401).json({ error: 'Unauthorized', message: 'A valid login token is required for remote access.' });
+});
 
 // Initialize Gemini Client
 const getGeminiClient = () => {
@@ -1264,36 +1370,77 @@ app.post("/api/config", (req, res) => {
 });
 
 // CRUD for Manga List (SQLite Engine + Persistent Backup Sync)
-app.get("/api/manga", (_req, res) => {
-  const allManga = SqliteDb.getAllManga();
-  const activeOnly = allManga.filter((m) => !isSeriesFromDisabledSource(m));
-  res.json(activeOnly);
+app.get("/api/manga", (req, res) => {
+  // Server-side pagination/sorting (optional; omitted params keep the legacy
+  // "return everything" behavior so the existing frontend is unaffected).
+  const limitRaw = Number(req.query.limit);
+  const offsetRaw = Number(req.query.offset);
+  const hasPagination = (req.query.limit !== undefined || req.query.offset !== undefined) &&
+    (Number.isFinite(limitRaw) || Number.isFinite(offsetRaw));
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 200;
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
+  let allManga = SqliteDb.getAllManga();
+  allManga = allManga.filter((m) => !isSeriesFromDisabledSource(m));
+
+  if (hasPagination) {
+    const paged = allManga.slice(offset, offset + limit);
+    res.setHeader('X-Total-Count', String(allManga.length));
+    return res.json(paged);
+  }
+  res.json(allManga);
 });
 
+// Whitelisted fields a client is allowed to set when creating a manga.
+const MANGA_CREATE_FIELDS = {
+  title: (v: any) => String(v || 'Untitled Series'),
+  altTitles: (v: any) => (Array.isArray(v) ? v : []),
+  type: (v: any) => ['manga', 'manhwa', 'manhua'].includes(v) ? v : 'manhwa',
+  coverImage: (v: any) => String(v || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&auto=format&fit=crop&q=80'),
+  description: (v: any) => String(v || 'No description provided.'),
+  genres: (v: any) => (Array.isArray(v) ? v : ['Action']),
+  status: (v: any) => String(v || 'reading'),
+  currentChapter: (v: any) => Number(v) || 0,
+  totalChapters: (v: any) => (v ? Number(v) : null),
+  latestChapter: (v: any, all: any) => Number(v) || Number(all.currentChapter) || 1,
+  rating: (v: any) => Number(v) || 8.0,
+  sourceUrl: (v: any) => String(v || ''),
+  sourceName: (v: any) => String(v || 'Custom / Manual'),
+  autoUpdateEnabled: (v: any) => v !== false,
+  notes: (v: any) => String(v || ''),
+  syncedFromApi: (v: any) => v || null,
+  apiId: (v: any) => v || null,
+  isFavorite: (v: any) => Boolean(v),
+};
+
 app.post("/api/manga", (req, res) => {
+  const body = req.body || {};
   const newItem: MangaItem = {
-    id: req.body.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    title: req.body.title || 'Untitled Series',
-    altTitles: Array.isArray(req.body.altTitles) ? req.body.altTitles : [],
-    type: req.body.type || 'manhwa',
-    coverImage: req.body.coverImage || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&auto=format&fit=crop&q=80',
-    description: req.body.description || 'No description provided.',
-    genres: Array.isArray(req.body.genres) ? req.body.genres : ['Action'],
-    status: req.body.status || 'reading',
-    currentChapter: Number(req.body.currentChapter) || 0,
-    totalChapters: req.body.totalChapters ? Number(req.body.totalChapters) : null,
-    latestChapter: Number(req.body.latestChapter) || Number(req.body.currentChapter) || 1,
+    id: String(body.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`),
+    title: MANGA_CREATE_FIELDS.title(body.title),
+    altTitles: MANGA_CREATE_FIELDS.altTitles(body.altTitles),
+    type: MANGA_CREATE_FIELDS.type(body.type),
+    coverImage: MANGA_CREATE_FIELDS.coverImage(body.coverImage),
+    description: MANGA_CREATE_FIELDS.description(body.description),
+    genres: MANGA_CREATE_FIELDS.genres(body.genres),
+    status: MANGA_CREATE_FIELDS.status(body.status) as MangaItem['status'],
+    currentChapter: MANGA_CREATE_FIELDS.currentChapter(body.currentChapter),
+    totalChapters: MANGA_CREATE_FIELDS.totalChapters(body.totalChapters),
+    latestChapter: MANGA_CREATE_FIELDS.latestChapter(body.latestChapter, body),
     lastUpdated: new Date().toISOString(),
-    rating: Number(req.body.rating) || 8.0,
-    sourceUrl: req.body.sourceUrl || '',
-    sourceName: req.body.sourceName || 'Custom / Manual',
-    autoUpdateEnabled: req.body.autoUpdateEnabled !== false,
-    notes: req.body.notes || '',
+    rating: MANGA_CREATE_FIELDS.rating(body.rating),
+    sourceUrl: MANGA_CREATE_FIELDS.sourceUrl(body.sourceUrl),
+    sourceName: MANGA_CREATE_FIELDS.sourceName(body.sourceName),
+    autoUpdateEnabled: MANGA_CREATE_FIELDS.autoUpdateEnabled(body.autoUpdateEnabled),
+    notes: MANGA_CREATE_FIELDS.notes(body.notes),
     addedAt: new Date().toISOString(),
     lastReadAt: new Date().toISOString(),
-    syncedFromApi: req.body.syncedFromApi || null,
-    apiId: req.body.apiId || null,
-    isFavorite: Boolean(req.body.isFavorite),
+    syncedFromApi: MANGA_CREATE_FIELDS.syncedFromApi(body.syncedFromApi),
+    apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
+    isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
+    // userId is intentionally NEVER taken from the client body; it is derived
+    // only from the authenticated user (or null for host/anonymous creates).
+    userId: (req as any).user ? (req as any).user.id : null,
   };
 
   syncAddOrUpdateManga(newItem);
@@ -1365,9 +1512,28 @@ app.put("/api/manga/:id", (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
+  const body = req.body || {};
+  // Whitelisted mutable fields — id/userId/apiId/syncedFromApi are NEVER taken
+  // from the client, preventing field injection / cross-user reassignment.
   const updatedItem: MangaItem = {
     ...existing,
-    ...req.body,
+    title: body.title !== undefined ? String(body.title) : existing.title,
+    altTitles: body.altTitles !== undefined ? (Array.isArray(body.altTitles) ? body.altTitles : existing.altTitles) : existing.altTitles,
+    type: body.type !== undefined ? (['manga', 'manhwa', 'manhua'].includes(body.type) ? body.type : existing.type) : existing.type,
+    coverImage: body.coverImage !== undefined ? String(body.coverImage) : existing.coverImage,
+    description: body.description !== undefined ? String(body.description) : existing.description,
+    genres: body.genres !== undefined ? (Array.isArray(body.genres) ? body.genres : existing.genres) : existing.genres,
+    status: body.status !== undefined ? (String(body.status) as MangaItem['status']) : existing.status,
+    currentChapter: body.currentChapter !== undefined ? (Number(body.currentChapter) || 0) : existing.currentChapter,
+    totalChapters: body.totalChapters !== undefined ? (body.totalChapters ? Number(body.totalChapters) : null) : existing.totalChapters,
+    rating: body.rating !== undefined ? (Number(body.rating) || 0) : existing.rating,
+    sourceUrl: body.sourceUrl !== undefined ? String(body.sourceUrl) : existing.sourceUrl,
+    sourceName: body.sourceName !== undefined ? String(body.sourceName) : existing.sourceName,
+    autoUpdateEnabled: body.autoUpdateEnabled !== undefined ? Boolean(body.autoUpdateEnabled) : existing.autoUpdateEnabled,
+    notes: body.notes !== undefined ? String(body.notes) : existing.notes,
+    isFavorite: body.isFavorite !== undefined ? Boolean(body.isFavorite) : existing.isFavorite,
+    isFlagged: body.isFlagged !== undefined ? Boolean(body.isFlagged) : existing.isFlagged,
+    flagReason: body.flagReason !== undefined ? String(body.flagReason) : existing.flagReason,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -1382,7 +1548,8 @@ app.post("/api/manga/increment/:id", (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  const newChapter = existing.currentChapter + 1;
+  // Guard against NaN when currentChapter is null/undefined.
+  const newChapter = (Number(existing.currentChapter) || 0) + 1;
   SqliteDb.updateChapterProgress(id, newChapter);
   const updated = SqliteDb.getMangaById(id);
   if (updated) {
@@ -1623,22 +1790,44 @@ async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
   return parsed;
 }
 
-async function streamProxiedImage(response: Response): Promise<Buffer> {
+// Pass the proxied image body through to the client as a stream, enforcing the
+// size cap with an AbortController (no full-image buffering in RAM). Returns
+// true on success, or sets an error on the response and returns false.
+async function streamProxiedImage(response: Response, res: express.Response): Promise<boolean> {
   const declaredLength = Number(response.headers.get('content-length') || 0);
   if (declaredLength > MAX_PROXY_IMAGE_BYTES) {
-    throw new Error(`Proxied image exceeds size cap (${declaredLength} bytes)`);
+    res.setHeader('Content-Type', 'text/plain');
+    res.status(413).send('Proxied image exceeds size cap');
+    return false;
   }
 
-  const chunks: Buffer[] = [];
-  let received = 0;
-  for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
-    received += chunk.length;
-    if (received > MAX_PROXY_IMAGE_BYTES) {
-      throw new Error('Proxied image exceeded size cap during streaming');
-    }
-    chunks.push(Buffer.from(chunk));
+  const body = response.body as unknown as AsyncIterable<Uint8Array> | null;
+  if (!body) {
+    res.status(502).send('Empty upstream response');
+    return false;
   }
-  return Buffer.concat(chunks);
+
+  const controller = new AbortController();
+  let received = 0;
+  const abortOnOverflow = () => controller.abort();
+  const capTimer = setTimeout(abortOnOverflow, 60000); // safety in case streaming stalls
+
+  try {
+    for await (const chunk of body) {
+      received += chunk.length;
+      if (received > MAX_PROXY_IMAGE_BYTES) {
+        controller.abort();
+        throw new Error('Proxied image exceeded size cap during streaming');
+      }
+      if (!res.write(Buffer.from(chunk))) {
+        await new Promise((resolve) => res.once('drain', resolve));
+      }
+    }
+    res.end();
+    return true;
+  } finally {
+    clearTimeout(capTimer);
+  }
 }
 
 // Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
@@ -1712,17 +1901,21 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
       return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
     }
 
-    const buffer = await streamProxiedImage(response);
     const contentType = response.headers.get('content-type') || 'image/jpeg';
-
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Same-origin serving: no need for a wildcard ACAO header (and it would let
+    // any site hotlink this proxy). Omit it so only the app can use the proxy.
     res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-    res.send(buffer);
+    res.setHeader('Content-Disposition', 'inline');
+    await streamProxiedImage(response, res);
   } catch (err: any) {
     console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
-    // Fallback placeholder panel if remote image is unreachable
-    res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
+    if (!res.headersSent) {
+      // Fallback placeholder panel if remote image is unreachable
+      res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
+    } else {
+      res.end();
+    }
   }
 };
 
@@ -5157,13 +5350,26 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
 
 
 // Dynamic Webtoon Canvas Panel Renderer (SVG Image endpoint)
+// XML-escape helper: SVG served as image/svg+xml must escape & < > " ' so a
+// user-supplied title/chapter can never break out of the markup (reflected XSS).
+function escapeXml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 app.get("/api/reader/panel-image", (req, res) => {
-  const manga = (req.query.manga as string) || 'Webtoon';
-  const chapter = (req.query.chapter as string) || '1';
-  const page = Number(req.query.page) || 1;
-  const totalPages = Number(req.query.totalPages) || 14;
+  const manga = escapeXml((req.query.manga as string) || 'Webtoon');
+  // chapter/totalPages are validated as non-negative integers before rendering.
+  const chapter = Math.max(1, Math.floor(Number(req.query.chapter) || 1));
+  const totalPages = Math.max(1, Math.floor(Number(req.query.totalPages) || 14));
+  const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
   const type = (req.query.type as string) || 'manhwa';
-  const genre = (req.query.genre as string) || 'Action';
+  const genre = String((req.query.genre as string) || 'Action').toLowerCase();
+  const chapterNext = escapeXml(chapter + 1);
 
   // Aesthetic colors per genre
   let bgGrad1 = '#0f172a';
@@ -5219,7 +5425,7 @@ app.get("/api/reader/panel-image", (req, res) => {
       </text>
       
       <text x="400" y="230" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="36" font-weight="900">
-        ${manga.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        ${manga}
       </text>
 
       <rect x="250" y="270" width="300" height="40" rx="20" fill="${auraColor}"/>
@@ -5240,7 +5446,7 @@ app.get("/api/reader/panel-image", (req, res) => {
       <!-- Speech Bubble -->
       <path d="M 120 850 Q 120 800 170 800 L 630 800 Q 680 800 680 850 L 680 930 Q 680 980 630 980 L 320 980 L 260 1030 L 280 980 L 170 980 Q 120 980 120 930 Z" fill="#0f172a" stroke="${auraColor}" stroke-width="3"/>
       <text x="400" y="890" text-anchor="middle" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="22" font-weight="700">
-        ${dialogueText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        ${escapeXml(dialogueText)}
       </text>
 
       <!-- Page Indicator -->
@@ -5266,7 +5472,7 @@ app.get("/api/reader/panel-image", (req, res) => {
         End of Chapter ${chapter}
       </text>
       <text x="400" y="785" text-anchor="middle" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="16" font-weight="600">
-        Click "Next Chapter" to continue reading Chapter ${Number(chapter) + 1}!
+        Click "Next Chapter" to continue reading Chapter ${chapterNext}!
       </text>
     `;
   } else {
@@ -5292,7 +5498,7 @@ app.get("/api/reader/panel-image", (req, res) => {
         <!-- Dialogue Bubble -->
         <path d="M 80 130 Q 80 100 110 100 L 520 100 Q 550 100 550 130 L 550 190 Q 550 220 520 220 L 220 220 L 180 250 L 190 220 L 110 220 Q 80 220 80 190 Z" fill="#0f172a" stroke="${auraColor}" stroke-width="2"/>
         <text x="315" y="150" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="18" font-weight="700">
-          Page ${page}: "Unleashing the ${genre} aura power!"
+          Page ${escapeXml(page)}: "Unleashing the ${escapeXml(genre)} aura power!"
         </text>
         <text x="315" y="180" text-anchor="middle" fill="#cbd5e1" font-family="system-ui, sans-serif" font-size="14">
           The power level is increasing exponentially...
@@ -5623,6 +5829,49 @@ app.get("/api/auth/client-context", (req, res) => {
     isHost,
     clientIp,
     defaultRole: isHost ? 'admin' : 'guest',
+  });
+});
+
+// Login: exchange a username/email + password for a signed token.
+// Available regardless of REQUIRE_AUTH (host can always mint tokens; remote
+// clients need this to gain access once auth is enabled).
+app.post("/api/auth/login", async (req, res) => {
+  const { username, email, password } = req.body || {};
+  const identifier = String(username || email || '').trim().toLowerCase();
+  const pass = String(password || '');
+  if (!identifier || !pass) {
+    return res.status(400).json({ error: 'Bad Request', message: 'username/email and password are required.' });
+  }
+
+  const user = userProfiles.find(
+    (u) => (u.username || '').toLowerCase() === identifier || (u.email || '').toLowerCase() === identifier
+  );
+  if (!user || !user.password) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
+  }
+
+  const ok = await verifyPasswordAsync(pass, user.password);
+  if (!ok) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
+  }
+
+  const token = signAuthToken({ sub: user.id, role: user.role });
+  res.json({
+    token,
+    expiresInMs: AUTH_TOKEN_TTL_MS,
+    user: { id: user.id, username: user.username, role: user.role, name: user.name },
+  });
+});
+
+// Return the currently authenticated user (or null). Never requires auth.
+app.get("/api/auth/me", (req, res) => {
+  const user = (req as any).user as UserProfile | null;
+  res.json({
+    authenticated: !!user,
+    authEnabled: AUTH_ENABLED,
+    user: user
+      ? { id: user.id, username: user.username, role: user.role, name: user.name }
+      : null,
   });
 });
 
