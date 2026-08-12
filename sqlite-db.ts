@@ -99,6 +99,32 @@ db.exec(`
     status TEXT,
     details TEXT
   );
+
+  -- Reading progress / position (resume mid-chapter), modeled on Kotatsu's
+  -- HistoryEntity. One row per (manga, user, chapter) so a user can resume a
+  -- chapter at the exact page/percent they left off, or continue from history.
+  CREATE TABLE IF NOT EXISTS reading_progress (
+    manga_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    chapter_number INTEGER NOT NULL,
+    page_index INTEGER DEFAULT 0,
+    page_count INTEGER DEFAULT 0,
+    percent INTEGER DEFAULT 0,
+    last_read_at TEXT,
+    PRIMARY KEY (manga_id, user_id, chapter_number)
+  );
+
+  -- Per-day reading activity, powering the (previously mock) analytics heatmap.
+  CREATE TABLE IF NOT EXISTS reading_activity (
+    date TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    chapters_read INTEGER DEFAULT 0,
+    minutes_spent REAL DEFAULT 0,
+    PRIMARY KEY (date, user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_read_progress_user ON reading_progress(user_id, last_read_at);
+  CREATE INDEX IF NOT EXISTS idx_read_activity_user ON reading_activity(user_id, date);
 `);
 
 // Prepared Statements for Sub-millisecond Execution
@@ -192,6 +218,33 @@ const stmtDeleteAllLogs = db.prepare('DELETE FROM logs');
 const stmtInsertLog = db.prepare(`
   INSERT OR REPLACE INTO logs (id, mangaId, mangaTitle, sourceName, previousChapter, newChapter, timestamp, status, details, type)
   VALUES (@id, @mangaId, @mangaTitle, @sourceName, @previousChapter, @newChapter, @timestamp, @status, @details, @type)
+`);
+
+// ── Reading Progress & Activity Persistence ─────────────────────────────────
+const stmtUpsertReadingProgress = db.prepare(`
+  INSERT INTO reading_progress (manga_id, user_id, chapter_number, page_index, page_count, percent, last_read_at)
+  VALUES (@manga_id, @user_id, @chapter_number, @page_index, @page_count, @percent, @last_read_at)
+  ON CONFLICT(manga_id, user_id, chapter_number) DO UPDATE SET
+    page_index = excluded.page_index,
+    page_count = excluded.page_count,
+    percent = excluded.percent,
+    last_read_at = excluded.last_read_at
+`);
+const stmtGetReadingProgress = db.prepare(`
+  SELECT * FROM reading_progress WHERE manga_id = ? AND user_id = ?
+`);
+const stmtGetReadingProgressForChapter = db.prepare(`
+  SELECT * FROM reading_progress WHERE manga_id = ? AND user_id = ? AND chapter_number = ?
+`);
+const stmtUpsertReadingActivity = db.prepare(`
+  INSERT INTO reading_activity (date, user_id, chapters_read, minutes_spent)
+  VALUES (@date, @user_id, @chapters_read, @minutes_spent)
+  ON CONFLICT(date, user_id) DO UPDATE SET
+    chapters_read = excluded.chapters_read,
+    minutes_spent = excluded.minutes_spent
+`);
+const stmtGetReadingActivity = db.prepare(`
+  SELECT * FROM reading_activity WHERE user_id = ? ORDER BY date ASC
 `);
 
 // Helper Serializers & Deserializers
@@ -455,6 +508,51 @@ export const SqliteDb = {
       }
     });
     transaction(logs);
+  },
+
+  // ── Reading Progress (resume position) ─────────────────────────────────────
+  upsertReadingProgress(p: {
+    manga_id: string;
+    user_id: string;
+    chapter_number: number;
+    page_index?: number;
+    page_count?: number;
+    percent?: number;
+  }) {
+    stmtUpsertReadingProgress.run({
+      manga_id: p.manga_id,
+      user_id: p.user_id,
+      chapter_number: Number(p.chapter_number) || 0,
+      page_index: Number(p.page_index) || 0,
+      page_count: Number(p.page_count) || 0,
+      percent: Math.min(100, Math.max(0, Number(p.percent) || 0)),
+      last_read_at: new Date().toISOString(),
+    });
+  },
+
+  getReadingProgress(mangaId: string, userId: string): any[] {
+    return stmtGetReadingProgress.all(mangaId, userId);
+  },
+
+  getReadingProgressForChapter(mangaId: string, userId: string, chapterNumber: number): any {
+    return stmtGetReadingProgressForChapter.get(mangaId, userId, Number(chapterNumber) || 0) || null;
+  },
+
+  // ── Per-day Reading Activity (real analytics/heatmap) ──────────────────────
+  recordReadingActivity(userId: string, opts: { chaptersRead?: number; minutesSpent?: number }) {
+    const today = new Date().toISOString().substring(0, 10);
+    const allRows = stmtGetReadingActivity.all(userId) as any[];
+    const existing = allRows.find((r: any) => r.date === today);
+    stmtUpsertReadingActivity.run({
+      date: today,
+      user_id: userId,
+      chapters_read: (existing?.chapters_read || 0) + (Number(opts.chaptersRead) || 0),
+      minutes_spent: (existing?.minutes_spent || 0) + (Number(opts.minutesSpent) || 0),
+    });
+  },
+
+  getReadingActivity(userId: string): any[] {
+    return stmtGetReadingActivity.all(userId);
   }
 };
 

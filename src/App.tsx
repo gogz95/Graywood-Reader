@@ -855,21 +855,10 @@ export default function App() {
 
         {activeTab === 'browse' && (
           <BrowseView
-            mangaList={displayMangaList}
             searchQuery={searchQuery}
-            onIncrementChapter={handleIncrementChapter}
             onSelectManga={handleSelectMangaDetail}
-            onQuickEdit={(manga) => {
-              setEditingManga(manga);
-              setAddModalOpen(true);
-            }}
-            onDeleteManga={handleDeleteManga}
-            onAddNew={() => {
-              setEditingManga(null);
-              setAddModalOpen(true);
-            }}
             onOpenReader={handleOpenReader}
-            onOpenChapters={handleOpenChapters}
+            onTrack={handleSaveManga}
           />
         )}
 

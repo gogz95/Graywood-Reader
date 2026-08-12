@@ -3727,6 +3727,108 @@ app.get('/api/scrape/browse', async (req, res) => {
   }
 });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// LIVE EXPLORE FEED  GET /api/explore
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// The Explore page ("/browse") feeds exclusively on LIVE source data — never the
+// local SQLite library. This endpoint aggregates popular/live series across a
+// curated set of enabled, alive sources, dedupes them by normalized title, and
+// paginates. A short-TTL cache keeps repeat calls from hammering the sources.
+const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonic'];
+const EXPLORE_CACHE_TTL_MS = 60_000; // 60s
+const exploreCache: Map<string, { expiresAt: number; data: any[] }> = new Map();
+
+function exploreCacheKey(sourceId: string, page: number, limit: number): string {
+  return `${sourceId}::${page}::${limit}`;
+}
+
+app.get("/api/explore", async (req, res) => {
+  const rawSourceId = ((req.query.sourceId as string) || '').trim();
+  const q = ((req.query.q as string) || '').trim();
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 30));
+
+  const sourcesToBrowse: SourceDefinition[] = [];
+  if (rawSourceId && rawSourceId !== 'all') {
+    const found = KOTATSU_SOURCES.find(
+      (s) => s.id === rawSourceId && s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+    );
+    if (found) sourcesToBrowse.push(found);
+  } else {
+    for (const id of DEFAULT_EXPLORE_SOURCE_IDS) {
+      const s = KOTATSU_SOURCES.find(
+        (src) => src.id === id && src.id !== 'mangadex' && !disabledSourceIds.has(src.id) && isSourceAlive(src.id)
+      );
+      if (s) sourcesToBrowse.push(s);
+    }
+    // Fall back to any enabled+alive sources if the defaults are all disabled.
+    if (sourcesToBrowse.length === 0) {
+      sourcesToBrowse.push(
+        ...KOTATSU_SOURCES.filter(
+          (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+        ).slice(0, 4)
+      );
+    }
+  }
+
+  if (sourcesToBrowse.length === 0) {
+    return res.json({ items: [], totalCount: 0, totalPages: 0 });
+  }
+
+  try {
+    const aggregated: any[] = [];
+    const perSourceLimit = Math.max(6, Math.ceil(limit / sourcesToBrowse.length));
+
+    await Promise.all(
+      sourcesToBrowse.map(async (src) => {
+        const key = exploreCacheKey(src.id, page, perSourceLimit);
+        let items: any[] = [];
+        const cached = exploreCache.get(key);
+        if (cached && cached.expiresAt > Date.now()) {
+          items = cached.data;
+        } else {
+          const result = await getSourcePopularSeries(src, page, perSourceLimit);
+          items = Array.isArray(result) ? result : (result?.items || []);
+          exploreCache.set(key, { expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS, data: items });
+        }
+        for (const item of items) aggregated.push({ ...item, __sourceId: src.id, __sourceName: src.name });
+      })
+    );
+
+    let unique = aggregated;
+    if (q) {
+      const needle = q.toLowerCase();
+      unique = unique.filter((it) =>
+        (it.title || '').toLowerCase().includes(needle) ||
+        (it.description || '').toLowerCase().includes(needle)
+      );
+    }
+
+    // Dedupe across sources by normalized title.
+    const seen = new Set<string>();
+    const deduped: any[] = [];
+    for (const it of unique) {
+      const key = String(it.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(it);
+      }
+    }
+
+    const offset = (page - 1) * limit;
+    const paged = deduped.slice(offset, offset + limit);
+    const totalPages = Math.max(1, Math.ceil(deduped.length / limit));
+
+    res.setHeader('X-Total-Count', String(deduped.length));
+    res.setHeader('X-Total-Pages', String(totalPages));
+    return res.json({ items: paged, totalCount: deduped.length, totalPages });
+  } catch (e: any) {
+    console.error('[Explore] Failed to aggregate live feed:', e.message);
+    return res.json({ items: [], totalCount: 0, totalPages: 0 });
+  }
+});
+
 // Helper: Get source-specific popular series feed (Kotatsu Parser Live Scraper + Multi-Tier Fallback)
 // Returns { items, totalCount } so callers can set X-Total-Pages headers for proper pagination.
 async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number = 1, limit: number = 24): Promise<{ items: any[]; totalCount: number }> {
@@ -5577,8 +5679,154 @@ app.post("/api/reader/mark-read", (req, res) => {
   };
 
   syncAddOrUpdateManga(updatedItem);
+
+  // Record the chapter as a completed read for the active user (real analytics).
+  const activeUserId = ((req as any).user?.id as string) || (req.query.userId as string) || 'usr_admin';
+  try {
+    SqliteDb.recordReadingActivity(activeUserId, { chaptersRead: 1 });
+  } catch (err) {
+    console.error('[Progress Engine] Failed to record reading activity:', err);
+  }
+
   res.json({ success: true, manga: updatedItem });
 });
+
+// =============================================================
+// READING PROGRESS & ACTIVITY PERSISTENCE API
+// =============================================================
+// Borrowed from Kotatsu's HistoryEntity model: store a per-user, per-chapter
+// reading position so readers can RESUME mid-chapter, and persist per-day
+// activity so the analytics/heatmap show real data instead of mock values.
+
+function resolveProgressUserId(req: express.Request): string {
+  return ((req as any).user?.id as string) || (req.query.userId as string) || 'usr_admin';
+}
+
+// Save (or update) the current reading position for a manga/chapter.
+app.post("/api/reader/progress", (req, res) => {
+  const { mangaId, chapterNumber, pageIndex, pageCount, percent } = req.body || {};
+  if (!mangaId || chapterNumber === undefined) {
+    return res.status(400).json({ error: 'mangaId and chapterNumber are required' });
+  }
+  const userId = resolveProgressUserId(req);
+
+  SqliteDb.upsertReadingProgress({
+    manga_id: String(mangaId),
+    user_id: userId,
+    chapter_number: Number(chapterNumber) || 0,
+    page_index: Number(pageIndex),
+    page_count: Number(pageCount),
+    percent: Number(percent),
+  });
+
+  // Mirror the latest chapter onto the manga row (best-effort, non-intrusive).
+  try {
+    const existing = SqliteDb.getMangaById(String(mangaId));
+    if (existing) {
+      const ch = Number(chapterNumber) || 0;
+      if (ch >= (Number(existing.currentChapter) || 0)) {
+        const synced = {
+          ...existing,
+          currentChapter: Math.max(Number(existing.currentChapter) || 0, ch),
+          lastReadAt: new Date().toISOString(),
+          status: existing.status === 'plan_to_read' ? 'reading' : existing.status,
+        };
+        SqliteDb.upsertManga(synced as MangaItem);
+      }
+    }
+  } catch (err) {
+    console.error('[Progress Engine] Failed to mirror progress onto manga:', err);
+  }
+
+  res.json({ success: true });
+});
+
+// Get the resume position(s) for a manga (all stored chapters for the user).
+app.get("/api/reader/history/:mangaId", (req, res) => {
+  const { mangaId } = req.params;
+  const userId = resolveProgressUserId(req);
+  const rows = SqliteDb.getReadingProgress(String(mangaId), userId);
+  res.json(rows);
+});
+
+// Get the "Continue Reading" list: most-recently-read manga for the user.
+app.get("/api/reader/history", (req, res) => {
+  const userId = resolveProgressUserId(req);
+  const all = SqliteDb.getAllManga();
+  const map = new Map<string, any>();
+  for (const m of all) {
+    const prog = SqliteDb.getReadingProgress(m.id, userId);
+    for (const p of prog) {
+      const rec = map.get(m.id);
+      if (!rec || (p.last_read_at || '') > (rec.last_read_at || '')) {
+        map.set(m.id, { manga: m, progress: p });
+      }
+    }
+  }
+  const list = [...map.values()]
+    .sort((a, b) => (b.progress.last_read_at || '').localeCompare(a.progress.last_read_at || ''))
+    .slice(0, 50);
+  res.json(list);
+});
+
+// Get real reading analytics (per-day activity) for the active user, converted
+// into the ReadingAnalytics shape (streaks, totals, heatmap).
+app.get("/api/reader/analytics", (req, res) => {
+  const userId = resolveProgressUserId(req);
+  const rows = SqliteDb.getReadingActivity(userId);
+  let totalChaptersRead = 0;
+  let totalTimeMinutes = 0;
+  for (const r of rows) {
+    totalChaptersRead += Number(r.chapters_read) || 0;
+    totalTimeMinutes += Number(r.minutes_spent) || 0;
+  }
+
+  const dayMap = new Map<string, number>();
+  for (const r of rows) dayMap.set(r.date, Number(r.chapters_read) || 0);
+  const dates = [...dayMap.keys()].sort();
+
+  // Current streak: trailing consecutive days with activity, ending today.
+  const today = new Date().toISOString().substring(0, 10);
+  let currentStreak = 0;
+  let cursor = today;
+  for (let i = 0; i < 3650; i++) {
+    if (dayMap.has(cursor)) { currentStreak++; cursor = prevDate(cursor); }
+    else break;
+  }
+
+  // Longest streak across all recorded days.
+  let longestStreak = 0;
+  let run = 0;
+  for (const d of dates) {
+    if (dayMap.has(d)) { run++; longestStreak = Math.max(longestStreak, run); }
+    else run = 0;
+  }
+
+  res.json({
+    currentStreakDays: currentStreak,
+    longestStreakDays: longestStreak,
+    totalChaptersRead,
+    totalTimeMinutes,
+    activities: rows.map((r) => {
+      const chapters = Number(r.chapters_read) || 0;
+      return {
+        date: r.date,
+        chaptersRead: chapters,
+        minutesSpent: Number(r.minutes_spent) || 0,
+        level: clamp(0, 4, chapters),
+      };
+    }),
+  });
+});
+
+function prevDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().substring(0, 10);
+}
+function clamp(min: number, max: number, v: number): number {
+  return Math.min(max, Math.max(min, v));
+}
 
 // Default App & Kotatsu Reader Settings in Server Memory
 let appSettings = {
