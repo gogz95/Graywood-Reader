@@ -1,0 +1,6613 @@
+{
+  "generatedAt": "2026-08-12T20:41:10.220Z",
+  "parserRepo": "kotatsu-parsers\\src\\main\\kotlin\\org\\koitharu\\kotatsu\\parsers\\site",
+  "totalIngested": 1187,
+  "reliable": 957,
+  "unreliable": 230,
+  "fixedFromLegacy": 827,
+  "fixed": [
+    {
+      "id": "acomics",
+      "legacy": "https://acomics.com",
+      "fixed": "https://acomics.ru",
+      "via": "configKey"
+    },
+    {
+      "id": "adonisfansub",
+      "legacy": "https://adonisfansub.com",
+      "fixed": "https://manga.adonisfansub.com",
+      "via": "ctor"
+    },
+    {
+      "id": "adult_webtoon",
+      "legacy": "https://adult_webtoon.com",
+      "fixed": "https://adultwebtoon.com",
+      "via": "ctor"
+    },
+    {
+      "id": "agscomics",
+      "legacy": "https://agscomics.com",
+      "fixed": "https://agrcomics.com",
+      "via": "bare"
+    },
+    {
+      "id": "ainzscans",
+      "legacy": "https://ainzscans.com",
+      "fixed": "https://ainzscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "aiyumangascanlation",
+      "legacy": "https://aiyumangascanlation.com",
+      "fixed": "https://aiyumanhua.com",
+      "via": "bare"
+    },
+    {
+      "id": "alceascan",
+      "legacy": "https://alceascan.com",
+      "fixed": "https://alceacomic.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "allhentai",
+      "legacy": "https://allhentai.com",
+      "fixed": "https://20.allhen.online",
+      "via": "configKey"
+    },
+    {
+      "id": "allied_fansub",
+      "legacy": "https://allied_fansub.com",
+      "fixed": "https://alliedfansub.net",
+      "via": "ctor"
+    },
+    {
+      "id": "allporn_comic",
+      "legacy": "https://allporn_comic.com",
+      "fixed": "https://allporncomic.com",
+      "via": "ctor"
+    },
+    {
+      "id": "alonescanlator",
+      "legacy": "https://alonescanlator.com",
+      "fixed": "https://alonescanlator.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "alterkaiscans",
+      "legacy": "https://alterkaiscans.com",
+      "fixed": "https://alterkaiscans.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "ancientcomics",
+      "legacy": "https://ancientcomics.com",
+      "fixed": "https://ancientcomics.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "anibel",
+      "legacy": "https://anibel.com",
+      "fixed": "https://anibel.net",
+      "via": "configKey"
+    },
+    {
+      "id": "anigliscans",
+      "legacy": "https://anigliscans.com",
+      "fixed": "https://anigliscans.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "animesama",
+      "legacy": "https://animesama.com",
+      "fixed": "https://anime-sama.fr",
+      "via": "configKey"
+    },
+    {
+      "id": "anisa_manga",
+      "legacy": "https://anisa_manga.com",
+      "fixed": "https://anisamanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "anisascans",
+      "legacy": "https://anisascans.com",
+      "fixed": "https://anisascans.in",
+      "via": "ctor"
+    },
+    {
+      "id": "anshscans",
+      "legacy": "https://anshscans.com",
+      "fixed": "https://anshscans.org",
+      "via": "ctor"
+    },
+    {
+      "id": "anteikuscan",
+      "legacy": "https://anteikuscan.com",
+      "fixed": "https://anteikuscan.fr",
+      "via": "bare"
+    },
+    {
+      "id": "apkomik",
+      "legacy": "https://apkomik.com",
+      "fixed": "https://apkomik.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "apoll_comics",
+      "legacy": "https://apoll_comics.com",
+      "fixed": "https://apollcomics.es",
+      "via": "ctor"
+    },
+    {
+      "id": "aquamanga",
+      "legacy": "https://aquamanga.com",
+      "fixed": "https://aquareader.net",
+      "via": "ctor"
+    },
+    {
+      "id": "arabsdoujin",
+      "legacy": "https://arabsdoujin.com",
+      "fixed": "https://arabsdoujin.online",
+      "via": "bare"
+    },
+    {
+      "id": "arabtoons",
+      "legacy": "https://arabtoons.com",
+      "fixed": "https://arabtoons.net",
+      "via": "ctor"
+    },
+    {
+      "id": "arareascans",
+      "legacy": "https://arareascans.com",
+      "fixed": "https://ar.kenmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "arcrelight",
+      "legacy": "https://arcrelight.com",
+      "fixed": "https://arc-relight.com",
+      "via": "bare"
+    },
+    {
+      "id": "arcticscan",
+      "legacy": "https://arcticscan.com",
+      "fixed": "https://arcticscan.top",
+      "via": "ctor"
+    },
+    {
+      "id": "areascans",
+      "legacy": "https://areascans.com",
+      "fixed": "https://ar.kenmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "argoscomics",
+      "legacy": "https://argoscomics.com",
+      "fixed": "https://argoscomic.com",
+      "via": "ctor"
+    },
+    {
+      "id": "armoniscans",
+      "legacy": "https://armoniscans.com",
+      "fixed": "https://armoniscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "arthur_scan",
+      "legacy": "https://arthur_scan.com",
+      "fixed": "https://arthurscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "arvenscans",
+      "legacy": "https://arvenscans.com",
+      "fixed": "https://arvencomics.com",
+      "via": "bare"
+    },
+    {
+      "id": "asqorg",
+      "legacy": "https://asqorg.com",
+      "fixed": "https://3asq.org",
+      "via": "ctor"
+    },
+    {
+      "id": "astralmanga",
+      "legacy": "https://astralmanga.com",
+      "fixed": "https://astral-manga.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "astrames",
+      "legacy": "https://astrames.com",
+      "fixed": "https://astrames.fr",
+      "via": "bare"
+    },
+    {
+      "id": "astrascans",
+      "legacy": "https://astrascans.com",
+      "fixed": "https://astrascans.org",
+      "via": "ctor"
+    },
+    {
+      "id": "asupankomik",
+      "legacy": "https://asupankomik.com",
+      "fixed": "https://asupankomik.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "asurascans",
+      "legacy": "https://asurascans.com",
+      "fixed": "https://asuracomic.net",
+      "via": "configKey"
+    },
+    {
+      "id": "asurascans_us",
+      "legacy": "https://asurascans_us.com",
+      "fixed": "https://asurascans.us",
+      "via": "ctor"
+    },
+    {
+      "id": "asurascansgg",
+      "legacy": "https://asurascansgg.com",
+      "fixed": "https://asurascans.us",
+      "via": "ctor"
+    },
+    {
+      "id": "asurascanstr",
+      "legacy": "https://asurascanstr.com",
+      "fixed": "https://asurascans.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "atemporal",
+      "legacy": "https://atemporal.com",
+      "fixed": "https://atemporal.cloud",
+      "via": "ctor"
+    },
+    {
+      "id": "atikrost",
+      "legacy": "https://atikrost.com",
+      "fixed": "https://mangaoku.org",
+      "via": "ctor"
+    },
+    {
+      "id": "atlantisscan",
+      "legacy": "https://atlantisscan.com",
+      "fixed": "https://scansatlanticos.com",
+      "via": "ctor"
+    },
+    {
+      "id": "bakaman",
+      "legacy": "https://bakaman.com",
+      "fixed": "https://bakaman.net",
+      "via": "ctor"
+    },
+    {
+      "id": "banana_manga",
+      "legacy": "https://banana_manga.com",
+      "fixed": "https://bananamanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "bananascan",
+      "legacy": "https://bananascan.com",
+      "fixed": "https://banana-scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "bananascan_com",
+      "legacy": "https://bananascan_com.com",
+      "fixed": "https://bananascan.com",
+      "via": "bare"
+    },
+    {
+      "id": "batcave",
+      "legacy": "https://batcave.com",
+      "fixed": "https://batcave.biz",
+      "via": "configKey"
+    },
+    {
+      "id": "beetoon",
+      "legacy": "https://beetoon.com",
+      "fixed": "https://bidmanga.com",
+      "via": "configKey"
+    },
+    {
+      "id": "best_manga",
+      "legacy": "https://best_manga.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "bestmanhuacom",
+      "legacy": "https://bestmanhuacom.com",
+      "fixed": "https://bestmanhua.com",
+      "via": "ctor"
+    },
+    {
+      "id": "birdtoon",
+      "legacy": "https://birdtoon.com",
+      "fixed": "https://birdtoon.shop",
+      "via": "ctor"
+    },
+    {
+      "id": "blogtruyen",
+      "legacy": "https://blogtruyen.com",
+      "fixed": "https://blogtruyenmoi.com",
+      "via": "configKey"
+    },
+    {
+      "id": "blogtruyenvn",
+      "legacy": "https://blogtruyenvn.com",
+      "fixed": "https://blogtruyenvn.org",
+      "via": "configKey"
+    },
+    {
+      "id": "bluesolo",
+      "legacy": "https://bluesolo.com",
+      "fixed": "https://www1.bluesolo.org",
+      "via": "ctor"
+    },
+    {
+      "id": "borutoexplorer",
+      "legacy": "https://borutoexplorer.com",
+      "fixed": "https://leitor.borutoexplorer.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "boys_love",
+      "legacy": "https://boys_love.com",
+      "fixed": "https://boyslove.me",
+      "via": "ctor"
+    },
+    {
+      "id": "brakeout",
+      "legacy": "https://brakeout.com",
+      "fixed": "https://brakeout.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "brmangas",
+      "legacy": "https://brmangas.com",
+      "fixed": "https://brmangas.net",
+      "via": "configKey"
+    },
+    {
+      "id": "brmangastop",
+      "legacy": "https://brmangastop.com",
+      "fixed": "https://brmangas.top",
+      "via": "ctor"
+    },
+    {
+      "id": "cabaredowatame",
+      "legacy": "https://cabaredowatame.com",
+      "fixed": "https://cabaredowatame.site",
+      "via": "ctor"
+    },
+    {
+      "id": "cafecomyaoi",
+      "legacy": "https://cafecomyaoi.com",
+      "fixed": "https://cafecomyaoi.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "carteldemanhwas",
+      "legacy": "https://carteldemanhwas.com",
+      "fixed": "https://cartelmanhwas.net",
+      "via": "ctor"
+    },
+    {
+      "id": "cat_300",
+      "legacy": "https://cat_300.com",
+      "fixed": "https://cat-300.com",
+      "via": "ctor"
+    },
+    {
+      "id": "catharsisworld",
+      "legacy": "https://catharsisworld.com",
+      "fixed": "https://catharsisworld.dig-it.info",
+      "via": "ctor"
+    },
+    {
+      "id": "centuryboys20th",
+      "legacy": "https://centuryboys20th.com",
+      "fixed": "https://20thcenturyboys.fr",
+      "via": "bare"
+    },
+    {
+      "id": "cerise_scans",
+      "legacy": "https://cerise_scans.com",
+      "fixed": "https://cerise.leitorweb.com",
+      "via": "ctor"
+    },
+    {
+      "id": "chainsawmanscan",
+      "legacy": "https://chainsawmanscan.com",
+      "fixed": "https://chainsawman-scan.com",
+      "via": "bare"
+    },
+    {
+      "id": "clonemanga",
+      "legacy": "https://clonemanga.com",
+      "fixed": "https://manga.clone-army.org",
+      "via": "configKey"
+    },
+    {
+      "id": "clovermanga",
+      "legacy": "https://clovermanga.com",
+      "fixed": "https://webtoonhatti.me",
+      "via": "ctor"
+    },
+    {
+      "id": "cmanga",
+      "legacy": "https://cmanga.com",
+      "fixed": "https://cmangax6.com",
+      "via": "configKey"
+    },
+    {
+      "id": "cocomic",
+      "legacy": "https://cocomic.com",
+      "fixed": "https://cocomic.co",
+      "via": "ctor"
+    },
+    {
+      "id": "cocorip",
+      "legacy": "https://cocorip.com",
+      "fixed": "https://cocorip.net",
+      "via": "ctor"
+    },
+    {
+      "id": "coffee_manga",
+      "legacy": "https://coffee_manga.com",
+      "fixed": "https://coffeemanga.io",
+      "via": "ctor"
+    },
+    {
+      "id": "colored_manga",
+      "legacy": "https://colored_manga.com",
+      "fixed": "https://coloredmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "comic21",
+      "legacy": "https://comic21.com",
+      "fixed": "https://comic21.me",
+      "via": "ctor"
+    },
+    {
+      "id": "comicaso",
+      "legacy": "https://comicaso.com",
+      "fixed": "https://comicaso.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "comicextra",
+      "legacy": "https://comicextra.com",
+      "fixed": "https://azcomix.me",
+      "via": "configKey"
+    },
+    {
+      "id": "comiz",
+      "legacy": "https://comiz.com",
+      "fixed": "https://v2.comiz.net",
+      "via": "ctor"
+    },
+    {
+      "id": "comx",
+      "legacy": "https://comx.com",
+      "fixed": "https://com-x.life",
+      "via": "configKey"
+    },
+    {
+      "id": "copypastescan",
+      "legacy": "https://copypastescan.com",
+      "fixed": "https://copypastescan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "cosmic_scans",
+      "legacy": "https://cosmic_scans.com",
+      "fixed": "https://cosmic345.co",
+      "via": "ctor"
+    },
+    {
+      "id": "cosmicscans",
+      "legacy": "https://cosmicscans.com",
+      "fixed": "https://cosmic-scans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "crowscans",
+      "legacy": "https://crowscans.com",
+      "fixed": "https://hadess.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "crystalscan",
+      "legacy": "https://crystalscan.com",
+      "fixed": "https://crystalcomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "cuutruyen",
+      "legacy": "https://cuutruyen.com",
+      "fixed": "https://cuutruyen.net",
+      "via": "configKey"
+    },
+    {
+      "id": "cvnscan",
+      "legacy": "https://cvnscan.com",
+      "fixed": "https://covendasbruxonas.com",
+      "via": "ctor"
+    },
+    {
+      "id": "cypherscans",
+      "legacy": "https://cypherscans.com",
+      "fixed": "https://cypheroscans.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "damconuong",
+      "legacy": "https://damconuong.com",
+      "fixed": "https://damconuong.co",
+      "via": "configKey"
+    },
+    {
+      "id": "dandadan",
+      "legacy": "https://dandadan.com",
+      "fixed": "https://dandadan.fr",
+      "via": "bare"
+    },
+    {
+      "id": "danke",
+      "legacy": "https://danke.com",
+      "fixed": "https://danke.moe",
+      "via": "bare"
+    },
+    {
+      "id": "dark_scans",
+      "legacy": "https://dark_scans.com",
+      "fixed": "https://darkscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "darkscan",
+      "legacy": "https://darkscan.com",
+      "fixed": "https://dark-scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "datgarscanlation",
+      "legacy": "https://datgarscanlation.com",
+      "fixed": "https://datgarscanlation.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "daycomics",
+      "legacy": "https://daycomics.com",
+      "fixed": "https://daycomics.me",
+      "via": "ctor"
+    },
+    {
+      "id": "deathtollscans",
+      "legacy": "https://deathtollscans.com",
+      "fixed": "https://reader.deathtollscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "decadencescans",
+      "legacy": "https://decadencescans.com",
+      "fixed": "https://reader.decadencescans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "deccalscans",
+      "legacy": "https://deccalscans.com",
+      "fixed": "https://fuchscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "demonicscans",
+      "legacy": "https://demonicscans.com",
+      "fixed": "https://demonicscans.org",
+      "via": "configKey"
+    },
+    {
+      "id": "demonsect",
+      "legacy": "https://demonsect.com",
+      "fixed": "https://seitacelestial.com",
+      "via": "ctor"
+    },
+    {
+      "id": "desume",
+      "legacy": "https://desume.com",
+      "fixed": "https://x.desu.city",
+      "via": "configKey"
+    },
+    {
+      "id": "diskusscan",
+      "legacy": "https://diskusscan.com",
+      "fixed": "https://diskusscan.online",
+      "via": "ctor"
+    },
+    {
+      "id": "doctruyen3q",
+      "legacy": "https://doctruyen3q.com",
+      "fixed": "https://doctruyen3qui15.pro",
+      "via": "ctor"
+    },
+    {
+      "id": "doctruyen5s",
+      "legacy": "https://doctruyen5s.com",
+      "fixed": "https://manga.io.vn",
+      "via": "bare"
+    },
+    {
+      "id": "dojing",
+      "legacy": "https://dojing.com",
+      "fixed": "https://dojing.net",
+      "via": "ctor"
+    },
+    {
+      "id": "domalfansb",
+      "legacy": "https://domalfansb.com",
+      "fixed": "https://domalfansb.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "doujin_hentai_net",
+      "legacy": "https://doujin_hentai_net.com",
+      "fixed": "https://doujinhentai.net",
+      "via": "ctor"
+    },
+    {
+      "id": "doujindesu",
+      "legacy": "https://doujindesu.com",
+      "fixed": "https://doujindesu.tv",
+      "via": "configKey"
+    },
+    {
+      "id": "doujindesurip",
+      "legacy": "https://doujindesurip.com",
+      "fixed": "https://doujindesu.asia",
+      "via": "ctor"
+    },
+    {
+      "id": "doujinku",
+      "legacy": "https://doujinku.com",
+      "fixed": "https://doujinku.org",
+      "via": "ctor"
+    },
+    {
+      "id": "doujins",
+      "legacy": "https://doujins.com",
+      "fixed": "https://doujins.lat",
+      "via": "ctor"
+    },
+    {
+      "id": "dragonmanga",
+      "legacy": "https://dragonmanga.com",
+      "fixed": "https://dragon-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "dragontea",
+      "legacy": "https://dragontea.com",
+      "fixed": "https://dragontea.ink",
+      "via": "ctor"
+    },
+    {
+      "id": "dragontranslation",
+      "legacy": "https://dragontranslation.com",
+      "fixed": "https://dragontranslation.net",
+      "via": "configKey"
+    },
+    {
+      "id": "dragontranslationorg",
+      "legacy": "https://dragontranslationorg.com",
+      "fixed": "https://dragontranslation.org",
+      "via": "ctor"
+    },
+    {
+      "id": "drakescans",
+      "legacy": "https://drakescans.com",
+      "fixed": "https://drakecomic.org",
+      "via": "ctor"
+    },
+    {
+      "id": "dreamscan",
+      "legacy": "https://dreamscan.com",
+      "fixed": "https://fairydream.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "drstone",
+      "legacy": "https://drstone.com",
+      "fixed": "https://drstone.fr",
+      "via": "bare"
+    },
+    {
+      "id": "dualeotruyen",
+      "legacy": "https://dualeotruyen.com",
+      "fixed": "https://dualeotruyenev.com",
+      "via": "configKey"
+    },
+    {
+      "id": "duniakomik",
+      "legacy": "https://duniakomik.com",
+      "fixed": "https://duniakomik.org",
+      "via": "ctor"
+    },
+    {
+      "id": "duoscanlators",
+      "legacy": "https://duoscanlators.com",
+      "fixed": "https://duoscanlators.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "dynastyscans",
+      "legacy": "https://dynastyscans.com",
+      "fixed": "https://dynasty-scans.com",
+      "via": "configKey"
+    },
+    {
+      "id": "ecchidoujin",
+      "legacy": "https://ecchidoujin.com",
+      "fixed": "https://ecchi-doujin.com",
+      "via": "ctor"
+    },
+    {
+      "id": "edoujin",
+      "legacy": "https://edoujin.com",
+      "fixed": "https://ehentaimanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "edscanlation",
+      "legacy": "https://edscanlation.com",
+      "fixed": "https://edscanlation.fr",
+      "via": "bare"
+    },
+    {
+      "id": "elarcpage",
+      "legacy": "https://elarcpage.com",
+      "fixed": "https://elarctoon.com",
+      "via": "ctor"
+    },
+    {
+      "id": "elevenscanlator",
+      "legacy": "https://elevenscanlator.com",
+      "fixed": "https://elevenscanlator.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "elitemanga",
+      "legacy": "https://elitemanga.com",
+      "fixed": "https://beinmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "emperorscan",
+      "legacy": "https://emperorscan.com",
+      "fixed": "https://emperorscan.mundoalterno.org",
+      "via": "ctor"
+    },
+    {
+      "id": "enryumanga",
+      "legacy": "https://enryumanga.com",
+      "fixed": "https://enryumanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "enthunderscans",
+      "legacy": "https://enthunderscans.com",
+      "fixed": "https://en-thunderscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "epikman",
+      "legacy": "https://epikman.com",
+      "fixed": "https://epikman.ga",
+      "via": "bare"
+    },
+    {
+      "id": "epsilonscan",
+      "legacy": "https://epsilonscan.com",
+      "fixed": "https://epsilonscan.to",
+      "via": "ctor"
+    },
+    {
+      "id": "epsilonsoft",
+      "legacy": "https://epsilonsoft.com",
+      "fixed": "https://epsilonsoft.to",
+      "via": "ctor"
+    },
+    {
+      "id": "erosscans",
+      "legacy": "https://erosscans.com",
+      "fixed": "https://erosxscans.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "etheralradiance",
+      "legacy": "https://etheralradiance.com",
+      "fixed": "https://etheralradiance.eu",
+      "via": "ctor"
+    },
+    {
+      "id": "evilmanga",
+      "legacy": "https://evilmanga.com",
+      "fixed": "https://evil-manga.eu",
+      "via": "ctor"
+    },
+    {
+      "id": "ezmanga",
+      "legacy": "https://ezmanga.com",
+      "fixed": "https://ezmanga.org",
+      "via": "bare"
+    },
+    {
+      "id": "fayscans",
+      "legacy": "https://fayscans.com",
+      "fixed": "https://fayscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "fbsquads",
+      "legacy": "https://fbsquads.com",
+      "fixed": "https://fbsquadx.com",
+      "via": "ctor"
+    },
+    {
+      "id": "fecomicc",
+      "legacy": "https://fecomicc.com",
+      "fixed": "https://mangasup.net",
+      "via": "ctor"
+    },
+    {
+      "id": "fenixproject",
+      "legacy": "https://fenixproject.com",
+      "fixed": "https://fenixproject.site",
+      "via": "ctor"
+    },
+    {
+      "id": "fireforce",
+      "legacy": "https://fireforce.com",
+      "fixed": "https://fireforce.fr",
+      "via": "bare"
+    },
+    {
+      "id": "firescans",
+      "legacy": "https://firescans.com",
+      "fixed": "https://div.page-item-detail",
+      "via": "ctor"
+    },
+    {
+      "id": "firstkissmanhua",
+      "legacy": "https://firstkissmanhua.com",
+      "fixed": "https://1stkissmanhua.net",
+      "via": "ctor"
+    },
+    {
+      "id": "flamecomics",
+      "legacy": "https://flamecomics.com",
+      "fixed": "https://flamecomics.xyz",
+      "via": "configKey"
+    },
+    {
+      "id": "flares",
+      "legacy": "https://flares.com",
+      "fixed": "https://fl-ares.com",
+      "via": "ctor"
+    },
+    {
+      "id": "flixscans",
+      "legacy": "https://flixscans.com",
+      "fixed": "https://flixscans.net",
+      "via": "configKey"
+    },
+    {
+      "id": "flixscansorg",
+      "legacy": "https://flixscansorg.com",
+      "fixed": "https://flixscans.org",
+      "via": "configKey"
+    },
+    {
+      "id": "flowermanga",
+      "legacy": "https://flowermanga.com",
+      "fixed": "https://flowermanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "fmteam",
+      "legacy": "https://fmteam.com",
+      "fixed": "https://fmteam.fr",
+      "via": "bare"
+    },
+    {
+      "id": "foxwhite",
+      "legacy": "https://foxwhite.com",
+      "fixed": "https://foxwhite.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "franxxmangas",
+      "legacy": "https://franxxmangas.com",
+      "fixed": "https://franxxmangas.net",
+      "via": "ctor"
+    },
+    {
+      "id": "freecomiconline",
+      "legacy": "https://freecomiconline.com",
+      "fixed": "https://freecomiconline.me",
+      "via": "ctor"
+    },
+    {
+      "id": "freemanga",
+      "legacy": "https://freemanga.com",
+      "fixed": "https://freemanga.me",
+      "via": "ctor"
+    },
+    {
+      "id": "frscan",
+      "legacy": "https://frscan.com",
+      "fixed": "https://fr-scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "frscanscom",
+      "legacy": "https://frscanscom.com",
+      "fixed": "https://frscans.com",
+      "via": "bare"
+    },
+    {
+      "id": "furymanga",
+      "legacy": "https://furymanga.com",
+      "fixed": "https://myshojo.com",
+      "via": "ctor"
+    },
+    {
+      "id": "futari",
+      "legacy": "https://futari.com",
+      "fixed": "https://futari.info",
+      "via": "ctor"
+    },
+    {
+      "id": "galaxscans",
+      "legacy": "https://galaxscans.com",
+      "fixed": "https://galaxscanlator.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "gekkouscans",
+      "legacy": "https://gekkouscans.com",
+      "fixed": "https://gekkou.site",
+      "via": "ctor"
+    },
+    {
+      "id": "ghostfansub",
+      "legacy": "https://ghostfansub.com",
+      "fixed": "https://ghostfansub.co",
+      "via": "ctor"
+    },
+    {
+      "id": "ghostscan",
+      "legacy": "https://ghostscan.com",
+      "fixed": "https://ghostscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "gistamishousefansub",
+      "legacy": "https://gistamishousefansub.com",
+      "fixed": "https://gistamishousefansub.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "glorymanga",
+      "legacy": "https://glorymanga.com",
+      "fixed": "https://mangagezgini.site",
+      "via": "ctor"
+    },
+    {
+      "id": "gmanga",
+      "legacy": "https://gmanga.com",
+      "fixed": "https://gmanga.site",
+      "via": "ctor"
+    },
+    {
+      "id": "goctruyentranh",
+      "legacy": "https://goctruyentranh.com",
+      "fixed": "https://goctruyentranh.net",
+      "via": "configKey"
+    },
+    {
+      "id": "goctruyentranhvui",
+      "legacy": "https://goctruyentranhvui.com",
+      "fixed": "https://goctruyentranhvui17.com",
+      "via": "configKey"
+    },
+    {
+      "id": "goodgirls",
+      "legacy": "https://goodgirls.com",
+      "fixed": "https://goodgirls.moe",
+      "via": "ctor"
+    },
+    {
+      "id": "gourmetscans",
+      "legacy": "https://gourmetscans.com",
+      "fixed": "https://gourmetsupremacy.com",
+      "via": "ctor"
+    },
+    {
+      "id": "grabber",
+      "legacy": "https://grabber.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "grimelek",
+      "legacy": "https://grimelek.com",
+      "fixed": "https://siyahmelek.org",
+      "via": "ctor"
+    },
+    {
+      "id": "gtothegreatsite",
+      "legacy": "https://gtothegreatsite.com",
+      "fixed": "https://reader.gtothegreatsite.net",
+      "via": "bare"
+    },
+    {
+      "id": "guildatierdraw",
+      "legacy": "https://guildatierdraw.com",
+      "fixed": "https://guildatierdraw.top",
+      "via": "bare"
+    },
+    {
+      "id": "guncel_manga",
+      "legacy": "https://guncel_manga.com",
+      "fixed": "https://guncelmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "guyacubari",
+      "legacy": "https://guyacubari.com",
+      "fixed": "https://guya.cubari.moe",
+      "via": "bare"
+    },
+    {
+      "id": "haikyuu",
+      "legacy": "https://haikyuu.com",
+      "fixed": "https://haikyuu.fr",
+      "via": "bare"
+    },
+    {
+      "id": "hamtruyen",
+      "legacy": "https://hamtruyen.com",
+      "fixed": "https://hamtruyen1.com",
+      "via": "ctor"
+    },
+    {
+      "id": "hangtruyen",
+      "legacy": "https://hangtruyen.com",
+      "fixed": "https://hangtruyen.org",
+      "via": "configKey"
+    },
+    {
+      "id": "haremscann",
+      "legacy": "https://haremscann.com",
+      "fixed": "https://haremscann.es",
+      "via": "ctor"
+    },
+    {
+      "id": "harimanga",
+      "legacy": "https://harimanga.com",
+      "fixed": "https://harimanga.me",
+      "via": "ctor"
+    },
+    {
+      "id": "harmonyscan",
+      "legacy": "https://harmonyscan.com",
+      "fixed": "https://harmony-scan.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "hastateam",
+      "legacy": "https://hastateam.com",
+      "fixed": "https://ddt.hastateam.com",
+      "via": "bare"
+    },
+    {
+      "id": "hastateam_reader",
+      "legacy": "https://hastateam_reader.com",
+      "fixed": "https://reader.hastateam.com",
+      "via": "bare"
+    },
+    {
+      "id": "hayalistic",
+      "legacy": "https://hayalistic.com",
+      "fixed": "https://hayalistic.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "heckscans",
+      "legacy": "https://heckscans.com",
+      "fixed": "https://heckscans.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "henchan",
+      "legacy": "https://henchan.com",
+      "fixed": "https://x5.h-chan.me",
+      "via": "configKey"
+    },
+    {
+      "id": "hentai_4free",
+      "legacy": "https://hentai_4free.com",
+      "fixed": "https://hentai4free.net",
+      "via": "ctor"
+    },
+    {
+      "id": "hentai18vn",
+      "legacy": "https://hentai18vn.com",
+      "fixed": "https://hentai18vn.top",
+      "via": "configKey"
+    },
+    {
+      "id": "hentai20",
+      "legacy": "https://hentai20.com",
+      "fixed": "https://hentai20.io",
+      "via": "ctor"
+    },
+    {
+      "id": "hentai3z",
+      "legacy": "https://hentai3z.com",
+      "fixed": "https://manga18h.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "hentai3zcc",
+      "legacy": "https://hentai3zcc.com",
+      "fixed": "https://hentai3z.cc",
+      "via": "bare"
+    },
+    {
+      "id": "hentaicube",
+      "legacy": "https://hentaicube.com",
+      "fixed": "https://hentaicube.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "hentailib",
+      "legacy": "https://hentailib.com",
+      "fixed": "https://v1.hentailib.org",
+      "via": "bare"
+    },
+    {
+      "id": "hentaimanga",
+      "legacy": "https://hentaimanga.com",
+      "fixed": "https://hentaimanga.me",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaiorigines",
+      "legacy": "https://hentaiorigines.com",
+      "fixed": "https://hentai-origines.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaireader",
+      "legacy": "https://hentaireader.com",
+      "fixed": "https://hentaireader.org",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaiscantradvf",
+      "legacy": "https://hentaiscantradvf.com",
+      "fixed": "https://hentai.scantrad-vf.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaislayer",
+      "legacy": "https://hentaislayer.com",
+      "fixed": "https://hentaislayer.net",
+      "via": "bare"
+    },
+    {
+      "id": "hentaiteca",
+      "legacy": "https://hentaiteca.com",
+      "fixed": "https://hentaiteca.net",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaitokyo",
+      "legacy": "https://hentaitokyo.com",
+      "fixed": "https://hentaitokyo.net",
+      "via": "bare"
+    },
+    {
+      "id": "hentaivn",
+      "legacy": "https://hentaivn.com",
+      "fixed": "https://hentaihvn.tv",
+      "via": "configKey"
+    },
+    {
+      "id": "hentaivnbuzz",
+      "legacy": "https://hentaivnbuzz.com",
+      "fixed": "https://hentaivn.beer",
+      "via": "configKey"
+    },
+    {
+      "id": "hentaivnplus",
+      "legacy": "https://hentaivnplus.com",
+      "fixed": "https://hentaivn.party",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaivnsu",
+      "legacy": "https://hentaivnsu.com",
+      "fixed": "https://hentaivn.su",
+      "via": "configKey"
+    },
+    {
+      "id": "hentaiz",
+      "legacy": "https://hentaiz.com",
+      "fixed": "https://hentaiz.news",
+      "via": "ctor"
+    },
+    {
+      "id": "hentaizone",
+      "legacy": "https://hentaizone.com",
+      "fixed": "https://hentaizone.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "hentalk",
+      "legacy": "https://hentalk.com",
+      "fixed": "https://hentalk.pw",
+      "via": "configKey"
+    },
+    {
+      "id": "hentaman",
+      "legacy": "https://hentaman.com",
+      "fixed": "https://hentaman.net",
+      "via": "configKey"
+    },
+    {
+      "id": "heytoon",
+      "legacy": "https://heytoon.com",
+      "fixed": "https://heytoon.net",
+      "via": "configKey"
+    },
+    {
+      "id": "hhentaifr",
+      "legacy": "https://hhentaifr.com",
+      "fixed": "https://hhentai.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "hijalacom",
+      "legacy": "https://hijalacom.com",
+      "fixed": "https://hijala.com",
+      "via": "ctor"
+    },
+    {
+      "id": "hikariscan",
+      "legacy": "https://hikariscan.com",
+      "fixed": "https://hikariscan.org",
+      "via": "ctor"
+    },
+    {
+      "id": "hipercool",
+      "legacy": "https://hipercool.com",
+      "fixed": "https://hiper.cool",
+      "via": "ctor"
+    },
+    {
+      "id": "hivecomic",
+      "legacy": "https://hivecomic.com",
+      "fixed": "https://hivetoons.org",
+      "via": "bare"
+    },
+    {
+      "id": "hmangabat",
+      "legacy": "https://hmangabat.com",
+      "fixed": "https://mangabats.com",
+      "via": "configKey"
+    },
+    {
+      "id": "hniscantrad",
+      "legacy": "https://hniscantrad.com",
+      "fixed": "https://hni-scantrad.net",
+      "via": "bare"
+    },
+    {
+      "id": "honeymanga",
+      "legacy": "https://honeymanga.com",
+      "fixed": "https://honey-manga.com.ua",
+      "via": "configKey"
+    },
+    {
+      "id": "hotcomics",
+      "legacy": "https://hotcomics.com",
+      "fixed": "https://hotcomics.me",
+      "via": "ctor"
+    },
+    {
+      "id": "housemangas",
+      "legacy": "https://housemangas.com",
+      "fixed": "https://visormanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "houseofotakus",
+      "legacy": "https://houseofotakus.com",
+      "fixed": "https://houseofotakus.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "huntersscan",
+      "legacy": "https://huntersscan.com",
+      "fixed": "https://readhunters.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "huntersscanen",
+      "legacy": "https://huntersscanen.com",
+      "fixed": "https://en.huntersscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "hwago",
+      "legacy": "https://hwago.com",
+      "fixed": "https://hwago01.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "hyperionscans",
+      "legacy": "https://hyperionscans.com",
+      "fixed": "https://seraphmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "ichiromanga",
+      "legacy": "https://ichiromanga.com",
+      "fixed": "https://ichiromanga.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "ikiru",
+      "legacy": "https://ikiru.com",
+      "fixed": "https://01.ikiru.wtf",
+      "via": "configKey"
+    },
+    {
+      "id": "imperioscans",
+      "legacy": "https://imperioscans.com",
+      "fixed": "https://imperioscans.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "inarimanga",
+      "legacy": "https://inarimanga.com",
+      "fixed": "https://clubinari.org",
+      "via": "ctor"
+    },
+    {
+      "id": "inaripikav",
+      "legacy": "https://inaripikav.com",
+      "fixed": "https://clubinari.org",
+      "via": "ctor"
+    },
+    {
+      "id": "infamousscans",
+      "legacy": "https://infamousscans.com",
+      "fixed": "https://infamous-scans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "inmoralnofansub",
+      "legacy": "https://inmoralnofansub.com",
+      "fixed": "https://inmoralnofansub.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "instamanhwa",
+      "legacy": "https://instamanhwa.com",
+      "fixed": "https://manhwaden.com",
+      "via": "ctor"
+    },
+    {
+      "id": "inumanga",
+      "legacy": "https://inumanga.com",
+      "fixed": "https://inu-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "irisscanlator",
+      "legacy": "https://irisscanlator.com",
+      "fixed": "https://irisscanlator.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "isekaiscan",
+      "legacy": "https://isekaiscan.com",
+      "fixed": "https://isekaiscan.top",
+      "via": "ctor"
+    },
+    {
+      "id": "isekaiscan_eu",
+      "legacy": "https://isekaiscan_eu.com",
+      "fixed": "https://paragonscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "izanamiscans",
+      "legacy": "https://izanamiscans.com",
+      "fixed": "https://izanamiscans.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "japscansfr",
+      "legacy": "https://japscansfr.com",
+      "fixed": "https://japscans.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "jeaztwobluescans",
+      "legacy": "https://jeaztwobluescans.com",
+      "fixed": "https://lectorhub.j5z.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "jellyring",
+      "legacy": "https://jellyring.com",
+      "fixed": "https://jellyring.co",
+      "via": "ctor"
+    },
+    {
+      "id": "jiangzaitoon",
+      "legacy": "https://jiangzaitoon.com",
+      "fixed": "https://jiangzaitoon.top",
+      "via": "ctor"
+    },
+    {
+      "id": "jimanga",
+      "legacy": "https://jimanga.com",
+      "fixed": "https://s2manga.io",
+      "via": "ctor"
+    },
+    {
+      "id": "jpmangas",
+      "legacy": "https://jpmangas.com",
+      "fixed": "https://jpmangas.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "jpscanvf",
+      "legacy": "https://jpscanvf.com",
+      "fixed": "https://lirescanvf.com",
+      "via": "bare"
+    },
+    {
+      "id": "kaijuno8",
+      "legacy": "https://kaijuno8.com",
+      "fixed": "https://kaijuno8.fr",
+      "via": "bare"
+    },
+    {
+      "id": "kaiscans",
+      "legacy": "https://kaiscans.com",
+      "fixed": "https://luascans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "kalango",
+      "legacy": "https://kalango.com",
+      "fixed": "https://kalango.org",
+      "via": "ctor"
+    },
+    {
+      "id": "kanzenin",
+      "legacy": "https://kanzenin.com",
+      "fixed": "https://kanzenin.info",
+      "via": "ctor"
+    },
+    {
+      "id": "katakomik",
+      "legacy": "https://katakomik.com",
+      "fixed": "https://katakomik.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "kdtscans",
+      "legacy": "https://kdtscans.com",
+      "fixed": "https://silentquill.net",
+      "via": "configKey"
+    },
+    {
+      "id": "kedi",
+      "legacy": "https://kedi.com",
+      "fixed": "https://kedi.to",
+      "via": "ctor"
+    },
+    {
+      "id": "kenhuav2scank",
+      "legacy": "https://kenhuav2scank.com",
+      "fixed": "https://kenhuav2scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "kewnscans",
+      "legacy": "https://kewnscans.com",
+      "fixed": "https://kewnscans.org",
+      "via": "bare"
+    },
+    {
+      "id": "kiara18",
+      "legacy": "https://kiara18.com",
+      "fixed": "https://18.kiara.cool",
+      "via": "ctor"
+    },
+    {
+      "id": "kings_manga",
+      "legacy": "https://kings_manga.com",
+      "fixed": "https://superdoujin.org",
+      "via": "ctor"
+    },
+    {
+      "id": "kiryuu",
+      "legacy": "https://kiryuu.com",
+      "fixed": "https://kiryuu02.com",
+      "via": "ctor"
+    },
+    {
+      "id": "kishisan",
+      "legacy": "https://kishisan.com",
+      "fixed": "https://kishisan.site",
+      "via": "bare"
+    },
+    {
+      "id": "kissmanga",
+      "legacy": "https://kissmanga.com",
+      "fixed": "https://kissmanga.in",
+      "via": "ctor"
+    },
+    {
+      "id": "klmanhua",
+      "legacy": "https://klmanhua.com",
+      "fixed": "https://klmanhua.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "knightnoscanlation",
+      "legacy": "https://knightnoscanlation.com",
+      "fixed": "https://lectorknight.com",
+      "via": "ctor"
+    },
+    {
+      "id": "kofiscans",
+      "legacy": "https://kofiscans.com",
+      "fixed": "https://isekaikomik.com",
+      "via": "ctor"
+    },
+    {
+      "id": "koinoboriscan",
+      "legacy": "https://koinoboriscan.com",
+      "fixed": "https://visorkoi.com",
+      "via": "ctor"
+    },
+    {
+      "id": "kombatch",
+      "legacy": "https://kombatch.com",
+      "fixed": "https://kombatch.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "komikav",
+      "legacy": "https://komikav.com",
+      "fixed": "https://komikav.net",
+      "via": "ctor"
+    },
+    {
+      "id": "komikcast",
+      "legacy": "https://komikcast.com",
+      "fixed": "https://komikcast.li",
+      "via": "ctor"
+    },
+    {
+      "id": "komikdewasa",
+      "legacy": "https://komikdewasa.com",
+      "fixed": "https://komikremaja.icu",
+      "via": "ctor"
+    },
+    {
+      "id": "komikdewasa_online",
+      "legacy": "https://komikdewasa_online.com",
+      "fixed": "https://komikdewasa.art",
+      "via": "ctor"
+    },
+    {
+      "id": "komikges",
+      "legacy": "https://komikges.com",
+      "fixed": "https://komikges.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "komikgo",
+      "legacy": "https://komikgo.com",
+      "fixed": "https://komikgo.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "komikid",
+      "legacy": "https://komikid.com",
+      "fixed": "https://komiku.org",
+      "via": "bare"
+    },
+    {
+      "id": "komikindo",
+      "legacy": "https://komikindo.com",
+      "fixed": "https://komiksin.id",
+      "via": "ctor"
+    },
+    {
+      "id": "komikindo_info",
+      "legacy": "https://komikindo_info.com",
+      "fixed": "https://komikindo.info",
+      "via": "bare"
+    },
+    {
+      "id": "komikindo_moe",
+      "legacy": "https://komikindo_moe.com",
+      "fixed": "https://div.animepost",
+      "via": "ctor"
+    },
+    {
+      "id": "komiklokal",
+      "legacy": "https://komiklokal.com",
+      "fixed": "https://komikmu.top",
+      "via": "ctor"
+    },
+    {
+      "id": "komiklokalcfd",
+      "legacy": "https://komiklokalcfd.com",
+      "fixed": "https://komikmu.icu",
+      "via": "ctor"
+    },
+    {
+      "id": "komikmama",
+      "legacy": "https://komikmama.com",
+      "fixed": "https://komikmama.lat",
+      "via": "ctor"
+    },
+    {
+      "id": "komikrealm",
+      "legacy": "https://komikrealm.com",
+      "fixed": "https://komikrealm.org",
+      "via": "bare"
+    },
+    {
+      "id": "komiksan",
+      "legacy": "https://komiksan.com",
+      "fixed": "https://img.attachment-medium",
+      "via": "ctor"
+    },
+    {
+      "id": "komiksay",
+      "legacy": "https://komiksay.com",
+      "fixed": "https://komiksay.info",
+      "via": "ctor"
+    },
+    {
+      "id": "komikstation",
+      "legacy": "https://komikstation.com",
+      "fixed": "https://komikstation.org",
+      "via": "ctor"
+    },
+    {
+      "id": "komiktap",
+      "legacy": "https://komiktap.com",
+      "fixed": "https://komiktap.info",
+      "via": "ctor"
+    },
+    {
+      "id": "komiku",
+      "legacy": "https://komiku.com",
+      "fixed": "https://api.komiku.id",
+      "via": "ctor"
+    },
+    {
+      "id": "komikzoid",
+      "legacy": "https://komikzoid.com",
+      "fixed": "https://komikzoid.id",
+      "via": "bare"
+    },
+    {
+      "id": "kumascans",
+      "legacy": "https://kumascans.com",
+      "fixed": "https://retsu.org",
+      "via": "ctor"
+    },
+    {
+      "id": "kuroneko",
+      "legacy": "https://kuroneko.com",
+      "fixed": "https://vi-hentai.moe",
+      "via": "configKey"
+    },
+    {
+      "id": "ladyestelarscan",
+      "legacy": "https://ladyestelarscan.com",
+      "fixed": "https://ladyestelarscan.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "laidbackscans",
+      "legacy": "https://laidbackscans.com",
+      "fixed": "https://laidbackscans.org",
+      "via": "bare"
+    },
+    {
+      "id": "lamimanga",
+      "legacy": "https://lamimanga.com",
+      "fixed": "https://mangalami.com",
+      "via": "ctor"
+    },
+    {
+      "id": "langgeek",
+      "legacy": "https://langgeek.com",
+      "fixed": "https://langgeek.net",
+      "via": "configKey"
+    },
+    {
+      "id": "laviniafansub",
+      "legacy": "https://laviniafansub.com",
+      "fixed": "https://laviniafansub.site",
+      "via": "ctor"
+    },
+    {
+      "id": "lectormanga",
+      "legacy": "https://lectormanga.com",
+      "fixed": "https://lectormangaa.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lectorunm",
+      "legacy": "https://lectorunm.com",
+      "fixed": "https://lectorunm.life",
+      "via": "ctor"
+    },
+    {
+      "id": "legacy_scans",
+      "legacy": "https://legacy_scans.com",
+      "fixed": "https://legacy-scans.com",
+      "via": "configKey"
+    },
+    {
+      "id": "legendscanlations",
+      "legacy": "https://legendscanlations.com",
+      "fixed": "https://escaneodeleyendas.com",
+      "via": "ctor"
+    },
+    {
+      "id": "leitorkamisama",
+      "legacy": "https://leitorkamisama.com",
+      "fixed": "https://leitor.kamisama.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "lekmangacom",
+      "legacy": "https://lekmangacom.com",
+      "fixed": "https://lekmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lekmangaorg",
+      "legacy": "https://lekmangaorg.com",
+      "fixed": "https://lekmanga.org",
+      "via": "ctor"
+    },
+    {
+      "id": "lelscanvf",
+      "legacy": "https://lelscanvf.com",
+      "fixed": "https://lelscanfr.com",
+      "via": "bare"
+    },
+    {
+      "id": "lepoytl",
+      "legacy": "https://lepoytl.com",
+      "fixed": "https://lepoytl.cloud",
+      "via": "bare"
+    },
+    {
+      "id": "ler999",
+      "legacy": "https://ler999.com",
+      "fixed": "https://ler999.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "lermanga",
+      "legacy": "https://lermanga.com",
+      "fixed": "https://lermanga.org",
+      "via": "configKey"
+    },
+    {
+      "id": "lermangaonline",
+      "legacy": "https://lermangaonline.com",
+      "fixed": "https://lermangaonline.com.br",
+      "via": "configKey"
+    },
+    {
+      "id": "lermangas",
+      "legacy": "https://lermangas.com",
+      "fixed": "https://lermangas.me",
+      "via": "ctor"
+    },
+    {
+      "id": "leviatanscans",
+      "legacy": "https://leviatanscans.com",
+      "fixed": "https://lscomic.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lhtranslation",
+      "legacy": "https://lhtranslation.com",
+      "fixed": "https://lhtranslation.net",
+      "via": "ctor"
+    },
+    {
+      "id": "lichsubs",
+      "legacy": "https://lichsubs.com",
+      "fixed": "https://kuroimanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "likemanga",
+      "legacy": "https://likemanga.com",
+      "fixed": "https://likemanga.ink",
+      "via": "bare"
+    },
+    {
+      "id": "likemangain",
+      "legacy": "https://likemangain.com",
+      "fixed": "https://likemanga.in",
+      "via": "ctor"
+    },
+    {
+      "id": "likemanganet",
+      "legacy": "https://likemanganet.com",
+      "fixed": "https://like-manga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "lilymanga",
+      "legacy": "https://lilymanga.com",
+      "fixed": "https://lilymanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "lilyumfansub",
+      "legacy": "https://lilyumfansub.com",
+      "fixed": "https://lilyumfansub.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "limboscan",
+      "legacy": "https://limboscan.com",
+      "fixed": "https://limboscan.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "limitedtimepoject",
+      "legacy": "https://limitedtimepoject.com",
+      "fixed": "https://limitedtimeproject.com",
+      "via": "ctor"
+    },
+    {
+      "id": "linewebtoons_en",
+      "legacy": "https://linewebtoons_en.com",
+      "fixed": "https://webtoons.com",
+      "via": "configKey"
+    },
+    {
+      "id": "linkstartscan",
+      "legacy": "https://linkstartscan.com",
+      "fixed": "https://linkstartscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "lirescan",
+      "legacy": "https://lirescan.com",
+      "fixed": "https://lire-scan.me",
+      "via": "configKey"
+    },
+    {
+      "id": "loliconmobi",
+      "legacy": "https://loliconmobi.com",
+      "fixed": "https://lolicon.mobi",
+      "via": "ctor"
+    },
+    {
+      "id": "lonertl",
+      "legacy": "https://lonertl.com",
+      "fixed": "https://loner-tl.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "luacomic_com",
+      "legacy": "https://luacomic_com.com",
+      "fixed": "https://luascans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "luascans",
+      "legacy": "https://luascans.com",
+      "fixed": "https://luacomic.net",
+      "via": "bare"
+    },
+    {
+      "id": "lugnicascans",
+      "legacy": "https://lugnicascans.com",
+      "fixed": "https://lugnica-scans.com",
+      "via": "configKey"
+    },
+    {
+      "id": "luminousscans",
+      "legacy": "https://luminousscans.com",
+      "fixed": "https://radiantscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lumoskomik",
+      "legacy": "https://lumoskomik.com",
+      "fixed": "https://lumos01.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lunar_scan",
+      "legacy": "https://lunar_scan.com",
+      "fixed": "https://lunarscan.org",
+      "via": "ctor"
+    },
+    {
+      "id": "lunarhentai",
+      "legacy": "https://lunarhentai.com",
+      "fixed": "https://gloryscans.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "lunarscan",
+      "legacy": "https://lunarscan.com",
+      "fixed": "https://lunarrscan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lunarscans",
+      "legacy": "https://lunarscans.com",
+      "fixed": "https://lunarscans.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "lunascans",
+      "legacy": "https://lunascans.com",
+      "fixed": "https://tuhafscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "lupiteam",
+      "legacy": "https://lupiteam.com",
+      "fixed": "https://lupiteam.net",
+      "via": "bare"
+    },
+    {
+      "id": "luxmanga",
+      "legacy": "https://luxmanga.com",
+      "fixed": "https://luxmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "lxmanga",
+      "legacy": "https://lxmanga.com",
+      "fixed": "https://lxmanga.my",
+      "via": "configKey"
+    },
+    {
+      "id": "madaradex",
+      "legacy": "https://madaradex.com",
+      "fixed": "https://madaradex.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mafiamanga",
+      "legacy": "https://mafiamanga.com",
+      "fixed": "https://mafia-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "magusmanga",
+      "legacy": "https://magusmanga.com",
+      "fixed": "https://magustoon.org",
+      "via": "bare"
+    },
+    {
+      "id": "maid_id",
+      "legacy": "https://maid_id.com",
+      "fixed": "https://maid.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "maidscan",
+      "legacy": "https://maidscan.com",
+      "fixed": "https://novo.empreguetes.site",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_crab",
+      "legacy": "https://manga_crab.com",
+      "fixed": "https://mangacrab.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_denizi",
+      "legacy": "https://manga_denizi.com",
+      "fixed": "https://mangadenizi.net",
+      "via": "bare"
+    },
+    {
+      "id": "manga_district",
+      "legacy": "https://manga_district.com",
+      "fixed": "https://mangadistrict.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_komi",
+      "legacy": "https://manga_komi.com",
+      "fixed": "https://mangakomi.io",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_manhua",
+      "legacy": "https://manga_manhua.com",
+      "fixed": "https://mangaonlineteam.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_queen",
+      "legacy": "https://manga_queen.com",
+      "fixed": "https://mangaqueen.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_scan",
+      "legacy": "https://manga_scan.com",
+      "fixed": "https://mangascan-fr.net",
+      "via": "bare"
+    },
+    {
+      "id": "manga_scantrad",
+      "legacy": "https://manga_scantrad.com",
+      "fixed": "https://manga-scantrad.io",
+      "via": "ctor"
+    },
+    {
+      "id": "manga_wtf",
+      "legacy": "https://manga_wtf.com",
+      "fixed": "https://manga.wtf",
+      "via": "configKey"
+    },
+    {
+      "id": "manga1001",
+      "legacy": "https://manga1001.com",
+      "fixed": "https://manga-1001.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manga168",
+      "legacy": "https://manga168.com",
+      "fixed": "https://manga168.net",
+      "via": "ctor"
+    },
+    {
+      "id": "manga18",
+      "legacy": "https://manga18.com",
+      "fixed": "https://manga18.club",
+      "via": "bare"
+    },
+    {
+      "id": "manga18h",
+      "legacy": "https://manga18h.com",
+      "fixed": "https://manga18h.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "manga18x",
+      "legacy": "https://manga18x.com",
+      "fixed": "https://manga18x.net",
+      "via": "ctor"
+    },
+    {
+      "id": "manga18xyz",
+      "legacy": "https://manga18xyz.com",
+      "fixed": "https://manga18.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "manga1st",
+      "legacy": "https://manga1st.com",
+      "fixed": "https://manga1st.online",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaailand",
+      "legacy": "https://mangaailand.com",
+      "fixed": "https://manga-ai-land.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "mangaatrend",
+      "legacy": "https://mangaatrend.com",
+      "fixed": "https://mangaatrend.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaay",
+      "legacy": "https://mangaay.com",
+      "fixed": "https://manga-ay.com",
+      "via": "configKey"
+    },
+    {
+      "id": "mangabee",
+      "legacy": "https://mangabee.com",
+      "fixed": "https://mangazin.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangabr",
+      "legacy": "https://mangabr.com",
+      "fixed": "https://mangabr.net",
+      "via": "bare"
+    },
+    {
+      "id": "mangachan",
+      "legacy": "https://mangachan.com",
+      "fixed": "https://manga-chan.me",
+      "via": "configKey"
+    },
+    {
+      "id": "mangacim",
+      "legacy": "https://mangacim.com",
+      "fixed": "https://mangacim.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaclash",
+      "legacy": "https://mangaclash.com",
+      "fixed": "https://toonclash.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangadass",
+      "legacy": "https://mangadass.com",
+      "fixed": "https://div.ss-manga",
+      "via": "ctor"
+    },
+    {
+      "id": "mangadna",
+      "legacy": "https://mangadna.com",
+      "fixed": "https://li.a-h",
+      "via": "ctor"
+    },
+    {
+      "id": "mangadop",
+      "legacy": "https://mangadop.com",
+      "fixed": "https://mangadop.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaefendisi",
+      "legacy": "https://mangaefendisi.com",
+      "fixed": "https://mangaefendisi.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaeffect",
+      "legacy": "https://mangaeffect.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaesp",
+      "legacy": "https://mangaesp.com",
+      "fixed": "https://mangaesp.topmanhuas.org",
+      "via": "bare"
+    },
+    {
+      "id": "mangafastnet",
+      "legacy": "https://mangafastnet.com",
+      "fixed": "https://manhuafast.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangafenxi",
+      "legacy": "https://mangafenxi.com",
+      "fixed": "https://mangafenxi.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangafire_en",
+      "legacy": "https://mangafire_en.com",
+      "fixed": "https://mangafire.to",
+      "via": "configKey"
+    },
+    {
+      "id": "mangaflame",
+      "legacy": "https://mangaflame.com",
+      "fixed": "https://mangaflame.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaforest",
+      "legacy": "https://mangaforest.com",
+      "fixed": "https://mangaforest.me",
+      "via": "bare"
+    },
+    {
+      "id": "mangafr",
+      "legacy": "https://mangafr.com",
+      "fixed": "https://mangafr.org",
+      "via": "bare"
+    },
+    {
+      "id": "mangafreak",
+      "legacy": "https://mangafreak.com",
+      "fixed": "https://mangafreak.online",
+      "via": "ctor"
+    },
+    {
+      "id": "mangagalaxy",
+      "legacy": "https://mangagalaxy.com",
+      "fixed": "https://vortexscans.org",
+      "via": "bare"
+    },
+    {
+      "id": "mangageko",
+      "legacy": "https://mangageko.com",
+      "fixed": "https://mgeko.cc",
+      "via": "configKey"
+    },
+    {
+      "id": "mangagezgini",
+      "legacy": "https://mangagezgini.com",
+      "fixed": "https://mangagezginim.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangahall",
+      "legacy": "https://mangahall.com",
+      "fixed": "https://mangaholic.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangahentai",
+      "legacy": "https://mangahentai.com",
+      "fixed": "https://mangahentai.me",
+      "via": "ctor"
+    },
+    {
+      "id": "mangahona",
+      "legacy": "https://mangahona.com",
+      "fixed": "https://mangahona.pl",
+      "via": "ctor"
+    },
+    {
+      "id": "mangahub",
+      "legacy": "https://mangahub.com",
+      "fixed": "https://mangahub.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangahub_link",
+      "legacy": "https://mangahub_link.com",
+      "fixed": "https://mangahub.link",
+      "via": "bare"
+    },
+    {
+      "id": "mangaid",
+      "legacy": "https://mangaid.com",
+      "fixed": "https://mangaid.click",
+      "via": "bare"
+    },
+    {
+      "id": "mangainua",
+      "legacy": "https://mangainua.com",
+      "fixed": "https://manga.in.ua",
+      "via": "configKey"
+    },
+    {
+      "id": "mangairo",
+      "legacy": "https://mangairo.com",
+      "fixed": "https://w.mangairo.com",
+      "via": "configKey"
+    },
+    {
+      "id": "mangaitalia",
+      "legacy": "https://mangaitalia.com",
+      "fixed": "https://mangaita.io",
+      "via": "bare"
+    },
+    {
+      "id": "mangajinx",
+      "legacy": "https://mangajinx.com",
+      "fixed": "https://mgjinx.com",
+      "via": "bare"
+    },
+    {
+      "id": "mangajp",
+      "legacy": "https://mangajp.com",
+      "fixed": "https://mangajp.top",
+      "via": "ctor"
+    },
+    {
+      "id": "mangakakalot",
+      "legacy": "https://mangakakalot.com",
+      "fixed": "https://mangakakalot.gg",
+      "via": "configKey"
+    },
+    {
+      "id": "mangakakalottv",
+      "legacy": "https://mangakakalottv.com",
+      "fixed": "https://ww8.mangakakalot.tv",
+      "via": "configKey"
+    },
+    {
+      "id": "mangakawaii",
+      "legacy": "https://mangakawaii.com",
+      "fixed": "https://mangakawaii.io",
+      "via": "configKey"
+    },
+    {
+      "id": "mangakawaii_en",
+      "legacy": "https://mangakawaii_en.com",
+      "fixed": "https://mangakawaii.io",
+      "via": "configKey"
+    },
+    {
+      "id": "mangakings",
+      "legacy": "https://mangakings.com",
+      "fixed": "https://mangakings.com.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangakiss",
+      "legacy": "https://mangakiss.com",
+      "fixed": "https://mangakiss.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangakita",
+      "legacy": "https://mangakita.com",
+      "fixed": "https://mangakita.id",
+      "via": "ctor"
+    },
+    {
+      "id": "mangakyo",
+      "legacy": "https://mangakyo.com",
+      "fixed": "https://mangakyo.vip",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaland",
+      "legacy": "https://mangaland.com",
+      "fixed": "https://mangaland.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangalc",
+      "legacy": "https://mangalc.com",
+      "fixed": "https://manga-lc.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangalek",
+      "legacy": "https://mangalek.com",
+      "fixed": "https://lekmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaleko",
+      "legacy": "https://mangaleko.com",
+      "fixed": "https://manga-leko.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangalesen",
+      "legacy": "https://mangalesen.com",
+      "fixed": "https://mangalesen.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangalib",
+      "legacy": "https://mangalib.com",
+      "fixed": "https://mangalib.org",
+      "via": "bare"
+    },
+    {
+      "id": "mangalinknet",
+      "legacy": "https://mangalinknet.com",
+      "fixed": "https://link-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangalionz",
+      "legacy": "https://mangalionz.com",
+      "fixed": "https://manga-lionz.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangamammy",
+      "legacy": "https://mangamammy.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "mangamana",
+      "legacy": "https://mangamana.com",
+      "fixed": "https://manga-mana.com",
+      "via": "configKey"
+    },
+    {
+      "id": "mangamaniacs",
+      "legacy": "https://mangamaniacs.com",
+      "fixed": "https://mangamaniacs.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangamate",
+      "legacy": "https://mangamate.com",
+      "fixed": "https://manga-mate.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangamoons",
+      "legacy": "https://mangamoons.com",
+      "fixed": "https://manga-moons.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangamundodrama",
+      "legacy": "https://mangamundodrama.com",
+      "fixed": "https://scaninmortal.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangananquim",
+      "legacy": "https://mangananquim.com",
+      "fixed": "https://mangananquim.site",
+      "via": "ctor"
+    },
+    {
+      "id": "manganato",
+      "legacy": "https://manganato.com",
+      "fixed": "https://natomanga.com",
+      "via": "configKey"
+    },
+    {
+      "id": "manganelo_com",
+      "legacy": "https://manganelo_com.com",
+      "fixed": "https://nelomanga.com",
+      "via": "configKey"
+    },
+    {
+      "id": "manganoon",
+      "legacy": "https://manganoon.com",
+      "fixed": "https://vrnoin.site",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaoku",
+      "legacy": "https://mangaoku.com",
+      "fixed": "https://mangaoku.info",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaonelove",
+      "legacy": "https://mangaonelove.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaonline",
+      "legacy": "https://mangaonline.com",
+      "fixed": "https://mangaonline.biz",
+      "via": "configKey"
+    },
+    {
+      "id": "mangaonline_blog",
+      "legacy": "https://mangaonline_blog.com",
+      "fixed": "https://mangaonline.blog",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaowl",
+      "legacy": "https://mangaowl.com",
+      "fixed": "https://mangaowl.to",
+      "via": "configKey"
+    },
+    {
+      "id": "mangaowl_io",
+      "legacy": "https://mangaowl_io.com",
+      "fixed": "https://mangaowl.io",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaowl_one",
+      "legacy": "https://mangaowl_one.com",
+      "fixed": "https://mangaowl.one",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaowl_us",
+      "legacy": "https://mangaowl_us.com",
+      "fixed": "https://mangaowlyaoi.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaowlblog",
+      "legacy": "https://mangaowlblog.com",
+      "fixed": "https://mangaowlnet.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangapeak",
+      "legacy": "https://mangapeak.com",
+      "fixed": "https://mangapeak.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaplusparser_en",
+      "legacy": "https://mangaplusparser_en.com",
+      "fixed": "https://mangaplus.shueisha.co.jp",
+      "via": "configKey"
+    },
+    {
+      "id": "mangapro",
+      "legacy": "https://mangapro.com",
+      "fixed": "https://promanga.pro",
+      "via": "ctor"
+    },
+    {
+      "id": "mangapure",
+      "legacy": "https://mangapure.com",
+      "fixed": "https://mangapure.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaraw",
+      "legacy": "https://mangaraw.com",
+      "fixed": "https://mangaraw.best",
+      "via": "ctor"
+    },
+    {
+      "id": "mangarbic",
+      "legacy": "https://mangarbic.com",
+      "fixed": "https://lekmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaread",
+      "legacy": "https://mangaread.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "mangareadco",
+      "legacy": "https://mangareadco.com",
+      "fixed": "https://mangaread.co",
+      "via": "ctor"
+    },
+    {
+      "id": "mangarock",
+      "legacy": "https://mangarock.com",
+      "fixed": "https://mangarockteam.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangarolls",
+      "legacy": "https://mangarolls.com",
+      "fixed": "https://mangarolls.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangarose",
+      "legacy": "https://mangarose.com",
+      "fixed": "https://mangarose.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangarosie",
+      "legacy": "https://mangarosie.com",
+      "fixed": "https://toon69.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaschan",
+      "legacy": "https://mangaschan.com",
+      "fixed": "https://mangaschan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasect",
+      "legacy": "https://mangasect.com",
+      "fixed": "https://mangasect.net",
+      "via": "bare"
+    },
+    {
+      "id": "mangasee",
+      "legacy": "https://mangasee.com",
+      "fixed": "https://mangasee123.com",
+      "via": "bare"
+    },
+    {
+      "id": "mangasehri",
+      "legacy": "https://mangasehri.com",
+      "fixed": "https://manga-sehri.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasehrinet",
+      "legacy": "https://mangasehrinet.com",
+      "fixed": "https://manga-sehri.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangashiina",
+      "legacy": "https://mangashiina.com",
+      "fixed": "https://mangamukai.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangashiro",
+      "legacy": "https://mangashiro.com",
+      "fixed": "https://mangashiro.me",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasonline",
+      "legacy": "https://mangasonline.com",
+      "fixed": "https://mangasonline.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasorigines",
+      "legacy": "https://mangasorigines.com",
+      "fixed": "https://mangas-origines.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasoriginesunofficial",
+      "legacy": "https://mangasoriginesunofficial.com",
+      "fixed": "https://crunchyscan.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasoul",
+      "legacy": "https://mangasoul.com",
+      "fixed": "https://manga-soul.com",
+      "via": "bare"
+    },
+    {
+      "id": "mangaspark",
+      "legacy": "https://mangaspark.com",
+      "fixed": "https://manga-spark.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangasscans",
+      "legacy": "https://mangasscans.com",
+      "fixed": "https://mangas-scans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangastarz",
+      "legacy": "https://mangastarz.com",
+      "fixed": "https://manga-starz.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangastorm",
+      "legacy": "https://mangastorm.com",
+      "fixed": "https://mangastorm.org",
+      "via": "configKey"
+    },
+    {
+      "id": "mangasushi",
+      "legacy": "https://mangasushi.com",
+      "fixed": "https://mangasushi.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatale",
+      "legacy": "https://mangatale.com",
+      "fixed": "https://ikiru.one",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatellers",
+      "legacy": "https://mangatellers.com",
+      "fixed": "https://reader.mangatellers.gr",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaterra",
+      "legacy": "https://mangaterra.com",
+      "fixed": "https://manga-terra.com",
+      "via": "bare"
+    },
+    {
+      "id": "mangatilkisi",
+      "legacy": "https://mangatilkisi.com",
+      "fixed": "https://mangatilkisi.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatime",
+      "legacy": "https://mangatime.com",
+      "fixed": "https://mangatime.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatr",
+      "legacy": "https://mangatr.com",
+      "fixed": "https://mangatr.app",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatv",
+      "legacy": "https://mangatv.com",
+      "fixed": "https://mangatv.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatx_cc",
+      "legacy": "https://mangatx_cc.com",
+      "fixed": "https://mangatx.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatx_gg",
+      "legacy": "https://mangatx_gg.com",
+      "fixed": "https://mangatx.gg",
+      "via": "ctor"
+    },
+    {
+      "id": "mangatxunofficial",
+      "legacy": "https://mangatxunofficial.com",
+      "fixed": "https://mangaempress.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaus",
+      "legacy": "https://mangaus.com",
+      "fixed": "https://mangaus.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaweebs",
+      "legacy": "https://mangaweebs.com",
+      "fixed": "https://mangaweebs.in",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaworld",
+      "legacy": "https://mangaworld.com",
+      "fixed": "https://mangaworld.ac",
+      "via": "bare"
+    },
+    {
+      "id": "mangaworldadult",
+      "legacy": "https://mangaworldadult.com",
+      "fixed": "https://mangaworldadult.net",
+      "via": "bare"
+    },
+    {
+      "id": "mangawow",
+      "legacy": "https://mangawow.com",
+      "fixed": "https://mangawow.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mangawt_net",
+      "legacy": "https://mangawt_net.com",
+      "fixed": "https://mangawt.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangaxico",
+      "legacy": "https://mangaxico.com",
+      "fixed": "https://mangagojo18.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mangayaro",
+      "legacy": "https://mangayaro.com",
+      "fixed": "https://mangayaro.id",
+      "via": "ctor"
+    },
+    {
+      "id": "mangazavr",
+      "legacy": "https://mangazavr.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "mangazin",
+      "legacy": "https://mangazin.com",
+      "fixed": "https://mangazin.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manhastro",
+      "legacy": "https://manhastro.com",
+      "fixed": "https://manhastro.net",
+      "via": "ctor"
+    },
+    {
+      "id": "manhatok",
+      "legacy": "https://manhatok.com",
+      "fixed": "https://manhatok.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "manhuagold",
+      "legacy": "https://manhuagold.com",
+      "fixed": "https://manhuagold.top",
+      "via": "bare"
+    },
+    {
+      "id": "manhuaplusorg",
+      "legacy": "https://manhuaplusorg.com",
+      "fixed": "https://manhuaplus.org",
+      "via": "bare"
+    },
+    {
+      "id": "manhuascan",
+      "legacy": "https://manhuascan.com",
+      "fixed": "https://kaliscan.io",
+      "via": "bare"
+    },
+    {
+      "id": "manhuascanus",
+      "legacy": "https://manhuascanus.com",
+      "fixed": "https://manhuascan.us",
+      "via": "ctor"
+    },
+    {
+      "id": "manhuazone",
+      "legacy": "https://manhuazone.com",
+      "fixed": "https://manhuazone.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwa_es",
+      "legacy": "https://manhwa_es.com",
+      "fixed": "https://manhwa-es.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwa_freak",
+      "legacy": "https://manhwa_freak.com",
+      "fixed": "https://manhwafreak.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwa18",
+      "legacy": "https://manhwa18.com",
+      "fixed": "https://manhwa18.net",
+      "via": "configKey"
+    },
+    {
+      "id": "manhwa18app",
+      "legacy": "https://manhwa18app.com",
+      "fixed": "https://manhwa18.app",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwa18com",
+      "legacy": "https://manhwa18com.com",
+      "fixed": "https://manhwa18.com",
+      "via": "configKey"
+    },
+    {
+      "id": "manhwa18org",
+      "legacy": "https://manhwa18org.com",
+      "fixed": "https://manhwa18.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwadesu",
+      "legacy": "https://manhwadesu.com",
+      "fixed": "https://manhwadesu.asia",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwahentai",
+      "legacy": "https://manhwahentai.com",
+      "fixed": "https://manhwahentai.me",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwahentaito",
+      "legacy": "https://manhwahentaito.com",
+      "fixed": "https://manhwahentai.to",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwahub",
+      "legacy": "https://manhwahub.com",
+      "fixed": "https://manhwahub.net",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaindo",
+      "legacy": "https://manhwaindo.com",
+      "fixed": "https://manhwaindo.one",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaindoicu",
+      "legacy": "https://manhwaindoicu.com",
+      "fixed": "https://komikdewasa.art",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaku",
+      "legacy": "https://manhwaku.com",
+      "fixed": "https://manhwaku.id",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaland",
+      "legacy": "https://manhwaland.com",
+      "fixed": "https://manhwaland.baby",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaland_ink",
+      "legacy": "https://manhwaland_ink.com",
+      "fixed": "https://manhwaland.asia",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwalatino",
+      "legacy": "https://manhwalatino.com",
+      "fixed": "https://manhwa-latino.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwalist",
+      "legacy": "https://manhwalist.com",
+      "fixed": "https://manhwalist.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwalist_org",
+      "legacy": "https://manhwalist_org.com",
+      "fixed": "https://isekaikomik.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaplus",
+      "legacy": "https://manhwaplus.com",
+      "fixed": "https://manhwablue.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaraw_com",
+      "legacy": "https://manhwaraw_com.com",
+      "fixed": "https://manhwaraw.com",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwas_es",
+      "legacy": "https://manhwas_es.com",
+      "fixed": "https://manhwas.es",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwasco",
+      "legacy": "https://manhwasco.com",
+      "fixed": "https://manhwasco.net",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwasmen",
+      "legacy": "https://manhwasmen.com",
+      "fixed": "https://manhwas.men",
+      "via": "configKey"
+    },
+    {
+      "id": "manhwax",
+      "legacy": "https://manhwax.com",
+      "fixed": "https://manhwax.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manhwaz",
+      "legacy": "https://manhwaz.com",
+      "fixed": "https://div.list-chapter",
+      "via": "ctor"
+    },
+    {
+      "id": "manjanoon",
+      "legacy": "https://manjanoon.com",
+      "fixed": "https://vrnoin.site",
+      "via": "ctor"
+    },
+    {
+      "id": "manjanoon_en",
+      "legacy": "https://manjanoon_en.com",
+      "fixed": "https://noonscan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "mantrazscan",
+      "legacy": "https://mantrazscan.com",
+      "fixed": "https://mantrazscan.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manwe",
+      "legacy": "https://manwe.com",
+      "fixed": "https://manwe.pro",
+      "via": "ctor"
+    },
+    {
+      "id": "manytoon",
+      "legacy": "https://manytoon.com",
+      "fixed": "https://manytoon.org",
+      "via": "ctor"
+    },
+    {
+      "id": "manytoonme",
+      "legacy": "https://manytoonme.com",
+      "fixed": "https://manytoon.me",
+      "via": "ctor"
+    },
+    {
+      "id": "marmota",
+      "legacy": "https://marmota.com",
+      "fixed": "https://marmota.me",
+      "via": "ctor"
+    },
+    {
+      "id": "mashlescan",
+      "legacy": "https://mashlescan.com",
+      "fixed": "https://mashlescan.fr",
+      "via": "bare"
+    },
+    {
+      "id": "masterkomik",
+      "legacy": "https://masterkomik.com",
+      "fixed": "https://tenshi01.id",
+      "via": "ctor"
+    },
+    {
+      "id": "maxgsscan",
+      "legacy": "https://maxgsscan.com",
+      "fixed": "https://maxgsscan.online",
+      "via": "bare"
+    },
+    {
+      "id": "mehentaivn",
+      "legacy": "https://mehentaivn.com",
+      "fixed": "https://hentaivnx.autos",
+      "via": "ctor"
+    },
+    {
+      "id": "menudo_fansub",
+      "legacy": "https://menudo_fansub.com",
+      "fixed": "https://menudo-fansub.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mgkomik",
+      "legacy": "https://mgkomik.com",
+      "fixed": "https://id.mgkomik.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "mhscans",
+      "legacy": "https://mhscans.com",
+      "fixed": "https://mhscans.mundoalterno.org",
+      "via": "ctor"
+    },
+    {
+      "id": "mi2mangaes",
+      "legacy": "https://mi2mangaes.com",
+      "fixed": "https://mi2manga.lat",
+      "via": "ctor"
+    },
+    {
+      "id": "miauscan",
+      "legacy": "https://miauscan.com",
+      "fixed": "https://leemiau.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mikoroku",
+      "legacy": "https://mikoroku.com",
+      "fixed": "https://mikoroku.web.id",
+      "via": "bare"
+    },
+    {
+      "id": "mikrokosmosfb",
+      "legacy": "https://mikrokosmosfb.com",
+      "fixed": "https://mikrokosmosfb.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "milasub",
+      "legacy": "https://milasub.com",
+      "fixed": "https://milascans.tr",
+      "via": "ctor"
+    },
+    {
+      "id": "milftoon",
+      "legacy": "https://milftoon.com",
+      "fixed": "https://milftoon.xxx",
+      "via": "ctor"
+    },
+    {
+      "id": "mindafansub",
+      "legacy": "https://mindafansub.com",
+      "fixed": "https://mindafansub.online",
+      "via": "ctor"
+    },
+    {
+      "id": "mintmanga",
+      "legacy": "https://mintmanga.com",
+      "fixed": "https://2.mintmanga.one",
+      "via": "bare"
+    },
+    {
+      "id": "mmscans",
+      "legacy": "https://mmscans.com",
+      "fixed": "https://div.summary-text",
+      "via": "ctor"
+    },
+    {
+      "id": "modescanlator",
+      "legacy": "https://modescanlator.com",
+      "fixed": "https://site.modescanlator.net",
+      "via": "bare"
+    },
+    {
+      "id": "monarcamanga",
+      "legacy": "https://monarcamanga.com",
+      "fixed": "https://visormonarca.com",
+      "via": "ctor"
+    },
+    {
+      "id": "monzeekomik",
+      "legacy": "https://monzeekomik.com",
+      "fixed": "https://monzee01.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "moondaisy_scans",
+      "legacy": "https://moondaisy_scans.com",
+      "fixed": "https://moondaisyscans.biz",
+      "via": "ctor"
+    },
+    {
+      "id": "moonloversscan",
+      "legacy": "https://moonloversscan.com",
+      "fixed": "https://moonloversscan.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "moonwitchinlovescan",
+      "legacy": "https://moonwitchinlovescan.com",
+      "fixed": "https://moonwitchscan.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "mundo_manhwa",
+      "legacy": "https://mundo_manhwa.com",
+      "fixed": "https://mundomanhwa.com",
+      "via": "ctor"
+    },
+    {
+      "id": "murimscan",
+      "legacy": "https://murimscan.com",
+      "fixed": "https://inkreads.com",
+      "via": "ctor"
+    },
+    {
+      "id": "mycomiclist",
+      "legacy": "https://mycomiclist.com",
+      "fixed": "https://mycomiclist.org",
+      "via": "configKey"
+    },
+    {
+      "id": "natsu",
+      "legacy": "https://natsu.com",
+      "fixed": "https://natsu.id",
+      "via": "ctor"
+    },
+    {
+      "id": "neatmanga",
+      "legacy": "https://neatmanga.com",
+      "fixed": "https://neatmangas.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nekopost",
+      "legacy": "https://nekopost.com",
+      "fixed": "https://superdoujin.org",
+      "via": "ctor"
+    },
+    {
+      "id": "nekoscans",
+      "legacy": "https://nekoscans.com",
+      "fixed": "https://nekoscans.org",
+      "via": "bare"
+    },
+    {
+      "id": "neox_scans",
+      "legacy": "https://neox_scans.com",
+      "fixed": "https://mangalivre.net",
+      "via": "ctor"
+    },
+    {
+      "id": "neroxus",
+      "legacy": "https://neroxus.com",
+      "fixed": "https://neroxus.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "nettruyen",
+      "legacy": "https://nettruyen.com",
+      "fixed": "https://nettruyenar.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nettruyenvie",
+      "legacy": "https://nettruyenvie.com",
+      "fixed": "https://nettruyenvia.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nettruyenx",
+      "legacy": "https://nettruyenx.com",
+      "fixed": "https://nettruyenx.net",
+      "via": "ctor"
+    },
+    {
+      "id": "neumanga",
+      "legacy": "https://neumanga.com",
+      "fixed": "https://neumanga.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "newtruyen",
+      "legacy": "https://newtruyen.com",
+      "fixed": "https://newtruyentranh4.com",
+      "via": "ctor"
+    },
+    {
+      "id": "ngamenkomik",
+      "legacy": "https://ngamenkomik.com",
+      "fixed": "https://ngamenkomik05.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "ngomik",
+      "legacy": "https://ngomik.com",
+      "fixed": "https://ngomik.mom",
+      "via": "ctor"
+    },
+    {
+      "id": "nhattruyenvn",
+      "legacy": "https://nhattruyenvn.com",
+      "fixed": "https://nhattruyenqq.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nhentaiworld",
+      "legacy": "https://nhentaiworld.com",
+      "fixed": "https://nhentaiworld-h1.art",
+      "via": "configKey"
+    },
+    {
+      "id": "nicovideo_seiga",
+      "legacy": "https://nicovideo_seiga.com",
+      "fixed": "https://nicovideo.jp",
+      "via": "configKey"
+    },
+    {
+      "id": "nightscans",
+      "legacy": "https://nightscans.com",
+      "fixed": "https://nightsup.net",
+      "via": "ctor"
+    },
+    {
+      "id": "nijitranslations",
+      "legacy": "https://nijitranslations.com",
+      "fixed": "https://niji-translations.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nimemob",
+      "legacy": "https://nimemob.com",
+      "fixed": "https://nimemob.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "ninemanga_en",
+      "legacy": "https://ninemanga_en.com",
+      "fixed": "https://ul.direlist",
+      "via": "bare"
+    },
+    {
+      "id": "ninjascan",
+      "legacy": "https://ninjascan.com",
+      "fixed": "https://ninjacomics.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "nitromanga",
+      "legacy": "https://nitromanga.com",
+      "fixed": "https://nitroscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "niverafansub",
+      "legacy": "https://niverafansub.com",
+      "fixed": "https://niverafansub.org",
+      "via": "ctor"
+    },
+    {
+      "id": "noblessetranslations",
+      "legacy": "https://noblessetranslations.com",
+      "fixed": "https://nobledicion.yoveo.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "nocsummer",
+      "legacy": "https://nocsummer.com",
+      "fixed": "https://nocfsb.com",
+      "via": "ctor"
+    },
+    {
+      "id": "normoyun",
+      "legacy": "https://normoyun.com",
+      "fixed": "https://swatscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "noromax",
+      "legacy": "https://noromax.com",
+      "fixed": "https://noromax01.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "norterose",
+      "legacy": "https://norterose.com",
+      "fixed": "https://norterose.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "ntrmanga",
+      "legacy": "https://ntrmanga.com",
+      "fixed": "https://ntr-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "nudemoon",
+      "legacy": "https://nudemoon.com",
+      "fixed": "https://b.nude-moon.fun",
+      "via": "configKey"
+    },
+    {
+      "id": "nvmanga",
+      "legacy": "https://nvmanga.com",
+      "fixed": "https://1manhwa.com",
+      "via": "ctor"
+    },
+    {
+      "id": "okyykomik",
+      "legacy": "https://okyykomik.com",
+      "fixed": "https://okyykomik.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "olaoe",
+      "legacy": "https://olaoe.com",
+      "fixed": "https://olaoe.cyou",
+      "via": "ctor"
+    },
+    {
+      "id": "olimposcans",
+      "legacy": "https://olimposcans.com",
+      "fixed": "https://leerolimpo.com",
+      "via": "bare"
+    },
+    {
+      "id": "omegascans",
+      "legacy": "https://omegascans.com",
+      "fixed": "https://omegascans.org",
+      "via": "bare"
+    },
+    {
+      "id": "onepieceex",
+      "legacy": "https://onepieceex.com",
+      "fixed": "https://onepieceex.net",
+      "via": "configKey"
+    },
+    {
+      "id": "onepiecescan",
+      "legacy": "https://onepiecescan.com",
+      "fixed": "https://onepiecescan.fr",
+      "via": "bare"
+    },
+    {
+      "id": "onlymanhwa",
+      "legacy": "https://onlymanhwa.com",
+      "fixed": "https://onlymanhwa.org",
+      "via": "ctor"
+    },
+    {
+      "id": "onma",
+      "legacy": "https://onma.com",
+      "fixed": "https://onma.me",
+      "via": "bare"
+    },
+    {
+      "id": "opiatoon",
+      "legacy": "https://opiatoon.com",
+      "fixed": "https://opiatoon.art",
+      "via": "ctor"
+    },
+    {
+      "id": "origamiorpheans",
+      "legacy": "https://origamiorpheans.com",
+      "fixed": "https://origami-orpheans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "oshinoko",
+      "legacy": "https://oshinoko.com",
+      "fixed": "https://oshinoko.fr",
+      "via": "bare"
+    },
+    {
+      "id": "otakusan_en",
+      "legacy": "https://otakusan_en.com",
+      "fixed": "https://otakusan.me",
+      "via": "bare"
+    },
+    {
+      "id": "otakusan_vi",
+      "legacy": "https://otakusan_vi.com",
+      "fixed": "https://otakusan.me",
+      "via": "bare"
+    },
+    {
+      "id": "otruyen",
+      "legacy": "https://otruyen.com",
+      "fixed": "https://otruyenapi.com",
+      "via": "configKey"
+    },
+    {
+      "id": "otsugami",
+      "legacy": "https://otsugami.com",
+      "fixed": "https://otsugami.id",
+      "via": "ctor"
+    },
+    {
+      "id": "panconcola",
+      "legacy": "https://panconcola.com",
+      "fixed": "https://artessupremas.com",
+      "via": "ctor"
+    },
+    {
+      "id": "pantheonscan",
+      "legacy": "https://pantheonscan.com",
+      "fixed": "https://pantheon-scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "pantheonscan_fr",
+      "legacy": "https://pantheonscan_fr.com",
+      "fixed": "https://pantheon-scan.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "peachbl",
+      "legacy": "https://peachbl.com",
+      "fixed": "https://peach-bl.com",
+      "via": "ctor"
+    },
+    {
+      "id": "perf_scan",
+      "legacy": "https://perf_scan.com",
+      "fixed": "https://perf-scan.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "petrotechsociety",
+      "legacy": "https://petrotechsociety.com",
+      "fixed": "https://petrotechsociety.org",
+      "via": "ctor"
+    },
+    {
+      "id": "phenixscans",
+      "legacy": "https://phenixscans.com",
+      "fixed": "https://phenix-scans.com",
+      "via": "configKey"
+    },
+    {
+      "id": "philiascans",
+      "legacy": "https://philiascans.com",
+      "fixed": "https://philiascans.org",
+      "via": "bare"
+    },
+    {
+      "id": "pianmanga",
+      "legacy": "https://pianmanga.com",
+      "fixed": "https://pianmanga.me",
+      "via": "ctor"
+    },
+    {
+      "id": "piedpiperfansub",
+      "legacy": "https://piedpiperfansub.com",
+      "fixed": "https://piedpiperfansub.me",
+      "via": "ctor"
+    },
+    {
+      "id": "piedpiperfansubyy",
+      "legacy": "https://piedpiperfansubyy.com",
+      "fixed": "https://piedpiperfansubyy.me",
+      "via": "ctor"
+    },
+    {
+      "id": "pinkteacomic",
+      "legacy": "https://pinkteacomic.com",
+      "fixed": "https://pinkteacomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "pirulitorosa",
+      "legacy": "https://pirulitorosa.com",
+      "fixed": "https://pirulitorosa.site",
+      "via": "ctor"
+    },
+    {
+      "id": "plumacomics",
+      "legacy": "https://plumacomics.com",
+      "fixed": "https://plumacomics.cloud",
+      "via": "ctor"
+    },
+    {
+      "id": "pojokmanga",
+      "legacy": "https://pojokmanga.com",
+      "fixed": "https://pojokmanga.info",
+      "via": "ctor"
+    },
+    {
+      "id": "porncomic18",
+      "legacy": "https://porncomic18.com",
+      "fixed": "https://18porncomic.com",
+      "via": "bare"
+    },
+    {
+      "id": "porncomixonline",
+      "legacy": "https://porncomixonline.com",
+      "fixed": "https://porncomix.online",
+      "via": "ctor"
+    },
+    {
+      "id": "pornhwascans",
+      "legacy": "https://pornhwascans.com",
+      "fixed": "https://pornhwascans.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "potatomanga",
+      "legacy": "https://potatomanga.com",
+      "fixed": "https://potatomanga.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "powermanga",
+      "legacy": "https://powermanga.com",
+      "fixed": "https://reader.powermanga.org",
+      "via": "ctor"
+    },
+    {
+      "id": "prisma_hentai",
+      "legacy": "https://prisma_hentai.com",
+      "fixed": "https://prismahentai.com",
+      "via": "ctor"
+    },
+    {
+      "id": "pururin",
+      "legacy": "https://pururin.com",
+      "fixed": "https://pururin.to",
+      "via": "configKey"
+    },
+    {
+      "id": "pussysussytoons",
+      "legacy": "https://pussysussytoons.com",
+      "fixed": "https://pussy.sussytoons.com",
+      "via": "ctor"
+    },
+    {
+      "id": "pzykosis666hfansub",
+      "legacy": "https://pzykosis666hfansub.com",
+      "fixed": "https://lector.pzykosis666hfansub.com",
+      "via": "ctor"
+    },
+    {
+      "id": "quaanhdaocuteo",
+      "legacy": "https://quaanhdaocuteo.com",
+      "fixed": "https://qadcuteo.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "ragnarokscanlation",
+      "legacy": "https://ragnarokscanlation.com",
+      "fixed": "https://ragnarokscanlation.org",
+      "via": "ctor"
+    },
+    {
+      "id": "raijinscans",
+      "legacy": "https://raijinscans.com",
+      "fixed": "https://raijin-scans.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "raiscans",
+      "legacy": "https://raiscans.com",
+      "fixed": "https://kenscans.com",
+      "via": "bare"
+    },
+    {
+      "id": "ramareader",
+      "legacy": "https://ramareader.com",
+      "fixed": "https://ramareader.it",
+      "via": "ctor"
+    },
+    {
+      "id": "randomscans",
+      "legacy": "https://randomscans.com",
+      "fixed": "https://luratoons.net",
+      "via": "configKey"
+    },
+    {
+      "id": "raw1001",
+      "legacy": "https://raw1001.com",
+      "fixed": "https://raw1001.net",
+      "via": "bare"
+    },
+    {
+      "id": "rawdex",
+      "legacy": "https://rawdex.com",
+      "fixed": "https://rawdex.net",
+      "via": "ctor"
+    },
+    {
+      "id": "rawkuma",
+      "legacy": "https://rawkuma.com",
+      "fixed": "https://old.rawkuma.net",
+      "via": "ctor"
+    },
+    {
+      "id": "rawmanga",
+      "legacy": "https://rawmanga.com",
+      "fixed": "https://div.mg-item",
+      "via": "ctor"
+    },
+    {
+      "id": "rawxz",
+      "legacy": "https://rawxz.com",
+      "fixed": "https://rawxz.ac",
+      "via": "ctor"
+    },
+    {
+      "id": "raysscan",
+      "legacy": "https://raysscan.com",
+      "fixed": "https://raysscan.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "readcomicsonline",
+      "legacy": "https://readcomicsonline.com",
+      "fixed": "https://readcomicsonline.ru",
+      "via": "bare"
+    },
+    {
+      "id": "reader_evilflowers",
+      "legacy": "https://reader_evilflowers.com",
+      "fixed": "https://evilflowers.com",
+      "via": "ctor"
+    },
+    {
+      "id": "readergen",
+      "legacy": "https://readergen.com",
+      "fixed": "https://fr.readergen.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "readerspoint",
+      "legacy": "https://readerspoint.com",
+      "fixed": "https://qscomics.org",
+      "via": "ctor"
+    },
+    {
+      "id": "readkomik",
+      "legacy": "https://readkomik.com",
+      "fixed": "https://novelstreams.com",
+      "via": "ctor"
+    },
+    {
+      "id": "readmanga_ru",
+      "legacy": "https://readmanga_ru.com",
+      "fixed": "https://a.zazaza.me",
+      "via": "bare"
+    },
+    {
+      "id": "readmanhua",
+      "legacy": "https://readmanhua.com",
+      "fixed": "https://readmanhua.net",
+      "via": "ctor"
+    },
+    {
+      "id": "readnifteam",
+      "legacy": "https://readnifteam.com",
+      "fixed": "https://read-nifteam.info",
+      "via": "ctor"
+    },
+    {
+      "id": "readonepiece",
+      "legacy": "https://readonepiece.com",
+      "fixed": "https://ww11.readonepiece.com",
+      "via": "configKey"
+    },
+    {
+      "id": "reapercomics",
+      "legacy": "https://reapercomics.com",
+      "fixed": "https://reaperscans.com",
+      "via": "bare"
+    },
+    {
+      "id": "reaperscans_fr",
+      "legacy": "https://reaperscans_fr.com",
+      "fixed": "https://reaperscans.fr",
+      "via": "bare"
+    },
+    {
+      "id": "reaperscansunoriginal",
+      "legacy": "https://reaperscansunoriginal.com",
+      "fixed": "https://reaper-scans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "remanga",
+      "legacy": "https://remanga.com",
+      "fixed": "https://remanga.org",
+      "via": "configKey"
+    },
+    {
+      "id": "remangas",
+      "legacy": "https://remangas.com",
+      "fixed": "https://remangas.net",
+      "via": "ctor"
+    },
+    {
+      "id": "resetscans",
+      "legacy": "https://resetscans.com",
+      "fixed": "https://reset-scans.org",
+      "via": "ctor"
+    },
+    {
+      "id": "reyume",
+      "legacy": "https://reyume.com",
+      "fixed": "https://re-yume.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "rhplusmanga",
+      "legacy": "https://rhplusmanga.com",
+      "fixed": "https://rh2plusmanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "richtoscan",
+      "legacy": "https://richtoscan.com",
+      "fixed": "https://r1.richtoon.top",
+      "via": "ctor"
+    },
+    {
+      "id": "rightdarkscan",
+      "legacy": "https://rightdarkscan.com",
+      "fixed": "https://rsdleft.com",
+      "via": "ctor"
+    },
+    {
+      "id": "rio2manganet",
+      "legacy": "https://rio2manganet.com",
+      "fixed": "https://zinchanmanga.mobi",
+      "via": "ctor"
+    },
+    {
+      "id": "rizzcomic",
+      "legacy": "https://rizzcomic.com",
+      "fixed": "https://rizzfables.com",
+      "via": "ctor"
+    },
+    {
+      "id": "robinmanga",
+      "legacy": "https://robinmanga.com",
+      "fixed": "https://guildknives.com",
+      "via": "ctor"
+    },
+    {
+      "id": "rocksmanga",
+      "legacy": "https://rocksmanga.com",
+      "fixed": "https://div.reading-content",
+      "via": "ctor"
+    },
+    {
+      "id": "romantikmanga",
+      "legacy": "https://romantikmanga.com",
+      "fixed": "https://webtoonhatti.club",
+      "via": "ctor"
+    },
+    {
+      "id": "ruyamanga",
+      "legacy": "https://ruyamanga.com",
+      "fixed": "https://ruyamanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "sakamotodays",
+      "legacy": "https://sakamotodays.com",
+      "fixed": "https://sakamotodays.fr",
+      "via": "bare"
+    },
+    {
+      "id": "sayhentai",
+      "legacy": "https://sayhentai.com",
+      "fixed": "https://sayhentaii.art",
+      "via": "configKey"
+    },
+    {
+      "id": "saytruyenhay",
+      "legacy": "https://saytruyenhay.com",
+      "fixed": "https://phetruyen.vip",
+      "via": "ctor"
+    },
+    {
+      "id": "scanboruto",
+      "legacy": "https://scanboruto.com",
+      "fixed": "https://scanboruto.fr",
+      "via": "bare"
+    },
+    {
+      "id": "scanhentai",
+      "legacy": "https://scanhentai.com",
+      "fixed": "https://scan-hentai.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "scanhentaimenu",
+      "legacy": "https://scanhentaimenu.com",
+      "fixed": "https://x-manga.org",
+      "via": "ctor"
+    },
+    {
+      "id": "scanita",
+      "legacy": "https://scanita.com",
+      "fixed": "https://scanita.org",
+      "via": "bare"
+    },
+    {
+      "id": "scanmanga",
+      "legacy": "https://scanmanga.com",
+      "fixed": "https://scan-manga.me",
+      "via": "bare"
+    },
+    {
+      "id": "scanmangavf_ws",
+      "legacy": "https://scanmangavf_ws.com",
+      "fixed": "https://scanmangavf.ws",
+      "via": "bare"
+    },
+    {
+      "id": "scans_mangas_me",
+      "legacy": "https://scans_mangas_me.com",
+      "fixed": "https://scansmangas.me",
+      "via": "configKey"
+    },
+    {
+      "id": "scans4u",
+      "legacy": "https://scans4u.com",
+      "fixed": "https://4uscans.com",
+      "via": "bare"
+    },
+    {
+      "id": "scansraw",
+      "legacy": "https://scansraw.com",
+      "fixed": "https://aquascans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "scantrad",
+      "legacy": "https://scantrad.com",
+      "fixed": "https://scan-trad.com",
+      "via": "bare"
+    },
+    {
+      "id": "scantradunion",
+      "legacy": "https://scantradunion.com",
+      "fixed": "https://scantrad-union.com",
+      "via": "configKey"
+    },
+    {
+      "id": "scantradvf",
+      "legacy": "https://scantradvf.com",
+      "fixed": "https://scantrad-vf.me",
+      "via": "ctor"
+    },
+    {
+      "id": "scanvf",
+      "legacy": "https://scanvf.com",
+      "fixed": "https://scan-vf.net",
+      "via": "bare"
+    },
+    {
+      "id": "scanvforg",
+      "legacy": "https://scanvforg.com",
+      "fixed": "https://scanvf.org",
+      "via": "bare"
+    },
+    {
+      "id": "scyllacomics",
+      "legacy": "https://scyllacomics.com",
+      "fixed": "https://scyllacomics.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "seimanga",
+      "legacy": "https://seimanga.com",
+      "fixed": "https://1.seimanga.me",
+      "via": "bare"
+    },
+    {
+      "id": "seinagi",
+      "legacy": "https://seinagi.com",
+      "fixed": "https://reader.seinagi.org.es",
+      "via": "ctor"
+    },
+    {
+      "id": "seinagiadulto",
+      "legacy": "https://seinagiadulto.com",
+      "fixed": "https://adulto.seinagi.org.es",
+      "via": "ctor"
+    },
+    {
+      "id": "sekaikomik",
+      "legacy": "https://sekaikomik.com",
+      "fixed": "https://sekaikomik.mom",
+      "via": "ctor"
+    },
+    {
+      "id": "sektedoujin",
+      "legacy": "https://sektedoujin.com",
+      "fixed": "https://sektedoujin.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "sektekomik",
+      "legacy": "https://sektekomik.com",
+      "fixed": "https://sektekomik.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "selfmanga",
+      "legacy": "https://selfmanga.com",
+      "fixed": "https://selfmanga.live",
+      "via": "bare"
+    },
+    {
+      "id": "shadowceviri",
+      "legacy": "https://shadowceviri.com",
+      "fixed": "https://shadowceviri.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "shibamanga",
+      "legacy": "https://shibamanga.com",
+      "fixed": "https://div.page-item-detail",
+      "via": "ctor"
+    },
+    {
+      "id": "shinigami",
+      "legacy": "https://shinigami.com",
+      "fixed": "https://id.shinigami.asia",
+      "via": "configKey"
+    },
+    {
+      "id": "shirakami",
+      "legacy": "https://shirakami.com",
+      "fixed": "https://shirakami.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "shiro_doujin",
+      "legacy": "https://shiro_doujin.com",
+      "fixed": "https://shirodoujin.com",
+      "via": "bare"
+    },
+    {
+      "id": "shiyurasub",
+      "legacy": "https://shiyurasub.com",
+      "fixed": "https://shiyurasub.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "shojoscans",
+      "legacy": "https://shojoscans.com",
+      "fixed": "https://violetscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "siikomik",
+      "legacy": "https://siikomik.com",
+      "fixed": "https://siikomik.fun",
+      "via": "ctor"
+    },
+    {
+      "id": "silencescan",
+      "legacy": "https://silencescan.com",
+      "fixed": "https://silencescan.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "sinensisscans",
+      "legacy": "https://sinensisscans.com",
+      "fixed": "https://sinensis.leitorweb.com",
+      "via": "ctor"
+    },
+    {
+      "id": "sirenkomik",
+      "legacy": "https://sirenkomik.com",
+      "fixed": "https://sirenkomik.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "skanlacjefeniksy",
+      "legacy": "https://skanlacjefeniksy.com",
+      "fixed": "https://skanlacje-feniksy.pl",
+      "via": "ctor"
+    },
+    {
+      "id": "sky_manga",
+      "legacy": "https://sky_manga.com",
+      "fixed": "https://skymanga.work",
+      "via": "ctor"
+    },
+    {
+      "id": "snowmtl",
+      "legacy": "https://snowmtl.com",
+      "fixed": "https://snowmtl.ru",
+      "via": "bare"
+    },
+    {
+      "id": "snowscans",
+      "legacy": "https://snowscans.com",
+      "fixed": "https://flixscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "snscoeurturkey",
+      "legacy": "https://snscoeurturkey.com",
+      "fixed": "https://snscoeurturkey.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "sobatmanku",
+      "legacy": "https://sobatmanku.com",
+      "fixed": "https://sobatmanku19.cab",
+      "via": "bare"
+    },
+    {
+      "id": "solooscan",
+      "legacy": "https://solooscan.com",
+      "fixed": "https://solooscan.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "somanga",
+      "legacy": "https://somanga.com",
+      "fixed": "https://so-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "soulscans",
+      "legacy": "https://soulscans.com",
+      "fixed": "https://soulscans.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "spiderscans",
+      "legacy": "https://spiderscans.com",
+      "fixed": "https://spiderscans.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "ssreading",
+      "legacy": "https://ssreading.com",
+      "fixed": "https://ssreading.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "sssscanlator",
+      "legacy": "https://sssscanlator.com",
+      "fixed": "https://yomucomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "stellarsaber",
+      "legacy": "https://stellarsaber.com",
+      "fixed": "https://stellarsaber.pro",
+      "via": "ctor"
+    },
+    {
+      "id": "stickhorse",
+      "legacy": "https://stickhorse.com",
+      "fixed": "https://stickhorse.cl",
+      "via": "ctor"
+    },
+    {
+      "id": "stkissmanga_com",
+      "legacy": "https://stkissmanga_com.com",
+      "fixed": "https://1stkissmanga.mom",
+      "via": "ctor"
+    },
+    {
+      "id": "stkissmangablog",
+      "legacy": "https://stkissmangablog.com",
+      "fixed": "https://1stkissmanga.org",
+      "via": "ctor"
+    },
+    {
+      "id": "stonescape",
+      "legacy": "https://stonescape.com",
+      "fixed": "https://stonescape.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "summertoon",
+      "legacy": "https://summertoon.com",
+      "fixed": "https://summertoon.co",
+      "via": "ctor"
+    },
+    {
+      "id": "suryascans",
+      "legacy": "https://suryascans.com",
+      "fixed": "https://genzupdates.com",
+      "via": "bare"
+    },
+    {
+      "id": "sushiscan",
+      "legacy": "https://sushiscan.com",
+      "fixed": "https://sushiscan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "sushiscanfr",
+      "legacy": "https://sushiscanfr.com",
+      "fixed": "https://sushiscan.fr",
+      "via": "ctor"
+    },
+    {
+      "id": "sussyscan",
+      "legacy": "https://sussyscan.com",
+      "fixed": "https://sussytoons.wtf",
+      "via": "configKey"
+    },
+    {
+      "id": "sweetscan",
+      "legacy": "https://sweetscan.com",
+      "fixed": "https://sweetscan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "tanukimanga",
+      "legacy": "https://tanukimanga.com",
+      "fixed": "https://tanuki-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "tatakae_scans",
+      "legacy": "https://tatakae_scans.com",
+      "fixed": "https://tatakaescan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "taurusmanga",
+      "legacy": "https://taurusmanga.com",
+      "fixed": "https://taurus.topmanhuas.org",
+      "via": "ctor"
+    },
+    {
+      "id": "tcbscansmanga",
+      "legacy": "https://tcbscansmanga.com",
+      "fixed": "https://tcbscans-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "teamxnovel",
+      "legacy": "https://teamxnovel.com",
+      "fixed": "https://olympustaff.com",
+      "via": "configKey"
+    },
+    {
+      "id": "tecnoprojects",
+      "legacy": "https://tecnoprojects.com",
+      "fixed": "https://tecnoprojects.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "tecnoscans",
+      "legacy": "https://tecnoscans.com",
+      "fixed": "https://olyteconscans.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "temakimangas",
+      "legacy": "https://temakimangas.com",
+      "fixed": "https://temakimangas.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "tempestfansub",
+      "legacy": "https://tempestfansub.com",
+      "fixed": "https://tempestscans.net",
+      "via": "ctor"
+    },
+    {
+      "id": "tempestfansubnet",
+      "legacy": "https://tempestfansubnet.com",
+      "fixed": "https://tempestfansub.net",
+      "via": "ctor"
+    },
+    {
+      "id": "tempestscans",
+      "legacy": "https://tempestscans.com",
+      "fixed": "https://adumanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "templescan",
+      "legacy": "https://templescan.com",
+      "fixed": "https://templetoons.com",
+      "via": "bare"
+    },
+    {
+      "id": "templescanesp",
+      "legacy": "https://templescanesp.com",
+      "fixed": "https://templescanesp.net",
+      "via": "configKey"
+    },
+    {
+      "id": "tenkaiscan",
+      "legacy": "https://tenkaiscan.com",
+      "fixed": "https://falcoscan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "thaimanga",
+      "legacy": "https://thaimanga.com",
+      "fixed": "https://thaimanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "theblank",
+      "legacy": "https://theblank.com",
+      "fixed": "https://theblank.net",
+      "via": "ctor"
+    },
+    {
+      "id": "thunderscans",
+      "legacy": "https://thunderscans.com",
+      "fixed": "https://lavascans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "timenaight",
+      "legacy": "https://timenaight.com",
+      "fixed": "https://timenaight.org",
+      "via": "ctor"
+    },
+    {
+      "id": "tokyorevengers",
+      "legacy": "https://tokyorevengers.com",
+      "fixed": "https://tokyorevengers.fr",
+      "via": "bare"
+    },
+    {
+      "id": "tonizutoon",
+      "legacy": "https://tonizutoon.com",
+      "fixed": "https://tonizu.top",
+      "via": "ctor"
+    },
+    {
+      "id": "toomics",
+      "legacy": "https://toomics.com",
+      "fixed": "https://toomics.top",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsde",
+      "legacy": "https://toomicsde.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsen",
+      "legacy": "https://toomicsen.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicses",
+      "legacy": "https://toomicses.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsesla",
+      "legacy": "https://toomicsesla.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsfr",
+      "legacy": "https://toomicsfr.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsit",
+      "legacy": "https://toomicsit.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicsja",
+      "legacy": "https://toomicsja.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicspt",
+      "legacy": "https://toomicspt.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicssc",
+      "legacy": "https://toomicssc.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomicstc",
+      "legacy": "https://toomicstc.com",
+      "fixed": "https://toomics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "toomtammanga",
+      "legacy": "https://toomtammanga.com",
+      "fixed": "https://toomtam-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "tooncubus",
+      "legacy": "https://tooncubus.com",
+      "fixed": "https://tooncubus.top",
+      "via": "bare"
+    },
+    {
+      "id": "toongod",
+      "legacy": "https://toongod.com",
+      "fixed": "https://toongod.org",
+      "via": "ctor"
+    },
+    {
+      "id": "toonily_me",
+      "legacy": "https://toonily_me.com",
+      "fixed": "https://toonily.me",
+      "via": "bare"
+    },
+    {
+      "id": "topcomicporno",
+      "legacy": "https://topcomicporno.com",
+      "fixed": "https://topcomicporno.net",
+      "via": "ctor"
+    },
+    {
+      "id": "topmanhua",
+      "legacy": "https://topmanhua.com",
+      "fixed": "https://manhuatop.org",
+      "via": "ctor"
+    },
+    {
+      "id": "toptruyen",
+      "legacy": "https://toptruyen.com",
+      "fixed": "https://toptruyentv11.com",
+      "via": "ctor"
+    },
+    {
+      "id": "traduccionesamistosas",
+      "legacy": "https://traduccionesamistosas.com",
+      "fixed": "https://traduccionesamistosas.topmanhuas.org",
+      "via": "ctor"
+    },
+    {
+      "id": "tree_manga",
+      "legacy": "https://tree_manga.com",
+      "fixed": "https://treemanga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "tresdaos",
+      "legacy": "https://tresdaos.com",
+      "fixed": "https://threedaos.zdrz.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "tritinia",
+      "legacy": "https://tritinia.com",
+      "fixed": "https://tritinia.org",
+      "via": "ctor"
+    },
+    {
+      "id": "truemanga",
+      "legacy": "https://truemanga.com",
+      "fixed": "https://mangamonk.com",
+      "via": "bare"
+    },
+    {
+      "id": "truyengg",
+      "legacy": "https://truyengg.com",
+      "fixed": "https://foxtruyen.com",
+      "via": "configKey"
+    },
+    {
+      "id": "truyenhentai18",
+      "legacy": "https://truyenhentai18.com",
+      "fixed": "https://truyenhentai18.app",
+      "via": "configKey"
+    },
+    {
+      "id": "truyenhentaivn",
+      "legacy": "https://truyenhentaivn.com",
+      "fixed": "https://truyenhentaivn.club",
+      "via": "configKey"
+    },
+    {
+      "id": "truyenqq",
+      "legacy": "https://truyenqq.com",
+      "fixed": "https://truyenqqgo.com",
+      "via": "configKey"
+    },
+    {
+      "id": "truyentranh3q",
+      "legacy": "https://truyentranh3q.com",
+      "fixed": "https://truyentranh3qc.com",
+      "via": "configKey"
+    },
+    {
+      "id": "truyentranhdammyy",
+      "legacy": "https://truyentranhdammyy.com",
+      "fixed": "https://truyentranhdammyy.site",
+      "via": "ctor"
+    },
+    {
+      "id": "truyentranhfull",
+      "legacy": "https://truyentranhfull.com",
+      "fixed": "https://truyentranhfull.net",
+      "via": "ctor"
+    },
+    {
+      "id": "truyenvn",
+      "legacy": "https://truyenvn.com",
+      "fixed": "https://truyenvn.shop",
+      "via": "ctor"
+    },
+    {
+      "id": "tsundoku",
+      "legacy": "https://tsundoku.com",
+      "fixed": "https://tsundoku.com.br",
+      "via": "ctor"
+    },
+    {
+      "id": "tu_manhwas",
+      "legacy": "https://tu_manhwas.com",
+      "fixed": "https://tumanhwas.com",
+      "via": "ctor"
+    },
+    {
+      "id": "tukangkomik",
+      "legacy": "https://tukangkomik.com",
+      "fixed": "https://tukangkomik.co",
+      "via": "ctor"
+    },
+    {
+      "id": "tumangaonline",
+      "legacy": "https://tumangaonline.com",
+      "fixed": "https://zonatmo.com",
+      "via": "configKey"
+    },
+    {
+      "id": "tumanhwas",
+      "legacy": "https://tumanhwas.com",
+      "fixed": "https://tumanhwas.club",
+      "via": "bare"
+    },
+    {
+      "id": "tuttoanimemanga",
+      "legacy": "https://tuttoanimemanga.com",
+      "fixed": "https://tuttoanimemanga.net",
+      "via": "bare"
+    },
+    {
+      "id": "ukiyotoon",
+      "legacy": "https://ukiyotoon.com",
+      "fixed": "https://nakamatoon.com",
+      "via": "ctor"
+    },
+    {
+      "id": "ulascomic",
+      "legacy": "https://ulascomic.com",
+      "fixed": "https://ulascomic00.xyz",
+      "via": "bare"
+    },
+    {
+      "id": "usagi",
+      "legacy": "https://usagi.com",
+      "fixed": "https://web.usagi.one",
+      "via": "bare"
+    },
+    {
+      "id": "utoon",
+      "legacy": "https://utoon.com",
+      "fixed": "https://utoon.net",
+      "via": "ctor"
+    },
+    {
+      "id": "varnascan",
+      "legacy": "https://varnascan.com",
+      "fixed": "https://varnascan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "vcomycs",
+      "legacy": "https://vcomycs.com",
+      "fixed": "https://vivicomi8.info",
+      "via": "configKey"
+    },
+    {
+      "id": "vexmanga",
+      "legacy": "https://vexmanga.com",
+      "fixed": "https://vortexscans.org",
+      "via": "ctor"
+    },
+    {
+      "id": "vfscan",
+      "legacy": "https://vfscan.com",
+      "fixed": "https://vfscan.net",
+      "via": "ctor"
+    },
+    {
+      "id": "villainessscan",
+      "legacy": "https://villainessscan.com",
+      "fixed": "https://villainessscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "vinlandsaga",
+      "legacy": "https://vinlandsaga.com",
+      "fixed": "https://vinlandsaga.fr",
+      "via": "bare"
+    },
+    {
+      "id": "voidscans",
+      "legacy": "https://voidscans.com",
+      "fixed": "https://hivetoon.com",
+      "via": "ctor"
+    },
+    {
+      "id": "voidscans_co",
+      "legacy": "https://voidscans_co.com",
+      "fixed": "https://voidscans.co",
+      "via": "ctor"
+    },
+    {
+      "id": "vortexscans",
+      "legacy": "https://vortexscans.com",
+      "fixed": "https://vortexscans.org",
+      "via": "bare"
+    },
+    {
+      "id": "vymanga",
+      "legacy": "https://vymanga.com",
+      "fixed": "https://vymanga.net",
+      "via": "configKey"
+    },
+    {
+      "id": "vyvymanga",
+      "legacy": "https://vyvymanga.com",
+      "fixed": "https://vyvymanga.org",
+      "via": "ctor"
+    },
+    {
+      "id": "walpurgiscan",
+      "legacy": "https://walpurgiscan.com",
+      "fixed": "https://walpurgiscan.it",
+      "via": "ctor"
+    },
+    {
+      "id": "wamanga",
+      "legacy": "https://wamanga.com",
+      "fixed": "https://wamanga.ru",
+      "via": "configKey"
+    },
+    {
+      "id": "webtoon",
+      "legacy": "https://webtoon.com",
+      "fixed": "https://webtoon.uk",
+      "via": "ctor"
+    },
+    {
+      "id": "webtoonempire",
+      "legacy": "https://webtoonempire.com",
+      "fixed": "https://webtoonempire-bl.com",
+      "via": "ctor"
+    },
+    {
+      "id": "webtoonhatti",
+      "legacy": "https://webtoonhatti.com",
+      "fixed": "https://webtoonhatti.club",
+      "via": "ctor"
+    },
+    {
+      "id": "webtoons_en",
+      "legacy": "https://webtoons_en.com",
+      "fixed": "https://webtoons.com",
+      "via": "configKey"
+    },
+    {
+      "id": "webtoontr",
+      "legacy": "https://webtoontr.com",
+      "fixed": "https://webtoontr.net",
+      "via": "ctor"
+    },
+    {
+      "id": "webtoonxyz",
+      "legacy": "https://webtoonxyz.com",
+      "fixed": "https://webtoon.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "weloma",
+      "legacy": "https://weloma.com",
+      "fixed": "https://weloma.art",
+      "via": "bare"
+    },
+    {
+      "id": "welovemanga",
+      "legacy": "https://welovemanga.com",
+      "fixed": "https://welovemanga.one",
+      "via": "bare"
+    },
+    {
+      "id": "westmanga",
+      "legacy": "https://westmanga.com",
+      "fixed": "https://westmanga.me",
+      "via": "ctor"
+    },
+    {
+      "id": "wickedwitchscan",
+      "legacy": "https://wickedwitchscan.com",
+      "fixed": "https://wicked-witch-scan.com",
+      "via": "ctor"
+    },
+    {
+      "id": "witchscans",
+      "legacy": "https://witchscans.com",
+      "fixed": "https://altayscans.com",
+      "via": "ctor"
+    },
+    {
+      "id": "witcomics",
+      "legacy": "https://witcomics.com",
+      "fixed": "https://witcomics.net",
+      "via": "ctor"
+    },
+    {
+      "id": "wolfscanbr",
+      "legacy": "https://wolfscanbr.com",
+      "fixed": "https://wolfscanbr.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "worldmanhwas",
+      "legacy": "https://worldmanhwas.com",
+      "fixed": "https://worldmanhwas.zone",
+      "via": "ctor"
+    },
+    {
+      "id": "xmanhwa",
+      "legacy": "https://xmanhwa.com",
+      "fixed": "https://manhwaden.com",
+      "via": "ctor"
+    },
+    {
+      "id": "xoxocomics",
+      "legacy": "https://xoxocomics.com",
+      "fixed": "https://xoxocomic.com",
+      "via": "ctor"
+    },
+    {
+      "id": "xsanomanga",
+      "legacy": "https://xsanomanga.com",
+      "fixed": "https://xsano-manga.com",
+      "via": "bare"
+    },
+    {
+      "id": "xsscan",
+      "legacy": "https://xsscan.com",
+      "fixed": "https://xsscan.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "xxxrevolutionscantrad",
+      "legacy": "https://xxxrevolutionscantrad.com",
+      "fixed": "https://xxx.revolutionscantrad.com",
+      "via": "ctor"
+    },
+    {
+      "id": "yanpfansub",
+      "legacy": "https://yanpfansub.com",
+      "fixed": "https://trisalyanp.com",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoibar",
+      "legacy": "https://yaoibar.com",
+      "fixed": "https://yaoibar.gay",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoichan",
+      "legacy": "https://yaoichan.com",
+      "fixed": "https://v9.yaoi-chan.me",
+      "via": "configKey"
+    },
+    {
+      "id": "yaoiflix",
+      "legacy": "https://yaoiflix.com",
+      "fixed": "https://yaoiflix.me",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoilib",
+      "legacy": "https://yaoilib.com",
+      "fixed": "https://v2.slashlib.me",
+      "via": "bare"
+    },
+    {
+      "id": "yaoimanga",
+      "legacy": "https://yaoimanga.com",
+      "fixed": "https://yaoimanga.es",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoimangaoku",
+      "legacy": "https://yaoimangaoku.com",
+      "fixed": "https://yaoimangaoku.net",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoimobi",
+      "legacy": "https://yaoimobi.com",
+      "fixed": "https://yaoi.mobi",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoitr",
+      "legacy": "https://yaoitr.com",
+      "fixed": "https://yaoitr.fun",
+      "via": "ctor"
+    },
+    {
+      "id": "yaoix3",
+      "legacy": "https://yaoix3.com",
+      "fixed": "https://3xyaoi.com",
+      "via": "ctor"
+    },
+    {
+      "id": "ydcomics",
+      "legacy": "https://ydcomics.com",
+      "fixed": "https://yd-comics.com",
+      "via": "ctor"
+    },
+    {
+      "id": "ykmh",
+      "legacy": "https://ykmh.com",
+      "fixed": "https://ykmh.net",
+      "via": "bare"
+    },
+    {
+      "id": "yokaiteam",
+      "legacy": "https://yokaiteam.com",
+      "fixed": "https://yokai-team.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "yonabar",
+      "legacy": "https://yonabar.com",
+      "fixed": "https://yonabar.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "yubikiri",
+      "legacy": "https://yubikiri.com",
+      "fixed": "https://yubikiri.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "yugen_mangas_es",
+      "legacy": "https://yugen_mangas_es.com",
+      "fixed": "https://yugenmangas.lat",
+      "via": "bare"
+    },
+    {
+      "id": "yugenmangas",
+      "legacy": "https://yugenmangas.com",
+      "fixed": "https://yugenmangasbr.voblog.xyz",
+      "via": "configKey"
+    },
+    {
+      "id": "yuramanga",
+      "legacy": "https://yuramanga.com",
+      "fixed": "https://yuramanga.my.id",
+      "via": "bare"
+    },
+    {
+      "id": "yurilab",
+      "legacy": "https://yurilab.com",
+      "fixed": "https://yurilabs.my.id",
+      "via": "ctor"
+    },
+    {
+      "id": "yurilive",
+      "legacy": "https://yurilive.com",
+      "fixed": "https://yuri.live",
+      "via": "ctor"
+    },
+    {
+      "id": "yurimoonsub",
+      "legacy": "https://yurimoonsub.com",
+      "fixed": "https://yurimoonsub.blogspot.com",
+      "via": "bare"
+    },
+    {
+      "id": "yurineko",
+      "legacy": "https://yurineko.com",
+      "fixed": "https://yurineko.site",
+      "via": "configKey"
+    },
+    {
+      "id": "zahard",
+      "legacy": "https://zahard.com",
+      "fixed": "https://zahard.xyz",
+      "via": "ctor"
+    },
+    {
+      "id": "zandynofansub",
+      "legacy": "https://zandynofansub.com",
+      "fixed": "https://dd.mm.yyyy",
+      "via": "ctor"
+    },
+    {
+      "id": "zenmanga",
+      "legacy": "https://zenmanga.com",
+      "fixed": "https://inkstory.me",
+      "via": "configKey"
+    },
+    {
+      "id": "zin_manga_com",
+      "legacy": "https://zin_manga_com.com",
+      "fixed": "https://zin-manga.com",
+      "via": "ctor"
+    },
+    {
+      "id": "zinchanmanga",
+      "legacy": "https://zinchanmanga.com",
+      "fixed": "https://zinchangmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "zinchanmanga_net",
+      "legacy": "https://zinchanmanga_net.com",
+      "fixed": "https://zinchangmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "zinmanga",
+      "legacy": "https://zinmanga.com",
+      "fixed": "https://zinmanga.net",
+      "via": "ctor"
+    },
+    {
+      "id": "zinmanga_cc",
+      "legacy": "https://zinmanga_cc.com",
+      "fixed": "https://zinmanga.cc",
+      "via": "ctor"
+    },
+    {
+      "id": "zinmanga_ms",
+      "legacy": "https://zinmanga_ms.com",
+      "fixed": "https://zinmanga.ms",
+      "via": "ctor"
+    }
+  ],
+  "unreliableSources": [
+    {
+      "id": "agscomics",
+      "domain": "agrcomics.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "aiyumangascanlation",
+      "domain": "aiyumanhua.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "animexnovel",
+      "domain": "animexnovel.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "anteikuscan",
+      "domain": "anteikuscan.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "anzmangashd",
+      "domain": "anzmangashd.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "arabsdoujin",
+      "domain": "arabsdoujin.online",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "arcrelight",
+      "domain": "arc-relight.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "arvenscans",
+      "domain": "arvencomics.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "assortedscans",
+      "domain": "assortedscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "astrames",
+      "domain": "astrames.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "asupankomik",
+      "domain": "asupankomik.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "bananascan_com",
+      "domain": "bananascan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "beehentai",
+      "domain": "beehentai.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "bentoscan",
+      "domain": "bentoscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "berserkscan",
+      "domain": "berserkscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "bluelockscan",
+      "domain": "bluelockscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "brakeout",
+      "domain": "brakeout.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "centuryboys20th",
+      "domain": "20thcenturyboys.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "chainsawmanscan",
+      "domain": "chainsawman-scan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "comic1000",
+      "domain": "comic1000.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "dandadan",
+      "domain": "dandadan.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "danke",
+      "domain": "danke.moe",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "datgarscanlation",
+      "domain": "datgarscanlation.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "demonslayerscan",
+      "domain": "demonslayerscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "doctruyen5s",
+      "domain": "manga.io.vn",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "vi"
+    },
+    {
+      "id": "drstone",
+      "domain": "drstone.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "duoscanlators",
+      "domain": "duoscanlators.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "edscanlation",
+      "domain": "edscanlation.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "elevenscanlator",
+      "domain": "elevenscanlator.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "enlignemanga",
+      "domain": "enlignemanga.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "epikman",
+      "domain": "epikman.ga",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "tr"
+    },
+    {
+      "id": "ezmanga",
+      "domain": "ezmanga.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "fireforce",
+      "domain": "fireforce.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "firescans",
+      "domain": "div.page-item-detail",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "fmteam",
+      "domain": "fmteam.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "frmanga",
+      "domain": "frmanga.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "frscanscom",
+      "domain": "frscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "galaxscans",
+      "domain": "galaxscanlator.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "gistamishousefansub",
+      "domain": "gistamishousefansub.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "gtothegreatsite",
+      "domain": "reader.gtothegreatsite.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "gufengmh",
+      "domain": "gufengmh.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "zh"
+    },
+    {
+      "id": "guildatierdraw",
+      "domain": "guildatierdraw.top",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "guyacubari",
+      "domain": "guya.cubari.moe",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "hachirumi",
+      "domain": "hachirumi.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "haikyuu",
+      "domain": "haikyuu.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "hanman18",
+      "domain": "hanman18.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "zh"
+    },
+    {
+      "id": "hastateam",
+      "domain": "ddt.hastateam.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "hastateam_reader",
+      "domain": "reader.hastateam.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "heckscans",
+      "domain": "heckscans.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "hellsparadisescan",
+      "domain": "hellsparadisescan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "hensekai",
+      "domain": "hensekai.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "hentai3zcc",
+      "domain": "hentai3z.cc",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "hentailib",
+      "domain": "v1.hentailib.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "hentainexus",
+      "domain": "hentainexus.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "hentairead",
+      "domain": "hentairead.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "hentaiseason",
+      "domain": "hentaiseason.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "hentaislayer",
+      "domain": "hentaislayer.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "hentaitokyo",
+      "domain": "hentaitokyo.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "hijala",
+      "domain": "hijala.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "hivecomic",
+      "domain": "hivetoons.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "hniscantrad",
+      "domain": "hni-scantrad.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "hunterxhunterscan",
+      "domain": "hunterxhunterscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "ichiromanga",
+      "domain": "ichiromanga.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "jpmangas",
+      "domain": "jpmangas.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "jpscanvf",
+      "domain": "lirescanvf.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "kaijuno8",
+      "domain": "kaijuno8.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "kewnscans",
+      "domain": "kewnscans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "kingdomscan",
+      "domain": "kingdomscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "kishisan",
+      "domain": "kishisan.site",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "klmanhua",
+      "domain": "klmanhua.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "klz9",
+      "domain": "klz9.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "komikges",
+      "domain": "komikges.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "komikid",
+      "domain": "komiku.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "komikindo_info",
+      "domain": "komikindo.info",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "komikrealm",
+      "domain": "komikrealm.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "komiksan",
+      "domain": "img.attachment-medium",
+      "via": "ctor",
+      "engine": "mangathemesia",
+      "lang": "id"
+    },
+    {
+      "id": "komikzoid",
+      "domain": "komikzoid.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "laidbackscans",
+      "domain": "laidbackscans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "legionscans",
+      "domain": "legionscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "lelscanvf",
+      "domain": "lelscanfr.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "lepoytl",
+      "domain": "lepoytl.cloud",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "ler999",
+      "domain": "ler999.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "likemanga",
+      "domain": "likemanga.ink",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "lonertl",
+      "domain": "loner-tl.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "luascans",
+      "domain": "luacomic.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "lupiteam",
+      "domain": "lupiteam.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "magerin",
+      "domain": "magerin.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "magusmanga",
+      "domain": "magustoon.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "maid_id",
+      "domain": "maid.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "manga_denizi",
+      "domain": "mangadenizi.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "tr"
+    },
+    {
+      "id": "manga_scan",
+      "domain": "mangascan-fr.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "manga18",
+      "domain": "manga18.club",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "manga4life",
+      "domain": "manga4life.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangaailand",
+      "domain": "manga-ai-land.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "mangabr",
+      "domain": "mangabr.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "mangabuddy",
+      "domain": "mangabuddy.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangacute",
+      "domain": "mangacute.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangadass",
+      "domain": "div.ss-manga",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "mangadna",
+      "domain": "li.a-h",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "mangadoor",
+      "domain": "mangadoor.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "mangaesp",
+      "domain": "mangaesp.topmanhuas.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "mangaforest",
+      "domain": "mangaforest.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangafr",
+      "domain": "mangafr.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "mangagalaxy",
+      "domain": "vortexscans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangahaus",
+      "domain": "mangahaus.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "de"
+    },
+    {
+      "id": "mangahub_link",
+      "domain": "mangahub.link",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "mangaid",
+      "domain": "mangaid.click",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "mangaitalia",
+      "domain": "mangaita.io",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "mangajinx",
+      "domain": "mgjinx.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangakoinu",
+      "domain": "mangakoinu.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "mangakoma01",
+      "domain": "mangakoma01.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "mangalib",
+      "domain": "mangalib.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "mangapuma",
+      "domain": "mangapuma.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangasect",
+      "domain": "mangasect.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangasee",
+      "domain": "mangasee123.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "mangasoul",
+      "domain": "manga-soul.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "mangaterra",
+      "domain": "manga-terra.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "mangaworld",
+      "domain": "mangaworld.ac",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "mangaworldadult",
+      "domain": "mangaworldadult.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "mangaxyz",
+      "domain": "mangaxyz.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "manhatok",
+      "domain": "manhatok.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "manhuagold",
+      "domain": "manhuagold.top",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "manhuaplusorg",
+      "domain": "manhuaplus.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "manhuascan",
+      "domain": "kaliscan.io",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "manhwaz",
+      "domain": "div.list-chapter",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "mashlescan",
+      "domain": "mashlescan.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "maxgsscan",
+      "domain": "maxgsscan.online",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "mikoroku",
+      "domain": "mikoroku.web.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "mikrokosmosfb",
+      "domain": "mikrokosmosfb.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "tr"
+    },
+    {
+      "id": "mintmanga",
+      "domain": "2.mintmanga.one",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "mmscans",
+      "domain": "div.summary-text",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "modescanlator",
+      "domain": "site.modescanlator.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "mundohentaioficial",
+      "domain": "mundohentaioficial.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "myheroacademiascan",
+      "domain": "myheroacademiascan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "necroscans",
+      "domain": "necroscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "nekoscans",
+      "domain": "nekoscans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "nettruyen1975",
+      "domain": "nettruyen1975.com",
+      "via": "fallback",
+      "engine": "wpcomics",
+      "lang": "vi"
+    },
+    {
+      "id": "nettruyenfe",
+      "domain": "nettruyenfe.com",
+      "via": "fallback",
+      "engine": "wpcomics",
+      "lang": "vi"
+    },
+    {
+      "id": "nettruyenll",
+      "domain": "nettruyenll.com",
+      "via": "fallback",
+      "engine": "wpcomics",
+      "lang": "vi"
+    },
+    {
+      "id": "nettruyenssr",
+      "domain": "nettruyenssr.com",
+      "via": "fallback",
+      "engine": "wpcomics",
+      "lang": "vi"
+    },
+    {
+      "id": "nettruyenuu",
+      "domain": "nettruyenuu.com",
+      "via": "fallback",
+      "engine": "wpcomics",
+      "lang": "vi"
+    },
+    {
+      "id": "neumanga",
+      "domain": "neumanga.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "ngamenkomik",
+      "domain": "ngamenkomik05.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "nimemob",
+      "domain": "nimemob.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "ninemanga_en",
+      "domain": "ul.direlist",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "oioivn",
+      "domain": "oioivn.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "vi"
+    },
+    {
+      "id": "okyykomik",
+      "domain": "okyykomik.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "olimposcans",
+      "domain": "leerolimpo.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "omegascans",
+      "domain": "omegascans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "onepiecescan",
+      "domain": "onepiecescan.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "onepunchmanscan",
+      "domain": "onepunchmanscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "onma",
+      "domain": "onma.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "oshinoko",
+      "domain": "oshinoko.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "otakusan_en",
+      "domain": "otakusan.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "otakusan_vi",
+      "domain": "otakusan.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "vi"
+    },
+    {
+      "id": "papscan",
+      "domain": "papscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "perf_scan",
+      "domain": "perf-scan.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "philiascans",
+      "domain": "philiascans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "phoenixscans",
+      "domain": "phoenixscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "porncomic18",
+      "domain": "18porncomic.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "raiscans",
+      "domain": "kenscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "raw1001",
+      "domain": "raw1001.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "rawmanga",
+      "domain": "div.mg-item",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "ja"
+    },
+    {
+      "id": "raysscan",
+      "domain": "raysscan.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "readcomicsonline",
+      "domain": "readcomicsonline.ru",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "readmanga_ru",
+      "domain": "a.zazaza.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "reapercomics",
+      "domain": "reaperscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "reaperscans_fr",
+      "domain": "reaperscans.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "reyume",
+      "domain": "re-yume.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "rezoscans",
+      "domain": "rezoscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "rocksmanga",
+      "domain": "div.reading-content",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "ar"
+    },
+    {
+      "id": "sakamotodays",
+      "domain": "sakamotodays.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanboruto",
+      "domain": "scanboruto.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanita",
+      "domain": "scanita.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "scanjujutsukaisen",
+      "domain": "scanjujutsukaisen.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanmanga",
+      "domain": "scan-manga.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanmangavf_ws",
+      "domain": "scanmangavf.ws",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scans4u",
+      "domain": "4uscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "scantrad",
+      "domain": "scan-trad.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanvf",
+      "domain": "scan-vf.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scanvforg",
+      "domain": "scanvf.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "scyllacomics",
+      "domain": "scyllacomics.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "seimanga",
+      "domain": "1.seimanga.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "seinemanga",
+      "domain": "seinemanga.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "sektekomik",
+      "domain": "sektekomik.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "selfmanga",
+      "domain": "selfmanga.live",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "shadowceviri",
+      "domain": "shadowceviri.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "tr"
+    },
+    {
+      "id": "shibamanga",
+      "domain": "div.page-item-detail",
+      "via": "ctor",
+      "engine": "madara",
+      "lang": "en"
+    },
+    {
+      "id": "shiro_doujin",
+      "domain": "shirodoujin.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "shiyurasub",
+      "domain": "shiyurasub.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "snkscan",
+      "domain": "snkscan.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "snowmtl",
+      "domain": "snowmtl.ru",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "snscoeurturkey",
+      "domain": "snscoeurturkey.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "tr"
+    },
+    {
+      "id": "sobatmanku",
+      "domain": "sobatmanku19.cab",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "sodsaime",
+      "domain": "sodsaime.com",
+      "via": "fallback",
+      "engine": "mangathemesia",
+      "lang": "th"
+    },
+    {
+      "id": "solarmtl",
+      "domain": "solarmtl.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "solooscan",
+      "domain": "solooscan.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "starboundscans",
+      "domain": "starboundscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "suryascans",
+      "domain": "genzupdates.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "temakimangas",
+      "domain": "temakimangas.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "templescan",
+      "domain": "templetoons.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "tokyorevengers",
+      "domain": "tokyorevengers.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "tooncubus",
+      "domain": "tooncubus.top",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "toonily_me",
+      "domain": "toonily.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "toonitube",
+      "domain": "toonitube.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "truemanga",
+      "domain": "mangamonk.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "tumanhwas",
+      "domain": "tumanhwas.club",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "tuttoanimemanga",
+      "domain": "tuttoanimemanga.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "it"
+    },
+    {
+      "id": "tyrantscans",
+      "domain": "tyrantscans.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "ulascomic",
+      "domain": "ulascomic00.xyz",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "universohentai",
+      "domain": "universohentai.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "usagi",
+      "domain": "web.usagi.one",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "vercomicsporno",
+      "domain": "vercomicsporno.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "vermangasporno",
+      "domain": "vermangasporno.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "vinlandsaga",
+      "domain": "vinlandsaga.fr",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "fr"
+    },
+    {
+      "id": "vortexscans",
+      "domain": "vortexscans.org",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "en"
+    },
+    {
+      "id": "weloma",
+      "domain": "weloma.art",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "welovemanga",
+      "domain": "welovemanga.one",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ja"
+    },
+    {
+      "id": "wolfscanbr",
+      "domain": "wolfscanbr.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "xiutaku",
+      "domain": "xiutaku.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "zh"
+    },
+    {
+      "id": "xsanomanga",
+      "domain": "xsano-manga.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "yaoifanclub",
+      "domain": "yaoifanclub.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    },
+    {
+      "id": "yaoilib",
+      "domain": "v2.slashlib.me",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ru"
+    },
+    {
+      "id": "ykmh",
+      "domain": "ykmh.net",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "zh"
+    },
+    {
+      "id": "yokaiteam",
+      "domain": "yokai-team.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "yugen_mangas_es",
+      "domain": "yugenmangas.lat",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "es"
+    },
+    {
+      "id": "yuramanga",
+      "domain": "yuramanga.my.id",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "id"
+    },
+    {
+      "id": "yurigarden",
+      "domain": "yurigarden.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "vi"
+    },
+    {
+      "id": "yurimoonsub",
+      "domain": "yurimoonsub.blogspot.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "ar"
+    },
+    {
+      "id": "zscanlation",
+      "domain": "zscanlation.com",
+      "via": "bare",
+      "engine": "custom_html",
+      "lang": "pt"
+    }
+  ],
+  "probed": null,
+  "byEngine": {
+    "custom_html": 359,
+    "mangathemesia": 262,
+    "madara": 540,
+    "foolslide": 9,
+    "wpcomics": 17
+  },
+  "byLang": {
+    "ru": 24,
+    "tr": 120,
+    "en": 370,
+    "id": 117,
+    "es": 114,
+    "pt": 135,
+    "be": 1,
+    "fr": 99,
+    "ar": 64,
+    "th": 31,
+    "zh": 10,
+    "it": 17,
+    "vi": 59,
+    "cs": 1,
+    "uk": 3,
+    "ja": 15,
+    "de": 4,
+    "pl": 2,
+    "ko": 1
+  }
+}

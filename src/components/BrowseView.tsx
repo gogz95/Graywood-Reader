@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MangaItem, SourceDefinition, hasWorkingReaderSource } from '../types';
 import { isReaderAvailable } from '../utils/catalog';
 
@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Sparkles,
   Play,
+  Filter,
 } from 'lucide-react';
 
 // A single series coming from the LIVE explore feed (never the local library).
@@ -68,6 +69,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(true);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // Load the source list for the source filter dropdown (from server registry).
   useEffect(() => {
@@ -114,7 +117,12 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
   useEffect(() => {
     setPage(1);
-  }, [selectedSource, query, typeFilter]);
+  }, [selectedSource, query, typeFilter, selectedTag]);
+
+  // Fetch the live explore feed on mount and whenever filters/page change.
+  useEffect(() => {
+    fetchExplore();
+  }, [fetchExplore]);
 
   const handleTrack = (item: ExploreItem) => {
     onTrack({
@@ -143,8 +151,23 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     if (seedSearch !== undefined) setQuery(seedSearch);
   }, [seedSearch]);
 
+  // Popular tags derived from the current live feed so the chips always match real data.
+  const popularTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of results) {
+      for (const g of r.genres || []) {
+        counts.set(g, (counts.get(g) || 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 16)
+      .map(([tag]) => tag);
+  }, [results]);
+
   const visible = results.filter((r) =>
-    typeFilter === 'all' ? true : (r.type || 'manga').toLowerCase() === typeFilter
+    (typeFilter === 'all' ? true : (r.type || 'manga').toLowerCase() === typeFilter) &&
+    (selectedTag ? (r.genres || []).some((g) => g.toLowerCase() === selectedTag.toLowerCase()) : true)
   );
 
   const toManga = (r: ExploreItem, forReader: boolean): MangaItem => ({
@@ -233,13 +256,55 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           <span className="inline-flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-accent" /> Feed refreshes live · {countLabel}
           </span>
-          <button
-            onClick={() => setPage(1)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border ${
+                filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
+              }`}
+              title={filtersOpen ? 'Hide tags' : 'Show tags'}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
+            </button>
+            <button
+              onClick={() => setPage(1)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all"
+              title="Refresh the live feed"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
         </div>
+
+        {filtersOpen && popularTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tags</span>
+            <button
+              onClick={() => setSelectedTag(null)}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                selectedTag === null
+                  ? 'bg-accent-2 text-white border-accent-2'
+                  : 'bg-elevated text-secondary border-edge hover:text-primary'
+              }`}
+            >
+              All
+            </button>
+            {popularTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                  selectedTag === tag
+                    ? 'bg-accent-2 text-white border-accent-2 shadow-sm'
+                    : 'bg-elevated text-secondary border-edge hover:text-primary hover:border-accent-2/40'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -259,6 +324,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
       ) : (
         <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
           {visible.map((r) => {
               const isTracked = trackedKeys.has(String(r.title).trim().toLowerCase());
               const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
@@ -339,6 +405,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 </div>
               );
             })}
+          </div>
 
           {totalPages > 1 && (
             <div className="sticky bottom-4 z-20 flex items-center justify-between gap-3 p-4 bg-surface/95 backdrop-blur-md border border-edge rounded-2xl shadow-2xl">

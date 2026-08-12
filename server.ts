@@ -522,6 +522,59 @@ export function isSourceAlive(sourceNameOrId: string): boolean {
   return true;
 }
 
+// ── Reliable parser-domain extraction ───────────────────────────────────────
+// Kotatsu declares each parser's site domain inside compiled Kotlin in several
+// forms. This web port cannot compile Kotlin, so it regex-scans the .kt sources.
+// Getting the domain right decides whether a source is usable: the legacy code
+// only matched `ConfigKey.Domain("…")` and otherwise fell back to `<id>.com`,
+// which registered ~830 wrong/dead baseUrls (e.g. adult_webtoon.com). This
+// helper also reads the base-class constructor form
+// (`MadaraParser(ctx, Source, "tld")`) and a bare domain literal, mirroring
+// Kotatsu's KSP-generated source registry where the domain is authoritative at
+// compile time. Kept in sync with scripts/source-audit.mjs `extractParserDomain`.
+const PARSER_CLASS_RX = /(?:MadaraParser|MangaThemesiaParser|MangaReaderParser|FoolSlideParser|WpComicsParser|HotComicsParser|Manhwa18Parser|PagedMangaParser)\s*\(/;
+
+function sanitizeParserDomain(raw: string): string | null {
+  if (!raw) return null;
+  let d = String(raw).trim().toLowerCase();
+  d = d.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./, '').replace(/\.$/, '');
+  if (!d || d.length < 4 || d.length > 253) return null;
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return null; // hostname only, no '_'
+  if (d.includes('..') || /^-|-$/.test(d) || /--/.test(d)) return null;
+  const tld = d.split('.').pop() || '';
+  if (tld.length < 2 || tld.length > 24) return null;
+  return d;
+}
+
+interface ParserDomainResult { domain: string; baseUrl: string; reliable: boolean; via: string }
+
+function extractParserDomain(content: string, fallbackId: string): ParserDomainResult {
+  const pick = (raw: string | undefined, via: string, reliable: boolean): ParserDomainResult | null => {
+    const d = sanitizeParserDomain(raw || '');
+    if (!d) return null;
+    return { domain: d, baseUrl: `https://${d}`, reliable, via };
+  };
+  // 1) ConfigKey.Domain("tld") — modern standard for custom parsers.
+  const ck = content.match(/ConfigKey\s*\.\s*Domain\s*\(\s*["']([^"']+)["']/);
+  if (ck) { const p = pick(ck[1], 'configKey', true); if (p) return p; }
+  // 2) Base-class theme constructor: ClassName(context, Source, "tld").
+  if (PARSER_CLASS_RX.test(content)) {
+    const m = content.match(PARSER_CLASS_RX)!;
+    const start = (m.index || 0) + m[0].length;
+    const slice = content.slice(start, start + 280);
+    const literals = slice.match(/["']([^"']+)["']/g) || [];
+    for (let i = literals.length - 1; i >= 0; i--) {
+      const p = pick(literals[i].slice(1, -1), 'ctor', true);
+      if (p) return p;
+    }
+  }
+  // 3) A lone dotted-domain literal elsewhere in the file (validated; uncertain).
+  const bare = content.match(/["']((?:[a-z0-9-]+\.)+[a-z]{2,24})["']/i);
+  if (bare) { const p = pick(bare[1], 'bare', false); if (p) return p; }
+  // 4) Unreliable fallback for parity — flagged so ops can review it.
+  return { domain: `${fallbackId}.com`, baseUrl: `https://${fallbackId}.com`, reliable: false, via: 'fallback' };
+}
+
 // Fix #21: Dynamic Parser Repository Auto-Scanner supporting both original and Redo forks
 function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
   // Try Redo fork first (active community fork with 790+ more parsers), fall back to original
@@ -3173,6 +3226,8 @@ function deactivateSource(sourceId: string): { ok: boolean; message: string } {
 function buildFullSourceInventory(): any[] {
   const ids = new Set<string>();
   const inventory: any[] = [];
+  const removedSet = new Set((syncConfig.removedSources || []).map((r) => String(r).toLowerCase()));
+  const revivedSet = new Set((syncConfig.reactivatedSources || []).map((r) => String(r).toLowerCase()));
 
   const pushIfMissing = (s: SourceDefinition, state: 'active' | 'disabled' | 'removed') => {
     if (ids.has(s.id)) return;
@@ -3187,13 +3242,18 @@ function buildFullSourceInventory(): any[] {
   };
 
   for (const s of KOTATSU_SOURCES) {
-    const state = disabledSourceIds.has(s.id) ? 'disabled' : 'active';
+    // A source still parked in removedSources (and not explicitly revived) is NOT
+    // usable by the pipeline even if its parser remains registered — report it as
+    // 'removed' so the management UI reflects reality. Reactivated sources win.
+    const isRemoved = removedSet.has(s.id) && !revivedSet.has(s.id);
+    const state = isRemoved ? 'removed' : disabledSourceIds.has(s.id) ? 'disabled' : 'active';
     pushIfMissing(s, state);
   }
-  // Include parked (removed) sources so the client can re-activate them without a restart.
-  const removedSet = new Set((syncConfig.removedSources || []).map((r) => String(r).toLowerCase()));
+  // Include parked (removed) sources still not in the registry so the client can
+  // re-activate them without a restart.
   for (const id of removedSet) {
     if (ids.has(id)) continue;
+    if (revivedSet.has(id)) continue;
     const src = ensureParserInRegistry(id);
     if (src) pushIfMissing(src, 'removed');
     else if (id !== 'mangadex') {

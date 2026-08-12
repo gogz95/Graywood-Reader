@@ -17,6 +17,10 @@ export interface SourceDefinition {
   isNsfw: boolean;
   isEnabled?: boolean;
   isPinned?: boolean;
+  // Whether the baseUrl was extracted from a reliable parser declaration
+  // (ConfigKey.Domain / base-class constructor). False when derived from the
+  // unreliable `<id>.com` fallback and should be reviewed by an operator.
+  baseUrlReliable?: boolean;
   selectors?: {
     listContainer?: string;
     itemTitle?: string;
