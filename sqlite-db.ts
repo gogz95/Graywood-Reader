@@ -441,6 +441,31 @@ export const SqliteDb = {
     stmtSetSetting.run({ key, value });
   },
 
+  // ── Explore Catalog Buffer Persistence ─────────────────────────────────────
+  // The buffered /api/explore snapshot is stored as a JSON blob in the settings
+  // KV table so a server restart can serve /browse instantly (no warm-up wait).
+  // Everything is parsed defensively: a missing/corrupt row simply returns null.
+  getExploreBuffer(): any | null {
+    try {
+      const raw = stmtGetSetting.get('explore_buffer') as { value: string } | undefined;
+      if (!raw || !raw.value) return null;
+      const parsed = JSON.parse(raw.value);
+      if (!parsed || !Array.isArray(parsed.items)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  },
+
+  setExploreBuffer(entry: { items: any[]; sourceIds: string[]; builtAt: number; expiresAt: number; lastError: string | null } | null) {
+    try {
+      if (!entry) return;
+      stmtSetSetting.run({ key: 'explore_buffer', value: JSON.stringify(entry) });
+    } catch (err) {
+      console.error('[SQLite Engine] Error persisting explore buffer:', err);
+    }
+  },
+
   // ── Profiles ───────────────────────────────────────────────────────────────
   getAllProfiles(): any[] {
     return stmtGetAllProfiles.all();

@@ -191,6 +191,7 @@ export interface DatabaseSyncConfig {
   sources: string[];
   disabledSources?: string[];
   removedSources?: string[];
+  reactivatedSources?: string[]; // sources user manually revived from removed/dead lists
   lastSyncTime: string | null;
   totalTracked: number;
 }

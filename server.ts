@@ -468,6 +468,7 @@ let syncConfig: DatabaseSyncConfig = {
   sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
   disabledSources: Array.from(disabledSourceIds),
   removedSources: [],
+  reactivatedSources: [],
   lastSyncTime: new Date().toISOString(),
   totalTracked: 0,
 };
@@ -502,6 +503,16 @@ syncDeadSourcesToDisabled();
 export function isSourceAlive(sourceNameOrId: string): boolean {
   if (!sourceNameOrId) return false;
   const normalized = sourceNameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
+  // A source the user has explicitly re-activated counts as alive even if it was
+  // previously parked in removedSources / a dead-list. This lets every source be
+  // re-added afterwards except MangaDex (guarded at the endpoint layer).
+  if (Array.isArray(syncConfig?.reactivatedSources)) {
+    for (const revived of syncConfig.reactivatedSources) {
+      if (((revived || '').toLowerCase().replace(/[^a-z0-9]/g, '')) === normalized) {
+        return true;
+      }
+    }
+  }
   for (const dead of ALL_DEAD_SOURCES) {
     const normDead = dead.replace(/[^a-z0-9]/g, '');
     if (normalized.includes(normDead) || normDead.includes(normalized)) {
@@ -3058,6 +3069,142 @@ export function purgeDisabledSources(): { purgedCount: number; remainingCount: n
   return { purgedCount: toPurge.length, remainingCount: KOTATSU_SOURCES.length };
 }
 
+function isMetadataOnlySource(idOrName: string, url?: string): boolean {
+  return (idOrName || '').toLowerCase() === 'mangadex'
+    || (idOrName || '').toLowerCase().includes('mangadex')
+    || isMangaDexSourceLink(idOrName, url);
+}
+
+// Scan the cloned Kotatsu parser repo for a single parser definition by id,
+// ignoring dead/removed status (so previously-removed sources can be revived).
+function scanParserInRepo(sourceId: string): SourceDefinition | null {
+  const redoDir = path.join(process.cwd(), 'kotatsu-parsers-redo', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
+  const legacyDir = path.join(process.cwd(), 'kotatsu-parsers', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
+  const parsersDir = fs.existsSync(redoDir) ? redoDir : (fs.existsSync(legacyDir) ? legacyDir : null);
+  if (!parsersDir) return null;
+
+  let found: SourceDefinition | null = null;
+  (function walkDir(dir: string) {
+    if (found) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (found) return;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walkDir(fullPath); continue; }
+      if (!entry.isFile() || !entry.name.endsWith('.kt')) continue;
+      try {
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const annotationMatch = content.match(/@MangaSourceParser\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/);
+        if (!annotationMatch) continue;
+        const id = annotationMatch[1].toLowerCase();
+        if (id !== String(sourceId).toLowerCase()) continue;
+
+        const domainMatch = content.match(/ConfigKey\.Domain\(\s*"([^"]+)"/);
+        const domain = domainMatch ? domainMatch[1] : `${id}.com`;
+        const baseUrl = `https://${domain}`;
+        const relPath = fullPath.replace(/\\/g, '/');
+        let engineType: SourceEngineType = 'custom_html';
+        if (relPath.includes('/madara/')) engineType = 'madara';
+        else if (relPath.includes('/mangathemesia/') || content.includes('MangaThemesia') || content.includes('MangaReader')) engineType = 'mangathemesia';
+        else if (relPath.includes('/wpcomics/') || content.includes('WpComics')) engineType = 'wpcomics';
+        else if (relPath.includes('/foolslide/')) engineType = 'foolslide';
+        else if (id === 'mangadex') engineType = 'mangadex';
+        const isNsfw = relPath.includes('/galleryadults/') || content.includes('isNsfw = true') || content.includes('isAdult = true') || /18|hentai|porn|doujin/i.test(annotationMatch[2]);
+        found = { id, name: annotationMatch[2], baseUrl, engineType, lang: annotationMatch[3], isNsfw };
+      } catch { /* skip unreadable file */ }
+    }
+  })(parsersDir);
+  return found;
+}
+
+// Ensure a parser definition exists in KOTATSU_SOURCES (safe no-op if already there).
+function ensureParserInRegistry(sourceId: string): SourceDefinition | null {
+  if (!sourceId) return null;
+  const id = String(sourceId).toLowerCase();
+  const existing = KOTATSU_SOURCES.find((s) => s.id === id);
+  if (existing) return existing;
+  const scanned = scanParserInRepo(id);
+  if (scanned) KOTATSU_SOURCES.push(scanned);
+  return scanned;
+}
+
+// Fully revive + enable a source: clear removed/dead/disabled markers and ensure
+// its parser is registered. MangaDex is rejected (metadata-only).
+function reviveSource(sourceId: string): { source?: SourceDefinition; ok: boolean; message: string } {
+  const id = String(sourceId || '').toLowerCase();
+  if (!id) return { ok: false, message: 'sourceId is required' };
+  if (isMetadataOnlySource(id)) return { ok: false, message: 'mangadex is metadata-only and cannot be activated' };
+
+  if (Array.isArray(syncConfig.removedSources)) {
+    syncConfig.removedSources = syncConfig.removedSources.filter((r) => String(r).toLowerCase() !== id);
+  }
+  DYNAMIC_DEAD_SOURCES.delete(id);
+  ALL_DEAD_SOURCES.delete(id);
+
+  if (!Array.isArray(syncConfig.reactivatedSources)) syncConfig.reactivatedSources = [];
+  if (!syncConfig.reactivatedSources.some((r) => String(r).toLowerCase() === id)) syncConfig.reactivatedSources.push(id);
+
+  disabledSourceIds.delete(id);
+  if (Array.isArray(syncConfig.disabledSources)) {
+    syncConfig.disabledSources = syncConfig.disabledSources.filter((d) => String(d).toLowerCase() !== id);
+  }
+
+  const source = ensureParserInRegistry(id);
+  rebuildDeadSourcesSet();
+  saveDatabaseToDisk();
+  return { source, ok: true, message: `Source "${id}" activated` };
+}
+
+// Disable a source but keep it re-activatable (never touches removedSources).
+function deactivateSource(sourceId: string): { ok: boolean; message: string } {
+  const id = String(sourceId || '').toLowerCase();
+  if (!id) return { ok: false, message: 'sourceId is required' };
+  if (isMetadataOnlySource(id)) return { ok: false, message: 'mangadex is metadata-only and cannot be deactivated' };
+  disabledSourceIds.add(id);
+  if (!Array.isArray(syncConfig.disabledSources)) syncConfig.disabledSources = [];
+  if (!syncConfig.disabledSources.some((d) => String(d).toLowerCase() === id)) syncConfig.disabledSources.push(id);
+  saveDatabaseToDisk();
+  return { ok: true, message: `Source "${id}" deactivated` };
+}
+
+// Build the full source inventory (active + disabled + removed) so the client can
+// drive bulk activation. MangaDex gets isMetadataOnly: true, locked.
+function buildFullSourceInventory(): any[] {
+  const ids = new Set<string>();
+  const inventory: any[] = [];
+
+  const pushIfMissing = (s: SourceDefinition, state: 'active' | 'disabled' | 'removed') => {
+    if (ids.has(s.id)) return;
+    ids.add(s.id);
+    const isMeta = isMetadataOnlySource(s.id, s.baseUrl);
+    inventory.push({
+      ...s,
+      isMetadataOnly: isMeta,
+      isEnabled: state === 'active' && !isMeta,
+      status: isMeta ? 'metadata' : state,
+    });
+  };
+
+  for (const s of KOTATSU_SOURCES) {
+    const state = disabledSourceIds.has(s.id) ? 'disabled' : 'active';
+    pushIfMissing(s, state);
+  }
+  // Include parked (removed) sources so the client can re-activate them without a restart.
+  const removedSet = new Set((syncConfig.removedSources || []).map((r) => String(r).toLowerCase()));
+  for (const id of removedSet) {
+    if (ids.has(id)) continue;
+    const src = ensureParserInRegistry(id);
+    if (src) pushIfMissing(src, 'removed');
+    else if (id !== 'mangadex') {
+      ids.add(id);
+      inventory.push({ id, name: id, baseUrl: '', engineType: 'custom_html' as SourceEngineType, lang: 'en', isNsfw: false, isMetadataOnly: false, isEnabled: false, status: 'removed' });
+    }
+  }
+  return inventory;
+}
+
+
 // Kotatsu Sources List Endpoint (Returns active enabled sources only)
 app.get("/api/kotatsu/sources", (_req, res) => {
   const activeSources = KOTATSU_SOURCES.filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id) && isSourceAlive(s.name));
@@ -3096,6 +3243,77 @@ app.post("/api/kotatsu/sources/toggle", (req, res) => {
     success: true,
     sourceId,
     isEnabled: !disabledSourceIds.has(sourceId),
+    disabledCount: disabledSourceIds.size,
+  });
+});
+// Full source inventory for the management UI (active + disabled + removed).
+// MangaDex is always present but locked as metadata-only. Prefer this over the
+// legacy /api/kotatsu/sources when you need the complete list.
+app.get("/api/kotatsu/sources/all", (_req, res) => {
+  res.json(buildFullSourceInventory());
+});
+
+// Activate (revive + enable) a single source. MangaDex is rejected.
+app.post("/api/kotatsu/sources/activate", (req, res) => {
+  const { sourceId } = req.body || {};
+  const result = reviveSource(sourceId);
+  if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+  res.json({
+    success: true,
+    message: result.message,
+    source: result.source,
+    reactivatedCount: (syncConfig.reactivatedSources || []).length,
+    disabledCount: disabledSourceIds.size,
+  });
+});
+
+// Deactivate (disable) a single source. MangaDex is rejected.
+app.post("/api/kotatsu/sources/deactivate", (req, res) => {
+  const { sourceId } = req.body || {};
+  const result = deactivateSource(sourceId);
+  if (!result.ok) return res.status(400).json({ success: false, message: result.message });
+  res.json({ success: true, message: result.message, disabledCount: disabledSourceIds.size });
+});
+
+// Activate every source (revive all removed + clear disabled) EXCEPT MangaDex.
+app.post("/api/kotatsu/sources/activate-all", (_req, res) => {
+  const removedSet = new Set((syncConfig.removedSources || []).map((r) => String(r).toLowerCase()));
+  const allToRevive = new Set<string>([...removedSet, ...disabledSourceIds]);
+
+  let revived = 0;
+  let skippedMeta = 0;
+  for (const id of allToRevive) {
+    if (isMetadataOnlySource(id)) { skippedMeta++; continue; }
+    const r = reviveSource(id);
+    if (r.ok) revived++;
+  }
+  res.json({
+    success: true,
+    message: `Activated ${revived} source(s).`,
+    activatedCount: revived,
+    skippedMetadataOnly: skippedMeta,
+    activeCount: KOTATSU_SOURCES.filter((s) => !disabledSourceIds.has(s.id) && s.id !== 'mangadex').length,
+    reactivatedSources: syncConfig.reactivatedSources || [],
+  });
+});
+
+// Deactivate every source EXCEPT MangaDex (keeps them re-activatable).
+app.post("/api/kotatsu/sources/deactivate-all", (_req, res) => {
+  let deactivated = 0;
+  let skippedMeta = 0;
+  for (const s of KOTATSU_SOURCES) {
+    if (s.id === 'mangadex' || isMetadataOnlySource(s.id, s.baseUrl)) { skippedMeta++; continue; }
+    disabledSourceIds.add(s.id);
+    if (!Array.isArray(syncConfig.disabledSources)) syncConfig.disabledSources = [];
+    if (!syncConfig.disabledSources.includes(s.id)) syncConfig.disabledSources.push(s.id);
+    deactivated++;
+  }
+  saveDatabaseToDisk();
+  res.json({
+    success: true,
+    message: `Deactivated ${deactivated} source(s).`,
+    deactivatedCount: deactivated,
+    skippedMetadataOnly: skippedMeta,
     disabledCount: disabledSourceIds.size,
   });
 });
@@ -3735,11 +3953,61 @@ app.get('/api/scrape/browse', async (req, res) => {
 // curated set of enabled, alive sources, dedupes them by normalized title, and
 // paginates. A short-TTL cache keeps repeat calls from hammering the sources.
 const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonic'];
-const EXPLORE_CACHE_TTL_MS = 60_000; // 60s
-const exploreCache: Map<string, { expiresAt: number; data: any[] }> = new Map();
+// ── Explore Catalog Buffer ──────────────────────────────────────────────────
+// Instead of scraping sources live on every request, we buffer the consolidated
+// explore catalog in memory and refresh it automatically (once on startup + a
+// background interval). Reads are served straight from the buffer (near-instant),
+// so opening /browse no longer pays the full multi-source scrape latency each time.
+const EXPLORE_REFRESH_INTERVAL_MS = Number(process.env.EXPLORE_REFRESH_INTERVAL_MS) || 5 * 60 * 1000; // default 5 min
+const EXPLORE_CACHE_TTL_MS = Number(process.env.EXPLORE_CACHE_TTL_MS) || 60 * 60 * 1000; // hard TTL 1 h
+const EXPLORE_WARM_PAGES = Math.max(1, Math.min(6, Number(process.env.EXPLORE_WARM_PAGES) || 2)); // pages warmed per source
+const EXPLORE_WARM_LIMIT = 30; // items requested per source page during warm-up
+const EXPLORE_DOMAIN_SPACING_MS = 1200; // min gap between requests to the same domain (politeness)
 
-function exploreCacheKey(sourceId: string, page: number, limit: number): string {
-  return `${sourceId}::${page}::${limit}`;
+interface ExploreBufferEntry {
+  items: any[];                 // consolidated (cross-source, deduped, ordered) list w/ __sourceId
+  sourceIds: string[];          // sources represented in this snapshot
+  builtAt: number;
+  expiresAt: number;
+  lastError: string | null;
+}
+const exploreBufferRef: { current: ExploreBufferEntry | null } = { current: null };
+let exploreRefreshRunning = false;
+let exploreRefreshTimer: ReturnType<typeof setInterval> | null = null;
+const lastExploreDomainRequest = new Map<string, number>();
+
+function hostOf(url: string): string {
+  try { return new URL(url).host; } catch { return url || ''; }
+}
+function dedupeExploreItems(aggregated: any[]): any[] {
+  const seen = new Set<string>();
+  const deduped: any[] = [];
+  for (const it of aggregated) {
+    const key = String(it.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    if (!key) continue;
+    if (!seen.has(key)) { seen.add(key); deduped.push(it); }
+  }
+  return deduped;
+}
+function defaultExploreSources(): SourceDefinition[] {
+  const picks: SourceDefinition[] = [];
+  for (const id of DEFAULT_EXPLORE_SOURCE_IDS) {
+    const s = KOTATSU_SOURCES.find(
+      (src) => src.id === id && src.id !== 'mangadex' && !disabledSourceIds.has(src.id) && isSourceAlive(src.id)
+    );
+    if (s) picks.push(s);
+  }
+  if (picks.length === 0) {
+    picks.push(...KOTATSU_SOURCES.filter(
+      (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+    ).slice(0, 4));
+  }
+  return picks;
+}
+function throttleExploreDomain(host: string): Promise<void> {
+  const wait = EXPLORE_DOMAIN_SPACING_MS - (Date.now() - (lastExploreDomainRequest.get(host) || 0));
+  if (wait > 0) return new Promise((r) => setTimeout(r, wait));
+  return Promise.resolve();
 }
 
 app.get("/api/explore", async (req, res) => {
@@ -3748,6 +4016,41 @@ app.get("/api/explore", async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 30));
 
+  // Serve from the buffered catalog whenever possible (near-instant). Only when
+  // the buffer isn't warm yet (first request before background warm-up finishes,
+  // or an explicit source outside the default/explore set) do we pay for a live scrape.
+  const buf = exploreBufferRef.current;
+  const bufferReady = !!buf && buf.items.length > 0;
+  const bufferFresh = bufferReady && Date.now() < buf!.expiresAt;
+  const sourceInBuffer = bufferReady && !!buf && (rawSourceId === 'all' || rawSourceId === '' || buf.sourceIds.includes(rawSourceId));
+  // stale-while-revalidate: if the buffer is present, serve it immediately even if it's
+  // past its hard TTL; a fresh copy is fetched in the background without blocking the response.
+  const useBuffer = sourceInBuffer;
+
+  if (useBuffer) {
+    // If this snapshot is past its hard TTL, refresh it in the background without
+    // making the caller wait — they already got the cached copy above.
+    if (!bufferFresh) refreshExploreCatalog(false).catch(() => {});
+    let list: any[] = buf!.items;
+    if (rawSourceId && rawSourceId !== 'all') {
+      list = list.filter((it) => it.__sourceId === rawSourceId);
+    }
+    if (q) {
+      const needle = q.toLowerCase();
+      list = list.filter((it) =>
+        (it.title || '').toLowerCase().includes(needle) ||
+        (it.description || '').toLowerCase().includes(needle)
+      );
+    }
+    const offset = (page - 1) * limit;
+    const paged = list.slice(offset, offset + limit);
+    const totalPages = Math.max(1, Math.ceil(list.length / limit));
+    res.setHeader('X-Total-Count', String(list.length));
+    res.setHeader('X-Total-Pages', String(totalPages));
+    return res.json({ items: paged, totalCount: list.length, totalPages, cached: true });
+  }
+
+  // Fallback: live scrape path (unchanged behaviour) when the buffer isn't warm.
   const sourcesToBrowse: SourceDefinition[] = [];
   if (rawSourceId && rawSourceId !== 'all') {
     const found = KOTATSU_SOURCES.find(
@@ -3755,24 +4058,11 @@ app.get("/api/explore", async (req, res) => {
     );
     if (found) sourcesToBrowse.push(found);
   } else {
-    for (const id of DEFAULT_EXPLORE_SOURCE_IDS) {
-      const s = KOTATSU_SOURCES.find(
-        (src) => src.id === id && src.id !== 'mangadex' && !disabledSourceIds.has(src.id) && isSourceAlive(src.id)
-      );
-      if (s) sourcesToBrowse.push(s);
-    }
-    // Fall back to any enabled+alive sources if the defaults are all disabled.
-    if (sourcesToBrowse.length === 0) {
-      sourcesToBrowse.push(
-        ...KOTATSU_SOURCES.filter(
-          (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
-        ).slice(0, 4)
-      );
-    }
+    sourcesToBrowse.push(...defaultExploreSources());
   }
 
   if (sourcesToBrowse.length === 0) {
-    return res.json({ items: [], totalCount: 0, totalPages: 0 });
+    return res.json({ items: [], totalCount: 0, totalPages: 0, cached: false });
   }
 
   try {
@@ -3781,17 +4071,13 @@ app.get("/api/explore", async (req, res) => {
 
     await Promise.all(
       sourcesToBrowse.map(async (src) => {
-        const key = exploreCacheKey(src.id, page, perSourceLimit);
-        let items: any[] = [];
-        const cached = exploreCache.get(key);
-        if (cached && cached.expiresAt > Date.now()) {
-          items = cached.data;
-        } else {
+        try {
           const result = await getSourcePopularSeries(src, page, perSourceLimit);
-          items = Array.isArray(result) ? result : (result?.items || []);
-          exploreCache.set(key, { expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS, data: items });
+          const items = Array.isArray(result) ? result : (result?.items || []);
+          for (const item of items) aggregated.push({ ...item, __sourceId: src.id, __sourceName: src.name });
+        } catch {
+          // ignore per-source errors so one bad source doesn't kill the whole feed
         }
-        for (const item of items) aggregated.push({ ...item, __sourceId: src.id, __sourceName: src.name });
       })
     );
 
@@ -3804,28 +4090,17 @@ app.get("/api/explore", async (req, res) => {
       );
     }
 
-    // Dedupe across sources by normalized title.
-    const seen = new Set<string>();
-    const deduped: any[] = [];
-    for (const it of unique) {
-      const key = String(it.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-      if (!key) continue;
-      if (!seen.has(key)) {
-        seen.add(key);
-        deduped.push(it);
-      }
-    }
-
+    const deduped = dedupeExploreItems(unique);
     const offset = (page - 1) * limit;
     const paged = deduped.slice(offset, offset + limit);
     const totalPages = Math.max(1, Math.ceil(deduped.length / limit));
 
     res.setHeader('X-Total-Count', String(deduped.length));
     res.setHeader('X-Total-Pages', String(totalPages));
-    return res.json({ items: paged, totalCount: deduped.length, totalPages });
+    return res.json({ items: paged, totalCount: deduped.length, totalPages, cached: false });
   } catch (e: any) {
     console.error('[Explore] Failed to aggregate live feed:', e.message);
-    return res.json({ items: [], totalCount: 0, totalPages: 0 });
+    return res.json({ items: [], totalCount: 0, totalPages: 0, cached: false });
   }
 });
 
@@ -3969,7 +4244,93 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
     }
   }
 
-  return { items: uniqueItems.slice(offset, offset + limit), totalCount: uniqueItems.length };
+return { items: uniqueItems.slice(offset, offset + limit), totalCount: uniqueItems.length };
+}
+
+// ── Explore Catalog Buffer: background warm-up & automatic refresh ───────────
+async function buildExploreBuffer(): Promise<ExploreBufferEntry | null> {
+  const sources = defaultExploreSources();
+  if (sources.length === 0) return null;
+  const aggregated: any[] = [];
+  // Warm each source sequentially with politeness spacing between domain requests,
+  // so the consolidated snapshot contains enough items to serve early pages quickly.
+  for (const src of sources) {
+    const domain = hostOf(src.baseUrl);
+    await throttleExploreDomain(domain);
+    lastExploreDomainRequest.set(domain, Date.now());
+    for (let p = 1; p <= EXPLORE_WARM_PAGES; p++) {
+      try {
+        const result = await getSourcePopularSeries(src, p, EXPLORE_WARM_LIMIT);
+        const items = Array.isArray(result) ? result : (result?.items || []);
+        lastExploreDomainRequest.set(domain, Date.now());
+        for (const it of items) aggregated.push({ ...it, __sourceId: src.id, __sourceName: src.name });
+      } catch {
+        // skip an errored page — loosing one page is better than failing the whole buffer
+      }
+    }
+  }
+  const deduped = dedupeExploreItems(aggregated);
+  return {
+    items: deduped,
+    sourceIds: sources.map((s) => s.id),
+    builtAt: Date.now(),
+    expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS,
+    lastError: null,
+  };
+}
+
+async function refreshExploreCatalog(force = false): Promise<void> {
+  if (exploreRefreshRunning) return; // never run two warm-ups concurrently
+  exploreRefreshRunning = true;
+  try {
+    const built = await buildExploreBuffer();
+    if (built && built.items.length > 0) {
+      exploreBufferRef.current = built;
+      // Persist the fresh snapshot to SQLite so a restart can serve /browse instantly.
+      try { SqliteDb.setExploreBuffer(built); } catch (e: any) { console.error('[Explore Buffer] Persist failed:', e?.message); }
+      console.log(
+        `[Explore Buffer] Catalog ${force ? 'warmed' : 'refreshed'}: ${built.items.length} series across ${built.sourceIds.length} source(s) [${built.sourceIds.join(', ')}]`
+      );
+    } else if (force) {
+      console.warn('[Explore Buffer] Warm-up produced no items; will retry on next interval.');
+    }
+  } catch (e: any) {
+    console.error('[Explore Buffer] Refresh failed:', e?.message);
+    if (exploreBufferRef.current) exploreBufferRef.current.lastError = e?.message || 'unknown';
+  } finally {
+    exploreRefreshRunning = false;
+  }
+}
+
+function scheduleExploreRefresher(): void {
+  // Hydrate from SQLite FIRST so /api/explore is instantly ready after a restart
+  // (no need to wait for the background warm-up to finish scraping sources).
+  try {
+    const saved = SqliteDb.getExploreBuffer();
+    if (saved && Array.isArray(saved.items) && saved.items.length > 0) {
+      // Keep the persisted sourceIds/expiresAt; builtAt reflects the original build.
+      exploreBufferRef.current = {
+        items: saved.items,
+        sourceIds: Array.isArray(saved.sourceIds) ? saved.sourceIds : [],
+        builtAt: Number(saved.builtAt) || Date.now(),
+        expiresAt: saved.expiresAt ?? Date.now() + EXPLORE_CACHE_TTL_MS,
+        lastError: saved.lastError ?? null,
+      };
+      console.log(`[Explore Buffer] Loaded persisted catalog: ${saved.items.length} series from SQLite (serving /browse instantly).`);
+    } else {
+      console.log('[Explore Buffer] No persisted catalog found; warming from live sources.');
+    }
+  } catch (e: any) {
+    console.warn('[Explore Buffer] Could not load persisted catalog:', e?.message);
+  }
+
+  // Warm once on startup (non-blocking, so launch stays instant), then refresh on an interval.
+  refreshExploreCatalog(true).catch((e) => console.error('[Explore Buffer] Startup warm-up failed:', e?.message));
+  exploreRefreshTimer = setInterval(() => {
+    refreshExploreCatalog(false).catch((e) => console.error('[Explore Buffer] Interval refresh failed:', e?.message));
+  }, EXPLORE_REFRESH_INTERVAL_MS);
+  const minutes = Math.round(EXPLORE_REFRESH_INTERVAL_MS / 60000);
+  console.log(`[Explore Buffer] Scheduled automatic catalog refresh every ${minutes} min (warming ${EXPLORE_WARM_PAGES} page(s)/source).`);
 }
 
 // =====================================================================
@@ -6363,6 +6724,10 @@ async function startServer() {
   // 4. Non-blocking auto-updater (rate-spaced). The static hard-coded catalog is
   //    not re-seeded here — Explore is populated from live/verified sources only.
   scheduleBackgroundAutoUpdater();
+
+  // 5. Warm the Explore catalog buffer in the background and refresh it on an
+  //    interval, so /browse loads are served from memory instead of live scrapes.
+  scheduleExploreRefresher();
 }
 
 startServer();

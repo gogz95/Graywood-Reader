@@ -338,7 +338,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                   </div>
                 </div>
               );
-            </div>
+            })}
 
           {totalPages > 1 && (
             <div className="sticky bottom-4 z-20 flex items-center justify-between gap-3 p-4 bg-surface/95 backdrop-blur-md border border-edge rounded-2xl shadow-2xl">

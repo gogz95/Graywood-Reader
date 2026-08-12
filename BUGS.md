@@ -40,6 +40,17 @@ Copy the template below and fill in the fields:
 - **Actual**: Get announcer raw
 
 
+### [BUG-011] New reading-progress/analytics engine is backend-only — UI still shows mock data
+- **Status**: `open`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts` (`/api/reader/progress`, `/api/reader/history`, `/api/reader/analytics`), `sqlite-db.ts` (`reading_progress`, `reading_activity`), `src/components/AnalyticsModal.tsx`, `src/components/ReaderView.tsx`
+- **Submitted-By**: AI code review (2026-08-12)
+- **Description**: The staged change added a full per-user reading-progress + per-day activity persistence engine (tables, upserts, and three new endpooints). The endpoints work (verified at runtime: POST `/api/reader/progress` returns `{"success":true}` and GET `/api/reader/history/:mangaId` returns the stored row). However, **no frontend component calls any of these endpoints**. `ReaderView.tsx`/`App.tsx` call `/api/reader/mark-read` + a client-side session store, and `AnalyticsModal.tsx` renders hardcoded mock stats ("14 Days 🔥", "28 Days", "42.5 hrs", "148 Chapters in 2026") plus a pseudorandom heatmap. So the "real data instead of mock values" promise (sqlite-db.ts:117 comment) is not delivered to the UI.
+- **Expected**: The reader saves/resumes progress via `/api/reader/progress` & `/api/reader/history`, and the analytics modal fetches `/api/reader/analytics` and renders real streaks/totals/heatmap.
+- **Actual**: Backend persists data but nothing reads/writes it; analytics UI still shows fabricated figures.
+
+
 ### [BUG-009] [Does not load pages] Legend of the Northern Blade
 - **Status**: `open`
 - **Priority**: `high`
