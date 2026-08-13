@@ -609,9 +609,8 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
 
               if (processedIds.has(id) || !isSourceAlive(id) || !isSourceAlive(sourceName)) continue;
 
-              const domainMatch = content.match(/ConfigKey\.Domain\(\s*"([^"]+)"/);
+              const { baseUrl, reliable } = extractParserDomain(content, id);
               const domain = domainMatch ? domainMatch[1] : `${id}.com`;
-              const baseUrl = `https://${domain}`;
 
               const relPath = fullPath.replace(/\\/g, '/');
               let engineType: SourceEngineType = 'custom_html';
@@ -5463,7 +5462,7 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
 }
 
 // Extract real panel image URLs from chapter HTML (multi-attribute, filters metadata).
-function extractPanelImages(htmlText: string, origin: string): string[] {
+export function extractPanelImages(htmlText: string, origin: string): string[] {
   const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-cfsrc|data-full-url|data-original|data-srcset|srcset|src)=["']([^"']+)["'][^>]*>/gi;
   const pages: string[] = [];
   let match: RegExpExecArray | null;

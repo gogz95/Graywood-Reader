@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MangaItem, SourceDefinition, hasWorkingReaderSource } from '../types';
 import { isReaderAvailable } from '../utils/catalog';
 
+import { extractPanelImages } from '../utils/extractImages';
+
 import {
   Compass,
   Search,
@@ -31,6 +33,7 @@ export interface ExploreItem {
   type?: string;
   __sourceId?: string;
   __sourceName?: string;
+  previewImages?: string[];
 }
 
 const FALLBACK_COVER =
@@ -103,7 +106,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       const res = await fetch(`/api/explore?${params.toString()}`);
       if (!res.ok) throw new Error(`Explore feed returned ${res.status}`);
       const data = await res.json();
-      setResults(Array.isArray(data.items) ? data.items : []);
+      // Extract preview images for each item
+      const itemsWithImages = data.items?.map(item => {
+        const images = extractPanelImages(item.htmlContent || '', 'https://reader.anime-manga.io');
+        return { ...item, previewImages: Array.from(new Set(images)) };
+      }) || [];
+
+      setResults(itemsWithImages);
       setTotalPages(Number(data.totalPages) || 0);
     } catch (e: any) {
       console.error('[Explore] Feed error:', e.message);
