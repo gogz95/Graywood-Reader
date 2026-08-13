@@ -27,6 +27,405 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-032] [Does not load pages] What a Bountiful Harvest, Demon Lord!
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: What a Bountiful Harvest, Demon Lord! (asura_what-a-bountiful-harvest-demon-lord)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "What a Bountiful Harvest, Demon Lord!"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-031] [Does not load pages] Bad Born Blood
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Bad Born Blood (asura_bad-born-blood)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Bad Born Blood"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-030] [Does not load pages] The Knight King Who Returned with a God
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Knight King Who Returned with a God (asura_the-knight-king-who-returned-with-a-god)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Knight King Who Returned with a God"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-029] [Does not load pages] Regressor Instruction Manual
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Regressor Instruction Manual (asura_regressor-instruction-manual)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Regressor Instruction Manual"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-028] [Does not load pages] The Demon God
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Demon God (asura_the-demon-god)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Demon God"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-027] [Does not load pages] The Demon God
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Demon God (asura_the-demon-god)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Demon God"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-026] [Does not load pages] Terminally-Ill Genius Dark Knight
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Terminally-Ill Genius Dark Knight (asura_terminally-ill-genius-dark-knight)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Terminally-Ill Genius Dark Knight"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-025] [Does not load pages] Initializing the Sect System
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Initializing the Sect System (asura_initializing-the-sect-system)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Initializing the Sect System"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-024] [Does not load pages] Kidnapped Dragons
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Kidnapped Dragons (asura_kidnapped-dragons)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Kidnapped Dragons"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-023] [Does not load pages] Return of the Disaster-Class Hero
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Return of the Disaster-Class Hero (asura_return-of-the-disaster-class-hero)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Return of the Disaster-Class Hero"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-022] [Does not load pages] Villain To Kill
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Villain To Kill (asura_villain-to-kill)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Villain To Kill"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-021] [Does not load pages] The Former Supreme
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Former Supreme (asura_the-former-supreme)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Former Supreme"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-020] [Does not load pages] Nano Machine
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Nano Machine (asura_nano-machine)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Nano Machine"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-019] [Does not load pages] The Academy’s Sashimi Sword Master
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Academy’s Sashimi Sword Master (asura_the-academys-sashimi-sword-master)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Academy’s Sashimi Sword Master"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-018] [Does not load pages] Steel-Eating Player
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Steel-Eating Player (asura_steel-eating-player)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Steel-Eating Player"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-017] [Does not load pages] Pick Me Up, Infinite Gacha
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Pick Me Up, Infinite Gacha (asura_pick-me-up-infinite-gacha)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Pick Me Up, Infinite Gacha"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-016] [Does not load pages] The Heavenly Demon Wants a Quiet Life
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Heavenly Demon Wants a Quiet Life (asura_the-heavenly-demon-wants-a-quiet-life)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Heavenly Demon Wants a Quiet Life"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-015] [Does not load pages] The Forgotten Field
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: The Forgotten Field (asura_the-forgotten-field)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "The Forgotten Field"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-014] [Does not load pages] Genius Prismatic Mage
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Genius Prismatic Mage (asura_genius-prismatic-mage)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Genius Prismatic Mage"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-013] [Does not load pages] Terminally-Ill Genius Dark Knight
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Terminally-Ill Genius Dark Knight (asura_terminally-ill-genius-dark-knight)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Terminally-Ill Genius Dark Knight"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-012] [Does not load pages] Initializing the Sect System
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Guest Reader (2026-08-13)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Initializing the Sect System (asura_initializing-the-sect-system)
+Source: Asura Scans
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Initializing the Sect System"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 ### [BUG-010] Manhwa18
 - **Status**: `open`
 - **Priority**: `high`

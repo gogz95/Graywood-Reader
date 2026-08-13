@@ -108,7 +108,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       const data = await res.json();
       // Extract preview images for each item
       const itemsWithImages = data.items?.map(item => {
-        const images = extractPanelImages(item.htmlContent || '', 'https://reader.anime-manga.io');
+        const images = extractPanelImages(item.htmlContent || '');
         return { ...item, previewImages: Array.from(new Set(images)) };
       }) || [];
 

@@ -610,6 +610,7 @@ function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
               if (processedIds.has(id) || !isSourceAlive(id) || !isSourceAlive(sourceName)) continue;
 
               const { baseUrl, reliable } = extractParserDomain(content, id);
+              const domainMatch = content.match(/baseUrl\s*=\s*['\"]([^'\"]*)['\"]/);
               const domain = domainMatch ? domainMatch[1] : `${id}.com`;
 
               const relPath = fullPath.replace(/\\/g, '/');
@@ -4020,7 +4021,7 @@ const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 
 const EXPLORE_REFRESH_INTERVAL_MS = Number(process.env.EXPLORE_REFRESH_INTERVAL_MS) || 5 * 60 * 1000; // default 5 min
 const EXPLORE_CACHE_TTL_MS = Number(process.env.EXPLORE_CACHE_TTL_MS) || 60 * 60 * 1000; // hard TTL 1 h
 const EXPLORE_WARM_PAGES = Math.max(1, Math.min(6, Number(process.env.EXPLORE_WARM_PAGES) || 2)); // pages warmed per source
-const EXPLORE_WARM_LIMIT = 30; // items requested per source page during warm-up
+const EXPLORE_WARM_LIMIT = 30; // items requested per source page during warm-up (can be increased for better coverage)
 const EXPLORE_DOMAIN_SPACING_MS = 1200; // min gap between requests to the same domain (politeness)
 
 interface ExploreBufferEntry {
@@ -4073,7 +4074,43 @@ app.get("/api/explore", async (req, res) => {
   const rawSourceId = ((req.query.sourceId as string) || '').trim();
   const q = ((req.query.q as string) || '').trim();
   const page = Math.max(1, Number(req.query.page) || 1);
-  const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 30));
+  
+  // Adaptive limit calculation based on client-provided parameters
+  let limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+  
+  // If client provides a resolution parameter, adjust the limit dynamically
+  const clientWidth = Number(req.query.width) || 0;
+  const clientHeight = Number(req.query.height) || 0;
+  
+  // If width and height are provided, calculate a dynamic limit based on screen area
+  if (clientWidth > 0 && clientHeight > 0) {
+    // Calculate screen area in pixels
+    const screenArea = clientWidth * clientHeight;
+    
+    // Adjust limit based on screen area (smaller screens get fewer items, larger get more)
+    const baseLimit = 30;
+    const maxLimit = 100;
+    const minWidth = 1024; // Minimum width that triggers scaling
+    const maxWidth = 3840; // Maximum width that triggers scaling
+    
+    // Normalize screen area to a factor between 0 and 1
+    const normalizedArea = Math.min(1, Math.max(0, (screenArea - minWidth * minWidth) / (maxWidth * maxWidth - minWidth * minWidth)));
+    
+    // Apply exponential scaling based on screen size
+    const scaleFactor = 1 + (normalizedArea * 2.5); // Scale factor between 1 and 3.5
+    const scaledLimit = Math.min(maxLimit, Math.floor(baseLimit * scaleFactor));
+    
+    limit = Math.max(baseLimit, scaledLimit);
+  }
+  
+  // Also try to detect device type from headers for optimization
+  const userAgent = req.headers['user-agent']?.toString() || '';
+  const isMobile = /mobile|android|iphone|ipod|blackberry|iemobile|opera mini|fennec|windows phone|windows mobile/i.test(userAgent);
+  
+  // For mobile devices, reduce limits to prevent overloading
+  if (isMobile) {
+    limit = Math.min(40, limit); // Cap mobile limits to 40
+  }
 
   // Serve from the buffered catalog whenever possible (near-instant). Only when
   // the buffer isn't warm yet (first request before background warm-up finishes,
@@ -4317,9 +4354,11 @@ async function buildExploreBuffer(): Promise<ExploreBufferEntry | null> {
     const domain = hostOf(src.baseUrl);
     await throttleExploreDomain(domain);
     lastExploreDomainRequest.set(domain, Date.now());
+    // Use increased limit for warm-up to collect more items
+    const warmLimit = EXPLORE_WARM_LIMIT * 2; // Increase to 60 items per page
     for (let p = 1; p <= EXPLORE_WARM_PAGES; p++) {
       try {
-        const result = await getSourcePopularSeries(src, p, EXPLORE_WARM_LIMIT);
+        const result = await getSourcePopularSeries(src, p, warmLimit);
         const items = Array.isArray(result) ? result : (result?.items || []);
         lastExploreDomainRequest.set(domain, Date.now());
         for (const it of items) aggregated.push({ ...it, __sourceId: src.id, __sourceName: src.name });
@@ -6819,3 +6858,27 @@ function gracefulShutdown(signal: string) {
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// ── Adapative Resolution System Implementation Notes ───────────────────────
+// 
+// The /api/explore endpoint now supports dynamic limit adjustment based on client 
+// screen resolution to create a hybrid scaling system:
+//
+// 1. Client-provided resolution parameters:
+//    - width (pixels) 
+//    - height (pixels)
+//    - If both provided, system calculates a dynamic limit based on screen area
+//
+// 2. Dynamic limit calculation:
+//    - Normalized screen area scaled between 1024px and 3840px minimum/maximum widths
+//    - Exponential scaling factor to provide smooth transition from small to large screens
+//    - Base limit of 30 series with potential to scale up to 100 series
+//
+// 3. Device type detection:
+//    - Automatically detects mobile devices from User-Agent headers
+//    - Caps mobile limits to 40 series or less to prevent overload
+//
+// Example requests:
+// - Large desktop: /api/explore?width=1920&height=1080&limit=30
+// - Mobile: /api/explore?width=414&height=896&limit=30
+// - Custom limit override: /api/explore?width=1920&height=1080&limit=50
