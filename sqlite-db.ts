@@ -77,7 +77,6 @@ try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch(e) {}
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch(e) {}
 
 // Schema extensions for app-state persistence (profiles, logs, KV settings)
-try { db.exec('ALTER TABLE profiles ADD COLUMN password TEXT'); } catch (e) {}
 try { db.exec('ALTER TABLE logs ADD COLUMN mangaId TEXT'); } catch (e) {}
 try { db.exec('ALTER TABLE logs ADD COLUMN type TEXT'); } catch (e) {}
 
@@ -89,6 +88,7 @@ db.exec(`
     email TEXT,
     avatar TEXT,
     role TEXT,
+    password TEXT,
     storageFolderPath TEXT,
     createdAt TEXT
   );

@@ -35,6 +35,9 @@ import {
   RATE_LIMIT_WINDOW,
   ipRequestCounts,
   ipProxyRequestCounts,
+  checkLoginRateLimit,
+  recordLoginFailure,
+  clearLoginFailures,
 } from "./server/rateLimit";
 import {
   detectChallenge,
@@ -50,6 +53,7 @@ import {
   APP_USER_AGENT,
   getSystemVersionReport,
 } from "./server/version";
+import { logger, requestLoggerMiddleware } from "./server/logger";
 import {
   KOTATSU_SOURCES,
   ALL_SOURCES_CATALOG,
@@ -107,6 +111,9 @@ app.use((_req, res, next) => {
   res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Total-Pages');
   next();
 });
+
+// Structured request/access logging (method, URL, status, duration, user)
+app.use(requestLoggerMiddleware);
 
 // Baseline security response headers
 app.use((_req, res, next) => {
@@ -503,7 +510,7 @@ function ensureAdminPasswordBootstrap() {
       console.error('[Auth Engine] Failed to write admin bootstrap password file:', err);
     }
   } else if (process.env.ADMIN_PASSWORD) {
-    console.log('[Auth Engine] Applying ADMIN_PASSWORD from environment to usr_admin.');
+console.log('[Auth Engine] Applying ADMIN_PASSWORD from environment to usr_admin.');
   }
 
   userProfiles[idx] = { ...admin, password: hashPassword(plain), username: admin.username || 'admin' };
@@ -6364,6 +6371,21 @@ app.get("/api/auth/client-context", (req, res) => {
 // Available regardless of REQUIRE_AUTH (host can always mint tokens; remote
 // clients need this to gain access once auth is enabled).
 app.post("/api/auth/login", async (req, res) => {
+  const clientIp = (req.ip || req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
+
+  // Login brute-force rate limiting (skipped for host/localhost)
+  if (clientIp !== '127.0.0.1' && clientIp !== '::1') {
+    const block = checkLoginRateLimit(clientIp);
+    if (block) {
+      logger.warn('Auth', `Login blocked for IP ${clientIp}`, { retryAfterSeconds: block.retryAfterSeconds });
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: block.message,
+        retryAfterSeconds: block.retryAfterSeconds,
+      });
+    }
+  }
+
   const { username, email, password } = req.body || {};
   const identifier = String(username || email || '').trim().toLowerCase();
   const pass = String(password || '');
@@ -6375,13 +6397,21 @@ app.post("/api/auth/login", async (req, res) => {
     (u) => (u.username || '').toLowerCase() === identifier || (u.email || '').toLowerCase() === identifier
   );
   if (!user || !user.password) {
+    recordLoginFailure(clientIp);
+    logger.warn('Auth', `Failed login attempt for "${identifier}" from ${clientIp}`);
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
   }
 
   const ok = await verifyPasswordAsync(pass, user.password);
   if (!ok) {
+    recordLoginFailure(clientIp);
+    logger.warn('Auth', `Failed login attempt for "${user.username}" (bad password) from ${clientIp}`);
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
   }
+
+  // Successful login — clear any prior failure records
+  clearLoginFailures(clientIp);
+  logger.info('Auth', `User "${user.username}" logged in from ${clientIp}`);
 
   const token = signAuthToken({ sub: user.id, role: user.role });
   res.json({
@@ -6449,7 +6479,7 @@ app.post("/api/auth/register", (req, res) => {
   saveDatabaseToDisk();
 
   const regToken = signAuthToken({ sub: newUser.id, role: newUser.role });
-  console.log(`[Auth Engine] Registered user ${newUser.username} (${newUser.id}) role=${newUser.role}`);
+  logger.info('Auth', `Registered user ${newUser.username} (${newUser.id}) role=${newUser.role}`);
   res.status(201).json({
     token: regToken,
     expiresInMs: AUTH_TOKEN_TTL_MS,
@@ -6506,7 +6536,7 @@ app.post("/api/admin/users/promote", (req, res) => {
 
   userProfiles[idx].role = role as UserRole;
   saveDatabaseToDisk();
-  console.log(`[Admin Engine] User ${userProfiles[idx].name} (${userId}) role updated to ${role}.`);
+  logger.info('Admin', `User ${userProfiles[idx].name} (${userId}) role updated to ${role}.`);
   res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
 });
 
@@ -6538,7 +6568,7 @@ app.delete("/api/admin/users/:userId", (req, res) => {
   mangaDatabase = SqliteDb.getAllManga();
   syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
-  console.log(`[Admin Engine] User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${result.mangaDeleted} library records purged from SQLite)`);
+  logger.info('Admin', `User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${result.mangaDeleted} library records purged from SQLite)`);
 
   res.json({
     success: true,
@@ -6711,8 +6741,8 @@ async function startServer() {
 
   // 3. Start listening immediately (sub-50ms launch time)
   httpServer = app.listen(PORT, HOST, () => {
-    console.log(`[Fast Launch Engine] Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
-    console.log(`[Fast Launch Engine] SQLite database ready (${mangaDatabase.length} series)`);
+    logger.info('Startup', `Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
+    logger.info('Startup', `SQLite database ready (${mangaDatabase.length} series, ${userProfiles.length} users)`);
   });
 
   // 4. Non-blocking auto-updater (rate-spaced). The static hard-coded catalog is
@@ -6732,7 +6762,7 @@ startServer();
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[Shutdown] Received ${signal}. Flushing state & writing legacy JSON backup...`);
+  logger.info('Shutdown', `Received ${signal}. Flushing state & writing legacy JSON backup...`);
   try {
     if (saveTimeoutTimer) {
       clearTimeout(saveTimeoutTimer);
@@ -6745,8 +6775,10 @@ function gracefulShutdown(signal: string) {
     SqliteDb.replaceAllLogs(autoUpdateLogs);
     // Portable legacy snapshot (kept for backward compatibility with tooling)
     writeLegacyJsonSnapshot(`graceful shutdown via ${signal}`);
+    // Flush outstanding log buffer to disk
+    logger.flush();
   } catch (err) {
-    console.error('[Shutdown] Error while flushing state:', err);
+    logger.error('Shutdown', 'Error while flushing state', { error: String(err) });
   }
   // Close the HTTP server to stop accepting new connections and let in-flight
   // requests drain before exiting. Fall back to immediate exit after 5s.
