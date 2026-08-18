@@ -1,0 +1,214 @@
+import { MangaItem, MangaType, ReaderSettings, ReaderViewMode, AppSettings } from '../types';
+
+const STORAGE_KEY_LAST_GLOBAL = 'graywood_reader_last_settings';
+const STORAGE_KEY_FORMAT_PREFIX = 'graywood_reader_format_';
+const STORAGE_KEY_SERIES_PREFIX = 'graywood_reader_series_';
+
+/**
+ * Detect the underlying reading format of a series (Japanese Manga vs Korean Manhwa vs Chinese Manhua/Webtoon).
+ */
+export function detectMangaFormat(manga: Partial<MangaItem>): MangaType {
+  if (manga.type === 'manga' || manga.type === 'manhwa' || manga.type === 'manhua') {
+    return manga.type;
+  }
+
+  // Genre / tag heuristics
+  const genres = (manga.genres || []).map((g) => String(g).toLowerCase());
+  if (genres.some((g) => g.includes('manhwa') || g.includes('webtoon') || g.includes('long strip'))) {
+    return 'manhwa';
+  }
+  if (genres.some((g) => g.includes('manhua'))) {
+    return 'manhua';
+  }
+  if (genres.some((g) => g.includes('manga'))) {
+    return 'manga';
+  }
+
+  // Source name heuristics
+  const src = `${manga.sourceName || ''} ${manga.sourceUrl || ''}`.toLowerCase();
+  if (src.includes('asura') || src.includes('flame') || src.includes('manhwa') || src.includes('reaper')) {
+    return 'manhwa';
+  }
+  if (src.includes('manhua') || src.includes('topmanhua') || src.includes('nightscans')) {
+    return 'manhua';
+  }
+
+  return 'manga';
+}
+
+/**
+ * Get the recommended reading mode for a given format (e.g. Manga -> RTL, Manhwa/Manhua -> Webtoon).
+ */
+export function getRecommendedReadingMode(
+  manga: Partial<MangaItem>,
+  appSettings?: Partial<AppSettings>
+): { viewMode: ReaderViewMode; noPanelSpacing: boolean; pageGap: number } {
+  const format = detectMangaFormat(manga);
+
+  if (format === 'manga') {
+    const mode = appSettings?.defaultMangaMode || 'rtl';
+    return {
+      viewMode: mode,
+      noPanelSpacing: false,
+      pageGap: 0,
+    };
+  }
+
+  if (format === 'manhwa') {
+    const mode = appSettings?.defaultManhwaMode || 'webtoon';
+    const isSeamless = mode === 'webtoon-seamless';
+    return {
+      viewMode: mode,
+      noPanelSpacing: isSeamless,
+      pageGap: isSeamless ? 0 : 8,
+    };
+  }
+
+  // Manhua / other webtoons
+  const mode = appSettings?.defaultManhuaMode || 'webtoon';
+  const isSeamless = mode === 'webtoon-seamless';
+  return {
+    viewMode: mode,
+    noPanelSpacing: isSeamless,
+    pageGap: isSeamless ? 0 : 8,
+  };
+}
+
+/**
+ * Read saved series-specific reading settings from localStorage.
+ */
+export function getSavedSeriesReadingMode(mangaId: string): Partial<ReaderSettings> | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY_SERIES_PREFIX}${mangaId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist series-specific reading settings to localStorage.
+ */
+export function saveSeriesReadingMode(mangaId: string, settings: Partial<ReaderSettings>): void {
+  try {
+    localStorage.setItem(`${STORAGE_KEY_SERIES_PREFIX}${mangaId}`, JSON.stringify(settings));
+  } catch {
+    // silent fail for private mode / quota exceeded
+  }
+}
+
+/**
+ * Read saved format-specific reading settings from localStorage (manga / manhwa / manhua).
+ */
+export function getSavedFormatReadingMode(format: MangaType): Partial<ReaderSettings> | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY_FORMAT_PREFIX}${format}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist format-specific reading settings to localStorage.
+ */
+export function saveFormatReadingMode(format: MangaType, settings: Partial<ReaderSettings>): void {
+  try {
+    localStorage.setItem(`${STORAGE_KEY_FORMAT_PREFIX}${format}`, JSON.stringify(settings));
+  } catch {
+    // silent fail
+  }
+}
+
+/**
+ * Read the last used global reading settings from localStorage.
+ */
+export function getLastUsedReadingMode(): Partial<ReaderSettings> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_LAST_GLOBAL);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist the last used global reading settings to localStorage.
+ */
+export function saveLastUsedReadingMode(settings: Partial<ReaderSettings>): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_LAST_GLOBAL, JSON.stringify(settings));
+  } catch {
+    // silent fail
+  }
+}
+
+/**
+ * Resolves the optimal initial ReaderSettings for a series:
+ * 1. Series-specific preference (if saved)
+ * 2. Format-specific preference (if saved)
+ * 3. Intelligent auto-selection based on format (Manga = RTL, Manhwa/Manhua = Webtoon)
+ * 4. Global reader defaults
+ */
+export function resolveInitialReaderSettings(
+  manga: MangaItem,
+  defaultSettings?: ReaderSettings,
+  appSettings?: AppSettings
+): ReaderSettings {
+  const base: ReaderSettings = {
+    viewMode: 'webtoon',
+    maxWidth: '850px',
+    pageGap: 8,
+    noPanelSpacing: false,
+    bgColor: 'slate',
+    zoomLevel: 100,
+    autoMarkRead: true,
+    imageFilter: 'normal',
+    autoScrollEnabled: false,
+    autoScrollSpeed: 1.0,
+    tapZonesEnabled: true,
+    cropWhiteMargins: true,
+    showPageNumberOverlay: true,
+    showPersistentPageBadge: true,
+    autoNextChapter: true,
+    mangaFitMode: 'fit-height',
+    preloadCount: 3,
+    autoFormatMode: true,
+    rememberPerSeries: true,
+    ...(defaultSettings || {}),
+  };
+
+  const format = detectMangaFormat(manga);
+
+  // 1. Series-specific saved preference
+  const seriesPref = getSavedSeriesReadingMode(manga.id);
+  if (seriesPref && Object.keys(seriesPref).length > 0) {
+    return { ...base, ...seriesPref };
+  }
+
+  // 2. Format-specific saved preference
+  const formatPref = getSavedFormatReadingMode(format);
+  if (formatPref && Object.keys(formatPref).length > 0) {
+    return { ...base, ...formatPref };
+  }
+
+  // 3. Auto-format selection (enabled by default)
+  const isAutoFormatEnabled = appSettings?.autoFormatReadingMode !== false && base.autoFormatMode !== false;
+  if (isAutoFormatEnabled) {
+    const recommended = getRecommendedReadingMode(manga, appSettings);
+    return {
+      ...base,
+      viewMode: recommended.viewMode,
+      noPanelSpacing: recommended.noPanelSpacing,
+      pageGap: recommended.pageGap,
+    };
+  }
+
+  // 4. Global last used preference fallback
+  const lastUsed = getLastUsedReadingMode();
+  if (lastUsed && Object.keys(lastUsed).length > 0) {
+    return { ...base, ...lastUsed };
+  }
+
+  return base;
+}

@@ -201,10 +201,15 @@ export default function App() {
     captchaSolverEnabled: true,
     captchaApiKey: '',
     stealthMode: true,
+    autoFormatReadingMode: true,
+    defaultMangaMode: 'rtl',
+    defaultManhwaMode: 'webtoon',
+    defaultManhuaMode: 'webtoon',
     readerDefaults: {
       viewMode: 'webtoon',
       maxWidth: '850px',
       pageGap: 8,
+      noPanelSpacing: false,
       bgColor: 'slate',
       zoomLevel: 100,
       autoMarkRead: true,
@@ -218,6 +223,8 @@ export default function App() {
       autoNextChapter: true,
       mangaFitMode: 'fit-height',
       preloadCount: 3,
+      autoFormatMode: true,
+      rememberPerSeries: true,
     },
   });
 
@@ -804,6 +811,9 @@ export default function App() {
             onClose={handleCloseReader}
             onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
             onReport={handleReportMangaIssue}
+            onSaveSettings={(newReaderSettings) =>
+              handleSaveSettings({ ...appSettings, readerDefaults: newReaderSettings })
+            }
           />
         </Suspense>
       )}

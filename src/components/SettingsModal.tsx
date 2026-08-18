@@ -29,6 +29,7 @@ import {
   HardDrive,
   Cpu,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 import { AutoUpdateView } from './AutoUpdateView';
 import { AutoUpdateLog, UserProfile } from '../types';
@@ -378,7 +379,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge">
-                    <label className="font-bold text-secondary">Default Reading Mode:</label>
+                    <label className="font-bold text-secondary">Default Global Reading Mode:</label>
                     <select
                       value={formData.readerDefaults.viewMode || 'webtoon'}
                       onChange={(e) =>
@@ -390,9 +391,93 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-app border border-edge rounded-xl p-2.5 text-primary text-xs"
                     >
                       <option value="webtoon">📜 Vertical Continuous Webtoon Scroll</option>
+                      <option value="webtoon-seamless">📱 Webtoon Seamless (0px Gap)</option>
+                      <option value="rtl">🇯🇵 Manga (Right-to-Left Turn)</option>
+                      <option value="ltr">🇺🇸 Western / Manhua (Left-to-Right)</option>
                       <option value="single">📄 Single Page View</option>
-                      <option value="double">📖 Double Page Book Spread</option>
+                      <option value="double">📖 Double Page Spread</option>
+                      <option value="vertical-paged">📑 Paged Vertical</option>
                     </select>
+                  </div>
+
+                  <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge">
+                    <label className="font-bold text-secondary">🇯🇵 Default Japanese Manga Mode:</label>
+                    <select
+                      value={formData.defaultMangaMode || 'rtl'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          defaultMangaMode: e.target.value as ReaderViewMode,
+                        })
+                      }
+                      className="w-full bg-app border border-edge rounded-xl p-2.5 text-primary text-xs"
+                    >
+                      <option value="rtl">🇯🇵 Right-to-Left (RTL - Traditional Manga)</option>
+                      <option value="single">📄 Single Page LTR</option>
+                      <option value="double">📖 Double Page Spread</option>
+                      <option value="webtoon">📜 Continuous Vertical Scroll</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge">
+                    <label className="font-bold text-secondary">🇰🇷 Default Korean Manhwa Mode:</label>
+                    <select
+                      value={formData.defaultManhwaMode || 'webtoon'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          defaultManhwaMode: e.target.value as ReaderViewMode,
+                        })
+                      }
+                      className="w-full bg-app border border-edge rounded-xl p-2.5 text-primary text-xs"
+                    >
+                      <option value="webtoon">📜 Continuous Vertical Webtoon (Standard)</option>
+                      <option value="webtoon-seamless">📱 Webtoon Seamless (0px Gap)</option>
+                      <option value="single">📄 Single Page View</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge">
+                    <label className="font-bold text-secondary">🇨🇳 Default Chinese Manhua Mode:</label>
+                    <select
+                      value={formData.defaultManhuaMode || 'webtoon'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          defaultManhuaMode: e.target.value as ReaderViewMode,
+                        })
+                      }
+                      className="w-full bg-app border border-edge rounded-xl p-2.5 text-primary text-xs"
+                    >
+                      <option value="webtoon">📜 Continuous Vertical Webtoon</option>
+                      <option value="webtoon-seamless">📱 Webtoon Seamless (0px Gap)</option>
+                      <option value="ltr">🇺🇸 Left-to-Right (LTR)</option>
+                      <option value="single">📄 Single Page View</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge col-span-1 sm:col-span-2">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <div className="font-bold text-primary flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-accent" />
+                          <span>Smart Format Auto-Selection & Layout Memory</span>
+                        </div>
+                        <div className="text-[11px] text-secondary">
+                          Automatically select Manga (RTL) vs Manhwa/Manhua (Webtoon) when opening a series and remember your last chosen mode
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formData.autoFormatReadingMode !== false}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            autoFormatReadingMode: e.target.checked,
+                          })
+                        }
+                        className="w-5 h-5 accent-accent"
+                      />
+                    </label>
                   </div>
                   <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge col-span-1 sm:col-span-2">
                     <label className="font-bold text-secondary flex items-center gap-1.5">

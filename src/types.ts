@@ -1,4 +1,4 @@
-export type ReaderViewMode = 'webtoon' | 'single' | 'double' | 'rtl' | 'ltr';
+export type ReaderViewMode = 'webtoon' | 'webtoon-seamless' | 'single' | 'double' | 'rtl' | 'ltr' | 'vertical-paged';
 export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
 export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'invert' | 'brightness' | 'oled';
 export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk';
@@ -98,6 +98,8 @@ export interface ReaderSettings {
   autoNextChapter: boolean; // Automatic next chapter for webtoons
   mangaFitMode: 'fit-height' | 'fit-width' | 'original';
   preloadCount: number;
+  autoFormatMode?: boolean; // Automatically adapt layout based on Manga (RTL) vs Manhwa/Manhua (Webtoon)
+  rememberPerSeries?: boolean; // Persist last selected layout per individual series
 }
 
 export interface AppSettings {
@@ -117,6 +119,10 @@ export interface AppSettings {
   captchaApiKey: string;
   stealthMode: boolean;
   preferredLanguage?: string;
+  autoFormatReadingMode?: boolean;
+  defaultMangaMode?: ReaderViewMode;
+  defaultManhwaMode?: ReaderViewMode;
+  defaultManhuaMode?: ReaderViewMode;
   readerDefaults: ReaderSettings;
 }
 

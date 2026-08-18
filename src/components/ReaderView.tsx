@@ -12,6 +12,14 @@ import {
   ScanGroupOption,
 } from '../types';
 import {
+  detectMangaFormat,
+  getRecommendedReadingMode,
+  resolveInitialReaderSettings,
+  saveSeriesReadingMode,
+  saveFormatReadingMode,
+  saveLastUsedReadingMode,
+} from '../utils/readingMode';
+import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +55,7 @@ interface ReaderViewProps {
   onMarkChapterRead: (chapterNum: number) => void;
   /** Opens the bug-reporting tool pre-filled for the flagged series. */
   onReport: (category: FlagCategory, manga: MangaItem) => void;
+  onSaveSettings?: (settings: ReaderSettings) => void;
 }
 
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -57,6 +66,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onClose,
   onMarkChapterRead,
   onReport,
+  onSaveSettings,
 }) => {
   const [currentChapterNum, setCurrentChapterNum] = useState<number>(initialChapterNumber || 1);
   const [chapterData, setChapterData] = useState<ChapterData | null>(null);
@@ -82,26 +92,27 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Selected Scanlation Release Group Version
   const [selectedScanGroup, setSelectedScanGroup] = useState<string>(manga.sourceName || 'AsuraScans');
 
-  const [settings, setSettings] = useState<ReaderSettings>(
-    defaultSettings || {
-      viewMode: 'webtoon',
-      maxWidth: '850px',
-      pageGap: 8,
-      bgColor: 'slate',
-      zoomLevel: 100,
-      autoMarkRead: true,
-      imageFilter: 'normal',
-      autoScrollEnabled: false,
-      autoScrollSpeed: 1.0,
-      tapZonesEnabled: true,
-      cropWhiteMargins: true,
-      showPageNumberOverlay: true,
-      showPersistentPageBadge: true,
-      autoNextChapter: true,
-      mangaFitMode: 'fit-height',
-      preloadCount: 3,
-    }
+  const detectedFormat = useMemo(() => detectMangaFormat(manga), [manga]);
+
+  // Persistent Reader Settings with Format Auto-Detection
+  const [settings, setSettingsState] = useState<ReaderSettings>(() =>
+    resolveInitialReaderSettings(manga, defaultSettings)
   );
+
+  const setSettings = useCallback(
+    (newSettings: ReaderSettings) => {
+      setSettingsState(newSettings);
+      saveSeriesReadingMode(manga.id, newSettings);
+      saveFormatReadingMode(detectedFormat, newSettings);
+      saveLastUsedReadingMode(newSettings);
+      if (onSaveSettings) {
+        onSaveSettings(newSettings);
+      }
+    },
+    [manga.id, detectedFormat, onSaveSettings]
+  );
+
+  const isWebtoon = settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless';
 
   // Auto-scroll state
   const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
@@ -246,7 +257,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Micro-step Smooth Auto-scroll Engine
   useEffect(() => {
-    if (!isAutoScrolling || settings.viewMode !== 'webtoon') return;
+    if (!isAutoScrolling || !isWebtoon) return;
 
     // Smooth continuous micro steps based on speed level (0.5x to 3.0x)
     const step = settings.autoScrollSpeed * 1.2;
@@ -257,7 +268,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }, 16); // ~60 FPS smooth scrolling
 
     return () => clearInterval(timer);
-  }, [isAutoScrolling, settings.autoScrollSpeed, settings.viewMode]);
+  }, [isAutoScrolling, settings.autoScrollSpeed, isWebtoon]);
 
   // Handle Scroll Progress & Auto-Next Chapter Trigger
   const handleScroll = useCallback(() => {
@@ -563,6 +574,24 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-1.5">
+            {/* Quick Reading Mode Switcher Button */}
+            <button
+              onClick={() => {
+                const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon';
+                setSettings({
+                  ...settings,
+                  viewMode: nextMode,
+                  noPanelSpacing: false,
+                  pageGap: nextMode === 'webtoon' ? 8 : 0,
+                });
+                triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📜 Webtoon (Vertical)');
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-elevated/80 hover:bg-elevated border border-edge text-secondary hover:text-accent text-[11px] font-bold transition-all flex items-center gap-1.5"
+              title="Click to toggle between Webtoon and Manga RTL"
+            >
+              <span>{settings.viewMode === 'rtl' ? '🇯🇵 RTL' : settings.viewMode === 'ltr' ? '🇺🇸 LTR' : settings.viewMode === 'single' ? '📄 Single' : settings.viewMode === 'webtoon-seamless' ? '📱 Seamless' : '📜 Webtoon'}</span>
+            </button>
+
             <button
               onClick={() => setShowPageGridModal(true)}
               className="p-2 rounded-lg bg-elevated/80 hover:bg-elevated text-secondary transition-all hidden sm:block"
@@ -709,7 +738,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   onClick={() => {
                     setCurrentPageIndex(idx);
                     setShowPageGridModal(false);
-                    if (settings.viewMode === 'webtoon' && scrollContainerRef.current) {
+                    if (isWebtoon && scrollContainerRef.current) {
                       const totalH = scrollContainerRef.current.scrollHeight;
                       scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * idx;
                     }
@@ -753,6 +782,51 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </button>
             </div>
 
+            {/* FORMAT AUTO-DETECTION BADGE & TOGGLE */}
+            <div className="p-3 bg-app/90 rounded-xl border border-edge flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4 text-accent flex-shrink-0" />
+                <div>
+                  <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+                    <span>Format:</span>
+                    <span className="text-accent uppercase font-mono">
+                      {detectedFormat === 'manga' ? '🇯🇵 Japanese Manga' : detectedFormat === 'manhwa' ? '🇰🇷 Korean Manhwa' : '🇨🇳 Chinese Manhua'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-secondary">
+                    {settings.autoFormatMode !== false ? 'Auto-detection active (remembering your layout)' : 'Manual layout override active'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = settings.autoFormatMode === false;
+                  if (next) {
+                    const rec = getRecommendedReadingMode(manga);
+                    setSettings({
+                      ...settings,
+                      autoFormatMode: true,
+                      viewMode: rec.viewMode,
+                      noPanelSpacing: rec.noPanelSpacing,
+                      pageGap: rec.pageGap,
+                    });
+                    triggerToast(`Auto-Format Active: ${rec.viewMode.toUpperCase()}`);
+                  } else {
+                    setSettings({ ...settings, autoFormatMode: false });
+                    triggerToast('Auto-Format Disabled');
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                  settings.autoFormatMode !== false
+                    ? 'bg-accent/15 text-accent border-accent/40'
+                    : 'bg-elevated text-secondary border-edge hover:text-primary'
+                }`}
+              >
+                {settings.autoFormatMode !== false ? 'Auto-Format ON' : 'Auto-Format OFF'}
+              </button>
+            </div>
+
             {/* 1. READER VIEWING MODE (KOTATSU INSPIRED) */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
@@ -781,7 +855,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       triggerToast(`Reader Mode: ${mode.label}`);
                     }}
                     className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
-                      settings.viewMode === mode.id || (mode.id === 'webtoon-seamless' && settings.noPanelSpacing)
+                      settings.viewMode === mode.id || (mode.id === 'webtoon-seamless' && settings.noPanelSpacing && isWebtoon)
                         ? 'border-accent bg-accent/10 text-accent font-bold'
                         : 'border-edge bg-app text-secondary hover:bg-elevated'
                     }`}
@@ -1014,7 +1088,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </button>
             </div>
           </div>
-        ) : chapterData && settings.viewMode === 'webtoon' ? (
+        ) : chapterData && isWebtoon ? (
           /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */
           <div className="flex flex-col items-center w-full py-4 space-y-0 relative">
             {/* Phone/Tablet Center Touch Overlay for HUD Toggle */}
