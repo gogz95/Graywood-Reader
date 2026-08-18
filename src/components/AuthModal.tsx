@@ -132,11 +132,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </p>
           </div>
           <div className="flex rounded-xl bg-app border border-edge p-1 gap-1">
-            <button type="button" onClick={() => setMode('login')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'login' ? 'bg-accent text-accent-fg' : 'text-secondary hover:text-primary'}`}>
-              <span className="inline-flex items-center gap-1.5 justify-center"><LogIn className="w-3.5 h-3.5" /> Sign In</span>
+            <button type="button" onClick={() => setMode('login')} className={`flex-1 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${mode === 'login' ? 'bg-accent text-accent-fg' : 'text-secondary hover:text-primary'}`}>
+              <span className="inline-flex items-center gap-1.5 justify-center"><LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Sign In</span>
             </button>
-            <button type="button" onClick={() => setMode('register')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'register' ? 'bg-accent text-accent-fg' : 'text-secondary hover:text-primary'}`}>
-              <span className="inline-flex items-center gap-1.5 justify-center"><UserPlus className="w-3.5 h-3.5" /> Register</span>
+            <button type="button" onClick={() => setMode('register')} className={`flex-1 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${mode === 'register' ? 'bg-accent text-accent-fg' : 'text-secondary hover:text-primary'}`}>
+              <span className="inline-flex items-center gap-1.5 justify-center"><UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Register</span>
             </button>
           </div>
           {mode === 'login' ? (
@@ -153,11 +153,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-3 top-2.5 text-muted hover:text-secondary">{showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
                 </div>
               </div>
-              <button type="submit" disabled={busy} className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-accent-bright text-accent-fg font-black text-xs flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
-                <LogIn className="w-4 h-4" />{busy ? 'Signing in...' : 'Sign In'}
+              <button type="submit" disabled={busy} className="w-full py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-accent to-accent-bright text-accent-fg font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
+                <LogIn className="w-4 h-4 sm:w-5 sm:h-5" />{busy ? 'Signing in...' : 'Sign In'}
               </button>
-              <button type="button" onClick={handleGuestQuickSignIn} className="w-full py-2.5 rounded-xl bg-elevated border border-edge text-secondary hover:text-primary font-bold text-xs flex items-center justify-center gap-2">
-                <UserCheck className="w-4 h-4" />Continue as Guest
+              <button type="button" onClick={handleGuestQuickSignIn} className="w-full py-2.5 sm:py-3 rounded-xl bg-elevated border border-edge text-secondary hover:text-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2">
+                <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />Continue as Guest
               </button>
             </form>
           ) : (
@@ -192,8 +192,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-3 top-2.5 text-muted hover:text-secondary">{showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
                 </div>
               </div>
-              <button type="submit" disabled={busy} className="w-full py-3 rounded-xl bg-gradient-to-r from-success to-success text-accent-fg font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-success/20 disabled:opacity-60">
-                <UserPlus className="w-4 h-4" />{busy ? 'Creating...' : 'Create Account & Sign In'}
+              <button type="submit" disabled={busy} className="w-full py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-success to-success text-accent-fg font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-success/20 disabled:opacity-60">
+                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />{busy ? 'Creating...' : 'Create Account & Sign In'}
               </button>
             </form>
           )}

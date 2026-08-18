@@ -300,7 +300,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <span className="text-secondary font-medium mr-1">Type:</span>
             <button
               onClick={() => setTypeFilter('all')}
-              className={`px-2.5 py-1 rounded-md transition-all ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-xs sm:text-sm ${
                 typeFilter === 'all'
                   ? 'bg-elevated text-white font-semibold'
                   : 'text-secondary hover:text-primary'
@@ -310,7 +310,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </button>
             <button
               onClick={() => setTypeFilter('manhwa')}
-              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
                 typeFilter === 'manhwa'
                   ? 'bg-elevated text-white font-semibold'
                   : 'text-secondary hover:text-primary'
@@ -320,7 +320,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </button>
             <button
               onClick={() => setTypeFilter('manhua')}
-              className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
                 typeFilter === 'manhua'
                   ? 'bg-elevated text-white font-semibold'
                   : 'text-secondary hover:text-primary'
@@ -337,13 +337,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   setIsSelectMode(!isSelectMode);
                   if (isSelectMode) setSelectedIds(new Set());
                 }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 border ${
                   isSelectMode
                     ? 'bg-accent text-accent-fg border-accent shadow-sm'
                     : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
                 }`}
               >
-                {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                {isSelectMode ? <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 <span>{isSelectMode ? 'Cancel Select' : 'Select'}</span>
               </button>
 
@@ -677,9 +677,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                               e.stopPropagation();
                               onOpenReader(manga, manga.currentChapter + 1);
                             }}
-                            className="px-2.5 py-1 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs flex items-center gap-1"
+                            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs sm:text-sm flex items-center gap-1"
                           >
-                            <BookOpen className="w-3 h-3 fill-accent-fg" />
+                            <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-accent-fg" />
                             Read Ch. {manga.currentChapter + 1}
                           </button>
                           <button
@@ -687,7 +687,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                               e.stopPropagation();
                               onOpenChapters(manga);
                             }}
-                            className="px-2 py-1 rounded bg-elevated text-secondary hover:text-white transition-all text-xs"
+                            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-secondary hover:text-white transition-all text-xs sm:text-sm"
                           >
                             Chapters
                           </button>
@@ -696,7 +696,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                               e.stopPropagation();
                               onIncrementChapter(manga.id);
                             }}
-                            className="px-2 py-1 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs font-bold"
+                            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs sm:text-sm font-bold"
                             title="Quick mark +1 read"
                           >
                             +1

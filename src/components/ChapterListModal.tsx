@@ -166,7 +166,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
               <button
                 onClick={handleDownloadAll}
                 disabled={isDownloadingAll || chapters.length === 0}
-                className="px-3.5 py-2 rounded-xl bg-elevated border border-edge-strong/60 hover:bg-elevated/80 text-secondary font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated border border-edge-strong/60 hover:bg-elevated/80 text-secondary font-bold text-xs sm:text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isDownloadingAll ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />

@@ -617,7 +617,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           <button
             onClick={handleClearAppCache}
             disabled={isClearingCache}
-            className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated border border-edge-strong text-primary hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+            className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated border border-edge-strong text-primary hover:text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md active:scale-95"
             title="Purge local storage, image proxy cache, and dynamic canvas buffers"
           >
             <Trash2 className={`w-3.5 h-3.5 text-danger ${isClearingCache ? 'animate-spin' : ''}`} />
@@ -696,7 +696,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setEngineFilter('all')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all ${
                 engineFilter === 'all' ? 'bg-accent-2 text-white shadow-sm' : 'bg-elevated/80 text-secondary hover:bg-elevated'
               }`}
             >
@@ -706,7 +706,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               <button
                 key={key}
                 onClick={() => setEngineFilter(key as SourceEngineType)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
                   engineFilter === key ? 'bg-accent-2 text-white shadow-sm' : 'bg-elevated/80 text-secondary hover:bg-elevated'
                 }`}
               >

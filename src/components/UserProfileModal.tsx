@@ -162,7 +162,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCreating(false)}
-                className="px-3 py-1.5 rounded-xl bg-elevated text-secondary hover:text-white"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-elevated text-secondary hover:text-white text-xs sm:text-sm"
               >
                 Cancel
               </button>

@@ -63,14 +63,14 @@ export const BrowseTableView: React.FC<Props> = ({ manga, onSelectManga, onOpenR
                 {isReaderAvailable(m) ? (
                   <button
                     onClick={() => onOpenReader(m)}
-                    className="px-3 py-1.5 rounded-lg bg-accent text-accent-fg font-black text-xs"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-accent text-accent-fg font-black text-xs sm:text-sm"
                   >
                     Read
                   </button>
                 ) : (
                   <button
                     onClick={() => onSelectManga(m)}
-                    className="px-3 py-1.5 rounded-lg bg-elevated text-secondary font-bold text-xs border border-edge-strong"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-elevated text-secondary font-bold text-xs sm:text-sm border border-edge-strong"
                   >
                     View Info
                   </button>

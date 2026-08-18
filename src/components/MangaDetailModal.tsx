@@ -157,13 +157,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
 
                 <button
                   onClick={() => setIsFavorite(!isFavorite)}
-                  className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
+                  className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-bold flex items-center gap-1 transition-all ${
                     isFavorite
                       ? 'bg-accent/20 text-accent border border-accent/30'
                       : 'bg-elevated text-secondary'
                   }`}
                 >
-                  <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-accent text-accent' : ''}`} />
+                  <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-accent text-accent' : ''}`} />
                   <span>{isFavorite ? 'Favorite' : 'Add Favorite'}</span>
                 </button>
 
@@ -171,14 +171,14 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                 <div className="relative">
                   <button
                     onClick={() => setShowFlagDropdown(!showFlagDropdown)}
-                    className={`px-2.5 py-0.5 rounded text-xs font-bold flex items-center gap-1 transition-all ${
+                    className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-bold flex items-center gap-1 transition-all ${
                       isFlagged
                         ? 'bg-danger/20 text-danger border border-danger/40 shadow-sm'
                         : 'bg-elevated text-secondary hover:text-primary'
                     }`}
                     title="Flag series for loading errors or broken content"
                   >
-                    <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
+                    <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
                     <span>{isFlagged ? `Flagged: ${flagReason || 'Error'}` : 'Flag Issue'}</span>
                   </button>
                   {showFlagDropdown && (
@@ -274,9 +274,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                     onClose();
                     onOpenChapters(manga);
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 transition-all"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
                 >
-                  <Globe className="w-3.5 h-3.5 text-accent" />
+                  <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
                   <span>Browse All Chapters</span>
                 </button>
 
@@ -295,7 +295,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                 <button
                   onClick={handleRefreshMetadata}
                   disabled={isRefreshingMetadata}
-                  className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-50 text-primary font-bold text-xs flex items-center gap-1.5 transition-all"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-50 text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
                   title="Fetch latest metadata, chapter counts, covers, and rating from live sources"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-info ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
@@ -441,7 +441,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
         <div className="p-4 bg-app border-t border-edge flex items-center justify-between gap-3">
           <button
             onClick={() => onDeleteManga(manga.id)}
-            className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 text-danger font-bold text-xs flex items-center gap-1.5 transition-all"
+            className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-danger font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
           >
             <Trash2 className="w-4 h-4" />
             Delete

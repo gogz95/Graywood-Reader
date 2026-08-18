@@ -162,7 +162,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
                 type="button"
                 onClick={handleAutoEnrich}
                 disabled={enriching}
-                className="px-2.5 py-1 rounded bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+                className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
               >
                 <Sparkles className={`w-3.5 h-3.5 ${enriching ? 'animate-spin' : ''}`} />
                 <span>{enriching ? 'Enriching...' : 'Auto-Fill with Gemini AI'}</span>
@@ -300,15 +300,15 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-elevated text-secondary hover:text-white font-semibold"
+              className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-elevated text-secondary hover:text-white font-semibold text-xs sm:text-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold shadow-lg transition-all flex items-center gap-2"
+              className="px-6 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold shadow-lg transition-all flex items-center gap-2 text-xs sm:text-sm"
             >
-              <Save className="w-4 h-4" />
+              <Save className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>{initialManga ? 'Update Series' : 'Save to Tracker'}</span>
             </button>
           </div>

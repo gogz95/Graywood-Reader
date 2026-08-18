@@ -269,20 +269,20 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setFiltersOpen((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border ${
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border text-xs sm:text-sm ${
                 filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
               }`}
               title={filtersOpen ? 'Hide tags' : 'Show tags'}
             >
-              <Filter className="w-3.5 h-3.5" />
+              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
             </button>
             <button
               onClick={() => setPage(1)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
               title="Refresh the live feed"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Refresh
             </button>
           </div>
         </div>
@@ -292,7 +292,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tags</span>
             <button
               onClick={() => setSelectedTag(null)}
-              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
                 selectedTag === null
                   ? 'bg-accent-2 text-white border-accent-2'
                   : 'bg-elevated text-secondary border-edge hover:text-primary'
@@ -304,7 +304,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               <button
                 key={tag}
                 onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
                   selectedTag === tag
                     ? 'bg-accent-2 text-white border-accent-2 shadow-sm'
                     : 'bg-elevated text-secondary border-edge hover:text-primary hover:border-accent-2/40'
@@ -390,13 +390,13 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                           handleTrack(r);
                         }}
                         disabled={isTracked}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                           isTracked
                             ? 'bg-success/20 text-success border border-success/30 cursor-default'
                             : 'bg-accent-2/20 hover:bg-accent-2/40 text-accent-2 border border-accent-2/30'
                         }`}
                       >
-                        {isTracked ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        {isTracked ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                         {isTracked ? 'Tracked' : 'Track'}
                       </button>
                       <button
@@ -406,7 +406,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                           if (readable) onOpenReader(toManga(r, true), 1);
                           else onSelectManga(toManga(r, false));
                         }}
-                        className="flex items-center justify-center px-2.5 py-2 rounded-xl bg-elevated hover:bg-elevated text-accent border border-edge font-bold transition-all"
+                        className="flex items-center justify-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-accent border border-edge font-bold transition-all"
                       >
                         {readable ? <Play className="w-3.5 h-3.5 fill-accent" /> : <Star className="w-3.5 h-3.5" />}
                       </button>

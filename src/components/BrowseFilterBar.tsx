@@ -64,9 +64,9 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
           onClick={onRandom}
           disabled={isRandomPicking || filteredMangaCount === 0}
           title="Surprise me with a random series"
-          className={`px-3 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 text-accent-fg font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 disabled:opacity-40 ${isRandomPicking ? 'animate-pulse' : ''}`}
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-accent to-accent-2 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-md transition-all active:scale-95 disabled:opacity-40 ${isRandomPicking ? 'animate-pulse' : ''}`}
         >
-          <Dices className={`w-3.5 h-3.5 ${isRandomPicking ? 'animate-spin' : ''}`} />
+          <Dices className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRandomPicking ? 'animate-spin' : ''}`} />
           <span>{isRandomPicking ? 'Rolling...' : 'Random'}</span>
         </button>
 
@@ -201,7 +201,7 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
         </span>
         <button
           onClick={() => onSourceToggle('all')}
-          className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
             selectedSourceName === 'all'
               ? 'bg-accent text-accent-fg border-accent shadow-md font-black'
               : 'bg-app text-secondary border-edge hover:border-edge-strong'
@@ -213,7 +213,7 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
           <button
             key={src}
             onClick={() => onSourceToggle(src)}
-            className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border font-bold text-xs sm:text-sm transition-all ${
               selectedSourceName === src
                 ? 'bg-accent-2/30 text-accent-2 border-accent-2/50 shadow-md font-black'
                 : 'bg-app text-secondary border-edge hover:border-edge-strong'
@@ -229,19 +229,19 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
 
         <button
           onClick={onToggleFavorites}
-          className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all ${
             favoritesOnly
               ? 'bg-accent text-accent-fg border-accent shadow-md font-black'
               : 'bg-app text-secondary border-edge hover:border-edge-strong'
           }`}
         >
-          <Star className={`w-3.5 h-3.5 ${favoritesOnly ? 'fill-accent-fg' : 'text-accent'}`} />
+          <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${favoritesOnly ? 'fill-accent-fg' : 'text-accent'}`} />
           <span>Favorites Only</span>
         </button>
 
         <button
           onClick={onToggleUnread}
-          className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all ${
             unreadOnly
               ? 'bg-info text-accent-fg border-info shadow-md font-black'
               : 'bg-app text-secondary border-edge hover:border-edge-strong'
@@ -255,7 +255,7 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
             <span className="text-muted">|</span>
             <button
               onClick={() => onGenreToggle('all')}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold border transition-all ${
                 selectedGenre === 'all'
                   ? 'bg-accent text-accent-fg border-accent font-black shadow-sm'
                   : 'bg-app text-secondary border-edge'
@@ -267,7 +267,7 @@ export const BrowseFilterBar: React.FC<BrowseFilterBarProps> = ({
               <button
                 key={genre}
                 onClick={() => onGenreToggle(genre)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold border transition-all ${
                   selectedGenre === genre
                     ? 'bg-accent/20 text-accent border-accent/40 font-black'
                     : 'bg-app text-secondary border-edge hover:border-edge-strong'

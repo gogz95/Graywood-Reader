@@ -69,9 +69,9 @@ export const StickyNotesDrawer: React.FC<StickyNotesDrawerProps> = React.memo(({
             <div className="flex items-center justify-between">
               <button
                 onClick={() => onOpenAddModal(currentPageIndex)}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md"
+                className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-md"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
                 <span>Pin Note to Page {currentPageIndex + 1}</span>
               </button>
             </div>
@@ -202,7 +202,7 @@ export const StickyNotesDrawer: React.FC<StickyNotesDrawerProps> = React.memo(({
                 <button
                   type="button"
                   onClick={onCloseModal}
-                  className="px-3.5 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-bold"
+                  className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs sm:text-sm font-bold"
                 >
                   Cancel
                 </button>
@@ -210,7 +210,7 @@ export const StickyNotesDrawer: React.FC<StickyNotesDrawerProps> = React.memo(({
                   type="button"
                   onClick={onSaveNote}
                   disabled={!noteInputText.trim()}
-                  className="px-4 py-1.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg text-xs font-bold shadow-md disabled:opacity-50"
+                  className="px-4 sm:px-5 py-1.5 sm:py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg text-xs sm:text-sm font-bold shadow-md disabled:opacity-50"
                 >
                   Save Note
                 </button>

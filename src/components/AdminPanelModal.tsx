@@ -141,7 +141,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onSwitchUserView(u)}
-                    className="px-3 py-1.5 rounded-xl bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs sm:text-sm"
                     title="Impersonate or inspect user view as Admin"
                   >
                     Inspect View
@@ -151,7 +151,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     <>
                       <button
                         onClick={() => onPromoteUser(u.id, 'admin')}
-                        className="px-2.5 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-semibold"
+                        className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs sm:text-sm font-semibold"
                       >
                         Make Admin
                       </button>

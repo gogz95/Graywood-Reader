@@ -36,7 +36,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
 }) => {
   return (
     <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-surface border border-edge rounded-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl text-primary">
+      <div className="bg-surface border border-edge rounded-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl text-primary text-xs sm:text-sm">
         <div className="flex items-center justify-between border-b border-edge pb-3">
           <div className="font-extrabold text-primary text-base flex items-center gap-2">
             <Sliders className="w-5 h-5 text-accent" />
@@ -128,14 +128,14 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
                   });
                   onTriggerToast(`Reader Mode: ${mode.label}`);
                 }}
-                className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                className={`p-2.5 sm:p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                   settings.viewMode === mode.id || (mode.id === 'webtoon-seamless' && settings.noPanelSpacing && isWebtoon)
                     ? 'border-accent bg-accent/10 text-accent font-bold'
                     : 'border-edge bg-app text-secondary hover:bg-elevated'
                 }`}
               >
-                <span className="text-xs font-bold text-primary">{mode.label}</span>
-                <span className="text-[10px] opacity-70 line-clamp-1">{mode.desc}</span>
+                <span className="text-xs sm:text-sm font-bold text-primary">{mode.label}</span>
+                <span className="text-[10px] sm:text-[11px] opacity-70 line-clamp-1">{mode.desc}</span>
               </button>
             ))}
           </div>
@@ -181,7 +181,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
                 key={w}
                 type="button"
                 onClick={() => onSaveSettings({ ...settings, maxWidth: w })}
-                className={`py-2 rounded-lg font-bold border transition-all ${
+                className={`py-2 sm:py-2.5 rounded-lg font-bold border transition-all text-xs sm:text-sm ${
                   settings.maxWidth === w
                     ? 'border-accent bg-accent/15 text-accent shadow-sm'
                     : 'border-edge bg-app text-secondary hover:bg-elevated'
@@ -218,7 +218,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
                   onSaveSettings({ ...settings, imageFilter: f.id as ReaderImageFilter });
                   onTriggerToast(`Filter: ${f.name}`);
                 }}
-                className={`py-2 px-2.5 rounded-xl font-bold border text-left text-xs transition-all ${
+                className={`py-2 px-2.5 rounded-xl font-bold border text-left text-xs sm:text-sm transition-all ${
                   settings.imageFilter === f.id
                     ? 'border-accent bg-accent/15 text-accent shadow-sm'
                     : 'border-edge bg-app text-secondary hover:bg-elevated hover:text-primary'
@@ -273,7 +273,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
                 key={bg.id}
                 type="button"
                 onClick={() => onSaveSettings({ ...settings, bgColor: bg.id as any })}
-                className={`py-2 rounded-lg font-bold border text-center transition-all ${bg.bg} ${
+                className={`py-2 sm:py-2.5 rounded-lg font-bold border text-center transition-all ${bg.bg} ${
                   settings.bgColor === bg.id ? 'ring-2 ring-accent border-accent' : 'border-edge-strong'
                 }`}
               >
@@ -298,7 +298,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
                 key={speed}
                 type="button"
                 onClick={() => onSaveSettings({ ...settings, autoScrollSpeed: speed })}
-                className={`flex-1 py-1 rounded text-xs font-bold border transition-all ${
+                className={`flex-1 py-1 sm:py-1.5 rounded text-xs sm:text-sm font-bold border transition-all ${
                   settings.autoScrollSpeed === speed
                     ? 'border-accent bg-accent text-accent-fg'
                     : 'border-edge bg-surface text-secondary hover:bg-elevated'

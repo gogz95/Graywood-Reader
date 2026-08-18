@@ -271,43 +271,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Section Navigation Pills */}
-        <div className="flex items-center gap-1.5 p-2.5 bg-app border-b border-edge/80 overflow-x-auto text-xs font-bold scrollbar-none">
+        <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-app border-b border-edge/80 text-xs sm:text-sm font-bold">
           <button
             type="button"
             onClick={() => setActiveSection('reader')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'reader'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <BookOpen className="w-4 h-4" />
+            <BookOpen className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             <span>Reader & Layout</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSection('appearance')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'appearance'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Palette className="w-4 h-4 text-accent-2" />
+            <Palette className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
             <span>UI & Theme</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSection('autoupdate')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'autoupdate'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Zap className="w-4 h-4 text-accent-2" />
+            <Zap className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
             <span>Auto-Update Feed</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
@@ -319,13 +319,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('sources')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'sources'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Cpu className="w-4 h-4 text-success" />
+            <Cpu className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-success" />
             <span>Sources & Network</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
@@ -337,13 +337,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('duplicates')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap relative ${
               activeSection === 'duplicates'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <GitMerge className="w-4 h-4 text-accent-2" />
+            <GitMerge className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
             <span>Duplicate Merger</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
@@ -360,13 +360,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('subdomain')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'subdomain'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Globe className="w-4 h-4 text-info" />
+            <Globe className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-info" />
             <span>Tracker Domain</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
@@ -378,13 +378,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={() => setActiveSection('backup')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'backup'
                 ? 'bg-accent text-accent-fg shadow-md font-black'
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Download className="w-4 h-4 text-accent" />
+            <Download className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent" />
             <span>Backups & Storage</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
@@ -405,7 +405,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 1. READER DEFAULTS & PRACTICAL OPTIONS */}
           {activeSection === 'reader' && (
-            <div className="space-y-6 text-xs">
+            <div className="space-y-6 text-xs sm:text-sm">
               {/* Reading Performance Card */}
               <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                 <div className="font-bold text-primary text-sm flex items-center gap-2">
@@ -695,7 +695,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 3. SUBDOMAIN CONFIGURATION */}
           {activeSection === 'subdomain' && (
             isAdmin ? (
-              <div className="space-y-6 text-xs">
+              <div className="space-y-6 text-xs sm:text-sm">
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                   <div>
                     <div className="font-bold text-primary text-sm flex items-center gap-2 mb-1">
@@ -714,9 +714,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                     <button
                       type="submit"
-                      className="px-5 py-2.5 rounded-xl bg-info hover:bg-info text-white font-bold text-xs flex items-center gap-2 shadow-lg transition-all hover:scale-105"
+                      className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-info hover:bg-info text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all hover:scale-105"
                     >
-                      <Check className="w-4 h-4 stroke-[3]" />
+                      <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3]" />
                       Save Domain
                     </button>
                   </form>
@@ -735,7 +735,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 4. UI & APPEARANCE */}
           {activeSection === 'appearance' && (
-            <div className="space-y-6 text-xs">
+            <div className="space-y-6 text-xs sm:text-sm">
               <div className="space-y-3">
                 <label className="font-bold text-primary text-sm flex items-center gap-2">
                   <Palette className="w-4 h-4 text-accent-2" />
@@ -801,7 +801,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 5. SOURCES, CLOUDFLARE & NETWORK */}
           {activeSection === 'sources' && (
             isAdmin ? (
-              <div className="space-y-6 text-xs">
+              <div className="space-y-6 text-xs sm:text-sm">
                 {/* Metadata Sync */}
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -873,9 +873,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           type="button"
                           onClick={handleTestFlareSolverr}
                           disabled={isTestingFlareSolverr}
-                          className="px-3.5 py-2 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 border border-edge whitespace-nowrap transition-all"
+                          className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-edge whitespace-nowrap transition-all"
                         >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingFlareSolverr ? 'animate-spin' : ''}`} />
+                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isTestingFlareSolverr ? 'animate-spin' : ''}`} />
                           <span>{isTestingFlareSolverr ? 'Testing...' : 'Test Connection'}</span>
                         </button>
                       </div>
@@ -929,9 +929,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           type="button"
                           onClick={handleCheckCaptchaBalance}
                           disabled={isCheckingCaptchaBalance || !formData.captchaApiKey}
-                          className="px-3.5 py-2 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 border border-edge whitespace-nowrap disabled:opacity-50 transition-all"
+                          className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-edge whitespace-nowrap disabled:opacity-50 transition-all"
                         >
-                          <Zap className={`w-3.5 h-3.5 text-amber-400 ${isCheckingCaptchaBalance ? 'animate-pulse' : ''}`} />
+                          <Zap className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 ${isCheckingCaptchaBalance ? 'animate-pulse' : ''}`} />
                           <span>{isCheckingCaptchaBalance ? 'Checking...' : 'Check Balance'}</span>
                         </button>
                       </div>
@@ -1007,7 +1007,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 6. BACKUPS & STORAGE */}
           {activeSection === 'backup' && (
             isAdmin ? (
-              <div className="space-y-6 text-xs">
+              <div className="space-y-6 text-xs sm:text-sm">
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                   <div className="font-bold text-primary text-sm flex items-center gap-2">
                     <HardDrive className="w-4 h-4 text-accent" />
@@ -1118,7 +1118,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <a
                       href={`/api/gdpr/export-data/${encodeURIComponent(activeProfile?.id || 'usr_admin')}`}
                       download
-                      className="px-3.5 py-2 rounded-xl bg-accent-2/10 hover:bg-accent-2/20 text-accent-2 border border-accent-2/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                      className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-accent-2/10 hover:bg-accent-2/20 text-accent-2 border border-accent-2/30 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Download GDPR Data Export (Art. 15)</span>
@@ -1139,7 +1139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           }
                         }
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger border border-danger/30 text-xs font-bold flex items-center gap-1.5 transition-all"
+                      className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-danger/10 hover:bg-danger/20 text-danger border border-danger/30 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Right to Erasure / GDPR Wipe (Art. 17)</span>
@@ -1158,7 +1158,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated text-secondary font-bold text-xs"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-secondary font-bold text-xs sm:text-sm"
           >
             Close
           </button>
@@ -1167,9 +1167,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center gap-2 shadow-lg shadow-accent/20 transition-all hover:scale-105"
+            className="px-6 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-accent/20 transition-all hover:scale-105"
           >
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 stroke-[3]" />}
+            {saving ? <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3]" />}
             <span>Save Settings</span>
           </button>
         </div>
