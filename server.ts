@@ -53,6 +53,7 @@ import {
   checkSolverBalance,
   fetchWithChallengeBypass,
 } from "./server/captchaSolver";
+import { sourceCircuitBreaker, CircuitState } from "./server/circuitBreaker";
 import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
 import { localLibraryRouter } from "./server/routes/localLibrary";
@@ -3015,12 +3016,25 @@ app.post("/api/kotatsu/sources/deactivate-all", (_req, res) => {
 // Fix #22: Source Health Monitoring Endpoint
 app.get("/api/kotatsu/sources/health", (_req, res) => {
   const healthData: Record<string, SourceHealth> = {};
-  for (const source of KOTATSU_SOURCES) { const h = sourceHealthMap.get(source.id); if (h) healthData[source.id] = h; }
+  for (const source of KOTATSU_SOURCES) {
+    const h = sourceHealthMap.get(source.id);
+    const cb = sourceCircuitBreaker.getState(source.id);
+    if (h || cb.state !== 'CLOSED') {
+      healthData[source.id] = {
+        id: source.id,
+        lastChecked: h?.lastChecked || cb.lastChecked || Date.now(),
+        lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : 'ok'),
+        consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
+        failureReason: h?.failureReason || cb.lastFailureReason,
+        circuitState: cb.state,
+      };
+    }
+  }
   res.json({
-    healthy: Object.values(healthData).filter(h => h.lastStatus === 'ok').length,
-    degraded: Object.values(healthData).filter(h => h.lastStatus === 'degraded').length,
+    healthy: Object.values(healthData).filter(h => h.lastStatus === 'ok' && h.circuitState !== 'OPEN').length,
+    degraded: Object.values(healthData).filter(h => h.lastStatus === 'degraded' || h.circuitState === 'HALF_OPEN').length,
     blocked: Object.values(healthData).filter(h => h.lastStatus === 'blocked').length,
-    down: Object.values(healthData).filter(h => h.lastStatus === 'down').length,
+    down: Object.values(healthData).filter(h => h.lastStatus === 'down' || h.circuitState === 'OPEN').length,
     disabled: disabledSourceIds.size,
     sources: healthData,
     disabledSourceIds: Array.from(disabledSourceIds),
@@ -3948,11 +3962,17 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
       catalogUrl = page === 1 ? `${sourceDef.baseUrl}/series` : `${sourceDef.baseUrl}/series?page=${page}`;
     }
 
-    // Retry with exponential backoff (max 3 attempts: 4s, 8s, 16s timeout)
+    // Fast-fail if source is already marked down/blocked (circuit breaker OPEN)
+    if (!sourceCircuitBreaker.canAttempt(sourceDef.id)) {
+      console.warn(`[Catalog Scraper] Fast-failing ${sourceDef.name} (circuit OPEN)`);
+      return { items: [], totalCount: 0 };
+    }
+
+    // Retry with exponential backoff (max 3 attempts: 4s, 8s, 12s timeout)
     let html: string | null = null;
     for (let attempt = 0; attempt < 3 && !html; attempt++) {
       try {
-        const timeout = [4000, 8000, 16000][attempt] || 4000;
+        const timeout = [4000, 8000, 12000][attempt] || 4000;
         const liveRes = await fetchWithChallengeBypass(catalogUrl, {
           headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml' },
           enableCloudflareBypass: appSettings.enableCloudflareBypass,
@@ -3969,11 +3989,20 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
           updateSourceHealth(sourceDef.id, liveRes.html, liveRes.status);
         } else {
           updateSourceHealth(sourceDef.id, null, liveRes.status || 500);
-          if (attempt < 2) { console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} failed. Retrying...`); await new Promise(r => setTimeout(r, timeout)); }
+          if (liveRes.status === 404 || liveRes.status === 410) {
+            break; // Fast-fail non-transient HTTP errors
+          }
+          if (attempt < 2) {
+            console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} failed. Retrying...`);
+            await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
+          }
         }
       } catch (fetchErr: any) {
         updateSourceHealth(sourceDef.id, null, 0, fetchErr?.message);
-        if (attempt < 2) { console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} errored. Retrying...`); await new Promise(r => setTimeout(r, [4000,8000,16000][attempt])); }
+        if (attempt < 2) {
+          console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} errored. Retrying...`);
+          await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
+        }
       }
     }
     if (html) {
@@ -4463,21 +4492,48 @@ function detectBlockedResponse(html: string, statusCode: number): 'cloudflare' |
   return 'none';
 }
 
-interface SourceHealth { id: string; lastChecked: number; lastStatus: 'ok'|'degraded'|'blocked'|'down'; consecutiveFailures: number; failureReason?: string; }
+interface SourceHealth {
+  id: string;
+  lastChecked: number;
+  lastStatus: 'ok' | 'degraded' | 'blocked' | 'down';
+  consecutiveFailures: number;
+  failureReason?: string;
+  circuitState?: CircuitState;
+}
 const sourceHealthMap = new Map<string, SourceHealth>();
-function updateSourceHealth(sourceId: string, html: string|null, statusCode: number, error?: string) {
+function updateSourceHealth(sourceId: string, html: string | null, statusCode: number, error?: string) {
   let e = sourceHealthMap.get(sourceId);
-  if (!e) { e = { id: sourceId, lastChecked: Date.now(), lastStatus: 'ok', consecutiveFailures: 0 }; sourceHealthMap.set(sourceId, e); }
+  if (!e) {
+    e = { id: sourceId, lastChecked: Date.now(), lastStatus: 'ok', consecutiveFailures: 0 };
+    sourceHealthMap.set(sourceId, e);
+  }
   e.lastChecked = Date.now();
   if (error || statusCode >= 400) {
-    e.consecutiveFailures++; e.failureReason = error || `HTTP ${statusCode}`;
+    e.consecutiveFailures++;
+    e.failureReason = error || `HTTP ${statusCode}`;
     if (e.consecutiveFailures >= 5) e.lastStatus = 'down';
     else if (e.consecutiveFailures >= 2) e.lastStatus = 'degraded';
+    sourceCircuitBreaker.recordFailure(sourceId, statusCode, e.failureReason);
   } else if (html) {
     const bt = detectBlockedResponse(html, statusCode);
-    if (bt !== 'none') { e.consecutiveFailures++; e.lastStatus = 'blocked'; e.failureReason = `Source returned ${bt} challenge`; }
-    else { e.consecutiveFailures = 0; e.lastStatus = 'ok'; e.failureReason = undefined; }
-  } else { e.consecutiveFailures = 0; e.lastStatus = 'ok'; e.failureReason = undefined; }
+    if (bt !== 'none') {
+      e.consecutiveFailures++;
+      e.lastStatus = 'blocked';
+      e.failureReason = `Source returned ${bt} challenge`;
+      sourceCircuitBreaker.trip(sourceId, e.failureReason);
+    } else {
+      e.consecutiveFailures = 0;
+      e.lastStatus = 'ok';
+      e.failureReason = undefined;
+      sourceCircuitBreaker.recordSuccess(sourceId);
+    }
+  } else {
+    e.consecutiveFailures = 0;
+    e.lastStatus = 'ok';
+    e.failureReason = undefined;
+    sourceCircuitBreaker.recordSuccess(sourceId);
+  }
+  e.circuitState = sourceCircuitBreaker.getState(sourceId).state;
 }
 
 // Fix #5: Per-Source Cookie Jar for session persistence
@@ -4939,6 +4995,10 @@ function getEngineConfig(domainId: string): EngineSourceConfig | undefined {
 // ============================================================================
 
 async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceConfig): Promise<ResolvedChapter[]> {
+  if (!sourceCircuitBreaker.canAttempt(config.id)) {
+    console.warn(`[Madara Engine] Fast-failing ${config.name} (circuit OPEN)`);
+    return [];
+  }
   const origin = new URL(targetUrl).origin;
   const headers = { ...UA_HEADERS, 'Referer': origin + '/' };
 
@@ -4946,7 +5006,7 @@ async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceCon
   const fetchHtml = async (url: string, postBody?: string): Promise<string | null> => {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const timeout = [8000, 16000, 30000][attempt] || 8000;
+        const timeout = [6000, 12000, 20000][attempt] || 6000;
         const opts: any = {
           headers: postBody
             ? { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
@@ -4970,15 +5030,18 @@ async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceCon
           return res.html;
         }
         updateSourceHealth(config.id, null, res.status || 500);
+        if (res.status === 404 || res.status === 410) {
+          return null;
+        }
         if (attempt < 2) {
           console.warn(`[Madara Engine] ${config.name} attempt ${attempt+1} failed (HTTP ${res.status}). Retrying...`);
-          await new Promise(r => setTimeout(r, timeout));
+          await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
         }
       } catch (err: any) {
         updateSourceHealth(config.id, null, 0, err?.message);
         if (attempt < 2) {
           console.warn(`[Madara Engine] ${config.name} attempt ${attempt+1} errored. Retrying...`);
-          await new Promise(r => setTimeout(r, [8000,16000,30000][attempt]));
+          await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
         }
       }
     }
@@ -5450,6 +5513,10 @@ async function extractLiveDomainChapterPages(
   chapterNumber: number = 1
 ): Promise<string[] | null> {
   try {
+    if (domainId && !sourceCircuitBreaker.canAttempt(domainId)) {
+      console.warn(`[Live Source Extractor] Fast-failing extract from ${domainId} (circuit OPEN)`);
+      return null;
+    }
     // 0. Auto Domain Mirror Redirection + manhwa18 path normalization
     const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
 
