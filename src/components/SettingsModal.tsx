@@ -8,7 +8,7 @@ import {
   AppTheme,
   DuplicateCandidate,
   DatabaseSyncConfig,
-  MangaItem,
+  MangaItem
 } from '../types';
 import { DuplicateFinderView } from './DuplicateFinderView';
 import {
@@ -32,7 +32,7 @@ import {
   Sparkles,
   AlertTriangle,
   ExternalLink,
-  Eye,
+  Eye
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { AutoUpdateView } from './AutoUpdateView';
