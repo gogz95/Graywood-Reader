@@ -46,6 +46,11 @@ import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
 import { localLibraryRouter } from "./server/routes/localLibrary";
 import {
+  APP_VERSION,
+  APP_USER_AGENT,
+  getSystemVersionReport,
+} from "./server/version";
+import {
   KOTATSU_SOURCES,
   ALL_SOURCES_CATALOG,
   SOURCE_MAP,
@@ -255,7 +260,7 @@ const getGeminiClient = () => {
     apiKey,
     httpOptions: {
       headers: {
-        "User-Agent": "ManhuaSync-App/2.5.0",
+        "User-Agent": APP_USER_AGENT,
       },
     },
   });
@@ -1175,7 +1180,17 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
 
 // Health Check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime(), databaseSize: mangaDatabase.length });
+  res.json({
+    status: "ok",
+    version: APP_VERSION,
+    uptime: process.uptime(),
+    databaseSize: mangaDatabase.length,
+  });
+});
+
+// System & Backend Component Version Info
+app.get("/api/version", (_req, res) => {
+  res.json(getSystemVersionReport());
 });
 
 // Sync Config / Subdomain details
@@ -6286,7 +6301,7 @@ app.post("/api/settings", (req, res) => {
 // Export Backup JSON
 app.get("/api/settings/backup/export", (req, res) => {
   const backup = {
-    version: "2.5.0-kotatsu",
+    version: `${APP_VERSION}-kotatsu`,
     exportedAt: new Date().toISOString(),
     mangaDatabase: SqliteDb.getAllManga(),
     config: syncConfig,
@@ -6696,7 +6711,7 @@ async function startServer() {
 
   // 3. Start listening immediately (sub-50ms launch time)
   httpServer = app.listen(PORT, HOST, () => {
-    console.log(`[Fast Launch Engine] Subdomain Tracker running on http://${HOST}:${PORT}`);
+    console.log(`[Fast Launch Engine] Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
     console.log(`[Fast Launch Engine] SQLite database ready (${mangaDatabase.length} series)`);
   });
 

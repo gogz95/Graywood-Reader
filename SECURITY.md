@@ -10,9 +10,7 @@ We provide security updates and patches for the latest active release versions:
 
 | Version | Supported |
 |---|---|
-| `2.5.x` (Current) | :white_check_mark: Yes |
-| `2.4.x` | :white_check_mark: Yes (Critical only) |
-| `< 2.4.0` | :x: No (Please upgrade) |
+| `1.0.x` (Current) | :white_check_mark: Yes |
 
 ---
 
