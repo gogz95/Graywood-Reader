@@ -30,6 +30,7 @@ import {
   DuplicateCandidate,
   OpenApiManga,
   AppSettings,
+  ReadingStatus,
 } from './types';
 import { INITIAL_MANGA_DATABASE } from './data/initialManga';
 import { apiFetch } from './utils/api';
@@ -104,6 +105,26 @@ export default function App() {
   });
 
   const closeConfirmModal = () => setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    variant: 'danger' | 'warning' | 'info' = 'danger',
+    confirmLabel: string = 'Confirm'
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      variant,
+      confirmLabel,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
 
   // Reader Mode state
   const [readerTarget, setReaderTarget] = useState<{ manga: MangaItem; chapterNumber: number; chapterId?: string } | null>(null);
@@ -203,13 +224,13 @@ export default function App() {
     stealthMode: true,
     autoFormatReadingMode: true,
     defaultMangaMode: 'rtl',
-    defaultManhwaMode: 'webtoon',
-    defaultManhuaMode: 'webtoon',
+    defaultManhwaMode: 'webtoon-seamless',
+    defaultManhuaMode: 'webtoon-seamless',
     readerDefaults: {
-      viewMode: 'webtoon',
+      viewMode: 'webtoon-seamless',
       maxWidth: '850px',
-      pageGap: 8,
-      noPanelSpacing: false,
+      pageGap: 0,
+      noPanelSpacing: true,
       bgColor: 'slate',
       zoomLevel: 100,
       autoMarkRead: true,
@@ -666,6 +687,43 @@ export default function App() {
     }
   };
 
+  const handleBulkUpdateStatus = async (ids: string[], status: ReadingStatus) => {
+    const updatedList = mangaList.map((m) =>
+      ids.includes(m.id)
+        ? {
+            ...m,
+            status,
+            currentChapter: status === 'completed' && m.latestChapter ? m.latestChapter : m.currentChapter,
+            lastUpdated: new Date().toISOString(),
+          }
+        : m
+    );
+    setMangaList(updatedList);
+    for (const id of ids) {
+      const item = updatedList.find((m) => m.id === id);
+      if (item) {
+        apiFetch('/api/manga', {
+          method: 'POST',
+          body: JSON.stringify(item),
+        }).catch(() => {});
+      }
+    }
+  };
+
+  const handleBulkDelete = (ids: string[]) => {
+    showConfirm(
+      'Delete Selected Series',
+      `Are you sure you want to delete ${ids.length} selected series from your library?`,
+      async () => {
+        setMangaList((prev) => prev.filter((m) => !ids.includes(m.id)));
+        for (const id of ids) {
+          apiFetch(`/api/manga/${id}`, { method: 'DELETE' }).catch(() => {});
+        }
+      },
+      'danger'
+    );
+  };
+
   const unreadCount = mangaList.filter((m) => m.latestChapter > m.currentChapter).length;
 
   return (
@@ -717,6 +775,8 @@ export default function App() {
               }}
               onOpenReader={handleOpenReader}
               onOpenChapters={handleOpenChapters}
+              onBulkUpdateStatus={handleBulkUpdateStatus}
+              onBulkDelete={handleBulkDelete}
             />
           )}
 

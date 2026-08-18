@@ -25,6 +25,10 @@ import {
   Layers,
   AlertTriangle,
   Flag,
+  CheckSquare,
+  Square,
+  Download,
+  Check,
 } from 'lucide-react';
 
 interface LibraryViewProps {
@@ -37,6 +41,8 @@ interface LibraryViewProps {
   onAddNew: () => void;
   onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
   onOpenChapters: (manga: MangaItem) => void;
+  onBulkUpdateStatus?: (ids: string[], status: ReadingStatus) => void;
+  onBulkDelete?: (ids: string[]) => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -49,11 +55,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onAddNew,
   onOpenReader,
   onOpenChapters,
+  onBulkUpdateStatus,
+  onBulkDelete,
 }) => {
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
-  const [sortBy, setSortBy] = useState<'updated' | 'title' | 'chapter' | 'rating'>('updated');
+  const [sortBy, setSortBy] = useState<'updated' | 'title' | 'chapter' | 'rating' | 'unread' | 'lastRead'>('updated');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  // Multi-Select States
+  const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredList.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredList.map((m) => m.id)));
+    }
+  };
 
   const isReaderAvailable = (manga: MangaItem) => {
     return hasWorkingReaderSource(manga);
@@ -85,6 +114,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   // Sort Logic
   const sortedList = [...filteredList].sort((a, b) => {
+    if (sortBy === 'unread') {
+      const unreadA = Math.max(0, a.latestChapter - a.currentChapter);
+      const unreadB = Math.max(0, b.latestChapter - b.currentChapter);
+      return unreadB - unreadA;
+    }
+    if (sortBy === 'lastRead') {
+      return new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime();
+    }
     if (sortBy === 'updated') {
       return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
     }
@@ -267,40 +304,57 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </button>
           </div>
 
-          {/* Sort & View Mode Controls */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-secondary">
-              <ArrowUpDown className="w-3.5 h-3.5 text-accent" />
-              <span>Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e: any) => setSortBy(e.target.value)}
-                className="bg-app border border-edge rounded px-2 py-1 text-primary focus:outline-none focus:border-accent/50"
+            {/* Sort & View Mode Controls */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setIsSelectMode(!isSelectMode);
+                  if (isSelectMode) setSelectedIds(new Set());
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                  isSelectMode
+                    ? 'bg-accent text-accent-fg border-accent shadow-sm'
+                    : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
+                }`}
               >
-                <option value="updated">Recently Updated</option>
-                <option value="title">Title A-Z</option>
-                <option value="chapter">Chapter Progress</option>
-                <option value="rating">Highest Rating</option>
-              </select>
-            </div>
+                {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                <span>{isSelectMode ? 'Cancel Select' : 'Select'}</span>
+              </button>
 
-            <div className="flex items-center bg-app border border-edge rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-elevated text-accent' : 'text-secondary'}`}
-                title="Grid View"
-              >
-                <Layers className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary'}`}
-                title="Table View"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1.5 text-secondary">
+                <ArrowUpDown className="w-3.5 h-3.5 text-accent" />
+                <span>Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e: any) => setSortBy(e.target.value)}
+                  className="bg-app border border-edge rounded px-2 py-1 text-primary focus:outline-none focus:border-accent/50"
+                >
+                  <option value="unread">⚡ Unread Chapters Ahead</option>
+                  <option value="lastRead">🕒 Recently Read</option>
+                  <option value="updated">🔄 Recently Updated</option>
+                  <option value="title">🔤 Title A-Z</option>
+                  <option value="rating">★ Highest Rating</option>
+                  <option value="chapter">📊 Chapter Progress</option>
+                </select>
+              </div>
+
+              <div className="flex items-center bg-app border border-edge rounded-lg p-0.5">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-elevated text-accent' : 'text-secondary'}`}
+                  title="Grid View"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary'}`}
+                  title="Table View"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
         </div>
       </div>
 
@@ -341,7 +395,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               >
                 {/* Cover Image Container */}
                 <div
-                  onClick={() => onSelectManga(manga)}
+                  onClick={() => {
+                    if (isSelectMode) toggleSelect(manga.id);
+                    else onSelectManga(manga);
+                  }}
                   className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
                 >
                   <img
@@ -351,6 +408,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30" />
+
+                  {/* Multi-Select Checkbox Badge */}
+                  {isSelectMode && (
+                    <div className="absolute top-2.5 right-2.5 z-20">
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center border shadow-lg transition-all ${
+                        selectedIds.has(manga.id)
+                          ? 'bg-accent border-accent text-accent-fg scale-110'
+                          : 'bg-surface/80 border-edge text-transparent backdrop-blur-md'
+                      }`}>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Badges Overlay */}
                   <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
@@ -482,6 +552,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <table className="w-full text-left text-xs text-secondary">
               <thead className="bg-app text-secondary font-semibold border-b border-edge uppercase tracking-wider">
                 <tr>
+                  {isSelectMode && <th className="py-3 px-3 w-10"></th>}
                   <th className="py-3 px-4">Title</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Status</th>
@@ -494,8 +565,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <tbody className="divide-y divide-edge/80">
                 {sortedList.map((manga) => {
                   const hasNew = manga.latestChapter > manga.currentChapter;
+                  const isSelected = selectedIds.has(manga.id);
                   return (
-                    <tr key={manga.id} className="hover:bg-elevated/40 transition-colors">
+                    <tr
+                      key={manga.id}
+                      onClick={() => {
+                        if (isSelectMode) toggleSelect(manga.id);
+                      }}
+                      className={`hover:bg-elevated/40 transition-colors ${
+                        isSelected ? 'bg-accent/10' : ''
+                      } ${isSelectMode ? 'cursor-pointer' : ''}`}
+                    >
+                      {isSelectMode && (
+                        <td className="py-3 px-3">
+                          <div className={`w-5 h-5 rounded flex items-center justify-center border ${
+                            isSelected ? 'bg-accent border-accent text-accent-fg' : 'border-edge bg-surface text-transparent'
+                          }`}>
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                        </td>
+                      )}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <img
@@ -505,7 +594,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           />
                           <div>
                             <div
-                              onClick={() => onSelectManga(manga)}
+                              onClick={() => {
+                                if (!isSelectMode) onSelectManga(manga);
+                              }}
                               className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1"
                             >
                               {manga.title}
@@ -548,33 +639,48 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenReader(manga, manga.currentChapter + 1);
+                            }}
                             className="px-2.5 py-1 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs flex items-center gap-1"
                           >
                             <BookOpen className="w-3 h-3 fill-accent-fg" />
                             Read Ch. {manga.currentChapter + 1}
                           </button>
                           <button
-                            onClick={() => onOpenChapters(manga)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenChapters(manga);
+                            }}
                             className="px-2 py-1 rounded bg-elevated text-secondary hover:text-white transition-all text-xs"
                           >
                             Chapters
                           </button>
                           <button
-                            onClick={() => onIncrementChapter(manga.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onIncrementChapter(manga.id);
+                            }}
                             className="px-2 py-1 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs font-bold"
                             title="Quick mark +1 read"
                           >
                             +1
                           </button>
                           <button
-                            onClick={() => onQuickEdit(manga)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onQuickEdit(manga);
+                            }}
                             className="p-1 rounded bg-elevated text-secondary hover:text-white"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => onDeleteManga(manga.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteManga(manga.id);
+                            }}
                             className="p-1 rounded bg-elevated text-danger hover:bg-red-950"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -590,6 +696,86 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
 
+      {/* Floating Bulk Actions Toolbar */}
+      {isSelectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-surface/95 backdrop-blur-md border border-edge-strong rounded-2xl shadow-2xl p-3 px-5 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex items-center gap-2 pr-3 border-r border-edge">
+            <span className="w-6 h-6 rounded-full bg-accent text-accent-fg font-black text-xs flex items-center justify-center">
+              {selectedIds.size}
+            </span>
+            <span className="text-xs font-bold text-primary">Selected</span>
+          </div>
+
+          <button
+            onClick={selectAll}
+            className="px-3 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold text-xs transition-all"
+          >
+            {selectedIds.size === sortedList.length ? 'Deselect All' : 'Select All'}
+          </button>
+
+          {/* Bulk Mark Read */}
+          <button
+            onClick={() => {
+              if (onBulkUpdateStatus) {
+                onBulkUpdateStatus(Array.from(selectedIds), 'completed');
+                setSelectedIds(new Set());
+                setIsSelectMode(false);
+              }
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-success/20 hover:bg-success/30 text-success border border-success/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Mark as Read</span>
+          </button>
+
+          {/* Bulk Status Select */}
+          <select
+            onChange={(e) => {
+              if (e.target.value && onBulkUpdateStatus) {
+                onBulkUpdateStatus(Array.from(selectedIds), e.target.value as any);
+                setSelectedIds(new Set());
+                setIsSelectMode(false);
+              }
+            }}
+            defaultValue=""
+            className="bg-app border border-edge rounded-xl px-3 py-1.5 text-xs text-primary font-bold focus:outline-none"
+          >
+            <option value="" disabled>Set Status...</option>
+            <option value="reading">Reading</option>
+            <option value="completed">Completed</option>
+            <option value="plan_to_read">Plan to Read</option>
+            <option value="on_hold">On Hold</option>
+            <option value="dropped">Dropped</option>
+          </select>
+
+          {/* Bulk Delete */}
+          <button
+            onClick={() => {
+              if (onBulkDelete) {
+                onBulkDelete(Array.from(selectedIds));
+                setSelectedIds(new Set());
+                setIsSelectMode(false);
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete</span>
+          </button>
+
+          {/* Done */}
+          <button
+            onClick={() => {
+              setSelectedIds(new Set());
+              setIsSelectMode(false);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary hover:text-white text-xs font-bold"
+          >
+            Done
+          </button>
+        </div>
+      )}
+
       {/* Smart AI Recommendations Section */}
       <RecommendationsView
         mangaList={mangaList}
@@ -600,4 +786,3 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     </div>
   );
 };
-

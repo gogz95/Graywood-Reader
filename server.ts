@@ -39,6 +39,12 @@ import {
   ipRequestCounts,
   ipProxyRequestCounts,
 } from "./server/rateLimit";
+import {
+  detectChallenge,
+  solveWithFlareSolverr,
+  checkSolverBalance,
+  fetchWithChallengeBypass,
+} from "./server/captchaSolver";
 
 export {
   encryptPII,
@@ -4993,9 +4999,17 @@ async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapt
   const origin = new URL(targetUrl).origin;
   const reqHeaders = { ...UA_HEADERS, 'Referer': origin + '/' };
   try {
-    const sRes = await fetch(targetUrl, { headers: reqHeaders });
-    if (!sRes.ok) return [];
-    const sHtml = await sRes.text();
+    const bypassRes = await fetchWithChallengeBypass(targetUrl, {
+      headers: reqHeaders,
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      sourceId: origin,
+      onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
+    });
+    if (!bypassRes.ok || !bypassRes.html) return [];
+    const sHtml = bypassRes.html;
     const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     const out: ResolvedChapter[] = [];
     const seen = new Set<string>();
@@ -5725,14 +5739,22 @@ async function extractLiveDomainChapterPages(
     // 5. Universal HTML Chapter Resolver & Multi-Attribute Image Extractor
     const origin = new URL(targetUrl).origin;
     const reqHeaders = { ...UA_HEADERS, 'Referer': origin + '/' };
+    const solverOpts = {
+      headers: reqHeaders,
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      sourceId: origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+    };
 
-    // If the URL is a direct chapter page, fetch it directly.
+    // If the URL is a direct chapter page, fetch it directly with challenge bypass.
     const isDirectChapterUrl = /\/(chapter|chap|ch)[-\/_.]?\d+/i.test(targetUrl);
     if (isDirectChapterUrl) {
-      const directRes = await fetch(targetUrl, { headers: reqHeaders });
-      if (directRes.ok) {
-        const directHtml = await directRes.text();
-        const directImages = extractPanelImages(directHtml, origin);
+      const directBypass = await fetchWithChallengeBypass(targetUrl, solverOpts);
+      if (directBypass.ok && directBypass.html) {
+        const directImages = extractPanelImages(directBypass.html, origin);
         if (directImages.length > 0) return directImages;
       }
       return null;
@@ -5742,10 +5764,9 @@ async function extractLiveDomainChapterPages(
     const genericChapters = await fetchGenericChapterList(targetUrl);
     const genericTarget = matchResolvedChapter(genericChapters, chapterNumber);
     if (genericTarget) {
-      const pageRes = await fetch(genericTarget.url, { headers: reqHeaders });
-      if (pageRes.ok) {
-        const htmlText = await pageRes.text();
-        const images = extractPanelImages(htmlText, origin);
+      const pageBypass = await fetchWithChallengeBypass(genericTarget.url, solverOpts);
+      if (pageBypass.ok && pageBypass.html) {
+        const images = extractPanelImages(pageBypass.html, origin);
         if (images.length > 0) return images;
       }
     } else {
@@ -6422,6 +6443,122 @@ app.post('/api/crawler/bypass-fetch', async (req, res) => {
     console.error(`[Cloudflare Bypass Engine] Error bypassing challenge:`, err);
     res.status(500).json({ error: 'Failed to bypass Cloudflare challenge', details: err.message });
   }
+});
+
+// Automated Solver Status Testing & Balance Check Endpoints
+app.post("/api/solver/test-flaresolverr", async (req, res) => {
+  const testUrl = req.body?.url || appSettings.flareSolverrUrl || "http://localhost:8191/v1";
+  try {
+    const result = await solveWithFlareSolverr("https://nowsecure.nl", testUrl, 15);
+    res.json({
+      success: result.ok,
+      status: result.status,
+      latencyMs: result.responseTimeMs,
+      message: result.ok ? "FlareSolverr connection verified and active!" : (result.error || "Failed to solve challenge"),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/solver/check-balance", async (req, res) => {
+  const key = req.body?.apiKey || appSettings.captchaApiKey;
+  if (!key) {
+    return res.status(400).json({ success: false, error: "No API key configured" });
+  }
+  try {
+    const result = await checkSolverBalance(key, req.body?.provider || "auto");
+    res.json({
+      success: result.ok,
+      provider: result.provider,
+      balance: result.balance,
+      currency: result.currency,
+      error: result.error,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
+// OPDS 1.2 CATALOG SERVER (FOR E-READERS: KOBO, MOON+ READER, PANELS, PAPERBACK)
+// ============================================================================
+
+app.get('/api/opds/catalog.xml', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const updated = new Date().toISOString();
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:graywood:catalog</id>
+  <title>Graywood Reader OPDS Catalog</title>
+  <updated>${updated}</updated>
+  <author><name>Graywood Reader</name></author>
+  <link rel="self" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="start" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+`;
+
+  for (const manga of mangaDatabase) {
+    const coverUrl = manga.coverImage?.startsWith('http')
+      ? `${baseUrl}/api/proxy/image?url=${encodeURIComponent(manga.coverImage)}`
+      : manga.coverImage || '';
+
+    xml += `  <entry>
+    <title>${escapeXml(manga.title)}</title>
+    <id>urn:graywood:manga:${escapeXml(manga.id)}</id>
+    <updated>${manga.lastUpdated || updated}</updated>
+    <summary>${escapeXml(manga.description || `${manga.type} · Chapter ${manga.currentChapter}/${manga.latestChapter}`)}</summary>
+    <content type="text">${escapeXml(manga.description || '')}</content>
+    <category term="${escapeXml(manga.type || 'manga')}" label="${escapeXml(manga.type || 'manga')}"/>
+    ${coverUrl ? `<link rel="http://opds-spec.org/image" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
+    ${coverUrl ? `<link rel="http://opds-spec.org/image/thumbnail" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
+    <link rel="subsection" href="${baseUrl}/api/opds/series/${encodeURIComponent(manga.id)}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  </entry>\n`;
+  }
+
+  xml += `</feed>`;
+
+  res.setHeader('Content-Type', 'application/atom+xml; charset=utf-8');
+  res.send(xml);
+});
+
+app.get('/api/opds/series/:id', (req, res) => {
+  const { id } = req.params;
+  const manga = mangaDatabase.find((m) => m.id === id);
+  if (!manga) return res.status(404).send('Series not found');
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const updated = manga.lastUpdated || new Date().toISOString();
+  const coverUrl = manga.coverImage?.startsWith('http')
+    ? `${baseUrl}/api/proxy/image?url=${encodeURIComponent(manga.coverImage)}`
+    : manga.coverImage || '';
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
+  <id>urn:graywood:manga:${escapeXml(manga.id)}</id>
+  <title>${escapeXml(manga.title)}</title>
+  <updated>${updated}</updated>
+  <author><name>${escapeXml(manga.sourceName || 'Graywood Reader')}</name></author>
+  <link rel="self" href="${baseUrl}/api/opds/series/${encodeURIComponent(manga.id)}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="up" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  ${coverUrl ? `<link rel="http://opds-spec.org/image" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
+`;
+
+  const total = manga.latestChapter || manga.totalChapters || 1;
+  for (let ch = total; ch >= 1; ch--) {
+    xml += `  <entry>
+    <title>${escapeXml(manga.title)} - Chapter ${ch}</title>
+    <id>urn:graywood:manga:${escapeXml(manga.id)}:chapter:${ch}</id>
+    <updated>${updated}</updated>
+    <summary>Chapter ${ch} of ${escapeXml(manga.title)}</summary>
+    <link rel="http://opds-spec.org/acquisition" href="${baseUrl}/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&amp;chapterNumber=${ch}" type="application/json"/>
+  </entry>\n`;
+  }
+
+  xml += `</feed>`;
+
+  res.setHeader('Content-Type', 'application/atom+xml; charset=utf-8');
+  res.send(xml);
 });
 
 

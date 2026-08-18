@@ -30,7 +30,9 @@ import {
   Cpu,
   Lock,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
+import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { AutoUpdateView } from './AutoUpdateView';
 import { AutoUpdateLog, UserProfile } from '../types';
 
@@ -146,6 +148,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [formData, setFormData] = useState<AppSettings>(settings);
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // FlareSolverr & Captcha Solver Test States
+  const [isTestingFlareSolverr, setIsTestingFlareSolverr] = useState(false);
+  const [flareSolverrTestStatus, setFlareSolverrTestStatus] = useState<{ ok: boolean; message: string; latency?: number } | null>(null);
+
+  const [isCheckingCaptchaBalance, setIsCheckingCaptchaBalance] = useState(false);
+  const [captchaBalanceStatus, setCaptchaBalanceStatus] = useState<{ ok: boolean; message: string; balance?: number } | null>(null);
+  const [showCaptchaKey, setShowCaptchaKey] = useState(false);
+
+  const handleTestFlareSolverr = async () => {
+    setIsTestingFlareSolverr(true);
+    setFlareSolverrTestStatus(null);
+    try {
+      const res = await apiFetch('/api/solver/test-flaresolverr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: formData.flareSolverrUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFlareSolverrTestStatus({ ok: true, message: `Connected! Latency: ${data.latencyMs}ms`, latency: data.latencyMs });
+      } else {
+        setFlareSolverrTestStatus({ ok: false, message: data.message || data.error || 'Connection failed' });
+      }
+    } catch (err: any) {
+      setFlareSolverrTestStatus({ ok: false, message: err.message || 'Network error connecting to FlareSolverr' });
+    } finally {
+      setIsTestingFlareSolverr(false);
+    }
+  };
+
+  const handleCheckCaptchaBalance = async () => {
+    setIsCheckingCaptchaBalance(true);
+    setCaptchaBalanceStatus(null);
+    try {
+      const res = await apiFetch('/api/solver/check-balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: formData.captchaApiKey }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCaptchaBalanceStatus({ ok: true, message: `${data.provider} Active: $${Number(data.balance).toFixed(2)} ${data.currency}`, balance: data.balance });
+      } else {
+        setCaptchaBalanceStatus({ ok: false, message: data.error || 'Invalid API key or balance unavailable' });
+      }
+    } catch (err: any) {
+      setCaptchaBalanceStatus({ ok: false, message: err.message || 'Error checking solver balance' });
+    } finally {
+      setIsCheckingCaptchaBalance(false);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -775,23 +829,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   )}
                 </div>
 
-                {/* Cloudflare Solver */}
+                {/* Cloudflare & Captcha Solver Card */}
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="font-bold text-primary text-sm flex items-center gap-2">
                       <Shield className="w-4 h-4 text-success" />
-                      Cloudflare Challenge & Anti-DDoS Solver
+                      Cloudflare Challenge & Auto Captcha Solver
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-success/20 text-success border border-success/30">
-                      Active Bypass
+                      Active Defense Bypass
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label className="flex items-center justify-between p-3.5 rounded-xl bg-surface border border-edge cursor-pointer">
+                  {/* FlareSolverr Section */}
+                  <div className="space-y-3 p-4 bg-surface rounded-xl border border-edge">
+                    <label className="flex items-center justify-between cursor-pointer">
                       <div>
-                        <div className="font-bold text-primary">FlareSolverr Bypass</div>
-                        <div className="text-[11px] text-secondary">Solve Turnstile challenges</div>
+                        <div className="font-bold text-primary flex items-center gap-2">
+                          <span>FlareSolverr Automated Browser Bypass</span>
+                        </div>
+                        <div className="text-[11px] text-secondary">Automatically solve Cloudflare Turnstile & DDoS browser checks</div>
                       </div>
                       <input
                         type="checkbox"
@@ -801,15 +858,88 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       />
                     </label>
 
-                    <div className="space-y-1.5 p-3 rounded-xl bg-surface border border-edge">
-                      <label className="font-bold text-secondary">FlareSolverr Proxy Endpoint:</label>
+                    <div className="space-y-1.5 pt-1">
+                      <label className="font-bold text-secondary text-[11px]">FlareSolverr Service Endpoint URL:</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={formData.flareSolverrUrl}
+                          onChange={(e) => setFormData({ ...formData, flareSolverrUrl: e.target.value })}
+                          placeholder="http://localhost:8191/v1"
+                          className="flex-1 bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleTestFlareSolverr}
+                          disabled={isTestingFlareSolverr}
+                          className="px-3.5 py-2 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 border border-edge whitespace-nowrap transition-all"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingFlareSolverr ? 'animate-spin' : ''}`} />
+                          <span>{isTestingFlareSolverr ? 'Testing...' : 'Test Connection'}</span>
+                        </button>
+                      </div>
+                      {flareSolverrTestStatus && (
+                        <div className={`p-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ${flareSolverrTestStatus.ok ? 'bg-success/10 text-success border border-success/30' : 'bg-danger/10 text-danger border border-danger/30'}`}>
+                          {flareSolverrTestStatus.ok ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                          <span>{flareSolverrTestStatus.message}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2Captcha / CapSolver API Section */}
+                  <div className="space-y-3 p-4 bg-surface rounded-xl border border-edge">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <div className="font-bold text-primary flex items-center gap-2">
+                          <Zap className="w-4 h-4 text-amber-400" />
+                          <span>Automated Cloud Captcha Solver (2Captcha / CapSolver)</span>
+                        </div>
+                        <div className="text-[11px] text-secondary">Solve interactive Turnstile, reCAPTCHA, and hCaptcha challenges automatically via API</div>
+                      </div>
                       <input
-                        type="text"
-                        value={formData.flareSolverrUrl}
-                        onChange={(e) => setFormData({ ...formData, flareSolverrUrl: e.target.value })}
-                        placeholder="http://localhost:8191/v1"
-                        className="w-full bg-app border border-edge rounded-lg p-2 text-primary text-xs font-mono"
+                        type="checkbox"
+                        checked={formData.captchaSolverEnabled}
+                        onChange={(e) => setFormData({ ...formData, captchaSolverEnabled: e.target.checked })}
+                        className="w-5 h-5 accent-amber-400"
                       />
+                    </label>
+
+                    <div className="space-y-1.5 pt-1">
+                      <label className="font-bold text-secondary text-[11px]">Solver API Key (2Captcha or CapSolver):</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type={showCaptchaKey ? 'text' : 'password'}
+                            value={formData.captchaApiKey || ''}
+                            onChange={(e) => setFormData({ ...formData, captchaApiKey: e.target.value })}
+                            placeholder="Paste your 2Captcha or CapSolver API client key"
+                            className="w-full bg-app border border-edge rounded-lg px-3 py-2 pr-16 text-primary text-xs font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCaptchaKey(!showCaptchaKey)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-secondary hover:text-primary font-bold px-1.5 py-0.5 rounded bg-elevated"
+                          >
+                            {showCaptchaKey ? 'Hide' : 'Show'}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleCheckCaptchaBalance}
+                          disabled={isCheckingCaptchaBalance || !formData.captchaApiKey}
+                          className="px-3.5 py-2 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5 border border-edge whitespace-nowrap disabled:opacity-50 transition-all"
+                        >
+                          <Zap className={`w-3.5 h-3.5 text-amber-400 ${isCheckingCaptchaBalance ? 'animate-pulse' : ''}`} />
+                          <span>{isCheckingCaptchaBalance ? 'Checking...' : 'Check Balance'}</span>
+                        </button>
+                      </div>
+                      {captchaBalanceStatus && (
+                        <div className={`p-2 rounded-lg text-xs font-bold flex items-center gap-1.5 ${captchaBalanceStatus.ok ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-danger/10 text-danger border border-danger/30'}`}>
+                          {captchaBalanceStatus.ok ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                          <span>{captchaBalanceStatus.message}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -845,6 +975,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <Trash2 className="w-4 h-4" />
                       <span>Clear Image Cache Buffer</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tachiyomi / Mihon Backup Migration Card */}
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-primary text-sm flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-info" />
+                      Tachiyomi & Mihon Ecosystem Backup Migration
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-info/20 text-info border border-info/30">
+                      v2 Backup Standard
+                    </span>
+                  </div>
+
+                  <p className="text-secondary text-xs">
+                    Migrate all your tracked manga, reading progress, and categories directly between Tachiyomi / Mihon and Graywood Reader.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <label className="px-4 py-2.5 rounded-xl bg-info/20 hover:bg-info/30 text-info border border-info/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
+                      <Download className="w-4 h-4 rotate-180" />
+                      <span>Import Tachiyomi Backup (.json)</span>
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const text = await file.text();
+                            const imported = parseTachiyomiBackup(text, activeProfile?.id || 'usr_admin');
+                            let added = 0;
+                            for (const item of imported) {
+                              await apiFetch('/api/manga', {
+                                method: 'POST',
+                                body: JSON.stringify(item),
+                              });
+                              added++;
+                            }
+                            onRefreshData();
+                            showToast(`Successfully imported ${added} series from Tachiyomi backup!`);
+                          } catch (err: any) {
+                            alert(`Failed to import Tachiyomi backup: ${err.message}`);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const jsonStr = exportToTachiyomiBackup(mangaList);
+                        const blob = new Blob([jsonStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `tachiyomi_backup_${new Date().toISOString().split('T')[0]}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        showToast('Tachiyomi backup exported!');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export Tachiyomi Backup (.json)</span>
                     </button>
                   </div>
                 </div>

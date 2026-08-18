@@ -45,6 +45,11 @@ import {
   AlertTriangle,
   Flag,
 } from 'lucide-react';
+import {
+  saveOfflineChapter,
+  getOfflineChapter,
+  isChapterOffline,
+} from '../utils/offlineStorage';
 
 interface ReaderViewProps {
   manga: MangaItem;
@@ -121,7 +126,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Bookmarking & Downloading
   const [bookmarkedPages, setBookmarkedPages] = useState<number[]>([]);
   const [downloading, setDownloading] = useState<boolean>(false);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
   // Scroll progress tracking
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -133,6 +137,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 2500);
   }, []);
+
+  // Offline Chapter Storage States
+  const [isOfflineAvailable, setIsOfflineAvailable] = useState<boolean>(false);
+  const [isDownloadingOffline, setIsDownloadingOffline] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
@@ -164,6 +173,29 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
 
     try {
+      // Step 1: Check offline IndexedDB storage first for instant loading
+      const offlineCopy = await getOfflineChapter(manga.id, chNum);
+      if (offlineCopy && offlineCopy.pages && offlineCopy.pages.length > 0) {
+        setIsOfflineAvailable(true);
+        setChapterData({
+          mangaId: manga.id,
+          mangaTitle: manga.title,
+          chapterId: String(chNum),
+          chapterNumber: chNum,
+          title: `Chapter ${chNum}`,
+          pages: offlineCopy.pages,
+          scanGroup: 'Offline Storage',
+          totalChapters: manga.totalChapters || 1,
+          nextChapterNumber: chNum + 1,
+          prevChapterNumber: chNum > 1 ? chNum - 1 : null,
+        });
+        setCurrentPageIndex(0);
+        setLoading(false);
+        return;
+      } else {
+        setIsOfflineAvailable(false);
+      }
+
       const url = `/api/reader/chapter-pages?mangaId=${encodeURIComponent(
         manga.id
       )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}`;
@@ -367,22 +399,27 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   }, [settings.viewMode, currentPageIndex, chapterData, settings.autoScrollSpeed]);
 
   // Handle Offline Download Chapter
-  const handleDownloadChapter = useCallback(() => {
-    setDownloading(true);
-    setDownloadProgress(10);
-
-    const interval = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setDownloading(false);
-          triggerToast(`Chapter ${currentChapterNum} downloaded for offline reading!`);
-          return 100;
-        }
-        return prev + 25;
-      });
-    }, 350);
-  }, [currentChapterNum, triggerToast]);
+  const handleDownloadChapter = useCallback(async () => {
+    if (!chapterData || !chapterData.pages || chapterData.pages.length === 0) return;
+    setIsDownloadingOffline(true);
+    setDownloadProgress({ loaded: 0, total: chapterData.pages.length });
+    try {
+      await saveOfflineChapter(
+        manga.id,
+        manga.title,
+        currentChapterNum,
+        chapterData.pages,
+        (loaded, total) => setDownloadProgress({ loaded, total })
+      );
+      setIsOfflineAvailable(true);
+      triggerToast(`Chapter ${currentChapterNum} downloaded for offline reading!`);
+    } catch (err: any) {
+      triggerToast(`Offline download failed: ${err.message}`);
+    } finally {
+      setIsDownloadingOffline(false);
+      setDownloadProgress(null);
+    }
+  }, [chapterData, currentChapterNum, manga.id, manga.title, triggerToast]);
 
   // Toggle bookmark for page
   const toggleBookmarkPage = useCallback((pageIdx: number) => {
@@ -574,22 +611,61 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-1.5">
+            {/* Offline Chapter Download Button */}
+            <button
+              onClick={async () => {
+                if (!chapterData || !chapterData.pages || chapterData.pages.length === 0) return;
+                setIsDownloadingOffline(true);
+                setDownloadProgress({ loaded: 0, total: chapterData.pages.length });
+                try {
+                  await saveOfflineChapter(
+                    manga.id,
+                    manga.title,
+                    currentChapterNum,
+                    chapterData.pages,
+                    (loaded, total) => setDownloadProgress({ loaded, total })
+                  );
+                  setIsOfflineAvailable(true);
+                  triggerToast(`Chapter ${currentChapterNum} saved offline!`);
+                } catch (err: any) {
+                  triggerToast(`Offline download failed: ${err.message}`);
+                } finally {
+                  setIsDownloadingOffline(false);
+                  setDownloadProgress(null);
+                }
+              }}
+              disabled={isDownloadingOffline}
+              className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                isOfflineAvailable
+                  ? 'bg-success/15 border-success/30 text-success'
+                  : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
+              }`}
+              title={isOfflineAvailable ? 'Stored offline in browser' : 'Download chapter for offline reading'}
+            >
+              <Download className={`w-4 h-4 ${isDownloadingOffline ? 'animate-bounce text-accent' : ''}`} />
+              {downloadProgress && (
+                <span className="text-[10px] font-mono font-bold">
+                  {downloadProgress.loaded}/{downloadProgress.total}
+                </span>
+              )}
+            </button>
+
             {/* Quick Reading Mode Switcher Button */}
             <button
               onClick={() => {
-                const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon';
+                const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon-seamless';
                 setSettings({
                   ...settings,
                   viewMode: nextMode,
-                  noPanelSpacing: false,
-                  pageGap: nextMode === 'webtoon' ? 8 : 0,
+                  noPanelSpacing: nextMode === 'webtoon-seamless',
+                  pageGap: nextMode === 'webtoon-seamless' ? 0 : 8,
                 });
-                triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📜 Webtoon (Vertical)');
+                triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📱 Webtoon (Seamless 0px)');
               }}
               className="px-2.5 py-1.5 rounded-lg bg-elevated/80 hover:bg-elevated border border-edge text-secondary hover:text-accent text-[11px] font-bold transition-all flex items-center gap-1.5"
               title="Click to toggle between Webtoon and Manga RTL"
             >
-              <span>{settings.viewMode === 'rtl' ? '🇯🇵 RTL' : settings.viewMode === 'ltr' ? '🇺🇸 LTR' : settings.viewMode === 'single' ? '📄 Single' : settings.viewMode === 'webtoon-seamless' ? '📱 Seamless' : '📜 Webtoon'}</span>
+              <span>{settings.viewMode === 'rtl' ? '🇯🇵 RTL' : settings.viewMode === 'ltr' ? '🇺🇸 LTR' : settings.viewMode === 'single' ? '📄 Single' : settings.viewMode === 'double' ? '📖 Double Spread' : settings.viewMode === 'webtoon' ? '📜 Webtoon' : '📱 Seamless'}</span>
             </button>
 
             <button
@@ -1205,64 +1281,110 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             </div>
           </div>
         ) : (
-          /* SINGLE / RTL / LTR PAGE MODE FOR MANGA WITH TOUCH TAP ZONES */
+          /* SINGLE / DOUBLE BOOK SPREAD / RTL / LTR PAGE MODE WITH TOUCH TAP ZONES */
           <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 relative select-none">
-            <div className="relative w-full mx-auto flex flex-col items-center" style={{ maxWidth: settings.maxWidth }}>
-              {chapterData?.pages[currentPageIndex] && (() => {
-                const pageState = pageLoadStates.get(currentPageIndex);
-                const displaySrc = pageState?.blobUrl || chapterData.pages[currentPageIndex];
-                const isLoading = pageState?.status === 'loading';
-                const isError = pageState?.status === 'error';
+            <div
+              className={`relative w-full mx-auto flex items-center justify-center ${
+                settings.viewMode === 'double' ? 'max-w-6xl' : ''
+              }`}
+              style={{ maxWidth: settings.viewMode === 'double' ? '1200px' : settings.maxWidth }}
+            >
+              {settings.viewMode === 'double' && chapterData ? (
+                /* DOUBLE-PAGE SPREAD RENDERING */
+                (() => {
+                  const isCover = currentPageIndex === 0;
+                  const idx1 = currentPageIndex;
+                  const idx2 = !isCover && currentPageIndex + 1 < chapterData.pages.length ? currentPageIndex + 1 : null;
+                  
+                  // For RTL (Manga), the earlier page is on the right, later on the left.
+                  const isRtl = detectMangaFormat(manga) === 'manga';
+                  const leftIndex = isRtl ? idx2 : idx1;
+                  const rightIndex = isRtl ? idx1 : idx2;
 
-                return (
-                  <div className="relative w-full flex items-center justify-center">
-                    <img
-                      src={displaySrc}
-                      alt={`Page ${currentPageIndex + 1}`}
-                      style={imageFilterStyle}
-                      className={`w-full rounded-xl shadow-2xl transition-all ${
-                        settings.mangaFitMode === 'fit-height'
-                          ? 'max-h-[82vh] w-auto object-contain'
-                          : settings.mangaFitMode === 'fit-width'
-                          ? 'w-full h-auto'
-                          : 'w-auto h-auto'
-                      }`}
-                    />
+                  return (
+                    <div className="flex items-center justify-center gap-1 w-full max-h-[85vh]">
+                      {leftIndex !== null && chapterData.pages[leftIndex] && (
+                        <div className="flex-1 flex justify-end">
+                          <img
+                            src={pageLoadStates.get(leftIndex)?.blobUrl || chapterData.pages[leftIndex]}
+                            alt={`Page ${leftIndex + 1}`}
+                            style={imageFilterStyle}
+                            className="max-h-[82vh] w-auto object-contain rounded-l-xl shadow-2xl border-r border-edge/30"
+                          />
+                        </div>
+                      )}
+                      {rightIndex !== null && chapterData.pages[rightIndex] && (
+                        <div className="flex-1 flex justify-start">
+                          <img
+                            src={pageLoadStates.get(rightIndex)?.blobUrl || chapterData.pages[rightIndex]}
+                            alt={`Page ${rightIndex + 1}`}
+                            style={imageFilterStyle}
+                            className="max-h-[82vh] w-auto object-contain rounded-r-xl shadow-2xl"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : (
+                /* SINGLE PAGE RENDERING */
+                chapterData?.pages[currentPageIndex] && (() => {
+                  const pageState = pageLoadStates.get(currentPageIndex);
+                  const displaySrc = pageState?.blobUrl || chapterData.pages[currentPageIndex];
+                  const isLoading = pageState?.status === 'loading';
+                  const isError = pageState?.status === 'error';
 
-                    {isLoading && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/70 backdrop-blur-xs text-accent gap-2 rounded-xl">
-                        <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-                        <span className="text-xs font-mono font-bold text-primary">Loading Page {currentPageIndex + 1}...</span>
-                      </div>
-                    )}
+                  return (
+                    <div className="relative w-full flex items-center justify-center">
+                      <img
+                        src={displaySrc}
+                        alt={`Page ${currentPageIndex + 1}`}
+                        style={imageFilterStyle}
+                        className={`w-full rounded-xl shadow-2xl transition-all ${
+                          settings.mangaFitMode === 'fit-height'
+                            ? 'max-h-[82vh] w-auto object-contain'
+                            : settings.mangaFitMode === 'fit-width'
+                            ? 'w-full h-auto'
+                            : 'w-auto h-auto'
+                        }`}
+                      />
 
-                    {isError && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center rounded-xl">
-                        <p className="text-xs font-bold text-secondary">Failed to load Page {currentPageIndex + 1}</p>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            loaderRef.current?.retryPage(currentPageIndex);
-                          }}
-                          className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry Page</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+                      {isLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/70 backdrop-blur-xs text-accent gap-2 rounded-xl">
+                          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs font-mono font-bold text-primary">Loading Page {currentPageIndex + 1}...</span>
+                        </div>
+                      )}
+
+                      {isError && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center rounded-xl">
+                          <p className="text-xs font-bold text-secondary">Failed to load Page {currentPageIndex + 1}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              loaderRef.current?.retryPage(currentPageIndex);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Retry Page</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
 
               {/* Touch Tap Zone - Left 30% (Prev) */}
               <div
                 onClick={(e) => {
                   e.stopPropagation();
+                  const step = settings.viewMode === 'double' && currentPageIndex > 0 ? 2 : 1;
                   if (settings.viewMode === 'rtl') {
-                    if (currentPageIndex < chapterData!.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+                    if (currentPageIndex < chapterData!.pages.length - 1) setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
                   } else {
-                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
                   }
                 }}
                 className="absolute left-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-start pl-4 z-30"
@@ -1285,11 +1407,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <div
                 onClick={(e) => {
                   e.stopPropagation();
+                  const step = settings.viewMode === 'double' ? 2 : 1;
                   if (settings.viewMode === 'rtl') {
-                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
                   } else {
                     if (currentPageIndex < chapterData!.pages.length - 1) {
-                      setCurrentPageIndex((prev) => prev + 1);
+                      setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
                     } else if (chapterData?.nextChapterNumber) {
                       setCurrentChapterNum(chapterData.nextChapterNumber);
                     }

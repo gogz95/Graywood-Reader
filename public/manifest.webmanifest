@@ -1,0 +1,30 @@
+{
+  "name": "Graywood Reader",
+  "short_name": "Graywood",
+  "description": "High-performance self-hosted Manga, Manhwa, and Manhua reader with cloud-sync and anti-DDoS bypass.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Library",
+      "url": "/?tab=library",
+      "description": "Open your tracked manga library"
+    },
+    {
+      "name": "Browse Sources",
+      "url": "/?tab=browse",
+      "description": "Explore new and trending manga"
+    }
+  ],
+  "categories": ["books", "entertainment", "comics"]
+}

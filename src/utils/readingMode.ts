@@ -55,22 +55,22 @@ export function getRecommendedReadingMode(
   }
 
   if (format === 'manhwa') {
-    const mode = appSettings?.defaultManhwaMode || 'webtoon';
+    const mode = appSettings?.defaultManhwaMode || 'webtoon-seamless';
     const isSeamless = mode === 'webtoon-seamless';
     return {
       viewMode: mode,
       noPanelSpacing: isSeamless,
-      pageGap: isSeamless ? 0 : 8,
+      pageGap: isSeamless ? 0 : (appSettings?.readerDefaults?.pageGap ?? 8),
     };
   }
 
   // Manhua / other webtoons
-  const mode = appSettings?.defaultManhuaMode || 'webtoon';
+  const mode = appSettings?.defaultManhuaMode || 'webtoon-seamless';
   const isSeamless = mode === 'webtoon-seamless';
   return {
     viewMode: mode,
     noPanelSpacing: isSeamless,
-    pageGap: isSeamless ? 0 : 8,
+    pageGap: isSeamless ? 0 : (appSettings?.readerDefaults?.pageGap ?? 8),
   };
 }
 
@@ -156,10 +156,10 @@ export function resolveInitialReaderSettings(
   appSettings?: AppSettings
 ): ReaderSettings {
   const base: ReaderSettings = {
-    viewMode: 'webtoon',
+    viewMode: 'webtoon-seamless',
     maxWidth: '850px',
-    pageGap: 8,
-    noPanelSpacing: false,
+    pageGap: 0,
+    noPanelSpacing: true,
     bgColor: 'slate',
     zoomLevel: 100,
     autoMarkRead: true,

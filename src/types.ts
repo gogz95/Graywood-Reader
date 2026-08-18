@@ -110,6 +110,8 @@ export interface AppSettings {
   enableDownloadOffline: boolean;
   sourceTimeoutSeconds: number;
   anilistConnected: boolean;
+  anilistToken?: string;
+  anilistAutoSync?: boolean;
   mangadexConnected: boolean;
   customUserAgent: string;
   // Automated Cloudflare & Captcha Solver Properties
@@ -172,6 +174,7 @@ export interface MangaItem {
    * get overwritten. Chapter counters (latestChapter) are always refreshed.
    */
   metadataOverrides?: string[];
+  customTags?: string[];
 }
 
 
