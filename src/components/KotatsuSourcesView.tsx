@@ -97,6 +97,81 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
+  // Search filter for the sources sidebar list
+  const [sourceFilterQuery, setSourceFilterQuery] = useState('');
+
+  // Live source reachability / latency probe state
+  const [probeStatus, setProbeStatus] = useState<{ latencyMs?: number; ok?: boolean; testing?: boolean } | null>(null);
+
+  const testSourceHealth = async (src: SourceDefinition) => {
+    setProbeStatus({ testing: true });
+    const startTime = performance.now();
+    try {
+      const res = await apiFetch(`/api/kotatsu/search?sourceId=${src.id}&page=1&limit=5`);
+      const latency = Math.round(performance.now() - startTime);
+      if (res.ok) {
+        setProbeStatus({ latencyMs: latency, ok: true, testing: false });
+        showToast(`✓ ${src.name} is online (${latency}ms)`);
+      } else {
+        setProbeStatus({ latencyMs: latency, ok: false, testing: false });
+        showToast(`⚠️ ${src.name} returned HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      setProbeStatus({ ok: false, testing: false });
+      showToast(`✗ Failed to reach ${src.name}: ${err.message || err}`);
+    }
+  };
+
+  const enableAllEnglish = async () => {
+    const enSources = sources.filter((s) => (s.lang || 'en').toLowerCase() === 'en');
+    setDisabledSourceIds((prev) => {
+      const next = new Set(prev);
+      enSources.forEach((s) => next.delete(s.id));
+      return next;
+    });
+    for (const s of enSources) {
+      apiFetch('/api/kotatsu/sources/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: s.id, isEnabled: true }),
+      }).catch(() => {});
+    }
+    showToast(`✓ Enabled all ${enSources.length} English sources!`);
+  };
+
+  const enableCuratedOnly = async () => {
+    const curated = new Set([
+      'asurascans',
+      'flamecomics',
+      'weebcentral',
+      'manhwa18',
+      'harimanga',
+      'manhuaplus',
+      'mangaread',
+      'kunmanga',
+      'batoto',
+      'comick',
+      'ravenscans',
+      'demonicscans',
+    ]);
+    setDisabledSourceIds((prev) => {
+      const next = new Set(prev);
+      sources.forEach((s) => {
+        if (curated.has(s.id)) next.delete(s.id);
+        else next.add(s.id);
+      });
+      return next;
+    });
+    for (const s of sources) {
+      apiFetch('/api/kotatsu/sources/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: s.id, isEnabled: curated.has(s.id) }),
+      }).catch(() => {});
+    }
+    showToast(`✓ Activated top 12 curated sources!`);
+  };
+
   // Save pinned sources to localStorage
   useEffect(() => {
     try {
@@ -354,6 +429,13 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     if (engineFilter !== 'all' && s.engineType !== engineFilter) return false;
     if (selectedLangFilter !== 'all' && (s.lang || 'en').toLowerCase() !== selectedLangFilter) return false;
 
+    if (sourceFilterQuery.trim()) {
+      const q = sourceFilterQuery.toLowerCase();
+      if (!s.name.toLowerCase().includes(q) && !s.id.toLowerCase().includes(q) && !s.baseUrl.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
+
     const isDisabled = disabledSourceIds.has(s.id);
     if (statusFilter === 'enabled' && isDisabled) return false;
     if (statusFilter === 'disabled' && !isDisabled) return false;
@@ -498,12 +580,28 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
         {/* Global Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Batch Presets */}
+          <button
+            onClick={enableAllEnglish}
+            className="px-3 py-1.5 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent font-bold text-xs border border-accent/30 transition-all shadow-sm active:scale-95"
+            title="Enable all English language sources at once"
+          >
+            🇬🇧 Enable All EN
+          </button>
+          <button
+            onClick={enableCuratedOnly}
+            className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 font-bold text-xs border border-purple-500/30 transition-all shadow-sm active:scale-95"
+            title="Enable only top recommended scanlation sources"
+          >
+            ⭐ Curated Only
+          </button>
+
           {/* Language Selector */}
           <select
             value={selectedLangFilter}
             onChange={(e) => setSelectedLangFilter(e.target.value)}
             className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent-2/50"
-            title="Filter Kotatsu sources by language"
+            title="Filter sources by language"
           >
             <option value="en">🇬🇧 English (Preferred)</option>
             <option value="all">🌐 All Languages</option>
@@ -512,6 +610,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             <option value="ja">🇯🇵 Japanese</option>
             <option value="es">🇪🇸 Spanish</option>
             <option value="fr">🇫🇷 French</option>
+            <option value="id">🇮🇩 Indonesian</option>
+            <option value="ru">🇷🇺 Russian</option>
           </select>
 
           <button
@@ -521,7 +621,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             title="Purge local storage, image proxy cache, and dynamic canvas buffers"
           >
             <Trash2 className={`w-3.5 h-3.5 text-danger ${isClearingCache ? 'animate-spin' : ''}`} />
-            <span>{isClearingCache ? 'Clearing...' : 'Clear App Cache'}</span>
+            <span>{isClearingCache ? 'Clearing...' : 'Clear Cache'}</span>
           </button>
         </div>
       </div>
@@ -532,7 +632,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           <div className="flex items-center justify-between text-xs font-bold text-secondary px-1">
             <span className="flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-accent-2" />
-              Parsers ({filteredSources.length})
+              Sources ({filteredSources.length})
             </span>
             <button
               onClick={() => setNsfwVisible(!nsfwVisible)}
@@ -542,6 +642,26 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             >
               {nsfwVisible ? '18+ Shown' : '18+ Hidden'}
             </button>
+          </div>
+
+          {/* Quick Source Filter Input */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={sourceFilterQuery}
+              onChange={(e) => setSourceFilterQuery(e.target.value)}
+              placeholder="Search 1,187+ sources..."
+              className="w-full bg-app border border-edge rounded-xl pl-8 pr-3 py-1.5 text-xs text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent-2/50 font-medium"
+            />
+            {sourceFilterQuery && (
+              <button
+                onClick={() => setSourceFilterQuery('')}
+                className="text-xs text-muted hover:text-primary absolute right-2.5 top-1/2 -translate-y-1/2 font-bold"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* Status Filter Bar (All / Enabled / Disabled) */}
@@ -722,7 +842,18 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                 </div>
 
                 {/* Enable/Disable Toggle Control & View Mode Tabs */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Live Health Probe / Ping */}
+                  <button
+                    onClick={() => testSourceHealth(selectedSource)}
+                    disabled={probeStatus?.testing}
+                    className="px-3 py-1.5 rounded-xl bg-surface hover:bg-elevated border border-edge-strong text-secondary hover:text-primary font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                    title="Probe upstream server and test response latency"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${probeStatus?.testing ? 'animate-spin text-accent-2' : ''}`} />
+                    <span>{probeStatus?.testing ? 'Testing...' : probeStatus?.latencyMs ? `${probeStatus.latencyMs}ms` : 'Ping Test'}</span>
+                  </button>
+
                   <button
                     onClick={(e) => toggleSourceEnabled(selectedSource.id, selectedSource.name, e)}
                     className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all ${

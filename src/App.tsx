@@ -41,7 +41,7 @@ import {
   saveClientSessionProgress,
   getClientSessionHistory,
 } from './hooks/useReaderSession';
-import { searchAniListManga, syncAniListProgress } from './utils/aniListScrobbler';
+import { getAniListMediaId, syncAniListProgress } from './utils/aniListScrobbler';
 
 // Lightweight skeleton shown while lazy chunk loads
 const ViewFallback = () => (
@@ -688,11 +688,13 @@ export default function App() {
       if (appSettings.anilistConnected && appSettings.anilistToken && appSettings.anilistAutoSync) {
         const mangaItem = mangaList.find((m) => m.id === mangaId);
         if (mangaItem) {
-          searchAniListManga(mangaItem.title).then((match) => {
-            if (match?.id && appSettings.anilistToken) {
-              syncAniListProgress(appSettings.anilistToken, match.id, chapterNumber, mangaItem.status === 'completed');
-            }
-          }).catch(() => {});
+          getAniListMediaId(mangaItem.title)
+            .then((mediaId) => {
+              if (mediaId && appSettings.anilistToken) {
+                syncAniListProgress(appSettings.anilistToken, mediaId, chapterNumber, mangaItem.status === 'completed');
+              }
+            })
+            .catch(() => {});
         }
       }
     } catch (err) {

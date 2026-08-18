@@ -108,8 +108,29 @@ function parsersDir() {
 const ANNOTATION_RX = /@MangaSourceParser\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/;
 
 function ingestSources() {
+  const catalogPath = path.join(ROOT, 'server', 'sources', 'catalog.json');
+  if (fs.existsSync(catalogPath)) {
+    const raw = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+    const sources = raw.map((s) => {
+      const domain = s.baseUrl.replace(/^https?:\/\//, '');
+      return {
+        id: s.id,
+        name: s.name,
+        lang: s.lang,
+        engine: s.engineType,
+        baseUrl: s.baseUrl,
+        domain,
+        baseUrlReliable: !s.baseUrl.includes(`${s.id}.com`),
+        domainVia: 'catalog',
+        isNsfw: s.isNsfw,
+        file: 'server/sources/catalog.json',
+      };
+    });
+    return { dir: catalogPath, sources };
+  }
+
   const dir = parsersDir();
-  if (!dir) throw new Error('No kotatsu-parsers repo found under kotatsu-parsers/ or kotatsu-parsers-redo/');
+  if (!dir) throw new Error('No catalog.json found under server/sources/catalog.json or repo dir');
   const seen = new Set();
   const sources = [];
   (function walk(d) {

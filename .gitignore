@@ -19,3 +19,8 @@ coverage/
 dist-server/
 
 data/.admin-bootstrap-password
+
+# Detached external repositories
+kotatsu-app/
+kotatsu-parsers/
+kotatsu-parsers-redo/

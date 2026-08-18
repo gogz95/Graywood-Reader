@@ -4,6 +4,15 @@ This document outlines the planned future features, community requests, and arch
 
 ---
 
+## 🔜 Next Up — Planned (Queued)
+
+The following are explicitly queued as the immediate next features (recorded here so they are tracked):
+
+- 🔔 **Discord & Telegram New-Chapter Webhooks** — Dispatch rich embeds/instant pushes from the live auto-updater scan when it detects new chapters for series in your *Reading* list. *(See Category 3 → 2 below.)*
+- 📊 **"Manga Wrapped" Recap + Reading Streaks & Trophies** — Spotify-Wrapped-style yearly/monthly recap, streak counters, and milestone badges driven by the existing `reading_activity` analytics. *(See Category 1 → 1 & 2 below.)*
+
+---
+
 ## 🎮 Category 1: Gamification & Fun Additions
 
 ### 🏆 1. Reading Achievements, Trophies & Milestones System
@@ -77,3 +86,7 @@ This document outlines the planned future features, community requests, and arch
 - ✅ **Chapter N+1 Silent Background Prefetch Worker** (Aug 2026)
 - ✅ **Server-Side Immutable Image Proxy Caching with HTTP 304 ETags** (Aug 2026)
 - ✅ **Library View Virtualized Chunk Rendering** (Aug 2026)
+- ✅ **Automated Unit Tests + GitHub Actions CI** — Vitest + Supertest covering the security/SSRF/rate-limit helpers (`npm test`) (Aug 2026)
+- ✅ **OPDS 1.2 Upgrade** — catalog search (`/api/opds/search`), `startIndex`/`maxRecords` pagination, same-origin cover proxying, and browser-usable HTML chapter acquisition links (Aug 2026)
+- ✅ **Offline Storage Rework** — Blob-based page storage, per-series storage usage, LRU eviction, and **Download All Chapters** bulk offline download from the chapter list (Aug 2026)
+- ✅ **Local CBZ / ZIP Library Ingestion** — `STORAGE_PATH` folder scanner with cover + page streaming and add-to-library endpoints (CBR/PDF detected; full preview limited to ZIP-based archives) (Aug 2026)

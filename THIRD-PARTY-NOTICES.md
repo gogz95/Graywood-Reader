@@ -10,14 +10,14 @@ preserve these notices in any redistribution of the Software.
 
 ---
 
-## 1. Vendored source definitions — kotatsu-parsers
+## 1. Source definitions & parser schemas — kotatsu-parsers
 
 - **Project:** Kotatsu (KotatsuApp/kotatsu-parsers)
 - **License:** GNU General Public License v3.0 (GPL-3.0)
-- **Location in repo:** `kotatsu-parsers/` (vendored and scanned at boot)
+- **Location in repo:** `server/sources/catalog.json` & `server/sources/sourcesCatalog.ts` (compiled standalone definitions)
 - **Copyright:** © KotatsuApp contributors
 
-The full GPL-3.0 license text is included at `kotatsu-parsers/LICENSE`.
+The full GPL-3.0 license text is available at `LICENSE`.
 Because this GPL-3.0 component is distributed as part of the Software, the
 combined work is distributed under GPL-3.0-or-later.
 

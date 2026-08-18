@@ -102,15 +102,16 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     let totalChapters = 1;
     let isFavorite = false;
 
-    // Handle Tuple/Array format from standard Tachiyomi v2 backup: [url, title, source, ...]
+    // Handle Tuple/Array format from standard Tachiyomi v2 backup:
+    // [url, title, source, artist, author, description, genre, status, thumbnail_url, ...]
     if (Array.isArray(entry.manga)) {
       const m = entry.manga;
-      url = String(m[0] || m[3] || '');
+      url = String(m[0] || '');
       title = String(m[1] || 'Untitled Series');
-      description = String(m[6] || '');
-      genres = Array.isArray(m[7]) ? m[7] : [];
-      status = mapTachiyomiStatus(m[8]);
-      coverImage = String(m[9] || '');
+      description = String(m[5] || '');
+      genres = Array.isArray(m[6]) ? m[6] : [];
+      status = mapTachiyomiStatus(m[7]);
+      coverImage = String(m[8] || '');
       sourceName = String(m[2] ? `Source #${m[2]}` : 'Tachiyomi Import');
       if (entry.categories && entry.categories.includes('Favorites')) {
         isFavorite = true;
@@ -177,31 +178,34 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
 export function exportToTachiyomiBackup(mangaList: MangaItem[]): string {
   const tachiyomiData = {
     version: 2,
-    mangas: mangaList.map((m) => ({
-      manga: [
-        m.sourceUrl || `/manga/${m.id}`,
-        m.title,
-        1, // source id placeholder
-        m.sourceUrl || '',
-        '', // artist
-        '', // author
-        m.description || '',
-        m.genres || [],
-        m.status === 'completed' ? 2 : m.status === 'dropped' ? 5 : m.status === 'on_hold' ? 6 : 1,
-        m.coverImage,
-        0,
-        new Date(m.lastUpdated).getTime(),
-        1,
-      ],
-      categories: m.isFavorite ? ['Favorites', 'Reading'] : ['Reading'],
-      chapters: Array.from({ length: m.totalChapters || 1 }, (_, idx) => ({
-        url: `${m.sourceUrl || ''}/chapter-${idx + 1}`,
-        name: `Chapter ${idx + 1}`,
-        chapter_number: idx + 1,
-        read: idx < m.currentChapter,
-        last_page_read: idx < m.currentChapter ? 1 : 0,
-      })),
-    })),
+    mangas: mangaList.map((m) => {
+      const updatedMs = m.lastUpdated ? new Date(m.lastUpdated).getTime() : Date.now();
+      return {
+        manga: [
+          m.sourceUrl || `/manga/${m.id}`,
+          m.title,
+          1, // source id placeholder
+          m.sourceUrl || '',
+          '', // artist
+          '', // author
+          m.description || '',
+          m.genres || [],
+          m.status === 'completed' ? 2 : m.status === 'dropped' ? 5 : m.status === 'on_hold' ? 6 : 1,
+          m.coverImage,
+          0,
+          Number.isFinite(updatedMs) ? updatedMs : Date.now(),
+          1,
+        ],
+        categories: m.isFavorite ? ['Favorites', 'Reading'] : ['Reading'],
+        chapters: Array.from({ length: m.totalChapters || 1 }, (_, idx) => ({
+          url: `${m.sourceUrl || ''}/chapter-${idx + 1}`,
+          name: `Chapter ${idx + 1}`,
+          chapter_number: idx + 1,
+          read: idx < m.currentChapter,
+          last_page_read: idx < m.currentChapter ? 1 : 0,
+        })),
+      };
+    }),
   };
 
   return JSON.stringify(tachiyomiData, null, 2);

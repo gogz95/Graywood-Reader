@@ -45,6 +45,25 @@ import {
   checkSolverBalance,
   fetchWithChallengeBypass,
 } from "./server/captchaSolver";
+import { notesRouter } from "./server/routes/notes";
+import { opdsRouter } from "./server/routes/opds";
+import { localLibraryRouter } from "./server/routes/localLibrary";
+import {
+  KOTATSU_SOURCES,
+  ALL_SOURCES_CATALOG,
+  SOURCE_MAP,
+  INITIAL_DEAD_SOURCES,
+  DYNAMIC_DEAD_SOURCES,
+  ALL_DEAD_SOURCES,
+  disabledSourceIds,
+  rebuildDeadSourcesSet,
+  syncDeadSourcesToDisabled,
+  isSourceAlive,
+  isMetadataOnlySource,
+  buildFullSourceInventory,
+  ensureSourceInRegistry,
+  getSourceById,
+} from "./server/sources/sourcesCatalog";
 
 export {
   encryptPII,
@@ -54,6 +73,10 @@ export {
   verifyPassword,
   verifyPasswordAsync,
   isHostRequest,
+  KOTATSU_SOURCES,
+  ALL_SOURCES_CATALOG,
+  isSourceAlive,
+  disabledSourceIds,
 };
 
 // Initialize Express
@@ -61,7 +84,18 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 
+// Securely resolve the real client IP when served behind the bundled nginx
+// reverse proxy. Only trust X-Forwarded-For hops whose DIRECT peer is a
+// loopback address (i.e. nginx on the same host). Remote clients that reach
+// the app directly keep their raw socket IP, so the host-gate, admin identity
+// and rate-limiter can never be spoofed via a forged X-Forwarded-For header.
+app.set('trust proxy', (ip: string) => {
+  const normalized = String(ip).toLowerCase().replace(/^::ffff:/, '');
+  return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost';
+});
+
 app.use(express.json({ limit: "10mb" }));
+app.use(opdsRouter);
 
 // Response compression (shrinks the multi-MB library payloads by ~80%)
 app.use(compression());
@@ -211,6 +245,11 @@ app.use((req, res, next) => {
   return res.status(401).json({ error: 'Unauthorized', message: 'A valid login token is required for remote access.' });
 });
 
+// Mount scoped routers AFTER the host-gate / rate-limit / auth middleware chain
+// so they are covered by the same protections as the rest of the API.
+app.use(notesRouter);
+app.use(localLibraryRouter);
+
 // Initialize Gemini Client
 const getGeminiClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -280,74 +319,6 @@ let autoUpdateLogs: AutoUpdateLog[] = [
   },
 ];
 
-// Kotatsu-Parsers-Redo Source Engine Registry & Definitions Framework
-export const KOTATSU_SOURCES: SourceDefinition[] = [
-  // ── MangaDex (Official API v5) — Metadata Only ──────────────────────────────
-  { id: 'mangadex', name: 'MangaDex API v5', baseUrl: 'https://mangadex.org', engineType: 'mangadex', lang: 'en', isNsfw: false },
-  // ── Dedicated API / Custom Extractors ──────────────────────────────────────
-  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asurascans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'flamecomics', name: 'Flame Comics', baseUrl: 'https://flamecomics.xyz', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'batoto', name: 'Bato.to', baseUrl: 'https://bato.to', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'comickfun', name: 'ComickFun', baseUrl: 'https://comick.fun', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'comick', name: 'ComicK', baseUrl: 'https://comick.io', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'readm', name: 'ReadM', baseUrl: 'https://readm.org', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  // ── Madara Engine Sources (WP-Manga / admin-ajax.php) ─────────────────────
-  { id: 'manhwa18', name: 'Manhwa18', baseUrl: 'https://manhwa18.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'manhwa18cc', name: 'Manhwa18.cc', baseUrl: 'https://manhwa18.cc', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'aquamanga', name: 'Aqua Manga', baseUrl: 'https://aquareader.net', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplus', name: 'Manhua Plus', baseUrl: 'https://manhuaplus.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', baseUrl: 'https://manhuaplus.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'harimanga', name: 'Hari Manga', baseUrl: 'https://harimanga.me', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'anisascans', name: 'Anisa Scans', baseUrl: 'https://anisascans.in', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'adultwebtoon', name: 'Adult Webtoon', baseUrl: 'https://adultwebtoon.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'mangaread', name: 'MangaRead', baseUrl: 'https://www.mangaread.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhwabuddy', name: 'Manhwa Buddy', baseUrl: 'https://manhwabuddy.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuafast', name: 'Manhua Fast', baseUrl: 'https://manhuafast.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'kunmanga', name: 'Kun Manga', baseUrl: 'https://kunmanga.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'topmanhua', name: 'Top Manhua', baseUrl: 'https://topmanhua.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhwaclan', name: 'Manhwa Clan', baseUrl: 'https://manhwaclan.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'weebcentral', name: 'Weeb Central', baseUrl: 'https://weebcentral.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'atsumoe', name: 'Atsu Moe', baseUrl: 'https://atsu.moe', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'demonicscans', name: 'Demonic Scans', baseUrl: 'https://demonicscans.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'beehentai', name: 'BeeHentai', baseUrl: 'https://beehentai.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  // ── MangaReader Engine Sources ─────────────────────────────────────────────
-  { id: 'manhuascan', name: 'ManhuaScan', baseUrl: 'https://manhuascan.us', engineType: 'mangathemesia', lang: 'en', isNsfw: true },
-  { id: 'ravenscans', name: 'Raven Scans', baseUrl: 'https://ravenscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'luminous', name: 'Luminous Scans', baseUrl: 'https://luminousscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'night', name: 'Night Scans', baseUrl: 'https://nightscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'hentai20', name: 'Hentai20', baseUrl: 'https://hentai20.com', engineType: 'mangathemesia', lang: 'en', isNsfw: true },
-  // ── HotComics Engine Sources ───────────────────────────────────────────────
-  { id: 'hotcomics', name: 'HotComics', baseUrl: 'https://hotcomics.net', engineType: 'custom_html', lang: 'en', isNsfw: true },
-  { id: 'daycomics', name: 'DayComics', baseUrl: 'https://daycomics.com', engineType: 'custom_html', lang: 'en', isNsfw: true },
-  // ── Additional Sources ─────────────────────────────────────────────────────
-  { id: 'mangatx', name: 'Manga TX', baseUrl: 'https://mangatx.com', engineType: 'madara', lang: 'en', isNsfw: false },
-];
-
-// Define hard-coded dead sources with type safety
-const INITIAL_DEAD_SOURCES = new Set<string>([
-  'dynasty',
-  'dynastyscans',
-  'immortal',
-  'immortalupdates',
-  'luminous',
-  'luminousscans',
-  'night',
-  'nightscans',
-  'radiant',
-  'radiantscans',
-  'reaper',
-  'reaperscans',
-] as const);
-
-
-const ACTIVE_ENABLED_SOURCES = new Set([
-  'aquamanga', 'asurascans', 'flamecomics', 'manhwa18', 'manhwa18cc',
-  'harimanga', 'anisascans', 'manhuaplus', 'manhuaplusorg', 'mangaread',
-  'manhwabuddy', 'manhuafast', 'kunmanga', 'weebcentral', 'ravenscans',
-  'comickfun', 'comick', 'batoto', 'adultwebtoon', 'manhuascan',
-]);
-export const disabledSourceIds = new Set<string>();
-
 let syncConfig: DatabaseSyncConfig = {
   subdomain: 'tracker.manhuahub.app',
   autoUpdateIntervalMinutes: 60,
@@ -360,184 +331,11 @@ let syncConfig: DatabaseSyncConfig = {
   totalTracked: 0,
 };
 
-// Load dynamic dead sources from database
-const DYNAMIC_DEAD_SOURCES = new Set<string>();
-
-// Merge all unique dead sources, ensuring case-insensitive comparison
-const ALL_DEAD_SOURCES = new Set<string>();
-
-function rebuildDeadSourcesSet() {
-  ALL_DEAD_SOURCES.clear();
-  INITIAL_DEAD_SOURCES.forEach((source) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
-  DYNAMIC_DEAD_SOURCES.forEach((source) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
-  if (Array.isArray(syncConfig?.removedSources)) {
-    syncConfig.removedSources.forEach((source: string) => ALL_DEAD_SOURCES.add(source.toLowerCase()));
-  }
-}
-
-// Initial build of dead sources set
-rebuildDeadSourcesSet();
-
-// Sync dead-source IDs into disabledSourceIds so the reader pipeline also skips them
-function syncDeadSourcesToDisabled() {
-  for (const deadId of ALL_DEAD_SOURCES) {
-    disabledSourceIds.add(deadId);
-  }
-}
+// Initialize dead sources from syncConfig
+rebuildDeadSourcesSet(syncConfig);
 syncDeadSourcesToDisabled();
 
-// Helper function to check if a source is alive
-export function isSourceAlive(sourceNameOrId: string): boolean {
-  if (!sourceNameOrId) return false;
-  const normalized = sourceNameOrId.toLowerCase().replace(/[^a-z0-9]/g, '');
-  // A source the user has explicitly re-activated counts as alive even if it was
-  // previously parked in removedSources / a dead-list. This lets every source be
-  // re-added afterwards except MangaDex (guarded at the endpoint layer).
-  if (Array.isArray(syncConfig?.reactivatedSources)) {
-    for (const revived of syncConfig.reactivatedSources) {
-      if (((revived || '').toLowerCase().replace(/[^a-z0-9]/g, '')) === normalized) {
-        return true;
-      }
-    }
-  }
-  for (const dead of ALL_DEAD_SOURCES) {
-    const normDead = dead.replace(/[^a-z0-9]/g, '');
-    if (normalized.includes(normDead) || normDead.includes(normalized)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// ── Reliable parser-domain extraction ───────────────────────────────────────
-// Kotatsu declares each parser's site domain inside compiled Kotlin in several
-// forms. This web port cannot compile Kotlin, so it regex-scans the .kt sources.
-// Getting the domain right decides whether a source is usable: the legacy code
-// only matched `ConfigKey.Domain("…")` and otherwise fell back to `<id>.com`,
-// which registered ~830 wrong/dead baseUrls (e.g. adult_webtoon.com). This
-// helper also reads the base-class constructor form
-// (`MadaraParser(ctx, Source, "tld")`) and a bare domain literal, mirroring
-// Kotatsu's KSP-generated source registry where the domain is authoritative at
-// compile time. Kept in sync with scripts/source-audit.mjs `extractParserDomain`.
-const PARSER_CLASS_RX = /(?:MadaraParser|MangaThemesiaParser|MangaReaderParser|FoolSlideParser|WpComicsParser|HotComicsParser|Manhwa18Parser|PagedMangaParser)\s*\(/;
-
-function sanitizeParserDomain(raw: string): string | null {
-  if (!raw) return null;
-  let d = String(raw).trim().toLowerCase();
-  d = d.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/.*$/, '').replace(/^www\./, '').replace(/\.$/, '');
-  if (!d || d.length < 4 || d.length > 253) return null;
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return null; // hostname only, no '_'
-  if (d.includes('..') || /^-|-$/.test(d) || /--/.test(d)) return null;
-  const tld = d.split('.').pop() || '';
-  if (tld.length < 2 || tld.length > 24) return null;
-  return d;
-}
-
-interface ParserDomainResult { domain: string; baseUrl: string; reliable: boolean; via: string }
-
-function extractParserDomain(content: string, fallbackId: string): ParserDomainResult {
-  const pick = (raw: string | undefined, via: string, reliable: boolean): ParserDomainResult | null => {
-    const d = sanitizeParserDomain(raw || '');
-    if (!d) return null;
-    return { domain: d, baseUrl: `https://${d}`, reliable, via };
-  };
-  // 1) ConfigKey.Domain("tld") — modern standard for custom parsers.
-  const ck = content.match(/ConfigKey\s*\.\s*Domain\s*\(\s*["']([^"']+)["']/);
-  if (ck) { const p = pick(ck[1], 'configKey', true); if (p) return p; }
-  // 2) Base-class theme constructor: ClassName(context, Source, "tld").
-  if (PARSER_CLASS_RX.test(content)) {
-    const m = content.match(PARSER_CLASS_RX)!;
-    const start = (m.index || 0) + m[0].length;
-    const slice = content.slice(start, start + 280);
-    const literals = slice.match(/["']([^"']+)["']/g) || [];
-    for (let i = literals.length - 1; i >= 0; i--) {
-      const p = pick(literals[i].slice(1, -1), 'ctor', true);
-      if (p) return p;
-    }
-  }
-  // 3) A lone dotted-domain literal elsewhere in the file (validated; uncertain).
-  const bare = content.match(/["']((?:[a-z0-9-]+\.)+[a-z]{2,24})["']/i);
-  if (bare) { const p = pick(bare[1], 'bare', false); if (p) return p; }
-  // 4) Unreliable fallback for parity — flagged so ops can review it.
-  return { domain: `${fallbackId}.com`, baseUrl: `https://${fallbackId}.com`, reliable: false, via: 'fallback' };
-}
-
-// Fix #21: Dynamic Parser Repository Auto-Scanner supporting both original and Redo forks
-function loadKotatsuParsersFromClonedRepo(): SourceDefinition[] {
-  // Try Redo fork first (active community fork with 790+ more parsers), fall back to original
-  const redoDir = path.join(process.cwd(), 'kotatsu-parsers-redo', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
-  const legacyDir = path.join(process.cwd(), 'kotatsu-parsers', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
-  
-  const parsersDir = fs.existsSync(redoDir) ? redoDir : (fs.existsSync(legacyDir) ? legacyDir : null);
-  if (!parsersDir) { console.log('[Kotatsu Engine] No kotatsu-parsers repo found. Skipping auto-source discovery.'); return []; }
-
-  const foundSources: SourceDefinition[] = [];
-  const processedIds = new Set<string>([
-    ...KOTATSU_SOURCES.map((s) => s.id),
-    ...ALL_DEAD_SOURCES,
-  ]);
-
-  function walkDir(dir: string) {
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walkDir(fullPath);
-        } else if (entry.isFile() && entry.name.endsWith('.kt')) {
-          try {
-            const content = fs.readFileSync(fullPath, 'utf-8');
-            const annotationMatch = content.match(/@MangaSourceParser\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/);
-            if (annotationMatch) {
-              const rawId = annotationMatch[1];
-              const sourceName = annotationMatch[2];
-              const lang = annotationMatch[3];
-              const id = rawId.toLowerCase();
-
-              if (processedIds.has(id) || !isSourceAlive(id) || !isSourceAlive(sourceName)) continue;
-
-              const { baseUrl, reliable } = extractParserDomain(content, id);
-              const domainMatch = content.match(/baseUrl\s*=\s*['\"]([^'\"]*)['\"]/);
-              const domain = domainMatch ? domainMatch[1] : `${id}.com`;
-
-              const relPath = fullPath.replace(/\\/g, '/');
-              let engineType: SourceEngineType = 'custom_html';
-              if (relPath.includes('/madara/')) engineType = 'madara';
-              else if (relPath.includes('/mangathemesia/') || content.includes('MangaThemesia') || content.includes('MangaReader')) engineType = 'mangathemesia';
-              else if (relPath.includes('/wpcomics/') || content.includes('WpComics')) engineType = 'wpcomics';
-              else if (relPath.includes('/foolslide/')) engineType = 'foolslide';
-              else if (id === 'mangadex') engineType = 'mangadex';
-
-              const isNsfw = relPath.includes('/galleryadults/') || content.includes('isNsfw = true') || content.includes('isAdult = true') || /18|hentai|porn|doujin/i.test(sourceName);
-
-              processedIds.add(id);
-              foundSources.push({
-                id,
-                name: sourceName,
-                baseUrl,
-                engineType,
-                lang,
-                isNsfw,
-              });
-            }
-          } catch (e) { }
-        }
-      }
-    } catch (e) { }
-  }
-
-  walkDir(parsersDir);
-  return foundSources.filter(source => isSourceAlive(source.id) && isSourceAlive(source.name));
-}
-
-// Auto-populate KOTATSU_SOURCES from cloned repo
-try {
-  const repoSources = loadKotatsuParsersFromClonedRepo();
-  if (repoSources.length > 0) {
-    KOTATSU_SOURCES.push(...repoSources);
-    console.log(`[Kotatsu Engine] Loaded ${repoSources.length} additional parsers directly from kotatsu-parsers repository (Total: ${KOTATSU_SOURCES.length} sources)`);
-  }
-} catch (e) { }
+console.log(`[Source Engine] Initialized standalone source catalog with ${KOTATSU_SOURCES.length} sources`);
 
 
 
@@ -1872,11 +1670,16 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
       return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
     }
 
+    const etag = `"${crypto.createHash('md5').update(targetUrl).digest('hex')}"`;
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     res.setHeader('Content-Type', contentType);
-    // Same-origin serving: no need for a wildcard ACAO header (and it would let
-    // any site hotlink this proxy). Omit it so only the app can use the proxy.
-    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.setHeader('ETag', etag);
+    // Same-origin serving: 7-day immutable caching with ETag for instant re-reads
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('Content-Disposition', 'inline');
     await streamProxiedImage(response, res);
   } catch (err: any) {
@@ -3029,66 +2832,6 @@ export function purgeDisabledSources(): { purgedCount: number; remainingCount: n
   return { purgedCount: toPurge.length, remainingCount: KOTATSU_SOURCES.length };
 }
 
-function isMetadataOnlySource(idOrName: string, url?: string): boolean {
-  return (idOrName || '').toLowerCase() === 'mangadex'
-    || (idOrName || '').toLowerCase().includes('mangadex')
-    || isMangaDexSourceLink(idOrName, url);
-}
-
-// Scan the cloned Kotatsu parser repo for a single parser definition by id,
-// ignoring dead/removed status (so previously-removed sources can be revived).
-function scanParserInRepo(sourceId: string): SourceDefinition | null {
-  const redoDir = path.join(process.cwd(), 'kotatsu-parsers-redo', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
-  const legacyDir = path.join(process.cwd(), 'kotatsu-parsers', 'src', 'main', 'kotlin', 'org', 'koitharu', 'kotatsu', 'parsers', 'site');
-  const parsersDir = fs.existsSync(redoDir) ? redoDir : (fs.existsSync(legacyDir) ? legacyDir : null);
-  if (!parsersDir) return null;
-
-  let found: SourceDefinition | null = null;
-  (function walkDir(dir: string) {
-    if (found) return;
-    let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
-      if (found) return;
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) { walkDir(fullPath); continue; }
-      if (!entry.isFile() || !entry.name.endsWith('.kt')) continue;
-      try {
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const annotationMatch = content.match(/@MangaSourceParser\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/);
-        if (!annotationMatch) continue;
-        const id = annotationMatch[1].toLowerCase();
-        if (id !== String(sourceId).toLowerCase()) continue;
-
-        const domainMatch = content.match(/ConfigKey\.Domain\(\s*"([^"]+)"/);
-        const domain = domainMatch ? domainMatch[1] : `${id}.com`;
-        const baseUrl = `https://${domain}`;
-        const relPath = fullPath.replace(/\\/g, '/');
-        let engineType: SourceEngineType = 'custom_html';
-        if (relPath.includes('/madara/')) engineType = 'madara';
-        else if (relPath.includes('/mangathemesia/') || content.includes('MangaThemesia') || content.includes('MangaReader')) engineType = 'mangathemesia';
-        else if (relPath.includes('/wpcomics/') || content.includes('WpComics')) engineType = 'wpcomics';
-        else if (relPath.includes('/foolslide/')) engineType = 'foolslide';
-        else if (id === 'mangadex') engineType = 'mangadex';
-        const isNsfw = relPath.includes('/galleryadults/') || content.includes('isNsfw = true') || content.includes('isAdult = true') || /18|hentai|porn|doujin/i.test(annotationMatch[2]);
-        found = { id, name: annotationMatch[2], baseUrl, engineType, lang: annotationMatch[3], isNsfw };
-      } catch { /* skip unreadable file */ }
-    }
-  })(parsersDir);
-  return found;
-}
-
-// Ensure a parser definition exists in KOTATSU_SOURCES (safe no-op if already there).
-function ensureParserInRegistry(sourceId: string): SourceDefinition | null {
-  if (!sourceId) return null;
-  const id = String(sourceId).toLowerCase();
-  const existing = KOTATSU_SOURCES.find((s) => s.id === id);
-  if (existing) return existing;
-  const scanned = scanParserInRepo(id);
-  if (scanned) KOTATSU_SOURCES.push(scanned);
-  return scanned;
-}
-
 // Fully revive + enable a source: clear removed/dead/disabled markers and ensure
 // its parser is registered. MangaDex is rejected (metadata-only).
 function reviveSource(sourceId: string): { source?: SourceDefinition; ok: boolean; message: string } {
@@ -3110,10 +2853,10 @@ function reviveSource(sourceId: string): { source?: SourceDefinition; ok: boolea
     syncConfig.disabledSources = syncConfig.disabledSources.filter((d) => String(d).toLowerCase() !== id);
   }
 
-  const source = ensureParserInRegistry(id);
-  rebuildDeadSourcesSet();
+  const source = ensureSourceInRegistry(id);
+  rebuildDeadSourcesSet(syncConfig);
   saveDatabaseToDisk();
-  return { source, ok: true, message: `Source "${id}" activated` };
+  return { source: source || undefined, ok: true, message: `Source "${id}" activated` };
 }
 
 // Disable a source but keep it re-activatable (never touches removedSources).
@@ -3128,73 +2871,37 @@ function deactivateSource(sourceId: string): { ok: boolean; message: string } {
   return { ok: true, message: `Source "${id}" deactivated` };
 }
 
-// Build the full source inventory (active + disabled + removed) so the client can
-// drive bulk activation. MangaDex gets isMetadataOnly: true, locked.
-function buildFullSourceInventory(): any[] {
-  const ids = new Set<string>();
-  const inventory: any[] = [];
-  const removedSet = new Set((syncConfig.removedSources || []).map((r) => String(r).toLowerCase()));
-  const revivedSet = new Set((syncConfig.reactivatedSources || []).map((r) => String(r).toLowerCase()));
-
-  const pushIfMissing = (s: SourceDefinition, state: 'active' | 'disabled' | 'removed') => {
-    if (ids.has(s.id)) return;
-    ids.add(s.id);
-    const isMeta = isMetadataOnlySource(s.id, s.baseUrl);
-    inventory.push({
-      ...s,
-      isMetadataOnly: isMeta,
-      isEnabled: state === 'active' && !isMeta,
-      status: isMeta ? 'metadata' : state,
-    });
-  };
-
-  for (const s of KOTATSU_SOURCES) {
-    // A source still parked in removedSources (and not explicitly revived) is NOT
-    // usable by the pipeline even if its parser remains registered — report it as
-    // 'removed' so the management UI reflects reality. Reactivated sources win.
-    const isRemoved = removedSet.has(s.id) && !revivedSet.has(s.id);
-    const state = isRemoved ? 'removed' : disabledSourceIds.has(s.id) ? 'disabled' : 'active';
-    pushIfMissing(s, state);
-  }
-  // Include parked (removed) sources still not in the registry so the client can
-  // re-activate them without a restart.
-  for (const id of removedSet) {
-    if (ids.has(id)) continue;
-    if (revivedSet.has(id)) continue;
-    const src = ensureParserInRegistry(id);
-    if (src) pushIfMissing(src, 'removed');
-    else if (id !== 'mangadex') {
-      ids.add(id);
-      inventory.push({ id, name: id, baseUrl: '', engineType: 'custom_html' as SourceEngineType, lang: 'en', isNsfw: false, isMetadataOnly: false, isEnabled: false, status: 'removed' });
-    }
-  }
-  return inventory;
-}
-
-
-// Kotatsu Sources List Endpoint (Returns active enabled sources only)
-app.get("/api/kotatsu/sources", (_req, res) => {
-  const activeSources = KOTATSU_SOURCES.filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id) && isSourceAlive(s.name));
+// Sources List Endpoint (Returns active enabled sources only)
+const handleGetSources = (_req: express.Request, res: express.Response) => {
+  const activeSources = KOTATSU_SOURCES.filter(
+    (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id, syncConfig) && isSourceAlive(s.name, syncConfig)
+  );
   const listWithStates = activeSources.map((s) => ({
     ...s,
     isEnabled: true,
   }));
   res.json(listWithStates);
-});
+};
+
+app.get("/api/kotatsu/sources", handleGetSources);
+app.get("/api/sources", handleGetSources);
 
 // Endpoint to permanently purge all disabled sources
-app.post("/api/kotatsu/sources/purge-disabled", (_req, res) => {
+const handlePurgeDisabledSources = (_req: express.Request, res: express.Response) => {
   const result = purgeDisabledSources();
   res.json({
     success: true,
     message: `Permanently deleted ${result.purgedCount} disabled sources. ${result.remainingCount} active sources remain.`,
     ...result,
   });
-});
+};
+
+app.post("/api/kotatsu/sources/purge-disabled", handlePurgeDisabledSources);
+app.post("/api/sources/purge-disabled", handlePurgeDisabledSources);
 
 // Toggle Individual Source Enable/Disable Endpoint
-app.post("/api/kotatsu/sources/toggle", (req, res) => {
-  const { sourceId, isEnabled } = req.body;
+const handleToggleSource = (req: express.Request, res: express.Response) => {
+  const { sourceId, isEnabled } = req.body || {};
   if (!sourceId) return res.status(400).json({ error: "sourceId is required" });
 
   if (isEnabled === false) {
@@ -3205,23 +2912,28 @@ app.post("/api/kotatsu/sources/toggle", (req, res) => {
 
   syncConfig.disabledSources = Array.from(disabledSourceIds);
   saveDatabaseToDisk();
-  console.log(`[Kotatsu Engine] Source "${sourceId}" is now ${isEnabled ? 'ENABLED' : 'DISABLED'} (${disabledSourceIds.size} disabled in total)`);
+  console.log(`[Source Engine] Source "${sourceId}" is now ${isEnabled ? 'ENABLED' : 'DISABLED'} (${disabledSourceIds.size} disabled in total)`);
   res.json({
     success: true,
     sourceId,
     isEnabled: !disabledSourceIds.has(sourceId),
     disabledCount: disabledSourceIds.size,
   });
-});
+};
+
+app.post("/api/kotatsu/sources/toggle", handleToggleSource);
+app.post("/api/sources/toggle", handleToggleSource);
+
 // Full source inventory for the management UI (active + disabled + removed).
-// MangaDex is always present but locked as metadata-only. Prefer this over the
-// legacy /api/kotatsu/sources when you need the complete list.
-app.get("/api/kotatsu/sources/all", (_req, res) => {
-  res.json(buildFullSourceInventory());
-});
+const handleGetAllSources = (_req: express.Request, res: express.Response) => {
+  res.json(buildFullSourceInventory(syncConfig));
+};
+
+app.get("/api/kotatsu/sources/all", handleGetAllSources);
+app.get("/api/sources/all", handleGetAllSources);
 
 // Activate (revive + enable) a single source. MangaDex is rejected.
-app.post("/api/kotatsu/sources/activate", (req, res) => {
+const handleActivateSource = (req: express.Request, res: express.Response) => {
   const { sourceId } = req.body || {};
   const result = reviveSource(sourceId);
   if (!result.ok) return res.status(400).json({ success: false, message: result.message });
@@ -3232,15 +2944,21 @@ app.post("/api/kotatsu/sources/activate", (req, res) => {
     reactivatedCount: (syncConfig.reactivatedSources || []).length,
     disabledCount: disabledSourceIds.size,
   });
-});
+};
+
+app.post("/api/kotatsu/sources/activate", handleActivateSource);
+app.post("/api/sources/activate", handleActivateSource);
 
 // Deactivate (disable) a single source. MangaDex is rejected.
-app.post("/api/kotatsu/sources/deactivate", (req, res) => {
+const handleDeactivateSource = (req: express.Request, res: express.Response) => {
   const { sourceId } = req.body || {};
   const result = deactivateSource(sourceId);
   if (!result.ok) return res.status(400).json({ success: false, message: result.message });
   res.json({ success: true, message: result.message, disabledCount: disabledSourceIds.size });
-});
+};
+
+app.post("/api/kotatsu/sources/deactivate", handleDeactivateSource);
+app.post("/api/sources/deactivate", handleDeactivateSource);
 
 // Activate every source (revive all removed + clear disabled) EXCEPT MangaDex.
 app.post("/api/kotatsu/sources/activate-all", (_req, res) => {
@@ -6565,87 +6283,8 @@ app.get('/api/opds/series/:id', (req, res) => {
 // HIGH-PERFORMANCE IMAGE PROXY WITH ETAGS & IMMUTABLE CACHING
 // ============================================================================
 
-async function handleProxyImageRequest(req: express.Request, res: express.Response) {
-  const rawUrl = (req.query.url as string) || '';
-  if (!rawUrl) {
-    return res.status(400).send('Image URL required');
-  }
-
-  // Generate deterministic ETag based on image URL
-  const etag = `"${crypto.createHash('md5').update(rawUrl).digest('hex')}"`;
-  if (req.headers['if-none-match'] === etag) {
-    return res.status(304).end();
-  }
-
-  const sourceUrl = (req.query.sourceUrl as string) || (req.query.pageUrl as string) || rawUrl;
-  let referer = 'https://asurascans.com/';
-  try {
-    if (sourceUrl.startsWith('http')) {
-      referer = new URL(sourceUrl).origin + '/';
-    }
-  } catch (_) {}
-
-  try {
-    const fetchHeaders: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-      'Referer': referer,
-      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-    };
-
-    const imageRes = await fetch(rawUrl, {
-      headers: fetchHeaders,
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!imageRes.ok) {
-      return res.status(imageRes.status).send(`Failed to fetch upstream image: ${imageRes.statusText}`);
-    }
-
-    const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
-    const buffer = Buffer.from(await imageRes.arrayBuffer());
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(buffer);
-  } catch (err: any) {
-    res.status(502).send(`Image proxy error: ${err.message}`);
-  }
-}
-
-app.get('/api/proxy/image', handleProxyImageRequest);
-app.get('/api/reader/proxy-image', handleProxyImageRequest);
-
-// ============================================================================
-// PRIVATE PAGE STICKY NOTES API
-// ============================================================================
-
-app.get('/api/notes/:mangaId', (req, res) => {
-  const { mangaId } = req.params;
-  const notes = SqliteDb.getStickyNotes(mangaId);
-  res.json(notes);
-});
-
-app.post('/api/notes', (req, res) => {
-  const note = req.body;
-  if (!note || !note.mangaId || note.chapterNumber === undefined || note.pageIndex === undefined) {
-    return res.status(400).json({ error: 'mangaId, chapterNumber, and pageIndex are required' });
-  }
-  const noteId = note.id || `note_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const fullNote = {
-    ...note,
-    id: noteId,
-    updatedAt: new Date().toISOString(),
-  };
-  SqliteDb.saveStickyNote(fullNote);
-  res.json({ success: true, note: fullNote });
-});
-
-app.delete('/api/notes/:id', (req, res) => {
-  const { id } = req.params;
-  const ok = SqliteDb.deleteStickyNote(id);
-  res.json({ success: ok });
-});
+// Sticky notes and GDPR routes are handled by the scoped routers
+// (server/routes/notes.ts) and by the host-gated handlers below.
 
 
 

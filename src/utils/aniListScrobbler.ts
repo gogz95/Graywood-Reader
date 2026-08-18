@@ -69,6 +69,29 @@ export async function searchAniListManga(title: string): Promise<AniListMediaMat
     return null;
   }
 }
+// Cache resolved Media IDs per normalized title so we don't hit the AniList
+// GraphQL search endpoint on every chapter marked read.
+const mediaIdCache = new Map<string, number>();
+// Avoid redundant/duplicate progress mutations (e.g. from double mark-read).
+const lastSyncMap = new Map<number, { progress: number; at: number }>();
+const SYNC_DEBOUNCE_MS = 60 * 1000;
+
+/**
+ * Resolve an AniList Media ID for a title, caching the lookup by normalized title.
+ */
+export async function getAniListMediaId(title: string): Promise<number | null> {
+  const key = (title || '').toLowerCase().trim();
+  if (!key) return null;
+  const cached = mediaIdCache.get(key);
+  if (cached) return cached;
+  const match = await searchAniListManga(title);
+  if (match && match.id) {
+    mediaIdCache.set(key, match.id);
+    return match.id;
+  }
+  return null;
+}
+
 
 /**
  * Sync reading progress to AniList for a given manga and chapter number.
@@ -81,6 +104,14 @@ export async function syncAniListProgress(
 ): Promise<AniListSyncResult> {
   if (!token || !mediaId) {
     return { ok: false, error: 'AniList token or Media ID missing' };
+  }
+
+  const progress = Math.floor(chapterNumber);
+  const now = Date.now();
+  const last = lastSyncMap.get(mediaId);
+  if (last && last.progress === progress && now - last.at < SYNC_DEBOUNCE_MS) {
+    // Already synced this exact progress recently — skip the redundant mutation.
+    return { ok: true, mediaId, progress };
   }
 
   const mutation = `
@@ -106,7 +137,7 @@ export async function syncAniListProgress(
         query: mutation,
         variables: {
           mediaId,
-          progress: Math.floor(chapterNumber),
+          progress,
           status,
         },
       }),
@@ -120,10 +151,11 @@ export async function syncAniListProgress(
 
     const data: any = await res.json();
     const entry = data?.data?.SaveMediaListEntry;
+    lastSyncMap.set(mediaId, { progress, at: Date.now() });
     return {
       ok: true,
       mediaId,
-      progress: entry?.progress || chapterNumber,
+      progress: entry?.progress || progress,
     };
   } catch (err: any) {
     return { ok: false, error: err.message || 'Failed to update AniList' };

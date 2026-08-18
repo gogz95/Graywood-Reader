@@ -104,12 +104,37 @@ export class KotatsuImageLoader {
     } catch { return null; }
   }
 
+  private static readonly IMAGE_CACHE_MAX_BYTES = 256 * 1024 * 1024; // 256 MB cap
+
   private async setCachedBlob(rawUrl: string, blob: Blob): Promise<void> {
     try {
       const db = await KotatsuImageLoader.getImageCacheDB();
       const tx = db.transaction('images', 'readwrite');
-      tx.objectStore('images').put({ url: rawUrl, blob, timestamp: Date.now() });
+      tx.objectStore('images').put({ url: rawUrl, blob, size: blob.size, timestamp: Date.now() });
+      tx.oncomplete = () => { this.pruneImageCache().catch(() => {}); };
     } catch { /* silent fail */ }
+  }
+
+  // Evict the oldest cached images once the store exceeds the size cap so the
+  // IndexedDB quota is never exhausted during long reading sessions.
+  private async pruneImageCache(): Promise<void> {
+    const db = await KotatsuImageLoader.getImageCacheDB();
+    const all = await new Promise<Record<string, any>[]>((resolve, reject) => {
+      const tx = db.transaction('images', 'readonly');
+      const req = tx.objectStore('images').getAll();
+      req.onsuccess = () => resolve((req.result as any[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+    let total = all.reduce((sum, r) => sum + (r.size || 0), 0);
+    if (total <= KotatsuImageLoader.IMAGE_CACHE_MAX_BYTES) return;
+    const oldestFirst = [...all].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const wtx = db.transaction('images', 'readwrite');
+    const store = wtx.objectStore('images');
+    for (const row of oldestFirst) {
+      if (total <= KotatsuImageLoader.IMAGE_CACHE_MAX_BYTES) break;
+      store.delete(row.url);
+      total -= row.size || 0;
+    }
   }
 
   private concurrency: number;

@@ -20,6 +20,13 @@ import {
   saveFormatReadingMode,
   saveLastUsedReadingMode,
 } from '../utils/readingMode';
+import { ReaderHeader } from './reader/ReaderHeader';
+import { ReaderFooter } from './reader/ReaderFooter';
+import { ReaderSettingsModal } from './reader/ReaderSettingsModal';
+import { PageGridModal } from './reader/PageGridModal';
+import { StickyNotesDrawer } from './reader/StickyNotesDrawer';
+import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
+import { QuickJumpModal } from './reader/QuickJumpModal';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -98,6 +105,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [showChapterMenu, setShowChapterMenu] = useState<boolean>(false);
   const [showPageGridModal, setShowPageGridModal] = useState<boolean>(false);
   const [showGroupMenu, setShowGroupMenu] = useState<boolean>(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
+  const [showQuickJumpModal, setShowQuickJumpModal] = useState<boolean>(false);
 
   // Selected Scanlation Release Group Version
   const [selectedScanGroup, setSelectedScanGroup] = useState<string>(manga.sourceName || 'AsuraScans');
@@ -121,6 +130,18 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     },
     [manga.id, detectedFormat, onSaveSettings]
   );
+  // Guard against double-firing mark-read (autoMarkRead on load + 85% scroll),
+  // which otherwise sends duplicate mark-read + AniList scrobble calls.
+  const markedReadRef = useRef<Set<number>>(new Set());
+  const markChapterReadOnce = useCallback(
+    (chNum: number) => {
+      if (markedReadRef.current.has(chNum)) return;
+      markedReadRef.current.add(chNum);
+      onMarkChapterRead(chNum);
+    },
+    [onMarkChapterRead]
+  );
+
 
   const isWebtoon = settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless';
 
@@ -341,7 +362,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }
 
       if (settings.autoMarkRead && !data.isPlaceholder && !data.contentUnavailable && data.pages?.length) {
-        onMarkChapterRead(chNum);
+        markChapterReadOnce(chNum);
       }
 
       // Persist open position so analytics/history stay warm
@@ -363,10 +384,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [initialChapterId, manga.id, manga.sourceUrl, settings.autoMarkRead, onMarkChapterRead]);
+  }, [initialChapterId, manga.id, manga.sourceUrl, settings.autoMarkRead, markChapterReadOnce]);
 
   useEffect(() => {
     fetchChapterPages(currentChapterNum);
+    markedReadRef.current.clear();
 
     return () => {
       if (loaderRef.current) {
@@ -418,7 +440,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
 
     if (percent > 85 && settings.autoMarkRead) {
-      onMarkChapterRead(currentChapterNum);
+      markChapterReadOnce(currentChapterNum);
     }
 
     // Auto-Next Chapter trigger for Webtoons at scroll end
@@ -431,7 +453,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         }
       }, 3000);
     }
-  }, [scrollContainerRef, chapterData, settings.autoMarkRead, onMarkChapterRead, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum]);
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum]);
 
   // Debounced server progress persistence (page + percent) for analytics/resume
   useEffect(() => {
@@ -451,7 +473,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return () => clearTimeout(timer);
   }, [manga.id, currentChapterNum, currentPageIndex, readProgressPercent, chapterData]);
 
-  // Keyboard Navigation (Space for Auto-scroll, A/D, Arrow keys, F)
+  // Toggle bookmark for page
+  const toggleBookmarkPage = useCallback((pageIdx: number) => {
+    setBookmarkedPages((prev) => {
+      const newBookmarks = prev.includes(pageIdx)
+        ? prev.filter((p) => p !== pageIdx)
+        : [...prev, pageIdx];
+      triggerToast(
+        prev.includes(pageIdx)
+          ? `Removed page ${pageIdx + 1} from bookmarks.`
+          : `Bookmarked page ${pageIdx + 1}!`
+      );
+      return newBookmarks;
+    });
+  }, [triggerToast]);
+
+  // Keyboard Navigation (Space for Auto-scroll, A/D, Arrow keys, F, G, H, B, S)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ' || e.code === 'Space') {
@@ -503,12 +540,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         } else {
           document.exitFullscreen().catch(() => {});
         }
+      } else if (e.key === 'g' || e.key === 'G') {
+        setShowQuickJumpModal((prev) => !prev);
+      } else if (e.key === '?' || e.key === 'h' || e.key === 'H') {
+        setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === 'b' || e.key === 'B') {
+        toggleBookmarkPage(currentPageIndex);
+      } else if (e.key === 's' || e.key === 'S') {
+        setShowSettings((prev) => !prev);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.viewMode, settings.guidedPanelView, currentPageIndex, chapterData, settings.autoScrollSpeed, isWebtoon]);
+  }, [settings.viewMode, settings.guidedPanelView, currentPageIndex, chapterData, settings.autoScrollSpeed, isWebtoon, toggleBookmarkPage]);
 
   // Handle Offline Download Chapter
   const handleDownloadChapter = useCallback(async () => {
@@ -532,21 +577,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       setDownloadProgress(null);
     }
   }, [chapterData, currentChapterNum, manga.id, manga.title, triggerToast]);
-
-  // Toggle bookmark for page
-  const toggleBookmarkPage = useCallback((pageIdx: number) => {
-    setBookmarkedPages((prev) => {
-      const newBookmarks = prev.includes(pageIdx)
-        ? prev.filter((p) => p !== pageIdx)
-        : [...prev, pageIdx];
-      triggerToast(
-        prev.includes(pageIdx)
-          ? `Removed page ${pageIdx + 1} from bookmarks.`
-          : `Bookmarked page ${pageIdx + 1}!`
-      );
-      return newBookmarks;
-    });
-  }, [triggerToast]);
 
   // Canvas background style mapping
   const bgStyleClass = useMemo(() => {
@@ -601,325 +631,57 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       {/* TOP KOTATSU HUD HEADER BAR */}
       {showHud && (
-        <header className="sticky top-0 z-50 bg-surface/95 backdrop-blur-md border-b border-edge text-primary px-4 py-2.5 flex items-center justify-between gap-2 shadow-2xl transition-all">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl bg-elevated hover:bg-elevated text-secondary hover:text-white transition-all flex items-center gap-1.5 text-xs font-bold"
-              title="Return to Library"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Exit</span>
-            </button>
-
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-primary truncate hover:text-accent transition-colors">
-                {manga.title}
-              </h2>
-              <div className="flex items-center gap-2 text-xs text-secondary font-medium">
-                <span className="text-accent font-bold">Ch. {currentChapterNum}</span>
-                <span>•</span>
-                <span className="truncate">{selectedScanGroup}</span>
-                <span className="hidden sm:inline text-xs text-info font-semibold bg-info/10 px-1.5 py-0.5 rounded border border-info/20">
-                  {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Webtoon' : '🇨🇳 Manhua'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Center Controls: Chapter Dropdown + Scanlation Version Selector */}
-          <div className="flex items-center gap-1.5">
-            <button
-              disabled={!chapterData?.prevChapterNumber}
-              onClick={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
-              className="p-2 rounded-lg bg-elevated/80 hover:bg-elevated disabled:opacity-30 disabled:pointer-events-none text-primary transition-all"
-              title="Previous Chapter"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {/* Quick Chapter Selector Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowChapterMenu(!showChapterMenu)}
-                className="px-3 py-1.5 rounded-lg bg-elevated border border-edge-strong text-accent font-bold text-xs flex items-center gap-1.5 hover:bg-elevated transition-all"
-              >
-                <span>Ch. {currentChapterNum}</span>
-                <BookOpen className="w-3.5 h-3.5 text-secondary" />
-              </button>
-
-              {showChapterMenu && (
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-48 max-h-64 overflow-y-auto bg-surface border border-edge-strong rounded-xl shadow-2xl p-1 z-50 space-y-0.5">
-                  <div className="p-2 text-[11px] font-bold text-secondary uppercase tracking-wider border-b border-edge">
-                    Chapters List
-                  </div>
-                  {totalChaptersList.map((ch) => (
-                    <button
-                      key={ch}
-                      onClick={() => {
-                        setCurrentChapterNum(ch);
-                        setShowChapterMenu(false);
-                      }}
-                      className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
-                        ch === currentChapterNum
-                          ? 'bg-accent text-accent-fg font-bold'
-                          : 'text-secondary hover:bg-elevated'
-                      }`}
-                    >
-                      <span>Chapter {ch}</span>
-                      {ch <= manga.currentChapter && ch !== currentChapterNum && (
-                        <CheckCircle className="w-3 h-3 text-success" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Scanlation Release Group Version Selector (Only available if item has multiple sources) */}
-            {hasMultipleSources && (
-              <div className="relative hidden md:block">
-                <button
-                  onClick={() => setShowGroupMenu(!showGroupMenu)}
-                  className="px-3 py-1.5 rounded-lg bg-elevated border border-edge-strong text-primary font-bold text-xs flex items-center gap-1.5 hover:bg-elevated transition-all"
-                >
-                  <Globe className="w-3.5 h-3.5 text-info" />
-                  <span className="truncate max-w-[110px]">{selectedScanGroup}</span>
-                </button>
-
-                {showGroupMenu && (
-                  <div className="absolute top-full mt-2 left-0 w-64 bg-surface border border-edge-strong rounded-xl shadow-2xl p-1 z-50 space-y-1">
-                    <div className="p-2 text-[11px] font-bold text-secondary uppercase border-b border-edge">
-                      Select Scanlation Version / Group
-                    </div>
-                    {availableScanGroups.map((grp) => (
-                      <button
-                        key={grp.id}
-                        onClick={() => {
-                          setSelectedScanGroup(grp.name);
-                          setShowGroupMenu(false);
-                          triggerToast(`Switched scanlation group to ${grp.name}`);
-                        }}
-                        className={`w-full text-left p-2 rounded-lg text-xs flex items-center justify-between ${
-                          selectedScanGroup === grp.name
-                            ? 'bg-accent text-accent-fg font-bold'
-                            : 'text-secondary hover:bg-elevated'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-bold">{grp.name}</div>
-                          <div className="text-[10px] opacity-70">{grp.quality} • {grp.releaseDate}</div>
-                        </div>
-                        {selectedScanGroup === grp.name && <Check className="w-4 h-4" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
-              disabled={!chapterData?.nextChapterNumber}
-              onClick={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}
-              className="p-2 rounded-lg bg-accent hover:bg-accent-bright text-accent-fg font-bold disabled:opacity-30 disabled:pointer-events-none transition-all"
-              title="Next Chapter"
-            >
-              <ChevronRight className="w-4 h-4 stroke-[3]" />
-            </button>
-          </div>
-
-          {/* Right Action Bar */}
-          <div className="flex items-center gap-1.5">
-            {/* Sticky Notes Drawer Trigger */}
-            <button
-              onClick={() => setShowNotesDrawer(!showNotesDrawer)}
-              className={`p-2 rounded-xl border text-xs font-bold transition-all relative ${
-                currentChapterNotes.length > 0
-                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                  : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
-              }`}
-              title="Chapter Sticky Notes & Annotations (Press N to add)"
-            >
-              <StickyNote className="w-4 h-4" />
-              {currentChapterNotes.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black font-black text-[9px] flex items-center justify-center">
-                  {currentChapterNotes.length}
-                </span>
-              )}
-            </button>
-
-            {/* Offline Chapter Download Button */}
-            <button
-              onClick={async () => {
-                if (!chapterData || !chapterData.pages || chapterData.pages.length === 0) return;
-                setIsDownloadingOffline(true);
-                setDownloadProgress({ loaded: 0, total: chapterData.pages.length });
-                try {
-                  await saveOfflineChapter(
-                    manga.id,
-                    manga.title,
-                    currentChapterNum,
-                    chapterData.pages,
-                    (loaded, total) => setDownloadProgress({ loaded, total })
-                  );
-                  setIsOfflineAvailable(true);
-                  triggerToast(`Chapter ${currentChapterNum} saved offline!`);
-                } catch (err: any) {
-                  triggerToast(`Offline download failed: ${err.message}`);
-                } finally {
-                  setIsDownloadingOffline(false);
-                  setDownloadProgress(null);
-                }
-              }}
-              disabled={isDownloadingOffline}
-              className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
-                isOfflineAvailable
-                  ? 'bg-success/15 border-success/30 text-success'
-                  : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
-              }`}
-              title={isOfflineAvailable ? 'Stored offline in browser' : 'Download chapter for offline reading'}
-            >
-              <Download className={`w-4 h-4 ${isDownloadingOffline ? 'animate-bounce text-accent' : ''}`} />
-              {downloadProgress && (
-                <span className="text-[10px] font-mono font-bold">
-                  {downloadProgress.loaded}/{downloadProgress.total}
-                </span>
-              )}
-            </button>
-
-            {/* Quick Reading Mode Switcher Button */}
-            <button
-              onClick={() => {
-                const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon-seamless';
-                setSettings({
-                  ...settings,
-                  viewMode: nextMode,
-                  noPanelSpacing: nextMode === 'webtoon-seamless',
-                  pageGap: nextMode === 'webtoon-seamless' ? 0 : 8,
-                });
-                triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📱 Webtoon (Seamless 0px)');
-              }}
-              className="px-2.5 py-1.5 rounded-lg bg-elevated/80 hover:bg-elevated border border-edge text-secondary hover:text-accent text-[11px] font-bold transition-all flex items-center gap-1.5"
-              title="Click to toggle between Webtoon and Manga RTL"
-            >
-              <span>{settings.viewMode === 'rtl' ? '🇯🇵 RTL' : settings.viewMode === 'ltr' ? '🇺🇸 LTR' : settings.viewMode === 'single' ? '📄 Single' : settings.viewMode === 'double' ? '📖 Double Spread' : settings.viewMode === 'webtoon' ? '📜 Webtoon' : '📱 Seamless'}</span>
-            </button>
-
-            <button
-              onClick={() => setShowPageGridModal(true)}
-              className="p-2 rounded-lg bg-elevated/80 hover:bg-elevated text-secondary transition-all hidden sm:block"
-              title="Page Overview Gallery"
-            >
-              <Grid className="w-4 h-4 text-info" />
-            </button>
-
-            <button
-              onClick={() => toggleBookmarkPage(currentPageIndex)}
-              className={`p-2 rounded-lg transition-all ${
-                bookmarkedPages.includes(currentPageIndex)
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-elevated/80 text-secondary hover:bg-elevated'
-              }`}
-              title="Bookmark Current Page"
-            >
-              <Bookmark className="w-4 h-4 fill-current" />
-            </button>
-
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-lg transition-all ${
-                showSettings ? 'bg-accent text-accent-fg font-bold' : 'bg-elevated/80 text-secondary hover:bg-elevated'
-              }`}
-              title="Display & Speed Settings"
-            >
-              <Sliders className="w-4 h-4" />
-            </button>
-
-            {/* Flag Issue Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowFlagDropdown(!showFlagDropdown)}
-                className={`p-2 rounded-lg transition-all ${
-                  isFlagged ? 'bg-danger text-white font-bold animate-pulse' : 'bg-elevated/80 text-secondary hover:bg-elevated hover:text-danger'
-                }`}
-                title={isFlagged ? `Flagged: ${flagReason}` : "Flag Series / Report Loading Error"}
-              >
-                <AlertTriangle className="w-4 h-4" />
-              </button>
-              {showFlagDropdown && (
-                <div className="absolute right-0 top-full mt-1 z-[999] w-60 bg-surface border border-edge rounded-xl shadow-2xl overflow-hidden">
-                  <div className="p-2 border-b border-edge">
-                    <p className="text-[11px] font-bold text-primary">What went wrong?</p>
-                  </div>
-                  {FLAG_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setShowFlagDropdown(false);
-                        try {
-                          await apiFetch('/api/manga/toggle-flag', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
-                          });
-                        } catch (_) {}
-                        setIsFlagged(true);
-                        setFlagReason(cat.flagReason);
-                        triggerToast('⚠️ Series flagged');
-                        onReport(cat, manga);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-primary hover:bg-danger/10 hover:text-danger transition-colors text-left border-b border-edge/50 last:border-0"
-                    >
-                      <span className="p-1 rounded bg-danger/10 text-danger">{cat.icon}</span>
-                      <span>
-                        <span className="block font-bold">{cat.label}</span>
-                        <span className="block text-[10px] text-secondary">{cat.description}</span>
-                      </span>
-                    </button>
-                  ))}
-                  {isFlagged && (
-                    <button
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setShowFlagDropdown(false);
-                        try {
-                          await apiFetch('/api/manga/toggle-flag', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: manga.id, isFlagged: false }),
-                          });
-                        } catch (_) {}
-                        setIsFlagged(false);
-                        setFlagReason('');
-                        triggerToast('✓ Flag removed');
-                      }}
-                      className="w-full px-3 py-2 text-xs font-bold text-secondary hover:text-danger hover:bg-danger/10 transition-colors text-center border-t border-edge flex items-center justify-center gap-1.5"
-                    >
-                      <Check className="w-3 h-3" /> Remove Flag
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => {
-                if (!document.fullscreenElement) {
-                  document.documentElement.requestFullscreen().catch(() => {});
-                } else {
-                  document.exitFullscreen().catch(() => {});
-                }
-              }}
-              className="p-2 rounded-lg bg-elevated/80 hover:bg-elevated text-secondary hidden sm:block"
-              title="Toggle Fullscreen (F)"
-            >
-              <Maximize className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
+        <ReaderHeader
+          manga={manga}
+          currentChapterNum={currentChapterNum}
+          selectedScanGroup={selectedScanGroup}
+          chapterData={chapterData}
+          settings={settings}
+          isWebtoon={isWebtoon}
+          hasMultipleSources={hasMultipleSources}
+          availableScanGroups={availableScanGroups}
+          totalChaptersList={totalChaptersList}
+          showChapterMenu={showChapterMenu}
+          showGroupMenu={showGroupMenu}
+          currentChapterNotes={currentChapterNotes}
+          showNotesDrawer={showNotesDrawer}
+          isOfflineAvailable={isOfflineAvailable}
+          isDownloadingOffline={isDownloadingOffline}
+          downloadProgress={downloadProgress}
+          onClose={onClose}
+          onPrevChapter={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
+          onNextChapter={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}
+          onSelectChapter={(ch) => {
+            setCurrentChapterNum(ch);
+            setShowChapterMenu(false);
+          }}
+          onToggleChapterMenu={() => setShowChapterMenu(!showChapterMenu)}
+          onToggleGroupMenu={() => setShowGroupMenu(!showGroupMenu)}
+          onSelectScanGroup={(name) => {
+            setSelectedScanGroup(name);
+            setShowGroupMenu(false);
+            triggerToast(`Switched scanlation group to ${name}`);
+          }}
+          onToggleNotesDrawer={() => setShowNotesDrawer(!showNotesDrawer)}
+          onDownloadOffline={handleDownloadChapter}
+          onToggleViewMode={() => {
+            const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon-seamless';
+            setSettings({
+              ...settings,
+              viewMode: nextMode,
+              noPanelSpacing: nextMode === 'webtoon-seamless',
+              pageGap: nextMode === 'webtoon-seamless' ? 0 : 8,
+            });
+            triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📱 Webtoon (Seamless 0px)');
+          }}
+          onToggleFullscreen={() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+              document.exitFullscreen().catch(() => {});
+            }
+          }}
+        />
       )}
 
       {/* Top Scroll Reading Progress Bar */}
@@ -932,376 +694,57 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       {/* GRAPHICAL PAGE OVERVIEW GALLERY MODAL */}
       {showPageGridModal && chapterData && (
-        <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-surface border border-edge rounded-2xl max-w-4xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between border-b border-edge pb-3">
-              <div className="font-black text-primary text-base flex items-center gap-2">
-                <Grid className="w-5 h-5 text-accent" />
-                Graphical Overview Gallery ({chapterData.pages.length} Pages)
-              </div>
-              <button onClick={() => setShowPageGridModal(false)} className="text-secondary hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 p-2">
-              {chapterData.pages.map((pUrl, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setCurrentPageIndex(idx);
-                    setShowPageGridModal(false);
-                    if (isWebtoon && scrollContainerRef.current) {
-                      const totalH = scrollContainerRef.current.scrollHeight;
-                      scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * idx;
-                    }
-                  }}
-                  className={`relative rounded-xl overflow-hidden border-2 cursor-pointer transition-all hover:scale-105 ${
-                    currentPageIndex === idx
-                      ? 'border-accent ring-2 ring-accent/50 shadow-xl'
-                      : 'border-edge hover:border-edge-strong'
-                  }`}
-                >
-                  <img src={pUrl} alt={`Page ${idx + 1}`} className="w-full h-36 object-cover bg-app" />
-                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-app/90 text-[10px] font-mono font-bold text-accent">
-                    PAGE {idx + 1}
-                  </div>
-                  {bookmarkedPages.includes(idx) && (
-                    <div className="absolute top-1 left-1 p-1 rounded bg-accent text-accent-fg shadow-md">
-                      <Bookmark className="w-3 h-3 fill-current" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <PageGridModal
+          chapterData={chapterData}
+          currentPageIndex={currentPageIndex}
+          bookmarkedPages={bookmarkedPages}
+          isWebtoon={isWebtoon}
+          onClose={() => setShowPageGridModal(false)}
+          onSelectPage={(idx) => {
+            setCurrentPageIndex(idx);
+            setShowPageGridModal(false);
+            if (isWebtoon && scrollContainerRef.current) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * idx;
+            }
+          }}
+        />
       )}
 
       {/* DISPLAY & SPEED SETTINGS MODAL */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-surface border border-edge rounded-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl text-primary">
-            <div className="flex items-center justify-between border-b border-edge pb-3">
-              <div className="font-extrabold text-primary text-base flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-accent" />
-                Reader Layout, Display & Speed Settings
-              </div>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="p-1.5 rounded-full bg-elevated text-secondary hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+        <ReaderSettingsModal
+          manga={manga}
+          detectedFormat={detectedFormat}
+          settings={settings}
+          isWebtoon={isWebtoon}
+          isFlagged={isFlagged}
+          onClose={() => setShowSettings(false)}
+          onSaveSettings={setSettings}
+          onTriggerToast={triggerToast}
+          onToggleFlagDropdown={() => setShowFlagDropdown(!showFlagDropdown)}
+        />
+      )}
 
-            {/* FORMAT AUTO-DETECTION BADGE & TOGGLE */}
-            <div className="p-3 bg-app/90 rounded-xl border border-edge flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 text-accent flex-shrink-0" />
-                <div>
-                  <div className="text-xs font-bold text-primary flex items-center gap-1.5">
-                    <span>Format:</span>
-                    <span className="text-accent uppercase font-mono">
-                      {detectedFormat === 'manga' ? '🇯🇵 Japanese Manga' : detectedFormat === 'manhwa' ? '🇰🇷 Korean Manhwa' : '🇨🇳 Chinese Manhua'}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-secondary">
-                    {settings.autoFormatMode !== false ? 'Auto-detection active (remembering your layout)' : 'Manual layout override active'}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = settings.autoFormatMode === false;
-                  if (next) {
-                    const rec = getRecommendedReadingMode(manga);
-                    setSettings({
-                      ...settings,
-                      autoFormatMode: true,
-                      viewMode: rec.viewMode,
-                      noPanelSpacing: rec.noPanelSpacing,
-                      pageGap: rec.pageGap,
-                    });
-                    triggerToast(`Auto-Format Active: ${rec.viewMode.toUpperCase()}`);
-                  } else {
-                    setSettings({ ...settings, autoFormatMode: false });
-                    triggerToast('Auto-Format Disabled');
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                  settings.autoFormatMode !== false
-                    ? 'bg-accent/15 text-accent border-accent/40'
-                    : 'bg-elevated text-secondary border-edge hover:text-primary'
-                }`}
-              >
-                {settings.autoFormatMode !== false ? 'Auto-Format ON' : 'Auto-Format OFF'}
-              </button>
-            </div>
+      {/* KEYBOARD SHORTCUTS CHEAT SHEET MODAL */}
+      {showShortcutsModal && (
+        <ShortcutsHelpModal onClose={() => setShowShortcutsModal(false)} />
+      )}
 
-            {/* 1. READER VIEWING MODE (KOTATSU INSPIRED) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-accent" />
-                Reading Mode & Page Layout
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                {[
-                  { id: 'webtoon-seamless', label: '📱 Webtoon Seamless (0px Gap)', desc: 'Continuous vertical (No panel spacing)' },
-                  { id: 'webtoon', label: '📜 Webtoon Standard', desc: 'Continuous vertical (Custom gap)' },
-                  { id: 'rtl', label: '🇯🇵 Manga (RTL)', desc: 'Right to Left page turn' },
-                  { id: 'ltr', label: '🇺🇸 Western / Manhua', desc: 'Left to Right page turn' },
-                  { id: 'single', label: '📄 Single Page', desc: 'One page per view' },
-                  { id: 'vertical-paged', label: '📑 Paged Vertical', desc: 'Top to bottom paged' },
-                ].map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() => {
-                      setSettings({
-                        ...settings,
-                        viewMode: mode.id as any,
-                        noPanelSpacing: mode.id === 'webtoon-seamless',
-                        pageGap: mode.id === 'webtoon-seamless' ? 0 : settings.pageGap || 8,
-                      });
-                      triggerToast(`Reader Mode: ${mode.label}`);
-                    }}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
-                      settings.viewMode === mode.id || (mode.id === 'webtoon-seamless' && settings.noPanelSpacing && isWebtoon)
-                        ? 'border-accent bg-accent/10 text-accent font-bold'
-                        : 'border-edge bg-app text-secondary hover:bg-elevated'
-                    }`}
-                  >
-                    <span className="text-xs font-bold text-primary">{mode.label}</span>
-                    <span className="text-[10px] opacity-70 line-clamp-1">{mode.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. WEBTOON PANEL SPACING / GAP */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary flex items-center justify-between">
-                <span>Webtoon Vertical Panel Spacing (Gap):</span>
-                <span className="text-accent font-mono font-bold">
-                  {settings.noPanelSpacing || settings.pageGap === 0 ? '0px (Seamless)' : `${settings.pageGap}px`}
-                </span>
-              </label>
-              <div className="flex items-center gap-2">
-                {[0, 4, 8, 12, 16, 24].map((gap) => (
-                  <button
-                    key={gap}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, pageGap: gap, noPanelSpacing: gap === 0 })}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      (gap === 0 && (settings.noPanelSpacing || settings.pageGap === 0)) || settings.pageGap === gap
-                        ? 'border-accent bg-accent text-accent-fg'
-                        : 'border-edge bg-app text-secondary hover:bg-elevated'
-                    }`}
-                  >
-                    {gap === 0 ? 'Seamless' : `${gap}px`}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. CONTAINER MAX WIDTH */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary">Container Max Width (Reader Canvas):</label>
-              <div className="grid grid-cols-5 gap-2 text-xs">
-                {['600px', '750px', '850px', '1000px', '100%'].map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, maxWidth: w })}
-                    className={`py-1.5 rounded-lg font-bold border transition-all ${
-                      settings.maxWidth === w
-                        ? 'border-accent bg-accent text-accent-fg'
-                        : 'border-edge bg-app text-secondary hover:bg-elevated'
-                    }`}
-                  >
-                    {w === '100%' ? 'Full' : w}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 4. IMAGE FIT MODE */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary">Image Scaling & Fit Mode:</label>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {[
-                  { id: 'fit-width', label: 'Fit Width' },
-                  { id: 'fit-height', label: 'Fit Screen Height' },
-                  { id: 'original', label: 'Original Size' },
-                ].map((fit) => (
-                  <button
-                    key={fit.id}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, mangaFitMode: fit.id as any })}
-                    className={`py-1.5 rounded-lg font-bold border text-center transition-all ${
-                      settings.mangaFitMode === fit.id
-                        ? 'border-accent bg-accent text-accent-fg'
-                        : 'border-edge bg-app text-secondary hover:bg-elevated'
-                    }`}
-                  >
-                    {fit.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 5. VISUAL FILTERS (SHARPENER, E-INK, OLED) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-accent" />
-                Image Shader & Color Filters:
-              </label>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {[
-                  { id: 'normal', name: 'Normal Original' },
-                  { id: 'sharpener', name: '✨ Line-Art Sharpener' },
-                  { id: 'e-ink', name: '📖 E-Ink E-Paper' },
-                  { id: 'oled', name: '🌑 OLED Ultra-Dark' },
-                  { id: 'high-contrast', name: '⚡ High Contrast' },
-                  { id: 'sepia', name: '📜 Warm Sepia' },
-                  { id: 'grayscale', name: '🔘 Monochrome B&W' },
-                  { id: 'invert', name: '🔄 Invert Colors' },
-                  { id: 'brightness', name: '☀️ Bright Boost' },
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => {
-                      setSettings({ ...settings, imageFilter: f.id as any });
-                      triggerToast(`Filter: ${f.name}`);
-                    }}
-                    className={`py-2 px-2.5 rounded-xl font-bold border text-left text-xs transition-all ${
-                      settings.imageFilter === f.id
-                        ? 'border-accent bg-accent/15 text-accent shadow-sm'
-                        : 'border-edge bg-app text-secondary hover:bg-elevated hover:text-primary'
-                    }`}
-                  >
-                    {f.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 5B. GUIDED PANEL VIEW & PREFETCH TOGGLES */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
-                <div>
-                  <div className="text-xs font-bold text-primary">Guided Panel View</div>
-                  <div className="text-[10px] text-secondary">Snap-to-panel scrolling for Webtoons</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.guidedPanelView || false}
-                  onChange={(e) => setSettings({ ...settings, guidedPanelView: e.target.checked })}
-                  className="w-4 h-4 accent-accent"
-                />
-              </label>
-
-              <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
-                <div>
-                  <div className="text-xs font-bold text-primary">Preload Next Chapter</div>
-                  <div className="text-[10px] text-secondary">0ms instant chapter transitions</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.prefetchNextChapter !== false}
-                  onChange={(e) => setSettings({ ...settings, prefetchNextChapter: e.target.checked })}
-                  className="w-4 h-4 accent-accent"
-                />
-              </label>
-            </div>
-
-            {/* 5C. CANVAS BACKGROUND THEME */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-secondary">Background Canvas Theme:</label>
-              <div className="grid grid-cols-4 gap-2 text-xs">
-                {[
-                  { id: 'slate', name: 'Dark Slate', bg: 'bg-surface text-primary' },
-                  { id: 'black', name: 'AMOLED Black', bg: 'bg-black text-primary' },
-                  { id: 'sepia', name: 'Soft Sepia', bg: 'bg-[#f4ecd8] text-[#5b4636]' },
-                  { id: 'white', name: 'Paper White', bg: 'bg-white text-accent-fg' },
-                ].map((bg) => (
-                  <button
-                    key={bg.id}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, bgColor: bg.id as any })}
-                    className={`py-2 rounded-lg font-bold border text-center transition-all ${bg.bg} ${
-                      settings.bgColor === bg.id ? 'ring-2 ring-accent border-accent' : 'border-edge-strong'
-                    }`}
-                  >
-                    {bg.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 6. AUTO-SCROLL SPEED */}
-            <div className="p-3.5 bg-app rounded-xl border border-edge space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <Play className="w-3.5 h-3.5 text-accent" />
-                  Auto-Scroll Speed Controls
-                </span>
-                <span className="text-accent font-mono font-bold text-xs">{settings.autoScrollSpeed}x Speed</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {[0.5, 1.0, 1.5, 2.0, 3.0, 5.0].map((speed) => (
-                  <button
-                    key={speed}
-                    type="button"
-                    onClick={() => setSettings({ ...settings, autoScrollSpeed: speed })}
-                    className={`flex-1 py-1 rounded text-xs font-bold border transition-all ${
-                      settings.autoScrollSpeed === speed
-                        ? 'border-accent bg-accent text-accent-fg'
-                        : 'border-edge bg-surface text-secondary hover:bg-elevated'
-                    }`}
-                  >
-                    {speed}x
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 7. FLAGGING SYSTEM BUTTON */}
-            <div className="p-3.5 bg-red-950/30 border border-red-900/50 rounded-xl flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <div className="text-xs font-bold text-danger flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Flag Series Loading / Chapter Error
-                </div>
-                <div className="text-[11px] text-secondary">Report missing panels, unreadable images, or source issues.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFlagDropdown(!showFlagDropdown)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  isFlagged
-                    ? 'bg-danger text-white shadow-md'
-                    : 'bg-elevated hover:bg-red-950 text-danger border border-danger/30'
-                }`}
-              >
-                {isFlagged ? '✓ Flagged' : 'Flag Issue'}
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-edge flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowSettings(false)}
-                className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-extrabold text-xs"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* DIRECT PAGE JUMP MODAL */}
+      {showQuickJumpModal && chapterData && (
+        <QuickJumpModal
+          totalPages={chapterData.pages.length}
+          currentPage={currentPageIndex}
+          onClose={() => setShowQuickJumpModal(false)}
+          onJump={(targetIdx) => {
+            setCurrentPageIndex(targetIdx);
+            if (isWebtoon && scrollContainerRef.current) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * targetIdx;
+            }
+          }}
+        />
       )}
 
       {/* MAIN READER SCROLL CANVAS */}
@@ -1634,265 +1077,63 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       {/* BOTTOM HUD AUTO-SCROLL GRANULAR SPEED SELECTOR & PAGE SLIDER */}
       {showHud && chapterData && (
-        <footer className="sticky bottom-0 z-50 bg-surface/95 backdrop-blur-md border-t border-edge p-3 flex flex-col gap-2.5 text-xs">
-          {/* Quick Page Slider */}
-          <div className="flex items-center gap-3 max-w-2xl mx-auto w-full">
-            <span className="font-mono text-secondary font-bold">1</span>
-            <input
-              type="range"
-              min="0"
-              max={chapterData.pages.length - 1}
-              value={currentPageIndex}
-              onChange={(e) => setCurrentPageIndex(Number(e.target.value))}
-              className="flex-1 accent-accent cursor-pointer"
-            />
-            <span className="font-mono text-accent font-bold">
-              {currentPageIndex + 1} / {chapterData.pages.length}
-            </span>
-          </div>
-
-          {/* Granular Auto-Scroll Speed Selector Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-2 max-w-2xl mx-auto w-full">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setIsAutoScrolling(!isAutoScrolling)}
-                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all shadow-md ${
-                  isAutoScrolling ? 'bg-accent text-accent-fg' : 'bg-elevated text-secondary hover:text-white'
-                }`}
-                title="Toggle Auto-Scroll (Space)"
-              >
-                {isAutoScrolling ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                <span>{isAutoScrolling ? 'Pause' : 'Auto Scroll (Space)'}</span>
-              </button>
-
-              {/* Granular Speed Selector Bar */}
-              <div className="flex items-center gap-1 bg-app p-1 rounded-lg border border-edge">
-                <span className="text-[10px] text-secondary font-bold px-1">Speed:</span>
-                {[0.5, 1.0, 1.5, 2.0, 2.5, 3.0].map((spd) => (
-                  <button
-                    key={spd}
-                    onClick={() => {
-                      setSettings({ ...settings, autoScrollSpeed: spd });
-                      triggerToast(`Auto-Scroll Speed: ${spd}x`);
-                    }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                      settings.autoScrollSpeed === spd
-                        ? 'bg-accent text-accent-fg shadow-sm'
-                        : 'text-secondary hover:text-primary hover:bg-elevated'
-                    }`}
-                  >
-                    {spd}x
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowPageGridModal(true)}
-                className="hover:text-accent flex items-center gap-1 font-semibold text-secondary"
-              >
-                <Grid className="w-3.5 h-3.5 text-info" />
-                <span>Gallery Overview</span>
-              </button>
-            </div>
-          </div>
-        </footer>
+        <ReaderFooter
+          chapterData={chapterData}
+          currentPageIndex={currentPageIndex}
+          isAutoScrolling={isAutoScrolling}
+          settings={settings}
+          onSeekPage={(idx) => setCurrentPageIndex(idx)}
+          onToggleAutoScroll={() => setIsAutoScrolling(!isAutoScrolling)}
+          onSelectAutoScrollSpeed={(spd) => {
+            setSettings({ ...settings, autoScrollSpeed: spd });
+            triggerToast(`Auto-Scroll Speed: ${spd}x`);
+          }}
+          onOpenPageGrid={() => setShowPageGridModal(true)}
+        />
       )}
 
-      {/* STICKY NOTES DRAWER */}
-      {showNotesDrawer && (
-        <div className="fixed inset-0 z-50 bg-app/80 backdrop-blur-md flex justify-end">
-          <div className="bg-surface border-l border-edge w-full max-w-md h-full flex flex-col shadow-2xl p-5 space-y-4 animate-in slide-in-from-right duration-200">
-            <div className="flex items-center justify-between border-b border-edge pb-3">
-              <div className="font-black text-primary text-base flex items-center gap-2">
-                <StickyNote className="w-5 h-5 text-amber-400" />
-                <span>Chapter Notes & Annotations</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-400">
-                  {stickyNotes.length} Total
-                </span>
-              </div>
-              <button
-                onClick={() => setShowNotesDrawer(false)}
-                className="p-1.5 rounded-full bg-elevated text-secondary hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setNoteInputText('');
-                  setNoteInputColor('yellow');
-                  setActiveNoteModal({ pageIndex: currentPageIndex });
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Pin Note to Page {currentPageIndex + 1}</span>
-              </button>
-            </div>
-
-            {/* Notes List */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
-              {stickyNotes.length === 0 ? (
-                <div className="h-64 flex flex-col items-center justify-center text-center p-4 text-secondary">
-                  <StickyNote className="w-10 h-10 text-muted mb-2 opacity-50" />
-                  <p className="font-bold text-xs">No sticky notes yet</p>
-                  <p className="text-[11px] text-muted">Press 'N' or tap Pin Note to bookmark thoughts, theories, or favorite panels!</p>
-                </div>
-              ) : (
-                stickyNotes.map((note) => {
-                  const isCurrentCh = Number(note.chapterNumber) === Number(currentChapterNum);
-                  const colorClass =
-                    note.color === 'blue'
-                      ? 'bg-blue-950/40 border-blue-500/40 text-blue-200'
-                      : note.color === 'purple'
-                      ? 'bg-purple-950/40 border-purple-500/40 text-purple-200'
-                      : note.color === 'green'
-                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200';
-
-                  return (
-                    <div
-                      key={note.id}
-                      className={`p-3.5 rounded-xl border space-y-2 transition-all ${colorClass}`}
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 font-bold">
-                          <span className="px-2 py-0.5 rounded bg-black/40 text-[10px] font-mono">
-                            Ch. {note.chapterNumber} • Page {note.pageIndex + 1}
-                          </span>
-                          {isCurrentCh && (
-                            <span className="text-[10px] text-accent font-extrabold">Current Chapter</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => {
-                              setNoteInputText(note.noteText);
-                              setNoteInputColor(note.color || 'yellow');
-                              setActiveNoteModal({
-                                pageIndex: note.pageIndex,
-                                noteId: note.id,
-                                initialText: note.noteText,
-                                color: note.color,
-                              });
-                            }}
-                            className="p-1 rounded bg-black/30 hover:bg-black/60 text-secondary hover:text-white"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteNote(note.id)}
-                            className="p-1 rounded bg-black/30 hover:bg-red-950 text-secondary hover:text-danger"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="text-xs leading-relaxed font-sans whitespace-pre-wrap">
-                        {note.noteText}
-                      </p>
-
-                      <div className="pt-1 flex items-center justify-between text-[10px] opacity-70">
-                        <span>{new Date(note.updatedAt || note.createdAt).toLocaleDateString()}</span>
-                        <button
-                          onClick={() => {
-                            if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
-                              setCurrentChapterNum(note.chapterNumber);
-                            }
-                            setCurrentPageIndex(note.pageIndex);
-                            setShowNotesDrawer(false);
-                            if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
-                              const totalH = scrollContainerRef.current.scrollHeight;
-                              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
-                            }
-                          }}
-                          className="font-bold underline hover:opacity-100"
-                        >
-                          Jump to Page →
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADD / EDIT STICKY NOTE MODAL */}
-      {activeNoteModal && (
-        <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-edge rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-edge pb-2.5">
-              <div className="font-bold text-primary text-sm flex items-center gap-2">
-                <StickyNote className="w-4 h-4 text-amber-400" />
-                <span>{activeNoteModal.noteId ? 'Edit Sticky Note' : `Add Sticky Note (Page ${activeNoteModal.pageIndex + 1})`}</span>
-              </div>
-              <button
-                onClick={() => setActiveNoteModal(null)}
-                className="text-secondary hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <textarea
-              rows={4}
-              value={noteInputText}
-              onChange={(e) => setNoteInputText(e.target.value)}
-              placeholder="Type your notes, impressions, character theories, or key plot points..."
-              className="w-full bg-app border border-edge rounded-xl p-3 text-primary text-xs focus:outline-none focus:border-accent resize-none font-sans"
-              autoFocus
-            />
-
-            {/* Color Selector */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-secondary">Color:</span>
-                {[
-                  { id: 'yellow', bg: 'bg-amber-400' },
-                  { id: 'blue', bg: 'bg-blue-400' },
-                  { id: 'purple', bg: 'bg-purple-400' },
-                  { id: 'green', bg: 'bg-emerald-400' },
-                ].map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setNoteInputColor(c.id as any)}
-                    className={`w-6 h-6 rounded-full ${c.bg} transition-all ${
-                      noteInputColor === c.id ? 'ring-2 ring-white scale-110 shadow-lg' : 'opacity-60 hover:opacity-100'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveNoteModal(null)}
-                  className="px-3.5 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveNote}
-                  disabled={!noteInputText.trim()}
-                  className="px-4 py-1.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg text-xs font-bold shadow-md disabled:opacity-50"
-                >
-                  Save Note
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* STICKY NOTES DRAWER & MODAL */}
+      <StickyNotesDrawer
+        showDrawer={showNotesDrawer}
+        stickyNotes={stickyNotes}
+        currentChapterNum={currentChapterNum}
+        currentPageIndex={currentPageIndex}
+        activeNoteModal={activeNoteModal}
+        noteInputText={noteInputText}
+        noteInputColor={noteInputColor}
+        onCloseDrawer={() => setShowNotesDrawer(false)}
+        onOpenAddModal={(pageIdx) => {
+          setNoteInputText('');
+          setNoteInputColor('yellow');
+          setActiveNoteModal({ pageIndex: pageIdx });
+        }}
+        onOpenEditModal={(note) => {
+          setNoteInputText(note.noteText);
+          setNoteInputColor(note.color || 'yellow');
+          setActiveNoteModal({
+            pageIndex: note.pageIndex,
+            noteId: note.id,
+            initialText: note.noteText,
+            color: note.color,
+          });
+        }}
+        onCloseModal={() => setActiveNoteModal(null)}
+        onChangeNoteText={setNoteInputText}
+        onChangeNoteColor={setNoteInputColor}
+        onSaveNote={handleSaveNote}
+        onDeleteNote={handleDeleteNote}
+        onJumpToNote={(note) => {
+          if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
+            setCurrentChapterNum(note.chapterNumber);
+          }
+          setCurrentPageIndex(note.pageIndex);
+          setShowNotesDrawer(false);
+          if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
+            const totalH = scrollContainerRef.current.scrollHeight;
+            scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
+          }
+        }}
+      />
     </div>
   );
 };

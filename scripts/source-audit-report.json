@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-13T08:23:11.332Z",
+  "generatedAt": "2026-08-18T10:37:39.431Z",
   "parserRepo": "kotatsu-parsers\\src\\main\\kotlin\\org\\koitharu\\kotatsu\\parsers\\site",
   "totalIngested": 1187,
   "reliable": 957,
@@ -6581,36 +6581,7 @@
       "lang": "pt"
     }
   ],
-  "probed": [
-    {
-      "id": "asurascans",
-      "engine": "custom_html",
-      "domain": "asuracomic.net",
-      "reachable": "yes",
-      "status": 200,
-      "finalUrl": "https://asurascans.com/",
-      "blocked": "none",
-      "catalog": {
-        "status": 200,
-        "seriesLinks": 141,
-        "blocked": "none"
-      }
-    },
-    {
-      "id": "manhwa18",
-      "engine": "custom_html",
-      "domain": "manhwa18.net",
-      "reachable": "yes",
-      "status": 200,
-      "finalUrl": "https://manhwa18.net/",
-      "blocked": "none",
-      "catalog": {
-        "status": 404,
-        "seriesLinks": 0,
-        "blocked": "none"
-      }
-    }
-  ],
+  "probed": null,
   "byEngine": {
     "custom_html": 359,
     "mangathemesia": 262,

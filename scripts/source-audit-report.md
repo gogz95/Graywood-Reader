@@ -1,17 +1,10 @@
 # Source Reliability & Functionality Audit
 
-- Date: 2026-08-13T08:23:11.335Z
+- Date: 2026-08-18T10:37:39.433Z
 - Parser repo: `kotatsu-parsers\src\main\kotlin\org\koitharu\kotatsu\parsers\site`
 - Sources ingested: **1187**
 - Reliable baseUrl: **957**
 - Unreliable baseUrl (fallback/invalid): **230**
-
-## Live probe (2 sources, 0 unreachable/blocked)
-
-| id | engine | reachable | status | blocked | finalUrl | catalog links |
-|---|---|---|---|---|---|---|
-| asurascans | custom_html | yes | 200 | none | https://asurascans.com/ | 141 |
-| manhwa18 | custom_html | yes | 200 | none | https://manhwa18.net/ | 0 |
 
 ## Unreliable baseUrl (needs domain fix)
 

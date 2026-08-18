@@ -17,24 +17,35 @@ export function resolveEncryptionSecret(): string {
     return process.env.ENCRYPTION_SECRET.trim();
   }
   const secretPath = path.join(process.cwd(), 'data', '.encryption-secret');
+  // A known, published legacy default was previously auto-seeded. If it is
+  // still present, warn loudly so operators rotate it — but never reuse it for
+  // new installs (it would let anyone decrypt PII / forge auth tokens).
+  const LEGACY_DEFAULT = 'graywood-reader-gdpr-aes256-secret-key-32b!';
   try {
     if (fs.existsSync(secretPath)) {
       const existing = fs.readFileSync(secretPath, 'utf8').trim();
-      if (existing) return existing;
+      if (existing) {
+        if (existing === LEGACY_DEFAULT) {
+          console.warn('[Security Engine] data/.encryption-secret contains the legacy default key. Rotate it now: set a strong ENCRYPTION_SECRET (>= 32 chars) and restart. Existing encrypted PII will need re-encryption.');
+        }
+        return existing;
+      }
     }
   } catch (err) {
     console.error('[Security Engine] Failed to read secret file:', err);
   }
-  // First run: seed with the legacy default key for backward compatibility.
-  const legacyDefault = 'graywood-reader-gdpr-aes256-secret-key-32b!';
+  // First run: generate a strong random secret — never a predictable default.
+  const generated =
+    crypto.randomBytes(48).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 48) +
+    crypto.randomBytes(4).toString('hex');
   try {
     fs.mkdirSync(path.dirname(secretPath), { recursive: true });
-    fs.writeFileSync(secretPath, legacyDefault + '\n', { mode: 0o600 });
-    console.warn('[Security Engine] Seeded data/.encryption-secret with the legacy default key so existing encrypted PII stays decryptable. Set ENCRYPTION_SECRET in your environment to rotate it.');
+    fs.writeFileSync(secretPath, generated + '\n', { mode: 0o600 });
+    console.warn('[Security Engine] Generated a fresh random encryption secret at data/.encryption-secret (mode 0600). Set ENCRYPTION_SECRET in your environment to pin it explicitly.');
   } catch (err) {
-    console.error('[Security Engine] Failed to seed secret file:', err);
+    console.error('[Security Engine] Failed to persist generated secret file:', err);
   }
-  return legacyDefault;
+  return generated;
 }
 
 export const ENCRYPTION_SECRET = resolveEncryptionSecret();
@@ -172,8 +183,10 @@ export function toPublicUser(u: UserProfile) {
 // HOST PC PRIVILEGE ENGINE & SECURITY MIDDLEWARE
 // ==========================================
 export function isHostRequest(req: express.Request): boolean {
-  // SECURITY: Never trust the raw X-Forwarded-For header here — it is trivially
-  // spoofable by any remote client. Use only the Express-resolved socket IP.
+  // SECURITY: req.ip is Express-resolved. The server enables `trust proxy` with
+  // a loopback-only trust function (see server.ts), so X-Forwarded-For is honored
+  // ONLY when the direct peer is a trusted loopback proxy (nginx on this host).
+  // A forged header from a remote client can therefore never elevate to a host.
   const clientIp = (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   return clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
 }

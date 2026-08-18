@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../utils/api';
 import { MangaItem, ChapterInfo, hasWorkingReaderSource } from '../types';
+import { bulkDownloadSeries, getOfflineStorageUsage } from '../utils/offlineStorage';
 
 
 import {
@@ -14,6 +15,9 @@ import {
   RefreshCw,
   Globe,
   Zap,
+  Download,
+  Loader2,
+  HardDrive,
 } from 'lucide-react';
 
 interface ChapterListModalProps {
@@ -33,6 +37,51 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [isDownloadingAll, setIsDownloadingAll] = useState<boolean>(false);
+  const [downloadStatus, setDownloadStatus] = useState({ done: 0, total: 0 });
+  const [downloadSummary, setDownloadSummary] = useState<string>('');
+  const [storageUsage, setStorageUsage] = useState<{ totalBytes: number; chapterCount: number }>({ totalBytes: 0, chapterCount: 0 });
+
+  const refreshStorageUsage = async () => {
+    const usage = await getOfflineStorageUsage();
+    setStorageUsage({ totalBytes: usage.totalBytes, chapterCount: usage.chapterCount });
+  };
+
+  const handleDownloadAll = async () => {
+    if (!manga.id || chapters.length === 0 || isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    setDownloadSummary('');
+    setDownloadStatus({ done: 0, total: chapters.length });
+    try {
+      const result = await bulkDownloadSeries({
+        mangaId: manga.id,
+        mangaTitle: manga.title,
+        chapterNumbers: chapters.map((c) => c.chapterNumber),
+        fetchChapterPages: async (chNum) => {
+          const res = await apiFetch(`/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&chapterNumber=${chNum}`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data.pages) ? data.pages : [];
+        },
+        onChapterComplete: (done, total) => setDownloadStatus({ done, total }),
+      });
+      setDownloadSummary(
+        result.downloaded > 0
+          ? `Saved ${result.downloaded}/${chapters.length} chapters offline.${result.failed ? ` ${result.failed} failed.` : ''}`
+          : 'No chapters could be downloaded.'
+      );
+    } catch (err) {
+      console.error('[ChapterListModal] Bulk download error:', err);
+      setDownloadSummary('Bulk download failed.');
+    } finally {
+      setIsDownloadingAll(false);
+      await refreshStorageUsage();
+    }
+  };
+
+  useEffect(() => {
+    refreshStorageUsage();
+  }, []);
 
   const fetchChapters = async () => {
     setLoading(true);
@@ -101,21 +150,47 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
         {/* Quick Launch Continue Reading Banner */}
         {hasWorkingReaderSource(manga) ? (
           <div className="p-4 bg-app/70 border-b border-edge/80 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs">
-              <Zap className="w-4 h-4 text-accent" />
-              <span className="text-secondary font-semibold">Ready to continue reading?</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-xs">
+                <Zap className="w-4 h-4 text-accent" />
+                <span className="text-secondary font-semibold">Ready to continue reading?</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-secondary/80">
+                <HardDrive className="w-3 h-3 text-accent" />
+                <span>Offline storage: {(storageUsage.totalBytes / 1048576).toFixed(1)} MB · {storageUsage.chapterCount} chapters</span>
+                {downloadSummary && <span className="text-accent font-semibold">· {downloadSummary}</span>}
+              </div>
             </div>
 
-            <button
-              onClick={() => {
-                onClose();
-                onOpenReader(manga.currentChapter + 1);
-              }}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-bold text-xs flex items-center gap-2 shadow-lg shadow-accent/10 transition-all"
-            >
-              <Play className="w-3.5 h-3.5 fill-accent-fg" />
-              <span>Read Chapter {manga.currentChapter + 1}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll || chapters.length === 0}
+                className="px-3.5 py-2 rounded-xl bg-elevated border border-edge-strong/60 hover:bg-elevated/80 text-secondary font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDownloadingAll ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 text-accent" />
+                )}
+                <span>
+                  {isDownloadingAll
+                    ? `Downloading ${downloadStatus.done}/${downloadStatus.total}...`
+                    : `Download All (${chapters.length})`}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenReader(manga.currentChapter + 1);
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-bold text-xs flex items-center gap-2 shadow-lg shadow-accent/10 transition-all"
+              >
+                <Play className="w-3.5 h-3.5 fill-accent-fg" />
+                <span>Read Chapter {manga.currentChapter + 1}</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="p-3.5 bg-app/70 border-b border-edge/80 text-xs text-secondary flex items-center justify-between">

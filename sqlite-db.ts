@@ -18,6 +18,10 @@ const db = new Database(DB_PATH);
 // Enable WAL Mode for high concurrency and sub-millisecond writes
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 5000');
+db.pragma('cache_size = -64000');
+db.pragma('temp_store = MEMORY');
+db.pragma('mmap_size = 268435456');
 
 // 1. Initialize Tables & Indexes
 db.exec(`
@@ -58,6 +62,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_manga_type ON manga(type);
   CREATE INDEX IF NOT EXISTS idx_manga_updated ON manga(lastUpdated DESC);
   CREATE INDEX IF NOT EXISTS idx_manga_apiId ON manga(apiId);
+  CREATE INDEX IF NOT EXISTS idx_manga_rating ON manga(rating DESC);
+  CREATE INDEX IF NOT EXISTS idx_manga_lastRead ON manga(lastReadAt DESC);
+  CREATE INDEX IF NOT EXISTS idx_manga_status ON manga(status);
 `);
 
 try { db.exec('ALTER TABLE manga ADD COLUMN availableSources TEXT'); } catch(e) {}

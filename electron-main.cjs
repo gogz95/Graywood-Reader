@@ -74,6 +74,16 @@ function createWindow() {
     if (url.startsWith('http:') || url.startsWith('https:')) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
+  // Retry if the backend wasn't ready yet / a transient load failure occurred.
+  mainWindow.webContents.on('did-fail-load', (_event, code, desc) => {
+    writeLog(`did-fail-load (${code}): ${desc}; retrying in 2s`);
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadURL(SERVER_URL).catch(() => writeLog('loadURL retry failed'));
+      }
+    }, 2000);
+  });
+
   mainWindow.on('closed', () => { mainWindow = null; writeLog('Electron window closed'); });
 }
 
@@ -83,5 +93,9 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('window-all-closed', () => { if (serverProcess) serverProcess.kill(); if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => {
+  // Keep the backend running on macOS so the app relaunches instantly; on other
+  // platforms quit, which triggers the will-quit teardown of the server.
+  if (process.platform !== 'darwin') app.quit();
+});
 app.on('will-quit', () => { writeLog('Electron app quitting'); if (serverProcess) serverProcess.kill(); });
