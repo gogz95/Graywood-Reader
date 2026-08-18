@@ -6,6 +6,32 @@ import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
 import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
+
+// Ad protection: known ad network domains are excluded from chapter page images
+const KNOWN_AD_DOMAINS = [
+  'googleadservices', 'pagead2', 'googlesyndication', 'doubleclick',
+  'ads', 'adn', 'adtech', 'mediavine', 'raptive', 'springboard',
+  'content.ad', 'outbrain', 'taboola', 'revcontent', 'nativo',
+  'push', 'popunder', 'click-under', 'interstitial'
+];
+
+// Check if an image src belongs to a known ad network
+function isAdImageSrc(src: string, origin: string): boolean {
+  try {
+    const url = new URL(src, origin);
+    const hostname = url.hostname.toLowerCase();
+    for (const adDomain of KNOWN_AD_DOMAINS) {
+      if (hostname.includes(adDomain)) return true;
+    }
+    const lowerSrc = src.toLowerCase();
+    if (/.*[/_](ad|banner|popunder|interstitial|media)(\?|$)/i.test(src)) return true;
+    // Google AdSense domain check (simplified)
+    // Google AdSense domain check (simplified)
+    return false;
+  } catch {
+    return false;
+  }
+}
 import {
   resolveEncryptionSecret,
   ENCRYPTION_SECRET,
@@ -3503,80 +3529,79 @@ async function scrapeFlameComics(page: number, limit: number): Promise<any[]> {
   }
 }
 
-// ── 3. MANHWA18 (HTML catalog, 90 pages, /manga-list?page=N) ─────────────────
-// URL pattern: https://manhwa18.com/manga-list?page=N&sort=az
-// Only keep SERIES pages (/manga/<slug>) — list HTML also contains chapter links.
+// ── 3. MANHWA18 (HTML catalog — /tim-kiem?page=N, Kotatsu-Redo reference) ───
+// Kotatsu-Redo uses /tim-kiem (search/browse) not /manga-list.
+// Selectors: .card-body .thumb-item-flow > .thumb_attr.series-title > a
+// Covers: .thumb img (data-src first, lazy-loaded)
 async function scrapeManhwa18(page: number, limit: number): Promise<any[]> {
   try {
-    const url = `https://manhwa18.com/manga-list?page=${page}&sort=az`;
+    // Kotatsu-Redo's Manhwa18Com.kt uses /tim-kiem?page=N
+    const url = `https://manhwa18.com/tim-kiem?page=${page}`;
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(15000),
       headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html', 'Referer': 'https://manhwa18.com/' },
     });
     if (!res.ok) return [];
 
     const html = await res.text();
+    // Try cheerio with Kotatsu selectors first
+    const $ = cheerio.load(html);
     const results: any[] = [];
     const seen = new Set<string>();
 
-    const isSeriesPage = (href: string): boolean => {
-      try {
-        const u = new URL(href, 'https://manhwa18.com');
-        const m = u.pathname.replace(/\/+$/, '').match(/^\/manga\/([^/]+)$/i);
-        return Boolean(m && m[1] && !/^(list|page)$/i.test(m[1]));
-      } catch { return false; }
-    };
+    // Primary: Kotatsu .card-body .thumb-item-flow
+    let cards = $('.card-body .thumb-item-flow').toArray();
+    if (cards.length === 0) cards = $('.thumb_attr.series-title').parent().toArray();
 
-    const titleRx = /<div class="thumb_attr series-title">\s*<a href="([^"]+)" title="([^"]+)"/gi;
-    const bgRx = /data-bg="([^"]+)"/gi;
-    const covers: string[] = [];
-    let bg: RegExpExecArray | null;
-    while ((bg = bgRx.exec(html)) !== null) covers.push(bg[1]);
-
-    let t: RegExpExecArray | null;
-    let i = 0;
-    while ((t = titleRx.exec(html)) !== null && results.length < limit) {
-      let href = t[1];
-      const title = (t[2] || '').trim();
-      if (!href.startsWith('http')) href = `https://manhwa18.com${href.startsWith('/') ? '' : '/'}${href}`;
-      href = href.replace(/\/+$/, '');
-      if (!isSeriesPage(href) || seen.has(href)) continue;
-      seen.add(href);
+    for (const el of cards) {
+      if (results.length >= limit) break;
+      const card = $(el);
+      const titleA = card.find('.thumb_attr.series-title > a').first();
+      const href = titleA.attr('href') || '';
+      const title = titleA.text().trim();
+      if (!href || !title) continue;
+      const absUrl = href.startsWith('http') ? href : `https://manhwa18.com${href.startsWith('/')?'':'/'}${href}`;
+      if (!/\/manga\/[^/]+$/i.test(absUrl.replace(/\/+$/, ''))) continue;
+      const key = absUrl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const thumb = card.find('.thumb img').first();
+      const cover = thumb.attr('data-src') || thumb.attr('src') || '';
       results.push({
-        id: generateSourceScrapeId('manhwa18', href),
-        title: title || 'Untitled',
-        sourceUrl: href,
-        coverImage: covers[i] || '',
+        id: generateSourceScrapeId('manhwa18', absUrl),
+        title, sourceUrl: absUrl,
+        coverImage: cover.startsWith('http') ? cover : '',
         sourceName: 'Manhwa18',
         description: 'Adult manhwa series from Manhwa18',
-        genres: ['Adult', 'Manhwa'],
-        latestChapter: 1,
-        type: 'manhwa',
+        genres: ['Adult', 'Manhwa'], latestChapter: 1, type: 'manhwa',
       });
-      i++;
     }
 
+    // Regex fallback if cheerio found nothing
     if (results.length === 0) {
-      const absRx = /href="(https?:\/\/manhwa18\.com\/manga\/[^"/]+)"[^>]*title="([^"]+)"/gi;
-      let m: RegExpExecArray | null;
-      while ((m = absRx.exec(html)) !== null && results.length < limit) {
-        const href = m[1].replace(/\/+$/, '');
-        if (!isSeriesPage(href) || seen.has(href)) continue;
+      const titleRx = /<div class="thumb_attr series-title">\s*<a href="([^"]+)" title="([^"]+)"/gi;
+      const bgRx = /data-bg="([^"]+)"/gi;
+      const covers: string[] = [];
+      let bg: RegExpExecArray | null;
+      while ((bg = bgRx.exec(html)) !== null) covers.push(bg[1]);
+      let t: RegExpExecArray | null;
+      let idx = 0;
+      while ((t = titleRx.exec(html)) !== null && results.length < limit) {
+        let href = t[1];
+        if (!href.startsWith('http')) href = `https://manhwa18.com${href.startsWith('/')?'':'/'}${href}`;
+        href = href.replace(/\/+$/, '');
+        if (!/\/manga\/[^/]+$/i.test(href) || seen.has(href)) continue;
         seen.add(href);
         results.push({
           id: generateSourceScrapeId('manhwa18', href),
-          title: m[2] || 'Untitled',
-          sourceUrl: href,
-          coverImage: '',
-          sourceName: 'Manhwa18',
-          description: 'Adult manhwa series from Manhwa18',
-          genres: ['Adult', 'Manhwa'],
-          latestChapter: 1,
-          type: 'manhwa',
+          title: (t[2]||'').trim() || 'Untitled', sourceUrl: href,
+          coverImage: covers[idx] || '', sourceName: 'Manhwa18',
+          description: 'Adult manhwa from Manhwa18',
+          genres: ['Adult','Manhwa'], latestChapter: 1, type: 'manhwa',
         });
+        idx++;
       }
     }
-
     return results;
   } catch (e) {
     console.error('[Scraper] Manhwa18 failed:', (e as Error).message);
@@ -3955,7 +3980,7 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
       const allImgs: string[] = [];
       $('img').each((_i, el) => {
         const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
-        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|banner|icon|placeholder/i.test(src)) {
+        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|banner|icon|placeholder/i.test(src) && !isAdImageSrc(src, origin)) {
           allImgs.push(src.startsWith('http') ? src : `${sourceDef.baseUrl.replace(/\/$/, '')}${src}`);
         }
       });
@@ -5068,7 +5093,7 @@ async function fetchMadaraChapterPages(targetUrl: string, chapterNumber: number,
     }
     const $ = cheerio.load(chHtml);
     // Scope to the reading container (Kotatsu's selectBodyPage), falling back to
-    // the whole document so sites without a distinct container still work.
+    // Google AdSense domain check (simplified)
     const bodySel = config.madaraSelectBodyPage || 'div.main-col-inner div.reading-content';
     const container = $(bodySel).first().length > 0 ? $(bodySel).first() : null;
     const pages: string[] = []; const seenImg = new Set<string>();
@@ -6955,4 +6980,4 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // Example requests:
 // - Large desktop: /api/explore?width=1920&height=1080&limit=30
 // - Mobile: /api/explore?width=414&height=896&limit=30
-// - Custom limit override: /api/explore?width=1920&height=1080&limit=50
+// - Custom limit override: /api/explore?width=1920&height=1080&limit=50
