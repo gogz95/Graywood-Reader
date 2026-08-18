@@ -1,6 +1,6 @@
 export type ReaderViewMode = 'webtoon' | 'webtoon-seamless' | 'single' | 'double' | 'rtl' | 'ltr' | 'vertical-paged';
 export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
-export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'invert' | 'brightness' | 'oled';
+export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'invert' | 'brightness' | 'oled' | 'e-ink' | 'sharpener' | 'high-contrast';
 export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk';
 export type MangaType = 'manga' | 'manhwa' | 'manhua';
 export type AppNavTab = 'library' | 'browse' | 'sources' | 'settings' | 'autoupdate' | 'duplicates' | 'openapi';
@@ -100,6 +100,19 @@ export interface ReaderSettings {
   preloadCount: number;
   autoFormatMode?: boolean; // Automatically adapt layout based on Manga (RTL) vs Manhwa/Manhua (Webtoon)
   rememberPerSeries?: boolean; // Persist last selected layout per individual series
+  guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
+  prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
+}
+
+export interface PageStickyNote {
+  id: string;
+  mangaId: string;
+  chapterNumber: number;
+  pageIndex: number;
+  noteText: string;
+  createdAt: string;
+  updatedAt: string;
+  color?: 'yellow' | 'blue' | 'purple' | 'green';
 }
 
 export interface AppSettings {

@@ -6561,6 +6561,92 @@ app.get('/api/opds/series/:id', (req, res) => {
   res.send(xml);
 });
 
+// ============================================================================
+// HIGH-PERFORMANCE IMAGE PROXY WITH ETAGS & IMMUTABLE CACHING
+// ============================================================================
+
+async function handleProxyImageRequest(req: express.Request, res: express.Response) {
+  const rawUrl = (req.query.url as string) || '';
+  if (!rawUrl) {
+    return res.status(400).send('Image URL required');
+  }
+
+  // Generate deterministic ETag based on image URL
+  const etag = `"${crypto.createHash('md5').update(rawUrl).digest('hex')}"`;
+  if (req.headers['if-none-match'] === etag) {
+    return res.status(304).end();
+  }
+
+  const sourceUrl = (req.query.sourceUrl as string) || (req.query.pageUrl as string) || rawUrl;
+  let referer = 'https://asurascans.com/';
+  try {
+    if (sourceUrl.startsWith('http')) {
+      referer = new URL(sourceUrl).origin + '/';
+    }
+  } catch (_) {}
+
+  try {
+    const fetchHeaders: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+      'Referer': referer,
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+    };
+
+    const imageRes = await fetch(rawUrl, {
+      headers: fetchHeaders,
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!imageRes.ok) {
+      return res.status(imageRes.status).send(`Failed to fetch upstream image: ${imageRes.statusText}`);
+    }
+
+    const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
+    const buffer = Buffer.from(await imageRes.arrayBuffer());
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(502).send(`Image proxy error: ${err.message}`);
+  }
+}
+
+app.get('/api/proxy/image', handleProxyImageRequest);
+app.get('/api/reader/proxy-image', handleProxyImageRequest);
+
+// ============================================================================
+// PRIVATE PAGE STICKY NOTES API
+// ============================================================================
+
+app.get('/api/notes/:mangaId', (req, res) => {
+  const { mangaId } = req.params;
+  const notes = SqliteDb.getStickyNotes(mangaId);
+  res.json(notes);
+});
+
+app.post('/api/notes', (req, res) => {
+  const note = req.body;
+  if (!note || !note.mangaId || note.chapterNumber === undefined || note.pageIndex === undefined) {
+    return res.status(400).json({ error: 'mangaId, chapterNumber, and pageIndex are required' });
+  }
+  const noteId = note.id || `note_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const fullNote = {
+    ...note,
+    id: noteId,
+    updatedAt: new Date().toISOString(),
+  };
+  SqliteDb.saveStickyNote(fullNote);
+  res.json({ success: true, note: fullNote });
+});
+
+app.delete('/api/notes/:id', (req, res) => {
+  const { id } = req.params;
+  const ok = SqliteDb.deleteStickyNote(id);
+  res.json({ success: ok });
+});
+
 
 
 // GDPR Article 15: Right to Access & Data Portability Export

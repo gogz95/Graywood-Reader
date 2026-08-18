@@ -67,6 +67,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Virtualized Chunked Loading for Smooth 60 FPS Scrolling
+  const [visibleLimit, setVisibleLimit] = useState<number>(36);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -136,6 +140,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
     return 0;
   });
+
+  // Reset visible limit on filter changes
+  React.useEffect(() => {
+    setVisibleLimit(36);
+  }, [statusFilter, typeFilter, sortBy, searchQuery]);
+
+  // IntersectionObserver for lazy chunk rendering
+  React.useEffect(() => {
+    if (!sentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleLimit((prev) => Math.min(prev + 24, sortedList.length));
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [sortedList.length]);
+
+  const visibleList = React.useMemo(() => sortedList.slice(0, visibleLimit), [sortedList, visibleLimit]);
 
   // Stats Counters
   const totalReading = mangaList.filter((m) => m.status === 'reading').length;
@@ -380,9 +406,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       ) : viewMode === 'grid' ? (
         /* GRID VIEW */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-          {sortedList.map((manga) => {
-            const hasNewChapter = manga.latestChapter > manga.currentChapter;
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
+            {visibleList.map((manga) => {
+              const hasNewChapter = manga.latestChapter > manga.currentChapter;
             const progress =
               manga.latestChapter > 0
                 ? Math.min(100, Math.round((manga.currentChapter / manga.latestChapter) * 100))
@@ -545,26 +572,33 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             );
           })}
         </div>
+        {visibleLimit < sortedList.length && (
+          <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary">
+            Loading more series ({visibleLimit} of {sortedList.length})...
+          </div>
+        )}
+      </div>
       ) : (
         /* TABLE VIEW */
-        <div className="bg-surface border border-edge rounded-xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-secondary">
-              <thead className="bg-app text-secondary font-semibold border-b border-edge uppercase tracking-wider">
-                <tr>
-                  {isSelectMode && <th className="py-3 px-3 w-10"></th>}
-                  <th className="py-3 px-4">Title</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Progress</th>
-                  <th className="py-3 px-4">Rating</th>
-                  <th className="py-3 px-4">Source</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-edge/80">
-                {sortedList.map((manga) => {
-                  const hasNew = manga.latestChapter > manga.currentChapter;
+        <div className="space-y-4">
+          <div className="bg-surface border border-edge rounded-xl overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-secondary">
+                <thead className="bg-app text-secondary font-semibold border-b border-edge uppercase tracking-wider">
+                  <tr>
+                    {isSelectMode && <th className="py-3 px-3 w-10"></th>}
+                    <th className="py-3 px-4">Title</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Progress</th>
+                    <th className="py-3 px-4">Rating</th>
+                    <th className="py-3 px-4">Source</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-edge/80">
+                  {visibleList.map((manga) => {
+                    const hasNew = manga.latestChapter > manga.currentChapter;
                   const isSelected = selectedIds.has(manga.id);
                   return (
                     <tr
@@ -690,9 +724,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </tr>
                   );
                 })}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
+          {visibleLimit < sortedList.length && (
+            <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary">
+              Loading more series ({visibleLimit} of {sortedList.length})...
+            </div>
+          )}
         </div>
       )}
 

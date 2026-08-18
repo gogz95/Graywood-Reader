@@ -10,6 +10,7 @@ import {
   ReaderBgColor,
   ReaderImageFilter,
   ScanGroupOption,
+  PageStickyNote,
 } from '../types';
 import {
   detectMangaFormat,
@@ -44,6 +45,10 @@ import {
   Smartphone,
   AlertTriangle,
   Flag,
+  StickyNote,
+  Plus,
+  Trash2,
+  Edit2,
 } from 'lucide-react';
 import {
   saveOfflineChapter,
@@ -143,9 +148,100 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [isDownloadingOffline, setIsDownloadingOffline] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<{ loaded: number; total: number } | null>(null);
 
+  // Private Page Sticky Notes State
+  const [stickyNotes, setStickyNotes] = useState<PageStickyNote[]>([]);
+  const [showNotesDrawer, setShowNotesDrawer] = useState<boolean>(false);
+  const [activeNoteModal, setActiveNoteModal] = useState<{
+    pageIndex: number;
+    noteId?: string;
+    initialText?: string;
+    color?: 'yellow' | 'blue' | 'purple' | 'green';
+  } | null>(null);
+  const [noteInputText, setNoteInputText] = useState<string>('');
+  const [noteInputColor, setNoteInputColor] = useState<'yellow' | 'blue' | 'purple' | 'green'>('yellow');
+
+  const fetchNotes = useCallback(async () => {
+    try {
+      const res = await apiFetch(`/api/notes/${encodeURIComponent(manga.id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStickyNotes(data || []);
+      }
+    } catch (_) {}
+  }, [manga.id]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  const handleSaveNote = async () => {
+    if (!activeNoteModal || !noteInputText.trim()) return;
+    try {
+      const res = await apiFetch('/api/notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: activeNoteModal.noteId,
+          mangaId: manga.id,
+          chapterNumber: currentChapterNum,
+          pageIndex: activeNoteModal.pageIndex,
+          noteText: noteInputText.trim(),
+          color: noteInputColor,
+        }),
+      });
+      if (res.ok) {
+        fetchNotes();
+        setActiveNoteModal(null);
+        setNoteInputText('');
+        triggerToast('Sticky note pinned to page!');
+      }
+    } catch (err: any) {
+      triggerToast(`Failed to save note: ${err.message}`);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      const res = await apiFetch(`/api/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+      if (res.ok) {
+        setStickyNotes((prev) => prev.filter((n) => n.id !== noteId));
+        triggerToast('Note deleted');
+      }
+    } catch (err: any) {
+      triggerToast(`Failed to delete: ${err.message}`);
+    }
+  };
+
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
   const [showFlagDropdown, setShowFlagDropdown] = useState<boolean>(false);
+
+  // Chapter N+1 Silent Background Prefetch Worker
+  const prefetchedChapterRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!chapterData || !chapterData.nextChapterNumber || settings.prefetchNextChapter === false) return;
+    const nextCh = chapterData.nextChapterNumber;
+    if (prefetchedChapterRef.current === nextCh) return;
+
+    const shouldPrefetch = isWebtoon
+      ? readProgressPercent >= 70
+      : currentPageIndex >= Math.max(0, (chapterData.pages?.length || 1) - 3);
+
+    if (shouldPrefetch) {
+      prefetchedChapterRef.current = nextCh;
+      apiFetch(`/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&chapterNumber=${nextCh}`)
+        .then((res) => res.json())
+        .then(async (nextData: ChapterData) => {
+          if (nextData && nextData.pages && nextData.pages.length > 0 && !nextData.isPlaceholder) {
+            nextData.pages.slice(0, 6).forEach((url) => {
+              const img = new Image();
+              img.src = url;
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [readProgressPercent, currentPageIndex, chapterData, isWebtoon, manga.id, settings.prefetchNextChapter]);
 
   // Dynamically compute available scanlation group versions from manga.availableSources
   const availableScanGroups: ScanGroupOption[] = (manga.availableSources && manga.availableSources.length > 0)
@@ -385,6 +481,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             setCurrentChapterNum(chapterData.prevChapterNumber);
           }
         }
+      } else if (e.key === 'ArrowDown' || e.key === 'j') {
+        if (isWebtoon && scrollContainerRef.current) {
+          e.preventDefault();
+          const step = settings.guidedPanelView ? window.innerHeight * 0.75 : 250;
+          scrollContainerRef.current.scrollBy({ top: step, behavior: 'smooth' });
+        }
+      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+        if (isWebtoon && scrollContainerRef.current) {
+          e.preventDefault();
+          const step = settings.guidedPanelView ? window.innerHeight * 0.75 : 250;
+          scrollContainerRef.current.scrollBy({ top: -step, behavior: 'smooth' });
+        }
+      } else if (e.key === 'n') {
+        setNoteInputText('');
+        setNoteInputColor('yellow');
+        setActiveNoteModal({ pageIndex: currentPageIndex });
       } else if (e.key === 'f') {
         if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen().catch(() => {});
@@ -396,7 +508,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.viewMode, currentPageIndex, chapterData, settings.autoScrollSpeed]);
+  }, [settings.viewMode, settings.guidedPanelView, currentPageIndex, chapterData, settings.autoScrollSpeed, isWebtoon]);
 
   // Handle Offline Download Chapter
   const handleDownloadChapter = useCallback(async () => {
@@ -445,15 +557,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return 'bg-app text-primary';
   }, [settings.bgColor]);
 
-  // CSS Image Filters Mapping (Including OLED pitch black optimization!)
+  // CSS Image Filters Mapping (Including OLED pitch black, E-Ink and Line-Art Sharpener)
   const imageFilterStyle = useMemo(() => {
     if (settings.imageFilter === 'oled') return { filter: 'contrast(130%) brightness(90%)' };
     if (settings.imageFilter === 'grayscale') return { filter: 'grayscale(100%)' };
     if (settings.imageFilter === 'sepia') return { filter: 'sepia(70%) contrast(105%)' };
     if (settings.imageFilter === 'invert') return { filter: 'invert(100%) hue-rotate(180deg)' };
     if (settings.imageFilter === 'brightness') return { filter: 'contrast(120%) brightness(110%)' };
+    if (settings.imageFilter === 'e-ink') return { filter: 'grayscale(100%) contrast(175%) brightness(105%)' };
+    if (settings.imageFilter === 'sharpener') return { filter: 'contrast(125%) brightness(98%) drop-shadow(0px 0px 0.5px rgba(0,0,0,0.8))' };
+    if (settings.imageFilter === 'high-contrast') return { filter: 'contrast(140%) brightness(100%)' };
     return {};
   }, [settings.imageFilter]);
+
+  const currentChapterNotes = useMemo(() => {
+    return stickyNotes.filter((n) => Number(n.chapterNumber) === Number(currentChapterNum));
+  }, [stickyNotes, currentChapterNum]);
 
   const totalChaptersList = useMemo(() => {
     return Array.from({
@@ -611,6 +730,24 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-1.5">
+            {/* Sticky Notes Drawer Trigger */}
+            <button
+              onClick={() => setShowNotesDrawer(!showNotesDrawer)}
+              className={`p-2 rounded-xl border text-xs font-bold transition-all relative ${
+                currentChapterNotes.length > 0
+                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                  : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
+              }`}
+              title="Chapter Sticky Notes & Annotations (Press N to add)"
+            >
+              <StickyNote className="w-4 h-4" />
+              {currentChapterNotes.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black font-black text-[9px] flex items-center justify-center">
+                  {currentChapterNotes.length}
+                </span>
+              )}
+            </button>
+
             {/* Offline Chapter Download Button */}
             <button
               onClick={async () => {
@@ -1015,7 +1152,73 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </div>
             </div>
 
-            {/* 5. BACKGROUND THEME */}
+            {/* 5. VISUAL FILTERS (SHARPENER, E-INK, OLED) */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-accent" />
+                Image Shader & Color Filters:
+              </label>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                {[
+                  { id: 'normal', name: 'Normal Original' },
+                  { id: 'sharpener', name: '✨ Line-Art Sharpener' },
+                  { id: 'e-ink', name: '📖 E-Ink E-Paper' },
+                  { id: 'oled', name: '🌑 OLED Ultra-Dark' },
+                  { id: 'high-contrast', name: '⚡ High Contrast' },
+                  { id: 'sepia', name: '📜 Warm Sepia' },
+                  { id: 'grayscale', name: '🔘 Monochrome B&W' },
+                  { id: 'invert', name: '🔄 Invert Colors' },
+                  { id: 'brightness', name: '☀️ Bright Boost' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setSettings({ ...settings, imageFilter: f.id as any });
+                      triggerToast(`Filter: ${f.name}`);
+                    }}
+                    className={`py-2 px-2.5 rounded-xl font-bold border text-left text-xs transition-all ${
+                      settings.imageFilter === f.id
+                        ? 'border-accent bg-accent/15 text-accent shadow-sm'
+                        : 'border-edge bg-app text-secondary hover:bg-elevated hover:text-primary'
+                    }`}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 5B. GUIDED PANEL VIEW & PREFETCH TOGGLES */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+                <div>
+                  <div className="text-xs font-bold text-primary">Guided Panel View</div>
+                  <div className="text-[10px] text-secondary">Snap-to-panel scrolling for Webtoons</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.guidedPanelView || false}
+                  onChange={(e) => setSettings({ ...settings, guidedPanelView: e.target.checked })}
+                  className="w-4 h-4 accent-accent"
+                />
+              </label>
+
+              <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+                <div>
+                  <div className="text-xs font-bold text-primary">Preload Next Chapter</div>
+                  <div className="text-[10px] text-secondary">0ms instant chapter transitions</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.prefetchNextChapter !== false}
+                  onChange={(e) => setSettings({ ...settings, prefetchNextChapter: e.target.checked })}
+                  className="w-4 h-4 accent-accent"
+                />
+              </label>
+            </div>
+
+            {/* 5C. CANVAS BACKGROUND THEME */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-secondary">Background Canvas Theme:</label>
               <div className="grid grid-cols-4 gap-2 text-xs">
@@ -1495,6 +1698,200 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             </div>
           </div>
         </footer>
+      )}
+
+      {/* STICKY NOTES DRAWER */}
+      {showNotesDrawer && (
+        <div className="fixed inset-0 z-50 bg-app/80 backdrop-blur-md flex justify-end">
+          <div className="bg-surface border-l border-edge w-full max-w-md h-full flex flex-col shadow-2xl p-5 space-y-4 animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between border-b border-edge pb-3">
+              <div className="font-black text-primary text-base flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-amber-400" />
+                <span>Chapter Notes & Annotations</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-400">
+                  {stickyNotes.length} Total
+                </span>
+              </div>
+              <button
+                onClick={() => setShowNotesDrawer(false)}
+                className="p-1.5 rounded-full bg-elevated text-secondary hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => {
+                  setNoteInputText('');
+                  setNoteInputColor('yellow');
+                  setActiveNoteModal({ pageIndex: currentPageIndex });
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Pin Note to Page {currentPageIndex + 1}</span>
+              </button>
+            </div>
+
+            {/* Notes List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+              {stickyNotes.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-4 text-secondary">
+                  <StickyNote className="w-10 h-10 text-muted mb-2 opacity-50" />
+                  <p className="font-bold text-xs">No sticky notes yet</p>
+                  <p className="text-[11px] text-muted">Press 'N' or tap Pin Note to bookmark thoughts, theories, or favorite panels!</p>
+                </div>
+              ) : (
+                stickyNotes.map((note) => {
+                  const isCurrentCh = Number(note.chapterNumber) === Number(currentChapterNum);
+                  const colorClass =
+                    note.color === 'blue'
+                      ? 'bg-blue-950/40 border-blue-500/40 text-blue-200'
+                      : note.color === 'purple'
+                      ? 'bg-purple-950/40 border-purple-500/40 text-purple-200'
+                      : note.color === 'green'
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                      : 'bg-amber-950/40 border-amber-500/40 text-amber-200';
+
+                  return (
+                    <div
+                      key={note.id}
+                      className={`p-3.5 rounded-xl border space-y-2 transition-all ${colorClass}`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 font-bold">
+                          <span className="px-2 py-0.5 rounded bg-black/40 text-[10px] font-mono">
+                            Ch. {note.chapterNumber} • Page {note.pageIndex + 1}
+                          </span>
+                          {isCurrentCh && (
+                            <span className="text-[10px] text-accent font-extrabold">Current Chapter</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setNoteInputText(note.noteText);
+                              setNoteInputColor(note.color || 'yellow');
+                              setActiveNoteModal({
+                                pageIndex: note.pageIndex,
+                                noteId: note.id,
+                                initialText: note.noteText,
+                                color: note.color,
+                              });
+                            }}
+                            className="p-1 rounded bg-black/30 hover:bg-black/60 text-secondary hover:text-white"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="p-1 rounded bg-black/30 hover:bg-red-950 text-secondary hover:text-danger"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-xs leading-relaxed font-sans whitespace-pre-wrap">
+                        {note.noteText}
+                      </p>
+
+                      <div className="pt-1 flex items-center justify-between text-[10px] opacity-70">
+                        <span>{new Date(note.updatedAt || note.createdAt).toLocaleDateString()}</span>
+                        <button
+                          onClick={() => {
+                            if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
+                              setCurrentChapterNum(note.chapterNumber);
+                            }
+                            setCurrentPageIndex(note.pageIndex);
+                            setShowNotesDrawer(false);
+                            if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
+                              const totalH = scrollContainerRef.current.scrollHeight;
+                              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
+                            }
+                          }}
+                          className="font-bold underline hover:opacity-100"
+                        >
+                          Jump to Page →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD / EDIT STICKY NOTE MODAL */}
+      {activeNoteModal && (
+        <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-edge rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-edge pb-2.5">
+              <div className="font-bold text-primary text-sm flex items-center gap-2">
+                <StickyNote className="w-4 h-4 text-amber-400" />
+                <span>{activeNoteModal.noteId ? 'Edit Sticky Note' : `Add Sticky Note (Page ${activeNoteModal.pageIndex + 1})`}</span>
+              </div>
+              <button
+                onClick={() => setActiveNoteModal(null)}
+                className="text-secondary hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <textarea
+              rows={4}
+              value={noteInputText}
+              onChange={(e) => setNoteInputText(e.target.value)}
+              placeholder="Type your notes, impressions, character theories, or key plot points..."
+              className="w-full bg-app border border-edge rounded-xl p-3 text-primary text-xs focus:outline-none focus:border-accent resize-none font-sans"
+              autoFocus
+            />
+
+            {/* Color Selector */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-secondary">Color:</span>
+                {[
+                  { id: 'yellow', bg: 'bg-amber-400' },
+                  { id: 'blue', bg: 'bg-blue-400' },
+                  { id: 'purple', bg: 'bg-purple-400' },
+                  { id: 'green', bg: 'bg-emerald-400' },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setNoteInputColor(c.id as any)}
+                    className={`w-6 h-6 rounded-full ${c.bg} transition-all ${
+                      noteInputColor === c.id ? 'ring-2 ring-white scale-110 shadow-lg' : 'opacity-60 hover:opacity-100'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveNoteModal(null)}
+                  className="px-3.5 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveNote}
+                  disabled={!noteInputText.trim()}
+                  className="px-4 py-1.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg text-xs font-bold shadow-md disabled:opacity-50"
+                >
+                  Save Note
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

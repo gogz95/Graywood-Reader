@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { MangaItem, UserProfile, AppSettings, AutoUpdateLog } from './src/types';
+import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote } from './src/types';
 
 // Ensure data directory exists (cwd-relative so bundled/Docker entrypoints share ./data)
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -49,7 +49,8 @@ db.exec(`
     flagReason TEXT,
     flaggedAt TEXT,
     availableSources TEXT,
-    metadataOverrides TEXT
+    metadataOverrides TEXT,
+    customTags TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_manga_title ON manga(title);
@@ -64,6 +65,7 @@ try { db.exec('ALTER TABLE manga ADD COLUMN isFlagged INTEGER DEFAULT 0'); } cat
 try { db.exec('ALTER TABLE manga ADD COLUMN flagReason TEXT'); } catch(e) {}
 try { db.exec('ALTER TABLE manga ADD COLUMN flaggedAt TEXT'); } catch(e) {}
 try { db.exec('ALTER TABLE manga ADD COLUMN metadataOverrides TEXT'); } catch(e) {}
+try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch(e) {}
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch(e) {}
 
@@ -145,8 +147,21 @@ db.exec(`
     PRIMARY KEY (user_id, manga_id)
   );
 
+  -- Private page sticky notes
+  CREATE TABLE IF NOT EXISTS page_sticky_notes (
+    id TEXT PRIMARY KEY,
+    manga_id TEXT NOT NULL,
+    chapter_number INTEGER NOT NULL,
+    page_index INTEGER NOT NULL,
+    note_text TEXT NOT NULL,
+    color TEXT DEFAULT 'yellow',
+    created_at TEXT,
+    updated_at TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_user_fav_user ON user_favorites(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_lib_user ON user_library_state(user_id, last_read_at);
+  CREATE INDEX IF NOT EXISTS idx_sticky_notes_manga ON page_sticky_notes(manga_id, chapter_number);
 `);
 
 // Prepared Statements for Sub-millisecond Execution
@@ -159,12 +174,12 @@ const stmtUpsertManga = db.prepare(`
     id, title, altTitles, type, coverImage, description, genres, status,
     currentChapter, totalChapters, latestChapter, lastUpdated, rating,
     sourceUrl, sourceName, availableSources, autoUpdateEnabled, notes, addedAt, lastReadAt,
-    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides
+    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides, customTags
   ) VALUES (
     @id, @title, @altTitles, @type, @coverImage, @description, @genres, @status,
     @currentChapter, @totalChapters, @latestChapter, @lastUpdated, @rating,
     @sourceUrl, @sourceName, @availableSources, @autoUpdateEnabled, @notes, @addedAt, @lastReadAt,
-    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides
+    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides, @customTags
   ) ON CONFLICT(id) DO UPDATE SET
     title=excluded.title,
     altTitles=excluded.altTitles,
@@ -190,7 +205,8 @@ const stmtUpsertManga = db.prepare(`
     isFlagged=excluded.isFlagged,
     flagReason=excluded.flagReason,
     flaggedAt=excluded.flaggedAt,
-    metadataOverrides=excluded.metadataOverrides
+    metadataOverrides=excluded.metadataOverrides,
+    customTags=excluded.customTags
 `);
 
 const stmtUpdateProgress = db.prepare(`
@@ -326,6 +342,7 @@ function mapRowToMangaItem(row: any): MangaItem {
     flagReason: row.flagReason || undefined,
     flaggedAt: row.flaggedAt || undefined,
     metadataOverrides: row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [],
+    customTags: row.customTags ? JSON.parse(row.customTags) : [],
     currentChapter: Number(row.currentChapter) || 0,
     latestChapter: Number(row.latestChapter) || 1,
     totalChapters: row.totalChapters ? Number(row.totalChapters) : null,
@@ -372,6 +389,7 @@ function mapMangaItemToRow(item: MangaItem) {
     flagReason: item.flagReason || null,
     flaggedAt: item.flaggedAt || (item.isFlagged ? new Date().toISOString() : null),
     metadataOverrides: JSON.stringify(item.metadataOverrides || []),
+    customTags: JSON.stringify(item.customTags || []),
   };
 }
 
@@ -746,6 +764,18 @@ export const SqliteDb = {
       };
     });
   },
+
+  getStickyNotes(mangaId: string): PageStickyNote[] {
+    return getStickyNotes(mangaId);
+  },
+
+  saveStickyNote(note: PageStickyNote): void {
+    saveStickyNote(note);
+  },
+
+  deleteStickyNote(id: string): boolean {
+    return deleteStickyNote(id);
+  },
 };
 
 /**
@@ -785,6 +815,50 @@ function migrateGlobalLibraryToUserTables() {
     console.log(`[SQLite Engine] Migrated global favorites/progress into per-user tables for usr_admin (${rows.length} series scanned).`);
   } catch (err) {
     console.error('[SQLite Engine] user library migration failed:', err);
+  }
+}
+
+/**
+ * Sticky Notes Helpers
+ */
+export function getStickyNotes(mangaId: string): PageStickyNote[] {
+  try {
+    return db.prepare('SELECT id, manga_id as mangaId, chapter_number as chapterNumber, page_index as pageIndex, note_text as noteText, color, created_at as createdAt, updated_at as updatedAt FROM page_sticky_notes WHERE manga_id = ? ORDER BY chapter_number ASC, page_index ASC').all(mangaId) as PageStickyNote[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveStickyNote(note: PageStickyNote): void {
+  try {
+    db.prepare(`
+      INSERT INTO page_sticky_notes (id, manga_id, chapter_number, page_index, note_text, color, created_at, updated_at)
+      VALUES (@id, @mangaId, @chapterNumber, @pageIndex, @noteText, @color, @createdAt, @updatedAt)
+      ON CONFLICT(id) DO UPDATE SET
+        note_text = excluded.note_text,
+        color = excluded.color,
+        updated_at = excluded.updated_at
+    `).run({
+      id: note.id,
+      mangaId: note.mangaId,
+      chapterNumber: note.chapterNumber,
+      pageIndex: note.pageIndex,
+      noteText: note.noteText,
+      color: note.color || 'yellow',
+      createdAt: note.createdAt || new Date().toISOString(),
+      updatedAt: note.updatedAt || new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Error saving sticky note:', err);
+  }
+}
+
+export function deleteStickyNote(id: string): boolean {
+  try {
+    const res = db.prepare('DELETE FROM page_sticky_notes WHERE id = ?').run(id);
+    return res.changes > 0;
+  } catch {
+    return false;
   }
 }
 

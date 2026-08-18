@@ -41,6 +41,7 @@ import {
   saveClientSessionProgress,
   getClientSessionHistory,
 } from './hooks/useReaderSession';
+import { searchAniListManga, syncAniListProgress } from './utils/aniListScrobbler';
 
 // Lightweight skeleton shown while lazy chunk loads
 const ViewFallback = () => (
@@ -682,6 +683,18 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mangaId, chapterNumber }),
       });
+
+      // AniList Live Scrobbler (Sync progress to AniList if token is configured)
+      if (appSettings.anilistConnected && appSettings.anilistToken && appSettings.anilistAutoSync) {
+        const mangaItem = mangaList.find((m) => m.id === mangaId);
+        if (mangaItem) {
+          searchAniListManga(mangaItem.title).then((match) => {
+            if (match?.id && appSettings.anilistToken) {
+              syncAniListProgress(appSettings.anilistToken, match.id, chapterNumber, mangaItem.status === 'completed');
+            }
+          }).catch(() => {});
+        }
+      }
     } catch (err) {
       console.error('Mark read error:', err);
     }
