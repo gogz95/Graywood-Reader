@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security Policy
+    url: https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/security/policy
+    about: Please report security vulnerabilities privately rather than via public issues.
+  - name: 💬 GitHub Discussions
+    url: https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/discussions
+    about: Ask general questions, share configurations, or discuss ideas with the community.
+  - name: 🐛 Active Bug Tracker (BUGS.md)
+    url: https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/BUGS.md
+    about: Check currently tracked bugs and resolution status.

@@ -1,0 +1,60 @@
+name: 💡 Feature Request
+description: Propose a new feature, UX improvement, or enhancement for Graywood Reader
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make Graywood Reader even better? We'd love to hear it! Please check the [Roadmap](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/ROADMAP.md) first to see if it is already planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem?
+      description: A clear and concise description of what the problem or limitation is.
+      placeholder: I am always frustrated when...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution / Feature Description
+      description: Describe the solution or new feature you would like to see added.
+      placeholder: Add support for...
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Feature Area
+      description: Which part of the application does this feature primarily target?
+      options:
+        - "Reader View (Webtoon, Spread, Shaders, Auto-scroll)"
+        - "Library Management (Grid, Table, Filters, Multi-Select)"
+        - "Search & Browse (Kotatsu Parsers, MangaDex, AniList)"
+        - "Offline Downloads & IndexedDB Storage"
+        - "Sync & Integrations (Tachiyomi / Mihon, AniList, OPDS)"
+        - "Server & Database (SQLite, WAL, API, Docker)"
+        - "Desktop App (Electron) / PWA"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or workarounds you have considered.
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any mockups, screenshots, reference links (e.g. Kotatsu, Tachiyomi, Paperback, Mihon), or other context.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have verified this feature is not already implemented or tracked in ROADMAP.md.
+          required: true
+        - label: I would be interested in helping implement or test this feature.
+          required: false

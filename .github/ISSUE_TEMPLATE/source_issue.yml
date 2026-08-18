@@ -1,0 +1,66 @@
+name: 🌐 Source / Parser Issue
+description: Report a broken manga/manhua scanlation source, parser failure, or Cloudflare challenge issue
+title: "[Source]: "
+labels: ["source-issue", "scraper", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when a specific manga source or parser stops returning search results, chapter lists, or image pages.
+  - type: input
+    id: source-name
+    attributes:
+      label: Source Name & Domain
+      description: What source is failing?
+      placeholder: e.g. Asura Scans (asuracomic.net) / Flame Comics / MangaDex
+    validations:
+      required: true
+  - type: input
+    id: sample-url
+    attributes:
+      label: Sample Manga or Chapter URL
+      description: Provide a direct URL to a series or chapter experiencing the issue on that source.
+      placeholder: https://...
+    validations:
+      required: true
+  - type: dropdown
+    id: failure-type
+    attributes:
+      label: Type of Failure
+      description: Where does the parser fail?
+      options:
+        - "Search / Discovery returns 0 results or fails"
+        - "Manga Details load, but Chapter List is empty"
+        - "Chapter loads, but Images fail to fetch (403 / 404 / 503)"
+        - "Cloudflare / Turnstile Captcha Loop (Bot Protection)"
+        - "Website domain has moved / changed URL"
+        - "Other"
+    validations:
+      required: true
+  - type: dropdown
+    id: flaresolverr-status
+    attributes:
+      label: FlareSolverr / Captcha Solver Status
+      description: If this source uses Cloudflare, do you have FlareSolverr configured?
+      options:
+        - "FlareSolverr is running and connected"
+        - "FlareSolverr is not enabled"
+        - "Not applicable (Source does not use Cloudflare)"
+        - "Unknown"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server Scraper Logs
+      description: Paste any scraper error logs from your server terminal or `npm run reader:smoke`.
+      render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Verification
+      options:
+        - label: I verified that the source website is accessible and working in my normal web browser.
+          required: true
+        - label: I checked if FlareSolverr or CapSolver is operational if Cloudflare protection is active.
+          required: true

@@ -1,0 +1,98 @@
+name: 🐛 Bug Report
+description: Report a reproducible bug or unexpected error in Graywood Reader
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure you have checked [BUGS.md](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/BUGS.md) to see if this issue is already known or addressed in a recent patch.
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe what happened and how it differs from what you expected...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the issue.
+      placeholder: |
+        1. Open '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+  - type: input
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+      placeholder: The chapter should load smoothly in Webtoon mode...
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment-type
+    attributes:
+      label: Deployment Type
+      description: How are you running Graywood Reader?
+      options:
+        - "Local Node.js (npm run start / dev)"
+        - "Docker / Docker Compose"
+        - "PM2 Linux Service"
+        - "Electron Desktop App (Windows)"
+        - "Standalone PWA (Mobile/Tablet)"
+        - "Other"
+    validations:
+      required: true
+  - type: dropdown
+    id: reader-mode
+    attributes:
+      label: Reader Mode (if applicable)
+      description: What reader layout were you using when the issue occurred?
+      options:
+        - "Not Reader Related"
+        - "Webtoon (Continuous Strip)"
+        - "Webtoon (0px Gap Seamless)"
+        - "Right-to-Left (Manga RTL)"
+        - "Left-to-Right (LTR)"
+        - "Double-Page Book Spread"
+        - "Single Page"
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment & System Information
+      description: Please provide your OS, browser, Node.js version, and Graywood Reader version.
+      value: |
+        - **Graywood Reader Version**: e.g., 2.5.0
+        - **OS**: e.g., Windows 11 / Ubuntu 24.04 / macOS Sonoma / Android 14
+        - **Browser**: e.g., Chrome 128 / Firefox 130 / Safari 18
+        - **Node.js Version**: e.g., 22.12.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server / Console Logs
+      description: Paste any relevant terminal logs, server error stack traces, or browser developer tools console errors.
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or Screen Recordings
+      description: Drag and drop any relevant screenshots or animated recordings here if visual.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and verified this has not been reported already.
+          required: true
+        - label: I have tested with the latest release / main branch.
+          required: true
+        - label: This is not a security vulnerability (see [SECURITY.md](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/SECURITY.md)).
+          required: true

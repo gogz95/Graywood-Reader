@@ -132,6 +132,15 @@ Graywood-Reader/
 
 ---
 
+## 🤝 Contributing & Community
+
+Contributions are what make the open-source community an amazing place to learn, inspire, and create.
+- **Contributing Guidelines**: See [`CONTRIBUTING.md`](CONTRIBUTING.md) for local setup, development commands, and architecture details.
+- **Code of Conduct**: See [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for community guidelines.
+- **Security Policy**: See [`SECURITY.md`](SECURITY.md) for vulnerability reporting and self-hosting security practices.
+
+---
+
 ## 💖 Acknowledgements & Inspirations
 
 This project is deeply indebted to and inspired by the incredible work of the open-source manga community:
