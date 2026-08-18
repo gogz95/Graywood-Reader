@@ -1,115 +1,87 @@
-const { app, BrowserWindow, shell } = require('electron');
+﻿const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const http = require('http');
 
-// Ensure logs directory exists
 const logsDir = path.join(__dirname, 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
+if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
 
-const logFilePath = path.join(logsDir, 'desktop_app.log');
-const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
-
+const logStream = fs.createWriteStream(path.join(logsDir, 'desktop_app.log'), { flags: 'a' });
 function writeLog(msg) {
-  const timestamp = new Date().toISOString();
-  const formatted = `[${timestamp}] ${msg}\n`;
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
   console.log(msg);
-  logStream.write(formatted);
+  logStream.write(line);
 }
 
 let mainWindow;
 let serverProcess;
-
 const PORT = process.env.PORT || 3000;
 const SERVER_URL = `http://localhost:${PORT}`;
 
 function startServer() {
   writeLog('Starting Graywood Reader backend server...');
-  serverProcess = spawn('npx', ['tsx', 'server.ts'], {
-    cwd: __dirname,
-    shell: true,
-    env: { ...process.env, PORT: PORT.toString() },
-  });
+  const bundled = path.join(__dirname, 'dist-server', 'server.cjs');
+  if (fs.existsSync(bundled)) {
+    writeLog('Using compiled server at dist-server/server.cjs');
+    serverProcess = spawn('node', [bundled], { cwd: __dirname, shell: true, env: { ...process.env, PORT: String(PORT) } });
+  } else {
+    writeLog('Compiled server not found; falling back to npx tsx server.ts');
+    serverProcess = spawn('npx', ['tsx', 'server.ts'], { cwd: __dirname, shell: true, env: { ...process.env, PORT: String(PORT) } });
+  }
+  serverProcess.stdout.on('data', (d) => writeLog(`[Server]: ${d.toString().trim()}`));
+  serverProcess.stderr.on('data', (d) => writeLog(`[Server Error]: ${d.toString().trim()}`));
+  serverProcess.on('close', (code) => writeLog(`Server process exited with code ${code}`));
+}
 
-  serverProcess.stdout.on('data', (data) => {
-    writeLog(`[Server]: ${data.toString().trim()}`);
-  });
-
-  serverProcess.stderr.on('data', (data) => {
-    writeLog(`[Server Error]: ${data.toString().trim()}`);
-  });
-
-  serverProcess.on('close', (code) => {
-    writeLog(`Server process exited with code ${code}`);
+function waitForServer(maxMs = 60000, intervalMs = 400) {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const req = http.get(`${SERVER_URL}/api/health`, (res) => {
+        res.resume();
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 500) {
+          writeLog(`Backend healthy (HTTP ${res.statusCode}) after ${Date.now() - started}ms`);
+          resolve();
+        } else retry();
+      });
+      req.on('error', () => retry());
+      req.setTimeout(2000, () => { req.destroy(); retry(); });
+    };
+    const retry = () => {
+      if (Date.now() - started > maxMs) return reject(new Error(`Server not ready within ${maxMs}ms`));
+      setTimeout(attempt, intervalMs);
+    };
+    attempt();
   });
 }
 
 function createWindow() {
   writeLog('Creating Electron desktop window...');
   mainWindow = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 800,
-    minHeight: 600,
-    title: 'Graywood Reader',
-    backgroundColor: '#020617',
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      // webSecurity stays enabled (default) — all content is served same-origin
-      // from the local server, and remote images go through the server-side proxy.
-    },
+    width: 1360, height: 900, minWidth: 800, minHeight: 600,
+    title: 'Graywood Reader', backgroundColor: '#020617', autoHideMenuBar: true,
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
-
-  setTimeout(() => {
-    writeLog(`Loading desktop app at ${SERVER_URL}`);
-    mainWindow.loadURL(SERVER_URL).catch((err) => {
+  waitForServer()
+    .then(() => { writeLog(`Loading desktop app at ${SERVER_URL}`); return mainWindow.loadURL(SERVER_URL); })
+    .catch((err) => { writeLog(`Health wait failed: ${err.message}; loading URL anyway`); return mainWindow.loadURL(SERVER_URL); })
+    .catch((err) => {
       writeLog(`Failed to load ${SERVER_URL}: ${err.message}`);
-      setTimeout(() => mainWindow.loadURL(SERVER_URL), 2000);
+      setTimeout(() => { if (mainWindow) mainWindow.loadURL(SERVER_URL); }, 2000);
     });
-  }, 1500);
-
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http:') || url.startsWith('https:')) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
+    if (url.startsWith('http:') || url.startsWith('https:')) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-    writeLog('Electron window closed');
-  });
+  mainWindow.on('closed', () => { mainWindow = null; writeLog('Electron window closed'); });
 }
 
 app.whenReady().then(() => {
   writeLog('Electron app ready');
   startServer();
   createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-
-app.on('window-all-closed', () => {
-  if (serverProcess) {
-    serverProcess.kill();
-  }
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('will-quit', () => {
-  writeLog('Electron app quitting');
-  if (serverProcess) {
-    serverProcess.kill();
-  }
-});
+app.on('window-all-closed', () => { if (serverProcess) serverProcess.kill(); if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => { writeLog('Electron app quitting'); if (serverProcess) serverProcess.kill(); });

@@ -11,9 +11,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
-      # Provide a strong unique secret (>=32 chars). If unset, the server
-      # manages its own key in /app/data/.encryption-secret.
-      # - ENCRYPTION_SECRET=${ENCRYPTION_SECRET:?set ENCRYPTION_SECRET in your environment}
+      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET:?set ENCRYPTION_SECRET in your environment}
+      - REQUIRE_AUTH=${REQUIRE_AUTH:-0}
       - STORAGE_PATH=/app/data/storage
     volumes:
       - ./data:/app/data
@@ -22,3 +21,4 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 15s

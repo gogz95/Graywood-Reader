@@ -106,7 +106,7 @@ export const DuplicateFinderView: React.FC<DuplicateFinderViewProps> = ({
             Scanning title variants, alt names, and running Gemini AI semantic matching...
           </p>
         </div>
-      ) : candidates.length === 0 ? (
+      ) : visibleCandidates.length === 0 ? (
         <div className="bg-surface border border-edge rounded-2xl p-12 text-center space-y-3">
           <div className="w-12 h-12 rounded-xl bg-success/10 text-success border border-success/20 flex items-center justify-center mx-auto">
             <CheckCircle className="w-6 h-6" />
@@ -119,11 +119,11 @@ export const DuplicateFinderView: React.FC<DuplicateFinderViewProps> = ({
       ) : (
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm text-secondary">
-            <span className="font-semibold text-primary">Found {candidates.length} Candidate Duplicate Pairs</span>
+            <span className="font-semibold text-primary">Found {visibleCandidates.length} Candidate Duplicate Pairs</span>
             <span>Select a pair to preview and merge</span>
           </div>
 
-          {candidates.map((cand) => (
+          {visibleCandidates.map((cand) => (
             <div
               key={cand.id}
               className="bg-surface border border-edge hover:border-accent-2/40 rounded-2xl p-5 shadow-lg space-y-4 transition-all"

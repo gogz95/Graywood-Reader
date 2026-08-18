@@ -2,9 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'manhuasync-tracker',
-      script: 'server.ts',
-      interpreter: 'npx',
-      interpreter_args: 'tsx',
+      script: 'dist-server/server.cjs',
+      interpreter: 'node',
       instances: 1,
       autorestart: true,
       watch: false,

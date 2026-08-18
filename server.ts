@@ -9,7 +9,46 @@ import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
 import { INITIAL_MANGA_DATABASE } from "./src/data/initialManga";
 import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
+import {
+  resolveEncryptionSecret,
+  ENCRYPTION_SECRET,
+  encryptPII,
+  decryptPII,
+  hashPassword,
+  isAlreadyHashed,
+  verifyPassword,
+  verifyPasswordAsync,
+  AUTH_ENABLED,
+  AUTH_TOKEN_TTL_MS,
+  AUTH_SIGNING_KEY,
+  signAuthToken,
+  verifyAuthToken,
+  toPublicUser,
+  isHostRequest,
+  isPrivateOrReservedIp,
+  assertSafeProxyTarget,
+  MAX_PROXY_IMAGE_BYTES,
+  streamProxiedImage,
+} from "./server/security";
+import {
+  rateLimitMiddleware,
+  isImageProxyPath,
+  RATE_LIMIT_MAX,
+  RATE_LIMIT_PROXY_MAX,
+  RATE_LIMIT_WINDOW,
+  ipRequestCounts,
+  ipProxyRequestCounts,
+} from "./server/rateLimit";
 
+export {
+  encryptPII,
+  decryptPII,
+  hashPassword,
+  isAlreadyHashed,
+  verifyPassword,
+  verifyPasswordAsync,
+  isHostRequest,
+};
 
 // Initialize Express
 const app = express();
@@ -55,11 +94,35 @@ const HOST_ONLY_PATHS = new Set<string>([
   '/api/kotatsu/sources/toggle',
   '/api/kotatsu/sources/purge-disabled',
   '/api/crawler/bypass-fetch',
+  // Database import/export/reset (destructive or full-library exfil)
+  '/api/db/export',
+  '/api/db/import',
+  '/api/db/reset',
+  '/api/db/refresh-all',
+  // Tracker bulk / destructive
+  '/api/tracker/auto-update',
+  '/api/tracker/detect-duplicates',
+  '/api/tracker/merge-duplicates',
+  '/api/tracker/dismiss-duplicate',
+  // Kotatsu / scrape bulk mutations
+  '/api/kotatsu/sources/activate',
+  '/api/kotatsu/sources/deactivate',
+  '/api/kotatsu/sources/activate-all',
+  '/api/kotatsu/sources/deactivate-all',
+  '/api/kotatsu/pull-all-sources',
+  '/api/scrape/update-all-series',
+  '/api/scrape/audit-sources',
+  '/api/scrape/source-catalog',
+  '/api/mangadex/pull-bulk-catalog',
+  // AI bulk (API key / load)
+  '/api/ai/enrich-metadata',
+  '/api/ai/find-similar',
 ]);
 // GET requests to host-only paths are allowed (read-only config/health info),
 // except these sensitive exports which leak the full database.
 const SENSITIVE_GET_PATHS = new Set<string>([
   '/api/settings/backup/export',
+  '/api/db/export',
 ]);
 
 // Normalize a request path: collapse trailing slashes and decode %2F so that
@@ -94,214 +157,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// ==========================================
 // DDOS PROTECTION & RATE LIMITING MIDDLEWARE (Bypassed for Host PC)
-// ==========================================
-// Uses a TTL-based cleanup to prevent memory leaks from growing Map entries.
-const ipRequestCounts = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT_MAX = 300; // max 300 requests per minute
-const RATE_LIMIT_WINDOW = 60 * 1000;
+app.use(rateLimitMiddleware);
 
-// Periodic cleanup of expired IP request entries to prevent unbounded memory growth.
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of ipRequestCounts) {
-    if (now > record.resetTime) {
-      ipRequestCounts.delete(ip);
-    }
-  }
-}, 30_000); // clean up every 30 seconds
-
-app.use((req, res, next) => {
-  // Allow all requests on localhost or host IP
-  const clientIp = req.ip || req.socket.remoteAddress || "127.0.0.1";
-  if (clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "::ffff:127.0.0.1") {
-    return next();
-  }
-
-  const now = Date.now();
-  const record = ipRequestCounts.get(clientIp);
-
-  if (!record || now > record.resetTime) {
-    ipRequestCounts.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-  } else {
-    record.count++;
-    if (record.count > RATE_LIMIT_MAX) {
-      return res.status(429).json({
-        error: "Too Many Requests",
-        message: "DDoS Protection triggered: Rate limit exceeded. Please wait 60 seconds before retrying.",
-      });
-    }
-  }
-  next();
-});
-
-// =========================================================
-// GDPR ARTICLE 32 CRYPTOGRAPHIC ENCRYPTION & SECURITY ENGINE
-// =========================================================
-// Secret resolution order:
-//   1. ENCRYPTION_SECRET environment variable (recommended for production)
-//   2. data/.encryption-secret file (auto-generated, never committed to git)
-// The legacy hardcoded default is seeded into the file on first run ONLY so
-// previously-encrypted PII remains decryptable. Rotate by setting the env var.
-function resolveEncryptionSecret(): string {
-  if (process.env.ENCRYPTION_SECRET && process.env.ENCRYPTION_SECRET.trim()) {
-    return process.env.ENCRYPTION_SECRET.trim();
-  }
-  const secretPath = path.join(process.cwd(), 'data', '.encryption-secret');
-  try {
-    if (fs.existsSync(secretPath)) {
-      const existing = fs.readFileSync(secretPath, 'utf8').trim();
-      if (existing) return existing;
-    }
-  } catch (err) {
-    console.error('[Security Engine] Failed to read secret file:', err);
-  }
-  // First run: seed with the legacy default key for backward compatibility.
-  const legacyDefault = 'graywood-reader-gdpr-aes256-secret-key-32b!';
-  try {
-    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
-    fs.writeFileSync(secretPath, legacyDefault + '\n', { mode: 0o600 });
-    console.warn('[Security Engine] Seeded data/.encryption-secret with the legacy default key so existing encrypted PII stays decryptable. Set ENCRYPTION_SECRET in your environment to rotate it.');
-  } catch (err) {
-    console.error('[Security Engine] Failed to seed secret file:', err);
-  }
-  return legacyDefault;
+/**
+ * Resolve the acting user for progress/favorites.
+ * Never trusts client-supplied userId query/body — only Bearer token, else host default.
+ */
+function resolveRequestUserId(req: express.Request): string | null {
+  const authed = (req as any).user as UserProfile | null | undefined;
+  if (authed?.id) return authed.id;
+  if (isHostRequest(req)) return 'usr_admin';
+  return null;
 }
 
-const ENCRYPTION_SECRET = resolveEncryptionSecret();
-const ALGORITHM = "aes-256-gcm";
-
-export function encryptPII(text: string): string {
-  if (!text) return "";
-  try {
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32)), iv);
-    let encrypted = cipher.update(text, "utf8", "hex");
-    encrypted += cipher.final("hex");
-    const authTag = cipher.getAuthTag().toString("hex");
-    return `enc:${iv.toString("hex")}:${authTag}:${encrypted}`;
-  } catch (err) {
-    console.error("[GDPR Engine] Encryption error:", err);
-    return text;
-  }
-}
-
-export function decryptPII(encryptedData: string): string {
-  if (!encryptedData || !encryptedData.startsWith("enc:")) return encryptedData;
-  try {
-    const parts = encryptedData.slice(4).split(":");
-    if (parts.length !== 3) return encryptedData;
-    const [ivHex, authTagHex, encryptedText] = parts;
-    const iv = Buffer.from(ivHex, "hex");
-    const authTag = Buffer.from(authTagHex, "hex");
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32)), iv);
-    decipher.setAuthTag(authTag);
-    let decrypted = decipher.update(encryptedText, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
-  } catch (err) {
-    return encryptedData;
-  }
-}
-
-// Password hashing uses salted scrypt (memory-hard KDF). Legacy unsalted
-// SHA-256 hashes are still accepted for verification for backward compatibility.
-export function hashPassword(password: string): string {
-  if (!password) return "";
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt:${salt}:${hash}`;
-}
-
-export function isAlreadyHashed(value: string): boolean {
-  return (
-    value.startsWith('scrypt:') ||
-    value.startsWith('enc:') ||
-    /^[a-f0-9]{64}$/i.test(value) // legacy SHA-256 hex digest
-  );
-}
-
-export function verifyPassword(password: string, stored: string): boolean {
-  if (!password || !stored) return false;
-  try {
-    if (stored.startsWith('scrypt:')) {
-      const [, salt, hash] = stored.split(':');
-      if (!salt || !hash) return false;
-      const check = crypto.scryptSync(password, salt, 64).toString('hex');
-      return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
-    }
-    // Legacy SHA-256 fallback
-    return stored === crypto.createHash('sha256').update(password + ENCRYPTION_SECRET).digest('hex');
-  } catch (err) {
-    return false;
-  }
-}
-
-// Async scrypt verification (used by the login flow so the event loop isn't
-// blocked by the memory-hard KDF. The sync `verifyPassword` above is retained
-// for existing callers; this variant is drop-in equivalent but non-blocking.)
-export function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!password || !stored) return resolve(false);
-    if (stored.startsWith('scrypt:')) {
-      const [, salt, hash] = stored.split(':');
-      if (!salt || !hash) return resolve(false);
-      return crypto.scrypt(password, salt, 64, (err, derived) => {
-        if (err) return resolve(false);
-        return resolve(crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(derived)));
-      });
-    }
-    // Legacy SHA-256 fallback (no KDF, so resolve synchronously-safe).
-    return resolve(stored === crypto.createHash('sha256').update(password + ENCRYPTION_SECRET).digest('hex'));
-  });
-}
-
-// =========================================================
-// TOKEN-BASED AUTHENTICATION (opt-in, backward compatible)
-// =========================================================
-// The app runs fully open (host-only IP gate) by default, as it does today.
-// Set `REQUIRE_AUTH=1` (env) to lock down remote clients: they must exchange a
-// username/password for a signed token at /api/auth/login. Host/localhost
-// requests are ALWAYS allowed (Electron desktop shell + localhost dev), so the
-// existing frontend keeps working whether auth is on or off.
-// Tokens are self-contained HMAC-SHA256-signed blobs (no DB session store).
-const AUTH_ENABLED = process.env.REQUIRE_AUTH === '1' || process.env.REQUIRE_AUTH === 'true';
-const AUTH_TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS) || 7 * 24 * 60 * 60 * 1000; // default 7 days
-
-// Derive a stable signing key from the encryption secret (same secret, new purpose).
-const AUTH_SIGNING_KEY = crypto.createHash('sha256')
-  .update('auth-signing:' + ENCRYPTION_SECRET)
-  .digest();
-
-function signAuthToken(payload: Record<string, unknown>): string {
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + AUTH_TOKEN_TTL_MS }), 'utf8').toString('base64url');
-  const sig = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
-  return `${body}.${sig}`;
-}
-
-function verifyAuthToken(token: string): Record<string, unknown> | null {
-  if (!token) return null;
-  const dot = token.indexOf('.');
-  if (dot === -1) return null;
-  const body = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  const expected = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
-  // Constant-time comparison guards against signature forgery.
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
-    if (typeof payload.exp === 'number' && payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-// Resolve the authenticated user (if any) from an Authorization header / query token.
+// Resolve the authenticated user (if any) from an Authorization header only.
+// Query-string tokens are rejected — they leak via logs, Referer, and history.
 function resolveAuthUser(req: express.Request): UserProfile | null {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : (req.query.auth_token as string) || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token) return null;
   const payload = verifyAuthToken(token);
   if (!payload || typeof payload.sub !== 'string') return null;
   return userProfiles.find((u) => u.id === payload.sub) || null;
@@ -317,7 +192,13 @@ app.use((req, _res, next) => {
 app.use((req, res, next) => {
   if (!AUTH_ENABLED) return next();
   // Public endpoints that must stay reachable without a token.
-  const publicPaths = ['/api/auth/login', '/api/auth/client-context', '/api/health'];
+  const publicPaths = [
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/client-context',
+    '/api/auth/me',
+    '/api/health',
+  ];
   if (publicPaths.some((p) => req.path === p || req.path.startsWith(p + '/'))) return next();
   if (isHostRequest(req)) return next();
   if ((req as any).user) return next();
@@ -779,6 +660,50 @@ function applySyncConfigRestored(config: DatabaseSyncConfig) {
   rebuildDeadSourcesSet();
 }
 
+/**
+ * Ensure usr_admin has a scrypt password so /api/auth/login works.
+ * Priority: existing hash > ADMIN_PASSWORD env > data/.admin-bootstrap-password (create once).
+ */
+function ensureAdminPasswordBootstrap() {
+  const idx = userProfiles.findIndex((p) => p.id === 'usr_admin');
+  if (idx === -1) return;
+  const admin = userProfiles[idx];
+  if (admin.password && isAlreadyHashed(admin.password)) return;
+
+  let plain = (process.env.ADMIN_PASSWORD || '').trim();
+  const bootstrapPath = path.join(process.cwd(), 'data', '.admin-bootstrap-password');
+  if (!plain) {
+    try {
+      if (fs.existsSync(bootstrapPath)) {
+        plain = fs.readFileSync(bootstrapPath, 'utf8').trim();
+      }
+    } catch { /* ignore */ }
+  }
+  if (!plain) {
+    plain = crypto.randomBytes(12).toString('base64url');
+    try {
+      fs.mkdirSync(path.dirname(bootstrapPath), { recursive: true });
+      fs.writeFileSync(bootstrapPath, plain + '\n', { mode: 0o600 });
+      console.warn(
+        `[Auth Engine] Generated one-time admin password for username "admin". ` +
+        `Saved to data/.admin-bootstrap-password — change it after first login. ` +
+        `Or set ADMIN_PASSWORD in the environment before next start.`
+      );
+    } catch (err) {
+      console.error('[Auth Engine] Failed to write admin bootstrap password file:', err);
+    }
+  } else if (process.env.ADMIN_PASSWORD) {
+    console.log('[Auth Engine] Applying ADMIN_PASSWORD from environment to usr_admin.');
+  }
+
+  userProfiles[idx] = { ...admin, password: hashPassword(plain), username: admin.username || 'admin' };
+  try {
+    saveDatabaseToDisk();
+  } catch (err) {
+    console.error('[Auth Engine] Failed to persist bootstrapped admin password:', err);
+  }
+}
+
 // Helper: Load App State from SQLite on Startup (with one-time legacy JSON migration)
 function loadDatabaseFromDisk() {
   try {
@@ -824,6 +749,33 @@ function loadDatabaseFromDisk() {
         storageFolderPath: p.storageFolderPath ? decryptPII(p.storageFolderPath) : undefined,
       }));
     }
+
+    // Ensure seed admin/guest always exist
+    if (!userProfiles.some((p) => p.id === 'usr_admin')) {
+      userProfiles.unshift({
+        id: 'usr_admin',
+        name: 'Host Administrator',
+        username: 'admin',
+        email: 'admin@manga.dev',
+        avatar: '🛡️',
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+      });
+    }
+    if (!userProfiles.some((p) => p.id === 'usr_guest')) {
+      userProfiles.push({
+        id: 'usr_guest',
+        name: 'Guest Reader',
+        username: 'guest',
+        email: 'guest@graywood.app',
+        avatar: '👤',
+        role: 'user',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    // Bootstrap admin password if missing (env ADMIN_PASSWORD or one-time generated file)
+    ensureAdminPasswordBootstrap();
 
     // 4. Sync Config (subdomain, update interval, disabled sources...)
     if (storedConfigJson) {
@@ -872,6 +824,11 @@ function loadDatabaseFromDisk() {
     }
 
     console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${mangaDatabase.length} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
+
+    // 8. Rewrite stale live-source URLs (asuracomic.net → asurascans.com, /manhwa/ → /manga/, …)
+    try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
+      console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
+    }
 
     purgeReaperScansFromAllStorage();
   } catch (err) {
@@ -1447,6 +1404,19 @@ app.get("/api/manga", (req, res) => {
   let allManga = SqliteDb.getAllManga();
   allManga = allManga.filter((m) => !isSeriesFromDisabledSource(m));
 
+  // Overlay per-user favorites + chapter progress when we can resolve a user.
+  const overlayUserId = resolveRequestUserId(req);
+  if (overlayUserId) {
+    allManga = SqliteDb.applyUserOverlay(allManga, overlayUserId);
+  } else {
+    // Anonymous/remote without token: never expose another user's favorites/progress
+    allManga = allManga.map((m) => ({
+      ...m,
+      isFavorite: false,
+      currentChapter: 0,
+    }));
+  }
+
   if (hasPagination) {
     const paged = allManga.slice(offset, offset + limit);
     res.setHeader('X-Total-Count', String(allManga.length));
@@ -1508,7 +1478,13 @@ app.post("/api/manga", (req, res) => {
   };
 
   syncAddOrUpdateManga(newItem);
-  res.status(201).json(newItem);
+  // Per-user favorite if client requested isFavorite on create
+  if (newItem.isFavorite) {
+    const uid = resolveRequestUserId(req) || (newItem.userId as string) || null;
+    if (uid) SqliteDb.setUserFavorite(uid, newItem.id, true);
+  }
+  const uid = resolveRequestUserId(req);
+  res.status(201).json(uid ? SqliteDb.applyUserOverlay([newItem], uid)[0] : newItem);
 });
 
 // Single Manga Metadata Refresh Endpoint
@@ -1602,7 +1578,12 @@ app.put("/api/manga/:id", (req, res) => {
   };
 
   syncAddOrUpdateManga(updatedItem);
-  res.json(updatedItem);
+  if (body.isFavorite !== undefined) {
+    const uid = resolveRequestUserId(req) || 'usr_admin';
+    SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(body.isFavorite));
+  }
+  const uid = resolveRequestUserId(req);
+  res.json(uid ? SqliteDb.applyUserOverlay([updatedItem], uid)[0] : updatedItem);
 });
 
 app.post("/api/manga/increment/:id", (req, res) => {
@@ -1612,13 +1593,13 @@ app.post("/api/manga/increment/:id", (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  // Guard against NaN when currentChapter is null/undefined.
-  const newChapter = (Number(existing.currentChapter) || 0) + 1;
-  SqliteDb.updateChapterProgress(id, newChapter);
-  const updated = SqliteDb.getMangaById(id);
-  if (updated) {
-    syncAddOrUpdateManga(updated);
-  }
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const overlay = SqliteDb.applyUserOverlay([existing], userId)[0];
+  const newChapter = (Number(overlay.currentChapter) || 0) + 1;
+  SqliteDb.setUserLibraryChapter(userId, id, newChapter, {
+    status: overlay.status === 'plan_to_read' ? 'reading' : overlay.status,
+  });
+  const updated = SqliteDb.applyUserOverlay([existing], userId)[0];
   res.json(updated);
 });
 
@@ -1626,11 +1607,12 @@ app.post("/api/manga/toggle-favorite", (req, res) => {
   const { id, isFavorite } = req.body || {};
   if (!id) return res.status(400).json({ error: "Missing manga id" });
 
-  SqliteDb.toggleFavorite(id, Boolean(isFavorite));
-  const updated = SqliteDb.getMangaById(id);
-  if (updated) {
-    syncAddOrUpdateManga(updated);
-  }
+  const existing = SqliteDb.getMangaById(id);
+  if (!existing) return res.status(404).json({ error: "Manga not found" });
+
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  SqliteDb.setUserFavorite(userId, String(id), Boolean(isFavorite));
+  const updated = SqliteDb.applyUserOverlay([existing], userId)[0];
   res.json({ success: true, manga: updated });
 });
 
@@ -1807,91 +1789,6 @@ async function enrichWithMangaDexMetadata<T extends { title?: string }>(items: T
   );
   const enriched = slice.map((_, i) => (results[i].status === 'fulfilled' ? results[i].value as T : slice[i]));
   return [...enriched, ...(Array.isArray(items) ? items.slice(limit) : [])];
-}
-
-// =========================================================
-// SSRF PROTECTION FOR OUTBOUND PROXY FETCHES
-// Blocks private/loopback/link-local/cloud-metadata targets and
-// non-HTTP protocols so the image proxy can never be abused to scan
-// the local network or internal services.
-// =========================================================
-const MAX_PROXY_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB hard cap per proxied image
-
-function isPrivateOrReservedIp(ip: string): boolean {
-  const normalized = ip.toLowerCase().replace(/^::ffff:/, '').replace(/^\[|\]$/g, '');
-  if (normalized === '::1' || normalized === '::' || normalized === 'localhost') return true;
-  if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
-  const parts = normalized.split('.').map(Number);
-  if (parts.length === 4 && parts.every((p) => Number.isInteger(p) && p >= 0 && p <= 255)) {
-    const [a, b] = parts;
-    if (a === 10 || a === 127 || a === 0) return true;          // RFC1918 / loopback / "this"
-    if (a === 172 && b >= 16 && b <= 31) return true;            // RFC1918
-    if (a === 192 && b === 168) return true;                     // RFC1918
-    if (a === 169 && b === 254) return true;                     // link-local / cloud metadata
-    if (a === 100 && b >= 64 && b <= 127) return true;           // CGNAT
-  }
-  return false;
-}
-
-async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
-  const parsed = new URL(rawUrl);
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Blocked non-HTTP proxy target protocol: ${parsed.protocol}`);
-  }
-  const host = parsed.hostname.replace(/^\[|\]$/g, '');
-  if (net.isIP(host)) {
-    if (isPrivateOrReservedIp(host)) {
-      throw new Error(`Blocked private/reserved IP proxy target: ${host}`);
-    }
-  } else {
-    const lookups = await dns.promises.lookup(host, { all: true });
-    for (const entry of lookups) {
-      if (isPrivateOrReservedIp(entry.address)) {
-        throw new Error(`Blocked host resolving to private/reserved IP: ${host}`);
-      }
-    }
-  }
-  return parsed;
-}
-
-// Pass the proxied image body through to the client as a stream, enforcing the
-// size cap with an AbortController (no full-image buffering in RAM). Returns
-// true on success, or sets an error on the response and returns false.
-async function streamProxiedImage(response: Response, res: express.Response): Promise<boolean> {
-  const declaredLength = Number(response.headers.get('content-length') || 0);
-  if (declaredLength > MAX_PROXY_IMAGE_BYTES) {
-    res.setHeader('Content-Type', 'text/plain');
-    res.status(413).send('Proxied image exceeds size cap');
-    return false;
-  }
-
-  const body = response.body as unknown as AsyncIterable<Uint8Array> | null;
-  if (!body) {
-    res.status(502).send('Empty upstream response');
-    return false;
-  }
-
-  const controller = new AbortController();
-  let received = 0;
-  const abortOnOverflow = () => controller.abort();
-  const capTimer = setTimeout(abortOnOverflow, 60000); // safety in case streaming stalls
-
-  try {
-    for await (const chunk of body) {
-      received += chunk.length;
-      if (received > MAX_PROXY_IMAGE_BYTES) {
-        controller.abort();
-        throw new Error('Proxied image exceeded size cap during streaming');
-      }
-      if (!res.write(Buffer.from(chunk))) {
-        await new Promise((resolve) => res.once('drain', resolve));
-      }
-    }
-    res.end();
-    return true;
-  } finally {
-    clearTimeout(capTimer);
-  }
 }
 
 // Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
@@ -3841,65 +3738,75 @@ async function scrapeFlameComics(page: number, limit: number): Promise<any[]> {
 
 // ── 3. MANHWA18 (HTML catalog, 90 pages, /manga-list?page=N) ─────────────────
 // URL pattern: https://manhwa18.com/manga-list?page=N&sort=az
+// Only keep SERIES pages (/manga/<slug>) — list HTML also contains chapter links.
 async function scrapeManhwa18(page: number, limit: number): Promise<any[]> {
   try {
     const url = `https://manhwa18.com/manga-list?page=${page}&sort=az`;
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html' },
+      signal: AbortSignal.timeout(12000),
+      headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html', 'Referer': 'https://manhwa18.com/' },
     });
     if (!res.ok) return [];
 
     const html = await res.text();
     const results: any[] = [];
+    const seen = new Set<string>();
 
-    // Extract items: data-bg for cover, series-title link for title/URL
-    const thumbRx = /<div class="thumb-wrapper"[^>]*>[\s\S]*?<a href="(https:\/\/manhwa18\.com\/manga\/[^"]+)"[\s\S]*?data-bg="([^"]+)"[\s\S]*?<\/div>\s*<div class="thumb_attr series-title">\s*<a href="[^"]*" title="([^"]+)"/gi;
-    let m: RegExpExecArray | null;
-    while ((m = thumbRx.exec(html)) !== null && results.length < limit) {
-      const href = m[1];
-      const cover = m[2];
-      const title = m[3];
+    const isSeriesPage = (href: string): boolean => {
+      try {
+        const u = new URL(href, 'https://manhwa18.com');
+        const m = u.pathname.replace(/\/+$/, '').match(/^\/manga\/([^/]+)$/i);
+        return Boolean(m && m[1] && !/^(list|page)$/i.test(m[1]));
+      } catch { return false; }
+    };
+
+    const titleRx = /<div class="thumb_attr series-title">\s*<a href="([^"]+)" title="([^"]+)"/gi;
+    const bgRx = /data-bg="([^"]+)"/gi;
+    const covers: string[] = [];
+    let bg: RegExpExecArray | null;
+    while ((bg = bgRx.exec(html)) !== null) covers.push(bg[1]);
+
+    let t: RegExpExecArray | null;
+    let i = 0;
+    while ((t = titleRx.exec(html)) !== null && results.length < limit) {
+      let href = t[1];
+      const title = (t[2] || '').trim();
+      if (!href.startsWith('http')) href = `https://manhwa18.com${href.startsWith('/') ? '' : '/'}${href}`;
+      href = href.replace(/\/+$/, '');
+      if (!isSeriesPage(href) || seen.has(href)) continue;
+      seen.add(href);
       results.push({
         id: generateSourceScrapeId('manhwa18', href),
         title: title || 'Untitled',
         sourceUrl: href,
-        coverImage: cover || '',
+        coverImage: covers[i] || '',
         sourceName: 'Manhwa18',
         description: 'Adult manhwa series from Manhwa18',
         genres: ['Adult', 'Manhwa'],
         latestChapter: 1,
         type: 'manhwa',
       });
+      i++;
     }
 
-    // Simpler fallback if regex above yields nothing
     if (results.length === 0) {
-      const titleRx = /<div class="thumb_attr series-title">\s*<a href="([^"]+)" title="([^"]+)"/gi;
-      const bgRx = /data-bg="([^"]+)"/gi;
-      const covers: string[] = [];
-      let bg: RegExpExecArray | null;
-      while ((bg = bgRx.exec(html)) !== null) covers.push(bg[1]);
-
-      let t: RegExpExecArray | null;
-      let i = 0;
-      while ((t = titleRx.exec(html)) !== null && results.length < limit) {
-        const href = t[1];
-        const title = t[2];
-        if (href.includes('/manga/')) {
-          results.push({
-            id: generateSourceScrapeId('manhwa18', href.startsWith('http') ? href : `https://manhwa18.com${href}`),
-            title,
-            sourceUrl: href.startsWith('http') ? href : `https://manhwa18.com${href}`,
-            coverImage: covers[i] || '',
-            sourceName: 'Manhwa18',
-            description: 'Adult manhwa series',
-            genres: ['Adult', 'Manhwa'],
-            latestChapter: 1,
-            type: 'manhwa',
-          });
-          i++;
-        }
+      const absRx = /href="(https?:\/\/manhwa18\.com\/manga\/[^"/]+)"[^>]*title="([^"]+)"/gi;
+      let m: RegExpExecArray | null;
+      while ((m = absRx.exec(html)) !== null && results.length < limit) {
+        const href = m[1].replace(/\/+$/, '');
+        if (!isSeriesPage(href) || seen.has(href)) continue;
+        seen.add(href);
+        results.push({
+          id: generateSourceScrapeId('manhwa18', href),
+          title: m[2] || 'Untitled',
+          sourceUrl: href,
+          coverImage: '',
+          sourceName: 'Manhwa18',
+          description: 'Adult manhwa series from Manhwa18',
+          genres: ['Adult', 'Manhwa'],
+          latestChapter: 1,
+          type: 'manhwa',
+        });
       }
     }
 
@@ -3910,7 +3817,6 @@ async function scrapeManhwa18(page: number, limit: number): Promise<any[]> {
   }
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // BULK AUTO-SCRAPE ENDPOINT  POST /api/scrape/source-catalog
 // Scrapes ALL pages from a given source and saves to database
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -4012,7 +3918,7 @@ app.get('/api/scrape/browse', async (req, res) => {
 // local SQLite library. This endpoint aggregates popular/live series across a
 // curated set of enabled, alive sources, dedupes them by normalized title, and
 // paginates. A short-TTL cache keeps repeat calls from hammering the sources.
-const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonic'];
+const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonic', 'manhwa18'];
 // ── Explore Catalog Buffer ──────────────────────────────────────────────────
 // Instead of scraping sources live on every request, we buffer the consolidated
 // explore catalog in memory and refresh it automatically (once on startup + a
@@ -4020,8 +3926,8 @@ const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 
 // so opening /browse no longer pays the full multi-source scrape latency each time.
 const EXPLORE_REFRESH_INTERVAL_MS = Number(process.env.EXPLORE_REFRESH_INTERVAL_MS) || 5 * 60 * 1000; // default 5 min
 const EXPLORE_CACHE_TTL_MS = Number(process.env.EXPLORE_CACHE_TTL_MS) || 60 * 60 * 1000; // hard TTL 1 h
-const EXPLORE_WARM_PAGES = Math.max(1, Math.min(6, Number(process.env.EXPLORE_WARM_PAGES) || 2)); // pages warmed per source
-const EXPLORE_WARM_LIMIT = 30; // items requested per source page during warm-up (can be increased for better coverage)
+const EXPLORE_WARM_PAGES = Math.max(1, Math.min(6, Number(process.env.EXPLORE_WARM_PAGES) || 3)); // pages warmed per source
+const EXPLORE_WARM_LIMIT = 40; // items requested per source page during warm-up (can be increased for better coverage)
 const EXPLORE_DOMAIN_SPACING_MS = 1200; // min gap between requests to the same domain (politeness)
 
 interface ExploreBufferEntry {
@@ -4845,11 +4751,33 @@ const ASURA_API_HEADERS = {
 // hard-coded — the API accepts the bare slug (the server 302s stale tokens away).
 const ASURA_SLUG_TOKEN_RX = /-[0-9a-f]{8}$/i;
 
+/** Normalize Asura chapter page payloads (string URLs or {url}/ {src} objects). */
+function normalizeAsuraPageList(rawPages: unknown): string[] {
+  if (!Array.isArray(rawPages)) return [];
+  const out: string[] = [];
+  for (const p of rawPages) {
+    let url = '';
+    if (typeof p === 'string') url = p.trim();
+    else if (p && typeof p === 'object') {
+      const o = p as Record<string, unknown>;
+      url = String(o.url || o.src || o.image || o.path || '').trim();
+    }
+    if (!url) continue;
+    if (url.startsWith('//')) url = 'https:' + url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      // relative CDN path
+      url = url.startsWith('/') ? `https://gg.asuracomic.net${url}` : `https://gg.asuracomic.net/${url}`;
+    }
+    out.push(url);
+  }
+  return Array.from(new Set(out));
+}
+
 // Fetch a series' REAL chapter list from the Asura Scans official API (newest-first).
 // The API resolves series by their BARE slug (token stripped); the old code tried
 // hard-coded token variants (-00dcbf97 / -b8509c2a) which go stale and fail.
 async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: ResolvedChapter[]; matchedSlug: string | null }> {
-  const targetUrl = rawTargetUrl.replace(/\/$/, '');
+  const targetUrl = normalizeLiveTargetUrl(rawTargetUrl).replace(/\/$/, '');
   let rawSlug = targetUrl.split('/').pop() || '';
   if (targetUrl.includes('/manga/') || targetUrl.includes('/series/') || targetUrl.includes('/comics/')) {
     const parts = targetUrl.split('/');
@@ -4865,19 +4793,27 @@ async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: 
 
   for (const s of slugsToTry) {
     try {
-      const listRes = await fetch(`https://api.asurascans.com/api/series/${s}/chapters`, { headers: ASURA_API_HEADERS });
-      if (!listRes.ok) continue;
+      const listRes = await fetch(`https://api.asurascans.com/api/series/${s}/chapters`, {
+        headers: ASURA_API_HEADERS,
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!listRes.ok) {
+        console.warn(`[Asura API Engine] Chapter list HTTP ${listRes.status} for slug "${s}"`);
+        continue;
+      }
       const listData = await listRes.json();
       if (listData && Array.isArray(listData.data) && listData.data.length > 0) {
-        const chapters: ResolvedChapter[] = listData.data.map((c: any) => ({
-          number: Number(c.number ?? 0),
-          id: String(c.id),
-          slug: String(c.slug || ''),
-          title: c.title ? `Chapter ${c.number} - ${c.title}` : `Chapter ${c.number}`,
-          url: c.slug ? `https://asurascans.com/series/${s}/chapters/${c.slug}` : '',
-          pageCount: Number(c.page_count) || 12,
-        }));
-        return { chapters, matchedSlug: s };
+        const chapters: ResolvedChapter[] = listData.data
+          .map((c: any) => ({
+            number: Number(c.number ?? 0),
+            id: String(c.id),
+            slug: String(c.slug || ''),
+            title: c.title ? `Chapter ${c.number} - ${c.title}` : `Chapter ${c.number}`,
+            url: c.slug ? `https://asurascans.com/series/${s}/chapters/${c.slug}` : '',
+            pageCount: Number(c.page_count) || 12,
+          }))
+          .filter((c: ResolvedChapter) => c.number > 0 && c.slug);
+        if (chapters.length > 0) return { chapters, matchedSlug: s };
       }
     } catch (e) {
       console.warn(`[Asura API Engine] Chapter list fetch failed for slug "${s}":`, (e as Error).message);
@@ -4897,17 +4833,58 @@ function matchResolvedChapter(chapters: ResolvedChapter[], chapterNumber: number
 }
 // Apply domain mirrors + manhwa18 path normalization to a live source URL.
 function normalizeLiveTargetUrl(rawTargetUrl: string): string {
-  let targetUrl = rawTargetUrl;
+  let targetUrl = (rawTargetUrl || '').trim();
+  if (!targetUrl) return targetUrl;
   for (const [oldDomain, newDomain] of Object.entries(DOMAIN_MIRRORS)) {
     if (targetUrl.includes(oldDomain)) {
-      targetUrl = targetUrl.replace(oldDomain, newDomain);
+      targetUrl = targetUrl.replace(new RegExp(oldDomain.replace(/\./g, '\\.'), 'gi'), newDomain);
       break;
     }
   }
-  if (targetUrl.includes('manhwa18')) {
-    targetUrl = targetUrl.replace('/webtoon/', '/manga/').replace('/read/', '/manga/');
+  // manhwa18.com historically used /manhwa/, /webtoon/, /read/ — canonical is /manga/
+  if (/manhwa18\.(com|net)/i.test(targetUrl)) {
+    targetUrl = targetUrl
+      .replace(/\/webtoon\//gi, '/manga/')
+      .replace(/\/read\//gi, '/manga/')
+      .replace(/\/manhwa\//gi, '/manga/');
   }
+  // Drop trailing slash so slug extraction is stable
+  targetUrl = targetUrl.replace(/\/+$/, '');
   return targetUrl;
+}
+
+/** One-time (and idempotent) rewrite of stale live-source URLs stored in SQLite. */
+function migrateStaleSourceUrlsInDatabase(): number {
+  let changed = 0;
+  for (const m of mangaDatabase) {
+    let dirty = false;
+    if (m.sourceUrl && typeof m.sourceUrl === 'string') {
+      const next = normalizeLiveTargetUrl(m.sourceUrl);
+      if (next && next !== m.sourceUrl) {
+        m.sourceUrl = next;
+        dirty = true;
+      }
+    }
+    if (Array.isArray(m.availableSources)) {
+      for (const s of m.availableSources) {
+        if (s?.sourceUrl) {
+          const next = normalizeLiveTargetUrl(s.sourceUrl);
+          if (next && next !== s.sourceUrl) {
+            s.sourceUrl = next;
+            dirty = true;
+          }
+        }
+      }
+    }
+    if (dirty) {
+      try { syncAddOrUpdateManga(m); } catch { /* continue */ }
+      changed++;
+    }
+  }
+  if (changed > 0) {
+    console.log(`[Migration] Rewrote stale source URLs on ${changed} series (asuracomic→asurascans, manhwa→manga, …).`);
+  }
+  return changed;
 }
 
 const UA_HEADERS = {
@@ -5250,19 +5227,30 @@ function extractManhwa18ChapterNumber(href: string, name: string, fallback: numb
 
 async function fetchManhwa18ChapterList(seriesUrl: string, domain: string): Promise<ResolvedChapter[]> {
   try {
-    const origin = (() => { try { return new URL(seriesUrl).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(seriesUrl, { headers: { ...UA_HEADERS, 'Referer': origin + '/' } });
+    const normalized = normalizeLiveTargetUrl(seriesUrl);
+    const origin = (() => { try { return new URL(normalized).origin; } catch { return `https://${domain}`; } })();
+    const res = await fetch(normalized, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      signal: AbortSignal.timeout(15000),
+    });
     if (!res.ok) return [];
     const html = await res.text();
     const $ = cheerio.load(html);
-    const anchors = $('.card-body > .list-chapters > a').toArray();
+    // Primary Kotatsu selector + broader fallbacks used by the current theme
+    let anchors = $('.card-body > .list-chapters > a').toArray();
+    if (anchors.length === 0) anchors = $('.list-chapters a, .chapter-list a, a.chapter-name, a[href*="/chap-"], a[href*="/chapter-"]').toArray();
     if (anchors.length === 0) return [];
     const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
     for (let i = 0; i < anchors.length; i++) {
       const el = $(anchors[i]);
       const href = el.attr('href') || '';
       if (!href || href.startsWith('javascript') || href.startsWith('#')) continue;
-      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+      const abs = (href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`).replace(/\/+$/, '');
+      // Must be a chapter URL under the series, not the series page itself
+      if (!/\/(chap|chapter)[-_/]/i.test(abs) && !/\/manga\/[^/]+\/[^/]+/i.test(abs)) continue;
+      if (seen.has(abs)) continue;
+      seen.add(abs);
       const name = el.find('.chapter-name').text().trim() || el.text().trim();
       const num = extractManhwa18ChapterNumber(href, name, anchors.length - i);
       chapters.push({ number: num, id: abs, slug: abs, title: name || `Chapter ${num}`, url: abs, pageCount: 0 });
@@ -5277,19 +5265,33 @@ async function fetchManhwa18ChapterList(seriesUrl: string, domain: string): Prom
 async function fetchManhwa18ChapterPages(chapterUrl: string, domain: string): Promise<string[] | null> {
   try {
     const origin = (() => { try { return new URL(chapterUrl).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(chapterUrl, { headers: { ...UA_HEADERS, 'Referer': origin + '/' } });
+    const res = await fetch(chapterUrl, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      signal: AbortSignal.timeout(15000),
+    });
     if (!res.ok) return null;
     const html = await res.text();
     const $ = cheerio.load(html);
     const pages: string[] = [];
-    $('#chapter-content img').each((_, el) => {
-      const raw = $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('src') || '';
-      const src = raw.trim();
-      if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|icon|banner|\/covers\//i.test(src)) {
-        pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
-      }
+    const pushSrc = (raw: string) => {
+      const src = (raw || '').trim();
+      if (!src) return;
+      if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src) && !/cdn\.manhwa18/i.test(src)) return;
+      if (/logo|avatar|icon|banner|favicon|\/covers\//i.test(src)) return;
+      const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
+      if (!pages.includes(abs)) pages.push(abs);
+    };
+    // Primary: #chapter-content img (Kotatsu)
+    $('#chapter-content img, .chapter-content img, #chapter_content img, .read-content img, .page-break img').each((_, el) => {
+      pushSrc($(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-original') || $(el).attr('src') || '');
     });
-    return pages.length > 0 ? Array.from(new Set(pages)) : null;
+    // Fallback: any lazy img on CDN
+    if (pages.length === 0) {
+      $('img.lazy, img[data-src]').each((_, el) => {
+        pushSrc($(el).attr('data-src') || $(el).attr('src') || '');
+      });
+    }
+    return pages.length > 0 ? pages : null;
   } catch (e) {
     console.warn('[Manhwa18 Engine] Page extraction failed:', (e as Error).message);
     return null;
@@ -5564,15 +5566,25 @@ async function extractLiveDomainChapterPages(
           if (targetChapter && targetChapter.slug) {
             const pagesRes = await fetch(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
               headers: ASURA_API_HEADERS,
+              signal: AbortSignal.timeout(15000),
             });
 
             if (pagesRes.ok) {
               const pagesData = await pagesRes.json();
-              const rawPages = pagesData.data?.chapter?.pages || [];
-              if (rawPages.length > 0) {
-                console.log(`[Asura API Engine] Successfully loaded ${rawPages.length} live pages for ${matchedSlug} Chapter ${chapterNumber} (resolved ${targetChapter.number})`);
-                return rawPages.map((p: any) => p.url);
+              const rawPages =
+                pagesData?.data?.chapter?.pages ||
+                pagesData?.data?.pages ||
+                pagesData?.chapter?.pages ||
+                pagesData?.pages ||
+                [];
+              const urls = normalizeAsuraPageList(rawPages);
+              if (urls.length > 0) {
+                console.log(`[Asura API Engine] Successfully loaded ${urls.length} live pages for ${matchedSlug} Chapter ${chapterNumber} (resolved ${targetChapter.number})`);
+                return urls;
               }
+              console.warn(`[Asura API Engine] Chapter payload had no usable page URLs for ${matchedSlug}/${targetChapter.slug}`);
+            } else {
+              console.warn(`[Asura API Engine] Chapter pages HTTP ${pagesRes.status} for ${matchedSlug}/${targetChapter.slug}`);
             }
           } else {
             console.warn(`[Asura API Engine] Chapter ${chapterNumber} not found for "${matchedSlug}" — not substituting a wrong chapter.`);
@@ -5828,31 +5840,30 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     if (!domainIsDisabled) {
       let livePages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, chapterNumber);
 
-      // Probe first 3 images to verify remote image host is reachable.
-      // Uses GET with Range: bytes=0-0 (most CDNs support this) instead of HEAD.
+      // Probe first image lightly. Do not discard the whole chapter if the CDN
+      // rejects Range probes (common) — the image proxy will still fetch pages.
       if (livePages && livePages.length > 0) {
         let probeOk = false;
-        const probeCount = Math.min(3, livePages.length);
-        for (let pi = 0; pi < probeCount; pi++) {
-          try {
-            const probeRes = await fetch(livePages[pi], {
-              method: 'GET',
-              signal: AbortSignal.timeout(3000),
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': targetUrl.startsWith('http') ? new URL(targetUrl).origin + '/' : 'https://manhwa18.com/',
-                'Range': 'bytes=0-0',
-              },
-            });
-            if (probeRes.ok || probeRes.status === 206 || probeRes.status === 405) {
-              probeOk = true;
-              break;
-            }
-          } catch (_) { }
+        try {
+          const probeRes = await fetch(livePages[0], {
+            method: 'GET',
+            signal: AbortSignal.timeout(4000),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+              'Referer': targetUrl.startsWith('http') ? new URL(targetUrl).origin + '/' : 'https://asurascans.com/',
+              'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            },
+          });
+          // Any response with a body is good enough; 403/ hotlink may still work via our proxy.
+          if (probeRes.ok || probeRes.status === 206 || probeRes.status === 405 || probeRes.status === 403) {
+            probeOk = true;
+          }
+        } catch (_) {
+          // Network blip — still serve pages through the proxy rather than placeholders.
+          probeOk = true;
         }
         if (!probeOk) {
-          console.warn(`[Reader Stream Engine] All ${probeCount} panel probes failed — live source unreachable; using placeholder.`);
-          livePages = null;
+          console.warn(`[Reader Stream Engine] First panel probe failed hard — still returning ${livePages.length} pages via proxy.`);
         }
       }
 
@@ -5876,7 +5887,9 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
           totalChapters,
           nextChapterNumber: chapterNumber < totalChapters ? chapterNumber + 1 : null,
           prevChapterNumber: chapterNumber > 1 ? chapterNumber - 1 : null,
+          isPlaceholder: false,
         });
+
       }
     } else if (matchedDomain && domainIsDisabled) {
       console.warn(`[Live Source Extractor] Skipping extraction — source "${matchedDomain.name}" is currently disabled.`);
@@ -5887,27 +5900,31 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
   //    not be resolved, fall through to a generated placeholder panel with the correct
   //    title instead of guessing a series from a title search.
 
-  // 4. Dynamic Fallback Panel Generator
-  const pageCount = 14;
-  const pages: string[] = [];
-  for (let p = 1; p <= pageCount; p++) {
-    const pageUrl = `/api/reader/panel-image?manga=${encodeURIComponent(mangaTitle)}&chapter=${chapterNumber}&page=${p}&totalPages=${pageCount}&type=${manga?.type || 'manhwa'}&genre=${encodeURIComponent(manga?.genres[0] || 'Action')}`;
-    pages.push(pageUrl);
-  }
-
-  res.json({
+  // 4. Content-unavailable response (honest empty state instead of fake comic panels)
+  const reason = targetUrl
+    ? 'Could not extract live chapter pages from the source. The site may be blocking requests, the chapter may be missing (many sources drop older chapters), or the series URL is stale.'
+    : 'No readable live source URL is configured for this series (MangaDex is metadata-only).';
+  return res.json({
     chapterId: `ch_${mangaId}_${chapterNumber}`,
     mangaId: mangaId || 'm1',
     mangaTitle,
     chapterNumber,
     title: `Chapter ${chapterNumber}`,
     scanGroup: manga?.sourceName || 'Scanlation Site',
-    pages,
+    pages: [],
     totalChapters,
     nextChapterNumber: chapterNumber < totalChapters ? chapterNumber + 1 : null,
     prevChapterNumber: chapterNumber > 1 ? chapterNumber - 1 : null,
+    isPlaceholder: true,
+    loadError: reason,
+    contentUnavailable: true,
   });
 });
+
+
+
+
+
 
 
 // Dynamic Webtoon Canvas Panel Renderer (SVG Image endpoint)
@@ -5930,6 +5947,24 @@ app.get("/api/reader/panel-image", (req, res) => {
   const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
   const type = (req.query.type as string) || 'manhwa';
   const genre = String((req.query.genre as string) || 'Action').toLowerCase();
+
+  // Simple unavailable panel (used when live extraction fails)
+  const rawTitle = String((req.query.manga as string) || 'Series');
+  if (/page panel|missing|unavailable|content unavailable/i.test(rawTitle) || String(req.query.reason || '') === 'unavailable') {
+    const msg = escapeXml(rawTitle === 'Page Panel' ? 'Content Unavailable' : rawTitle);
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200">
+<rect width="100%" height="100%" fill="#0b1220"/>
+<rect x="40" y="360" width="720" height="420" rx="24" fill="#111827" stroke="#f59e0b" stroke-width="2"/>
+<text x="400" y="480" text-anchor="middle" fill="#f8fafc" font-family="system-ui,sans-serif" font-size="32" font-weight="800">Content Unavailable</text>
+<text x="400" y="540" text-anchor="middle" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="18">${msg}</text>
+<text x="400" y="600" text-anchor="middle" fill="#64748b" font-family="system-ui,sans-serif" font-size="15">Chapter may be missing, source blocked, or URL stale.</text>
+<text x="400" y="650" text-anchor="middle" fill="#475569" font-family="system-ui,sans-serif" font-size="14">Try another chapter or source from the series detail page.</text>
+</svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(svg);
+  }
   const chapterNext = escapeXml(chapter + 1);
 
   // Aesthetic colors per genre
@@ -6121,32 +6156,33 @@ app.get("/api/reader/panel-image", (req, res) => {
 
 // Mark Chapter as Read
 app.post("/api/reader/mark-read", (req, res) => {
-  const { mangaId, chapterNumber } = req.body;
-  const index = mangaDatabase.findIndex((m) => m.id === mangaId);
-  if (index === -1) {
+  const { mangaId, chapterNumber } = req.body || {};
+  const manga = SqliteDb.getMangaById(String(mangaId)) || mangaDatabase.find((m) => m.id === mangaId);
+  if (!manga) {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  const manga = mangaDatabase[index];
-  const newChapterNum = Math.max(manga.currentChapter, Number(chapterNumber) || 1);
-  const updatedItem: MangaItem = {
-    ...manga,
-    currentChapter: newChapterNum,
-    latestChapter: Math.max(manga.latestChapter, newChapterNum),
-    lastReadAt: new Date().toISOString(),
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const newChapterNum = Math.max(Number(chapterNumber) || 1, 0);
+  SqliteDb.setUserLibraryChapter(userId, manga.id, newChapterNum, {
     status: manga.status === 'plan_to_read' ? 'reading' : manga.status,
-  };
+  });
+  // Keep page-level progress row in sync for resume
+  SqliteDb.upsertReadingProgress({
+    manga_id: manga.id,
+    user_id: userId,
+    chapter_number: newChapterNum,
+    page_index: 0,
+    percent: 100,
+  });
 
-  syncAddOrUpdateManga(updatedItem);
-
-  // Record the chapter as a completed read for the active user (real analytics).
-  const activeUserId = ((req as any).user?.id as string) || (req.query.userId as string) || 'usr_admin';
   try {
-    SqliteDb.recordReadingActivity(activeUserId, { chaptersRead: 1 });
+    SqliteDb.recordReadingActivity(userId, { chaptersRead: 1 });
   } catch (err) {
     console.error('[Progress Engine] Failed to record reading activity:', err);
   }
 
+  const updatedItem = SqliteDb.applyUserOverlay([manga], userId)[0];
   res.json({ success: true, manga: updatedItem });
 });
 
@@ -6158,7 +6194,7 @@ app.post("/api/reader/mark-read", (req, res) => {
 // activity so the analytics/heatmap show real data instead of mock values.
 
 function resolveProgressUserId(req: express.Request): string {
-  return ((req as any).user?.id as string) || (req.query.userId as string) || 'usr_admin';
+  return resolveRequestUserId(req) || 'usr_admin';
 }
 
 // Save (or update) the current reading position for a manga/chapter.
@@ -6178,23 +6214,12 @@ app.post("/api/reader/progress", (req, res) => {
     percent: Number(percent),
   });
 
-  // Mirror the latest chapter onto the manga row (best-effort, non-intrusive).
+  // Per-user library chapter (do NOT clobber global catalog currentChapter)
   try {
-    const existing = SqliteDb.getMangaById(String(mangaId));
-    if (existing) {
-      const ch = Number(chapterNumber) || 0;
-      if (ch >= (Number(existing.currentChapter) || 0)) {
-        const synced = {
-          ...existing,
-          currentChapter: Math.max(Number(existing.currentChapter) || 0, ch),
-          lastReadAt: new Date().toISOString(),
-          status: existing.status === 'plan_to_read' ? 'reading' : existing.status,
-        };
-        SqliteDb.upsertManga(synced as MangaItem);
-      }
-    }
+    const ch = Number(chapterNumber) || 0;
+    SqliteDb.setUserLibraryChapter(userId, String(mangaId), ch);
   } catch (err) {
-    console.error('[Progress Engine] Failed to mirror progress onto manga:', err);
+    console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
   }
 
   res.json({ success: true });
@@ -6411,15 +6436,7 @@ app.get("/api/gdpr/export-data/:userId", (req, res) => {
   const gdprExportBundle = {
     complianceNotice: "GDPR Article 15 Data Portability Export",
     exportTimestamp: new Date().toISOString(),
-    personalData: {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      email: user.email,
-      avatar: user.avatar,
-      role: user.role,
-      createdAt: user.createdAt,
-    },
+    personalData: toPublicUser(user),
     userMangaLibrary: userSeries,
   };
 
@@ -6435,11 +6452,26 @@ app.delete("/api/gdpr/erase-data/:userId", (req, res) => {
     return res.status(403).json({ error: "Forbidden", message: "GDPR data operations are restricted to the host computer." });
   }
   const { userId } = req.params;
+  if (userId === 'usr_admin' || userId === 'usr_guest') {
+    return res.status(403).json({
+      error: "Forbidden",
+      message: "Host Administrator and Permanent Guest Reader accounts cannot be erased via GDPR endpoint.",
+    });
+  }
+  const user = userProfiles.find((u) => u.id === userId);
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  const result = SqliteDb.purgeUserData(userId);
   userProfiles = userProfiles.filter((u) => u.id !== userId);
-  mangaDatabase = mangaDatabase.filter((m) => m.userId !== userId);
+  mangaDatabase = SqliteDb.getAllManga();
+  syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
-  console.log(`[GDPR Engine] User ${userId} requested full data erasure. All PII and library records purged.`);
-  res.json({ success: true, message: "All user PII and library data permanently erased in compliance with GDPR Article 17." });
+  console.log(`[GDPR Engine] User ${userId} erased. Purged ${result.mangaDeleted} owned series + reading data from SQLite.`);
+  res.json({
+    success: true,
+    message: "All user PII and library data permanently erased in compliance with GDPR Article 17.",
+    mangaDeleted: result.mangaDeleted,
+  });
 });
 
 // GET Settings
@@ -6515,19 +6547,6 @@ app.post("/api/settings/cache/clear", (req, res) => {
   });
 });
 
-// ==========================================
-// HOST PC PRIVILEGE ENGINE & SECURITY MIDDLEWARE
-// ==========================================
-
-export function isHostRequest(req: express.Request): boolean {
-  // SECURITY: Never trust the raw X-Forwarded-For header here — it is trivially
-  // spoofable by any remote client. Use only the Express-resolved socket IP.
-  // If you deploy behind a reverse proxy, configure `app.set('trust proxy', 1)`
-  // so Express safely resolves req.ip from the trusted proxy chain.
-  const clientIp = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-  return clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
-}
-
 // Host PC Client Context Endpoint
 app.get("/api/auth/client-context", (req, res) => {
   const isHost = isHostRequest(req);
@@ -6566,8 +6585,79 @@ app.post("/api/auth/login", async (req, res) => {
   res.json({
     token,
     expiresInMs: AUTH_TOKEN_TTL_MS,
-    user: { id: user.id, username: user.username, role: user.role, name: user.name },
+    user: toPublicUser(user),
   });
+});
+
+// Register a new user account. Passwords are scrypt-hashed before storage.
+// Role is never taken from the client (always 'user' unless first real account on host).
+app.post("/api/auth/register", (req, res) => {
+  const body = req.body || {};
+  const name = String(body.name || '').trim();
+  const username = String(body.username || '').trim();
+  const email = String(body.email || '').trim().toLowerCase();
+  const password = String(body.password || '');
+  const avatar = String(body.avatar || '🥷').trim() || '🥷';
+
+  if (!name || !username || !email || !password) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'name, username, email, and password are required.',
+    });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Password must be at least 8 characters.',
+    });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Bad Request', message: 'A valid email address is required.' });
+  }
+
+  const usernameLc = username.toLowerCase();
+  const taken = userProfiles.some(
+    (u) =>
+      (u.username || '').toLowerCase() === usernameLc ||
+      (u.email || '').toLowerCase() === email
+  );
+  if (taken) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'Username or email is already registered.',
+    });
+  }
+
+  const realUsers = userProfiles.filter((u) => u.id !== 'usr_admin' && u.id !== 'usr_guest');
+  const role: UserRole =
+    realUsers.length === 0 && isHostRequest(req) ? 'admin' : 'user';
+
+  const newUser: UserProfile = {
+    id: 'usr_' + Date.now().toString(36) + '_' + crypto.randomBytes(4).toString('hex'),
+    name,
+    username,
+    email,
+    password: hashPassword(password),
+    avatar,
+    role,
+    createdAt: new Date().toISOString(),
+  };
+
+  userProfiles.push(newUser);
+  saveDatabaseToDisk();
+
+  const regToken = signAuthToken({ sub: newUser.id, role: newUser.role });
+  console.log(`[Auth Engine] Registered user ${newUser.username} (${newUser.id}) role=${newUser.role}`);
+  res.status(201).json({
+    token: regToken,
+    expiresInMs: AUTH_TOKEN_TTL_MS,
+    user: toPublicUser(newUser),
+  });
+});
+
+// Public profile list (never includes password hashes).
+app.get("/api/profiles", (_req, res) => {
+  res.json(userProfiles.map(toPublicUser));
 });
 
 // Return the currently authenticated user (or null). Never requires auth.
@@ -6576,9 +6666,7 @@ app.get("/api/auth/me", (req, res) => {
   res.json({
     authenticated: !!user,
     authEnabled: AUTH_ENABLED,
-    user: user
-      ? { id: user.id, username: user.username, role: user.role, name: user.name }
-      : null,
+    user: user ? toPublicUser(user) : null,
   });
 });
 
@@ -6597,9 +6685,9 @@ app.use("/api/admin", (req, res, next) => {
 // ADMIN USER MANAGEMENT & DOUBLE CONFIRMATION
 // ==========================================
 
-// Get All Users List (Admin)
+// Get All Users List (Admin) — public DTOs only (no password hashes)
 app.get("/api/admin/users", (_req, res) => {
-  res.json(userProfiles);
+  res.json(userProfiles.map(toPublicUser));
 });
 
 // Admin User Role Promotion/Demotion
@@ -6617,7 +6705,7 @@ app.post("/api/admin/users/promote", (req, res) => {
   userProfiles[idx].role = role as UserRole;
   saveDatabaseToDisk();
   console.log(`[Admin Engine] User ${userProfiles[idx].name} (${userId}) role updated to ${role}.`);
-  res.json({ success: true, user: userProfiles[idx] });
+  res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
 });
 
 // Admin Delete User with MANDATORY Double Confirmation
@@ -6642,20 +6730,19 @@ app.delete("/api/admin/users/:userId", (req, res) => {
     return res.status(403).json({ error: "Host Administrator and Permanent Guest Reader accounts are protected and non-deletable." });
   }
 
-  // Perform purge
+  // Cascade purge in SQLite (profile + owned manga + reading progress/activity)
+  const result = SqliteDb.purgeUserData(userId);
   userProfiles = userProfiles.filter((u) => u.id !== userId);
-  const initialSeriesCount = mangaDatabase.length;
-  mangaDatabase = mangaDatabase.filter((m) => m.userId !== userId);
-  const purgedSeriesCount = initialSeriesCount - mangaDatabase.length;
-
+  mangaDatabase = SqliteDb.getAllManga();
+  syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
-  console.log(`[Admin Engine] User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${purgedSeriesCount} library records purged)`);
+  console.log(`[Admin Engine] User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${result.mangaDeleted} library records purged from SQLite)`);
 
   res.json({
     success: true,
-    message: `User account '${user.name}' and ${purgedSeriesCount} associated library records permanently deleted.`,
+    message: `User account '${user.name}' and ${result.mangaDeleted} associated library records permanently deleted.`,
     deletedUserId: userId,
-    remainingUsers: userProfiles,
+    remainingUsers: userProfiles.map(toPublicUser),
   });
 });
 

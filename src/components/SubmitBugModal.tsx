@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/api';
 import { Bug, X, Send, AlertTriangle, CheckCircle, FileText, Code2, AlertCircle } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -46,7 +47,7 @@ export const SubmitBugModal: React.FC<SubmitBugModalProps> = ({
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/bugs/submit', {
+      const res = await apiFetch('/api/bugs/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

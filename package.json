@@ -1,54 +1,56 @@
 {
-  "name": "manhuasync-tracker",
-  "version": "2.5.0",
-  "license": "GPL-3.0-or-later",
-  "main": "electron-main.cjs",
-  "engines": {
-    "node": ">=22.12.0"
-  },
-  "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build",
-    "start": "npx tsx server.ts",
-    "start:prod": "npx tsx server.ts",
-    "pm2:start": "pm2 start ecosystem.config.cjs",
-    "docker:build": "docker build -t manhuasync-tracker .",
-    "docker:run": "docker compose up -d",
-    "deploy:linux": "bash scripts/deploy-linux.sh",
-    "deploy:windows": "scripts\\deploy-windows.bat",
-    "electron:dev": "electron .",
-    "build:exe": "npm run build && electron-builder --win",
-    "preview": "vite preview",
-    "lint": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@google/genai": "^2.4.0",
-    "@tailwindcss/vite": "^4.1.14",
-    "better-sqlite3": "^13.0.3",
-    "cheerio": "^1.2.0",
-    "compression": "^1.8.1",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "lucide-react": "^1.31.0",
-    "motion": "^13.1.0",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
-    "@types/compression": "^1.8.1",
-    "@types/express": "^5.0.6",
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
-    "autoprefixer": "^10.4.21",
-    "electron": "^43.3.0",
-    "electron-builder": "^26.15.3",
-    "esbuild": "^0.28.2",
-    "tailwindcss": "^4.1.14",
-    "tsx": "^4.23.12",
-    "typescript": "~5.9.0",
-    "vite": "^8.2.1"
-  }
+    "name":  "manhuasync-tracker",
+    "version":  "2.5.0",
+    "license":  "GPL-3.0-or-later",
+    "main":  "electron-main.cjs",
+    "engines":  {
+                    "node":  "\u003e=22.12.0"
+                },
+    "scripts":  {
+                    "dev":  "tsx server.ts",
+                    "build:server":  "esbuild server.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-server/server.cjs --packages=external",
+                    "build":  "vite build \u0026\u0026 npm run build:server",
+                    "start":  "node dist-server/server.cjs",
+                    "start:prod":  "node dist-server/server.cjs",
+                    "pm2:start":  "pm2 start ecosystem.config.cjs",
+                    "docker:build":  "docker build -t manhuasync-tracker .",
+                    "docker:run":  "docker compose up -d",
+                    "deploy:linux":  "bash scripts/deploy-linux.sh",
+                    "deploy:windows":  "scripts\\deploy-windows.bat",
+                    "electron:dev":  "electron .",
+                    "build:exe":  "npm run build \u0026\u0026 electron-builder --win",
+                    "preview":  "vite preview",
+                    "lint":  "tsc --noEmit",
+                    "reader:smoke":  "node scripts/reader-smoke.mjs"
+                },
+    "dependencies":  {
+                         "@google/genai":  "^2.4.0",
+                         "@tailwindcss/vite":  "^4.1.14",
+                         "better-sqlite3":  "^13.0.3",
+                         "cheerio":  "^1.2.0",
+                         "compression":  "^1.8.1",
+                         "dotenv":  "^17.2.3",
+                         "express":  "^5.2.1",
+                         "lucide-react":  "^1.31.0",
+                         "motion":  "^13.1.0",
+                         "react":  "^19.0.1",
+                         "react-dom":  "^19.0.1"
+                     },
+    "devDependencies":  {
+                            "@types/better-sqlite3":  "^9.6.0",
+                            "@types/compression":  "^1.8.1",
+                            "@types/express":  "^5.0.6",
+                            "@types/node":  "^24.0.0",
+                            "@types/react":  "^19.2.18",
+                            "@types/react-dom":  "^19.2.4",
+                            "@vitejs/plugin-react":  "^6.0.5",
+                            "autoprefixer":  "^10.4.21",
+                            "electron":  "^43.3.0",
+                            "electron-builder":  "^26.15.3",
+                            "esbuild":  "^0.28.2",
+                            "tailwindcss":  "^4.1.14",
+                            "tsx":  "^4.23.12",
+                            "typescript":  "~5.9.0",
+                            "vite":  "^8.2.1"
+                        }
 }

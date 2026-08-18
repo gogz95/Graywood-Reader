@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/api';
 import {
   AppSettings,
   ReaderViewMode,
@@ -123,7 +124,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsRefreshingAll(true);
     setBulkRefreshStatus(null);
     try {
-      const res = await fetch('/api/manga/refresh-all-metadata', { method: 'POST' });
+      const res = await apiFetch('/api/manga/refresh-all-metadata', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setBulkRefreshStatus(`✓ Refreshed metadata for all ${data.updatedCount} series!`);
@@ -164,7 +165,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleClearCache = async () => {
     try {
-      const res = await fetch('/api/settings/cache/clear', { method: 'POST' });
+      const res = await apiFetch('/api/settings/cache/clear', { method: 'POST' });
       if (res.ok) {
         showToast('Image cache & page list buffers cleared!');
       }
@@ -792,7 +793,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         if (!targetId) return;
                         if (confirm(`Are you sure you want to permanently erase all data for "${activeProfile?.name}" under GDPR Article 17 (Right to be Forgotten)? This cannot be undone.`)) {
                           try {
-                            const res = await fetch(`/api/gdpr/erase-data/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+                            const res = await apiFetch(`/api/gdpr/erase-data/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
                             const data = await res.json().catch(() => ({}));
                             alert(res.ok ? (data.message || 'Erasure complete. All PII records and personal reading entries have been purged.') : `Erasure failed: ${data.message || data.error || res.statusText}`);
                           } catch (e) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { apiFetch } from '../utils/api';
 import { MangaItem, SourceDefinition, hasWorkingReaderSource } from '../types';
 import { isReaderAvailable } from '../utils/catalog';
 
@@ -79,7 +80,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/kotatsu/sources');
+        const res = await apiFetch('/api/kotatsu/sources');
         if (res.ok) {
           const list: SourceDefinition[] = await res.json();
           const defaults = ['asurascans', 'flamecomics', 'weebcentral', 'demonic'];
@@ -103,7 +104,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       const params = new URLSearchParams({ limit: String(ITEMS_PER_PAGE), page: String(page) });
       if (selectedSource !== 'all') params.set('sourceId', selectedSource);
       if (query.trim()) params.set('q', query.trim());
-      const res = await fetch(`/api/explore?${params.toString()}`);
+      const res = await apiFetch(`/api/explore?${params.toString()}`);
       if (!res.ok) throw new Error(`Explore feed returned ${res.status}`);
       const data = await res.json();
       // Extract preview images for each item

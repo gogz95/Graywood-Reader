@@ -4,8 +4,8 @@ import path from 'path';
 import crypto from 'crypto';
 import { MangaItem, UserProfile, AppSettings, AutoUpdateLog } from './src/types';
 
-// Ensure data directory exists
-const DATA_DIR = path.join(__dirname, 'data');
+// Ensure data directory exists (cwd-relative so bundled/Docker entrypoints share ./data)
+const DATA_DIR = path.join(process.cwd(), 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -125,6 +125,28 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_read_progress_user ON reading_progress(user_id, last_read_at);
   CREATE INDEX IF NOT EXISTS idx_read_activity_user ON reading_activity(user_id, date);
+
+  -- Per-user favorites (shared catalog rows stay global; library membership is personal)
+  CREATE TABLE IF NOT EXISTS user_favorites (
+    user_id TEXT NOT NULL,
+    manga_id TEXT NOT NULL,
+    is_favorite INTEGER DEFAULT 1,
+    updated_at TEXT,
+    PRIMARY KEY (user_id, manga_id)
+  );
+
+  -- Per-user library reading position (current chapter) so users don't clobber each other
+  CREATE TABLE IF NOT EXISTS user_library_state (
+    user_id TEXT NOT NULL,
+    manga_id TEXT NOT NULL,
+    current_chapter INTEGER DEFAULT 0,
+    last_read_at TEXT,
+    status TEXT,
+    PRIMARY KEY (user_id, manga_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_fav_user ON user_favorites(user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_lib_user ON user_library_state(user_id, last_read_at);
 `);
 
 // Prepared Statements for Sub-millisecond Execution
@@ -187,6 +209,18 @@ const stmtDeleteManga = db.prepare(`
   DELETE FROM manga WHERE id = ?
 `);
 
+const stmtDeleteMangaByUserId = db.prepare(`
+  DELETE FROM manga WHERE userId = ?
+`);
+
+const stmtDeleteReadingProgressByUserId = db.prepare(`
+  DELETE FROM reading_progress WHERE user_id = ?
+`);
+
+const stmtDeleteReadingActivityByUserId = db.prepare(`
+  DELETE FROM reading_activity WHERE user_id = ?
+`);
+
 // ── KV Settings Store (appSettings / syncConfig JSON blobs) ─────────────────
 const stmtGetSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
 const stmtSetSetting = db.prepare(`
@@ -236,6 +270,9 @@ const stmtGetReadingProgress = db.prepare(`
 const stmtGetReadingProgressForChapter = db.prepare(`
   SELECT * FROM reading_progress WHERE manga_id = ? AND user_id = ? AND chapter_number = ?
 `);
+const stmtGetReadingActivity = db.prepare(`
+  SELECT * FROM reading_activity WHERE user_id = ? ORDER BY date ASC
+`);
 const stmtUpsertReadingActivity = db.prepare(`
   INSERT INTO reading_activity (date, user_id, chapters_read, minutes_spent)
   VALUES (@date, @user_id, @chapters_read, @minutes_spent)
@@ -243,9 +280,38 @@ const stmtUpsertReadingActivity = db.prepare(`
     chapters_read = excluded.chapters_read,
     minutes_spent = excluded.minutes_spent
 `);
-const stmtGetReadingActivity = db.prepare(`
-  SELECT * FROM reading_activity WHERE user_id = ? ORDER BY date ASC
+
+// Per-user favorites & library chapter state
+const stmtUpsertUserFavorite = db.prepare(`
+  INSERT INTO user_favorites (user_id, manga_id, is_favorite, updated_at)
+  VALUES (@user_id, @manga_id, @is_favorite, @updated_at)
+  ON CONFLICT(user_id, manga_id) DO UPDATE SET
+    is_favorite = excluded.is_favorite,
+    updated_at = excluded.updated_at
 `);
+const stmtGetUserFavorites = db.prepare(`
+  SELECT manga_id, is_favorite FROM user_favorites WHERE user_id = ? AND is_favorite = 1
+`);
+const stmtGetUserFavorite = db.prepare(`
+  SELECT is_favorite FROM user_favorites WHERE user_id = ? AND manga_id = ?
+`);
+const stmtDeleteUserFavoritesByUser = db.prepare(`DELETE FROM user_favorites WHERE user_id = ?`);
+
+const stmtUpsertUserLibraryState = db.prepare(`
+  INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
+  VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status)
+  ON CONFLICT(user_id, manga_id) DO UPDATE SET
+    current_chapter = excluded.current_chapter,
+    last_read_at = excluded.last_read_at,
+    status = COALESCE(excluded.status, user_library_state.status)
+`);
+const stmtGetUserLibraryState = db.prepare(`
+  SELECT * FROM user_library_state WHERE user_id = ?
+`);
+const stmtGetUserLibraryStateOne = db.prepare(`
+  SELECT * FROM user_library_state WHERE user_id = ? AND manga_id = ?
+`);
+const stmtDeleteUserLibraryStateByUser = db.prepare(`DELETE FROM user_library_state WHERE user_id = ?`);
 
 // Helper Serializers & Deserializers
 function mapRowToMangaItem(row: any): MangaItem {
@@ -339,7 +405,7 @@ export function rekeyCollidedSourceIds(): number {
 
 // Data Migration Engine: Automatically imports existing database.json into SQLite
 export function migrateJsonToSqlite() {
-  const jsonPath = path.join(__dirname, 'database.json');
+  const jsonPath = path.join(process.cwd(), 'database.json');
   if (!fs.existsSync(jsonPath)) return;
 
   const countRow = db.prepare('SELECT COUNT(*) as count FROM manga').get() as { count: number };
@@ -416,6 +482,33 @@ export const SqliteDb = {
 
   deleteManga(id: string) {
     stmtDeleteManga.run(id);
+  },
+
+  deleteMangaByUserId(userId: string): number {
+    const info = stmtDeleteMangaByUserId.run(userId);
+    return Number(info.changes) || 0;
+  },
+
+  deleteReadingDataForUser(userId: string) {
+    stmtDeleteReadingProgressByUserId.run(userId);
+    stmtDeleteReadingActivityByUserId.run(userId);
+  },
+
+  /**
+   * Permanently remove a user's profile, owned manga rows, and reading data.
+   * Shared catalog rows (userId NULL) are left intact.
+   */
+  purgeUserData(userId: string): { mangaDeleted: number } {
+    const run = db.transaction((uid: string) => {
+      stmtDeleteReadingProgressByUserId.run(uid);
+      stmtDeleteReadingActivityByUserId.run(uid);
+      stmtDeleteUserFavoritesByUser.run(uid);
+      stmtDeleteUserLibraryStateByUser.run(uid);
+      const mangaInfo = stmtDeleteMangaByUserId.run(uid);
+      stmtDeleteProfile.run(uid);
+      return { mangaDeleted: Number(mangaInfo.changes) || 0 };
+    });
+    return run(userId);
   },
 
   purgeReaperScans() {
@@ -578,8 +671,123 @@ export const SqliteDb = {
 
   getReadingActivity(userId: string): any[] {
     return stmtGetReadingActivity.all(userId);
-  }
+  },
+
+  // ── Per-user favorites ─────────────────────────────────────────────────────
+  setUserFavorite(userId: string, mangaId: string, isFavorite: boolean) {
+    stmtUpsertUserFavorite.run({
+      user_id: userId,
+      manga_id: mangaId,
+      is_favorite: isFavorite ? 1 : 0,
+      updated_at: new Date().toISOString(),
+    });
+  },
+
+  getUserFavoriteIds(userId: string): Set<string> {
+    const rows = stmtGetUserFavorites.all(userId) as { manga_id: string }[];
+    return new Set(rows.map((r) => r.manga_id));
+  },
+
+  isUserFavorite(userId: string, mangaId: string): boolean {
+    const row = stmtGetUserFavorite.get(userId, mangaId) as { is_favorite: number } | undefined;
+    return Boolean(row?.is_favorite);
+  },
+
+  // ── Per-user library chapter state ─────────────────────────────────────────
+  setUserLibraryChapter(
+    userId: string,
+    mangaId: string,
+    currentChapter: number,
+    opts?: { status?: string }
+  ) {
+    const existing = stmtGetUserLibraryStateOne.get(userId, mangaId) as
+      | { current_chapter?: number; status?: string }
+      | undefined;
+    const nextCh = Math.max(Number(existing?.current_chapter) || 0, Number(currentChapter) || 0);
+    stmtUpsertUserLibraryState.run({
+      user_id: userId,
+      manga_id: mangaId,
+      current_chapter: nextCh,
+      last_read_at: new Date().toISOString(),
+      status: opts?.status || existing?.status || null,
+    });
+  },
+
+  getUserLibraryStateMap(userId: string): Map<string, { currentChapter: number; lastReadAt?: string; status?: string }> {
+    const rows = stmtGetUserLibraryState.all(userId) as any[];
+    const map = new Map<string, { currentChapter: number; lastReadAt?: string; status?: string }>();
+    for (const r of rows) {
+      map.set(r.manga_id, {
+        currentChapter: Number(r.current_chapter) || 0,
+        lastReadAt: r.last_read_at || undefined,
+        status: r.status || undefined,
+      });
+    }
+    return map;
+  },
+
+  /**
+   * Overlay per-user favorite + chapter progress onto catalog rows for API responses.
+   * Shared catalog fields stay global; isFavorite/currentChapter/lastReadAt become personal.
+   */
+  applyUserOverlay(items: MangaItem[], userId: string | null | undefined): MangaItem[] {
+    if (!userId) return items;
+    const favs = this.getUserFavoriteIds(userId);
+    const lib = this.getUserLibraryStateMap(userId);
+    return items.map((m) => {
+      const state = lib.get(m.id);
+      return {
+        ...m,
+        // Per-user favorites table is source of truth once overlay is applied
+        isFavorite: favs.has(m.id),
+        currentChapter: state ? state.currentChapter : (Number(m.currentChapter) || 0),
+        lastReadAt: state?.lastReadAt || m.lastReadAt,
+        status: (state?.status as MangaItem['status']) || m.status,
+      };
+    });
+  },
 };
+
+/**
+ * One-time: copy global manga.isFavorite / currentChapter into usr_admin personal tables
+ * so existing libraries don't vanish after the multi-user overlay lands.
+ */
+function migrateGlobalLibraryToUserTables() {
+  try {
+    const done = stmtGetSetting.get('migrated_user_library_v1') as { value: string } | undefined;
+    if (done?.value === '1') return;
+    const rows = db.prepare('SELECT id, isFavorite, currentChapter, lastReadAt, status FROM manga').all() as any[];
+    const now = new Date().toISOString();
+    const tx = db.transaction(() => {
+      for (const r of rows) {
+        if (r.isFavorite) {
+          stmtUpsertUserFavorite.run({
+            user_id: 'usr_admin',
+            manga_id: r.id,
+            is_favorite: 1,
+            updated_at: now,
+          });
+        }
+        const ch = Number(r.currentChapter) || 0;
+        if (ch > 0) {
+          stmtUpsertUserLibraryState.run({
+            user_id: 'usr_admin',
+            manga_id: r.id,
+            current_chapter: ch,
+            last_read_at: r.lastReadAt || now,
+            status: r.status || null,
+          });
+        }
+      }
+      stmtSetSetting.run({ key: 'migrated_user_library_v1', value: '1' });
+    });
+    tx();
+    console.log(`[SQLite Engine] Migrated global favorites/progress into per-user tables for usr_admin (${rows.length} series scanned).`);
+  } catch (err) {
+    console.error('[SQLite Engine] user library migration failed:', err);
+  }
+}
 
 // Execute migration check on startup
 migrateJsonToSqlite();
+migrateGlobalLibraryToUserTables();

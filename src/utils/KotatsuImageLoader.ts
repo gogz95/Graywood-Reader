@@ -66,8 +66,13 @@ export class KotatsuImageLoader {
   private static getImageCacheDB(): Promise<IDBDatabase> {
     if (KotatsuImageLoader.dbPromise) return KotatsuImageLoader.dbPromise;
     KotatsuImageLoader.dbPromise = new Promise((resolve, reject) => {
-      const req = indexedDB.open('kotatsu-image-cache', 1);
-      req.onupgradeneeded = () => { req.result.createObjectStore('images', { keyPath: 'url' }); };
+      // v2 stores Blob data (blob: URLs die on reload and must not be persisted)
+      const req = indexedDB.open('kotatsu-image-cache', 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (db.objectStoreNames.contains('images')) db.deleteObjectStore('images');
+        db.createObjectStore('images', { keyPath: 'url' });
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => { console.warn('[Image Cache] IndexedDB unavailable, using in-memory only'); reject(req.error); };
     });
@@ -81,17 +86,30 @@ export class KotatsuImageLoader {
         const tx = db.transaction('images', 'readonly');
         const store = tx.objectStore('images');
         const req = store.get(rawUrl);
-        req.onsuccess = () => resolve(req.result?.blobUrl || null);
+        req.onsuccess = () => {
+          const row = req.result as { blob?: Blob; blobUrl?: string } | undefined;
+          if (!row) return resolve(null);
+          if (row.blob instanceof Blob) {
+            resolve(URL.createObjectURL(row.blob));
+            return;
+          }
+          // Ignore legacy dead blob: URLs
+          if (typeof row.blobUrl === 'string' && !row.blobUrl.startsWith('blob:')) {
+            resolve(row.blobUrl);
+            return;
+          }
+          resolve(null);
+        };
         req.onerror = () => resolve(null);
       });
     } catch { return null; }
   }
 
-  private async setCachedBlobUrl(rawUrl: string, blobUrl: string): Promise<void> {
+  private async setCachedBlob(rawUrl: string, blob: Blob): Promise<void> {
     try {
       const db = await KotatsuImageLoader.getImageCacheDB();
       const tx = db.transaction('images', 'readwrite');
-      tx.objectStore('images').put({ url: rawUrl, blobUrl, timestamp: Date.now() });
+      tx.objectStore('images').put({ url: rawUrl, blob, timestamp: Date.now() });
     } catch { /* silent fail */ }
   }
 
@@ -141,6 +159,11 @@ export class KotatsuImageLoader {
       gcIntervalMs: config.gcIntervalMs ?? 60000,
       priorityMode: config.priorityMode ?? 'default',
     };
+
+    this.concurrency = this.config.maxConcurrency!;
+    this.preloadAhead = this.config.preloadAhead!;
+    this.preloadBehind = this.config.preloadBehind!;
+    this.maxCacheTTL = this.config.cacheTTL!;
 
     // Initialize cache
     this.cache = new Map();
@@ -288,31 +311,31 @@ export class KotatsuImageLoader {
 
     const rawUrl = this.pageUrls[pageIndex];
 
-    // Check browser cache first if enabled
-    if (this.config.enableBrowserCache) {
-      const cacheEntry = this.checkBrowserCache(rawUrl);
-      if (cacheEntry) {
+    try {
+      // Check browser cache first if enabled
+      if (this.config.enableBrowserCache) {
+        const cacheEntry = this.checkBrowserCache(rawUrl);
+        if (cacheEntry) {
+          if (state.blobUrl?.startsWith('blob:')) { URL.revokeObjectURL(state.blobUrl); }
+          state.blobUrl = cacheEntry.url;
+          state.status = 'loaded';
+          state.lastUpdated = Date.now();
+          this.notify();
+          return;
+        }
+      }
+
+      // IndexedDB persistent cache (Blob storage; object URLs recreated on read)
+      const cachedIdxDB = await this.getCachedBlobUrl(rawUrl);
+      if (cachedIdxDB) {
         if (state.blobUrl?.startsWith('blob:')) { URL.revokeObjectURL(state.blobUrl); }
-        state.blobUrl = cacheEntry.url;
+        state.blobUrl = cachedIdxDB;
         state.status = 'loaded';
         state.lastUpdated = Date.now();
         this.notify();
         return;
       }
-    }
 
-    // Fix #18: Check IndexedDB persistent cache
-    const cachedIdxDB = await this.getCachedBlobUrl(rawUrl);
-    if (cachedIdxDB) {
-      if (state.blobUrl?.startsWith('blob:')) { URL.revokeObjectURL(state.blobUrl); }
-      state.blobUrl = cachedIdxDB;
-      state.status = 'loaded';
-      state.lastUpdated = Date.now();
-      this.notify();
-      return;
-    }
-
-    try {
       // Fix #4: Don't double-proxy URLs that are already proxied
       const isAlreadyProxied = rawUrl.startsWith('/api/') || rawUrl.startsWith('/api/reader/proxy-image');
       const fetchUrl = isAlreadyProxied
@@ -334,8 +357,8 @@ export class KotatsuImageLoader {
       
       const blobUrl = URL.createObjectURL(blob);
 
-      // Fix #18: Persist to IndexedDB for offline reuse
-      this.setCachedBlobUrl(rawUrl, blobUrl).catch(() => {});
+      // Persist Blob (not blob: URL) for offline reuse across reloads
+      this.setCachedBlob(rawUrl, blob).catch(() => {});
 
       state.status = 'loaded';
       state.blobUrl = blobUrl;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { apiFetch } from '../utils/api';
 import { KotatsuImageLoader, PageLoadState } from '../utils/KotatsuImageLoader';
 import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 import {
@@ -155,26 +156,71 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       const url = `/api/reader/chapter-pages?mangaId=${encodeURIComponent(
         manga.id
       )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to load chapter content');
+      const res = await apiFetch(url);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error((errBody as any).message || (errBody as any).error || `Failed to load chapter content (HTTP ${res.status})`);
+      }
       const data: ChapterData = await res.json();
       setChapterData(data);
 
+      if (data.isPlaceholder || data.loadError || data.contentUnavailable || !data.pages?.length) {
+        setError(
+          data.loadError ||
+            'Live chapter pages could not be loaded from the source. The chapter may be missing, the source may be blocking requests, or the series URL is stale.'
+        );
+      }
+
+      // Resume mid-chapter page if the server has stored progress for this chapter
+      let resumePage = 0;
+      try {
+        const histRes = await apiFetch(`/api/reader/history/${encodeURIComponent(manga.id)}`);
+        if (histRes.ok) {
+          const rows = await histRes.json();
+          if (Array.isArray(rows)) {
+            const match = rows.find((r: any) => Number(r.chapter_number) === Number(chNum));
+            if (match && Number(match.page_index) > 0) {
+              resumePage = Math.min(
+                Number(match.page_index) || 0,
+                Math.max(0, (data.pages?.length || 1) - 1)
+              );
+            }
+          }
+        }
+      } catch {
+        /* resume is best-effort */
+      }
+      setCurrentPageIndex(resumePage);
+
       // Initialize Kotatsu Parallel Image Loader Engine
-      if (data.pages && data.pages.length > 0) {
+      if (data.pages && data.pages.length > 0 && !data.isPlaceholder && !data.contentUnavailable) {
         const loader = new KotatsuImageLoader(data.pages, manga.sourceUrl, (states) => {
           setPageLoadStates(new Map(states));
         });
         loaderRef.current = loader;
-        loader.setActiveIndex(0);
+        loader.setActiveIndex(resumePage);
       }
 
-      if (settings.autoMarkRead) {
+      if (settings.autoMarkRead && !data.isPlaceholder && !data.contentUnavailable && data.pages?.length) {
         onMarkChapterRead(chNum);
+      }
+
+      // Persist open position so analytics/history stay warm
+      if (!data.isPlaceholder && data.pages?.length) {
+        apiFetch('/api/reader/progress', {
+          method: 'POST',
+          body: JSON.stringify({
+            mangaId: manga.id,
+            chapterNumber: chNum,
+            pageIndex: resumePage,
+            pageCount: data.pages.length,
+            percent: data.pages.length ? Math.round((resumePage / data.pages.length) * 100) : 0,
+          }),
+        }).catch(() => {});
       }
     } catch (err: any) {
       console.error(err);
-      setError('Could not load chapter pages. Please try again.');
+      setError(err?.message || 'Could not load chapter pages. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -246,7 +292,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         }
       }, 3000);
     }
-  }, [scrollContainerRef, chapterData, settings.autoMarkRead, onMarkChapterRead, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum]);
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, onMarkChapterRead, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum]);
+
+  // Debounced server progress persistence (page + percent) for analytics/resume
+  useEffect(() => {
+    if (!chapterData || chapterData.isPlaceholder || chapterData.contentUnavailable || !chapterData.pages?.length) return;
+    const timer = setTimeout(() => {
+      apiFetch('/api/reader/progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          mangaId: manga.id,
+          chapterNumber: currentChapterNum,
+          pageIndex: currentPageIndex,
+          pageCount: chapterData.pages.length,
+          percent: readProgressPercent,
+        }),
+      }).catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [manga.id, currentChapterNum, currentPageIndex, readProgressPercent, chapterData]);
 
   // Keyboard Navigation (Space for Auto-scroll, A/D, Arrow keys, F)
   useEffect(() => {
@@ -553,7 +617,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         e.stopPropagation();
                         setShowFlagDropdown(false);
                         try {
-                          await fetch('/api/manga/toggle-flag', {
+                          await apiFetch('/api/manga/toggle-flag', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
@@ -580,7 +644,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         e.stopPropagation();
                         setShowFlagDropdown(false);
                         try {
-                          await fetch('/api/manga/toggle-flag', {
+                          await apiFetch('/api/manga/toggle-flag', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ id: manga.id, isFlagged: false }),
@@ -903,18 +967,52 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             </div>
           </div>
         ) : error ? (
-          <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center max-w-md mx-auto">
-            <div className="w-12 h-12 rounded-2xl bg-danger/10 text-danger border border-danger/20 flex items-center justify-center mx-auto">
-              <X className="w-6 h-6" />
+          <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-accent/10 text-accent border border-accent/30 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
             </div>
-            <h3 className="text-base font-bold text-primary">{error}</h3>
-            <button
-              onClick={() => fetchChapterPages(currentChapterNum)}
-              className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center gap-2 mx-auto"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Retry Chapter
-            </button>
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-primary">Content Unavailable</h3>
+              <p className="text-sm text-secondary leading-relaxed">{error}</p>
+              <p className="text-xs text-muted">
+                Series: <span className="text-primary font-semibold">{manga.title}</span>
+                {' · '}Chapter {currentChapterNum}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => fetchChapterPages(currentChapterNum)}
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry Chapter
+              </button>
+              {chapterData?.nextChapterNumber ? (
+                <button
+                  onClick={() => setCurrentChapterNum(chapterData.nextChapterNumber!)}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+                >
+                  Try Next Chapter
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : null}
+              {chapterData?.prevChapterNumber ? (
+                <button
+                  onClick={() => setCurrentChapterNum(chapterData.prevChapterNumber!)}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous Chapter
+                </button>
+              ) : null}
+              <button
+                onClick={() => setShowChapterMenu(true)}
+                className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                Pick Chapter
+              </button>
+            </div>
           </div>
         ) : chapterData && settings.viewMode === 'webtoon' ? (
           /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */

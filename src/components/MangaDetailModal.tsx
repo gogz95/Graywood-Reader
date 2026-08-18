@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { apiFetch } from '../utils/api';
 import { MangaItem, ReadingStatus, hasWorkingReaderSource } from '../types';
 
 import {
@@ -60,7 +61,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
     setIsRefreshingMetadata(true);
     setRefreshMsg(null);
     try {
-      const res = await fetch(`/api/manga/${manga.id}/refresh-metadata`, { method: 'POST' });
+      const res = await apiFetch(`/api/manga/${manga.id}/refresh-metadata`, { method: 'POST' });
       const data = await res.json();
       if (data.success && data.manga) {
         onUpdateManga(data.manga);
@@ -107,7 +108,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
   const handleFetchSimilar = async () => {
     setLoadingSimilar(true);
     try {
-      const res = await fetch('/api/ai/find-similar', {
+      const res = await apiFetch('/api/ai/find-similar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: manga.title, genres: manga.genres }),
@@ -193,7 +194,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                             e.stopPropagation();
                             setShowFlagDropdown(false);
                             try {
-                              await fetch('/api/manga/toggle-flag', {
+                              await apiFetch('/api/manga/toggle-flag', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
@@ -220,7 +221,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = ({
                             e.stopPropagation();
                             setShowFlagDropdown(false);
                             try {
-                              await fetch('/api/manga/toggle-flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: manga.id, isFlagged: false }) });
+                              await apiFetch('/api/manga/toggle-flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: manga.id, isFlagged: false }) });
                             } catch (_) {}
                             setIsFlagged(false);
                             setFlagReason('');

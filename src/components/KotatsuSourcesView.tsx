@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../utils/api';
 import {
   Globe,
   Search,
@@ -108,7 +109,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     (async () => {
       setIsFetchingSources(true);
       try {
-        const res = await fetch('/api/kotatsu/sources');
+        const res = await apiFetch('/api/kotatsu/sources');
         if (res.ok) {
           const list: SourceDefinition[] = await res.json();
           setSources(list);
@@ -146,7 +147,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const handleClearAppCache = async () => {
     setIsClearingCache(true);
     try {
-      const res = await fetch('/api/settings/cache/clear', { method: 'POST' });
+      const res = await apiFetch('/api/settings/cache/clear', { method: 'POST' });
       if (res.ok) {
         sessionStorage.clear();
         showToast('✓ App cache & temp canvas buffers cleared successfully!');
@@ -192,7 +193,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     });
 
     try {
-      await fetch('/api/kotatsu/sources/toggle', {
+      await apiFetch('/api/kotatsu/sources/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sourceId, isEnabled: nextIsEnabled }),
@@ -217,7 +218,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
       if (q.trim()) {
         // Search query mode
-        const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&q=${encodeURIComponent(q)}&page=${pageNum}&limit=20`);
+        const res = await apiFetch(`/api/kotatsu/search?sourceId=${src.id}&q=${encodeURIComponent(q)}&page=${pageNum}&limit=20`);
         if (res.ok) {
           setSearchResults(toArray(await res.json()));
           const tp = res.headers.get('X-Total-Pages');
@@ -225,7 +226,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         }
       } else if (tabMode === 'expanded') {
         // Expanded View Mode: 20 items per page (matches Asura's native page size)
-        const res = await fetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`);
+        const res = await apiFetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`);
         if (res.ok) {
           setExpandedResults(toArray(await res.json()));
           const tp = res.headers.get('X-Total-Pages');
@@ -236,8 +237,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       } else {
         // Dual Category Mode: Fetch Popular & Latest simultaneously
         const [popRes, latRes] = await Promise.all([
-          fetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`),
-          fetch(`/api/kotatsu/latest?sourceId=${src.id}&page=${pageNum}&limit=20`),
+          apiFetch(`/api/kotatsu/search?sourceId=${src.id}&page=${pageNum}&limit=20`),
+          apiFetch(`/api/kotatsu/latest?sourceId=${src.id}&page=${pageNum}&limit=20`),
         ]);
 
         if (popRes.ok) {

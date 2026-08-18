@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/api';
 import { MangaItem, ChapterInfo, hasWorkingReaderSource } from '../types';
 
 
@@ -36,7 +37,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
   const fetchChapters = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/reader/chapters/${manga.id}?order=${sortOrder}`);
+      const res = await apiFetch(`/api/reader/chapters/${manga.id}?order=${sortOrder}`);
       if (res.ok) {
         const data = await res.json();
         setChapters(data);

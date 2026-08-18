@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch } from '../utils/api';
 import { OpenApiManga, MangaItem } from '../types';
 import {
   Sparkles,
@@ -35,13 +36,13 @@ export const OpenApiFinderView: React.FC<OpenApiFinderViewProps> = ({
     setLoading(true);
     try {
       if (source === 'mangadex') {
-        const res = await fetch(`/api/mangadex/search?q=${encodeURIComponent(query)}`);
+        const res = await apiFetch(`/api/mangadex/search?q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
           setResults(data);
         }
       } else {
-        const res = await fetch(`/api/anilist/search`, {
+        const res = await apiFetch(`/api/anilist/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: query || 'Solo Leveling' }),
@@ -70,7 +71,7 @@ export const OpenApiFinderView: React.FC<OpenApiFinderViewProps> = ({
   const handleAdd = async (manga: OpenApiManga) => {
     try {
       if (manga.source === 'MangaDex API' || apiSource === 'mangadex') {
-        await fetch(`/api/mangadex/import/${manga.id}`, {
+        await apiFetch(`/api/mangadex/import/${manga.id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/api';
 import { MangaItem, MangaType, ReadingStatus } from '../types';
 import {
   X,
@@ -72,7 +73,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
     }
     setEnriching(true);
     try {
-      const res = await fetch('/api/ai/enrich-metadata', {
+      const res = await apiFetch('/api/ai/enrich-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/api';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle, FileWarning, BookX, Layers, HelpCircle, Check, Loader2 } from 'lucide-react';
 import { MangaItem } from '../types';
@@ -67,7 +68,7 @@ export const FlagIssueModal: React.FC<FlagIssueModalProps> = ({
 
     try {
       // 1. Persist the flag against this series via the existing toggle endpoint.
-      const res = await fetch('/api/manga/toggle-flag', {
+      const res = await apiFetch('/api/manga/toggle-flag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: manga.id, isFlagged: true, flagReason: cat.flagReason }),
@@ -92,7 +93,7 @@ export const FlagIssueModal: React.FC<FlagIssueModalProps> = ({
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/manga/toggle-flag', {
+      const res = await apiFetch('/api/manga/toggle-flag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: manga.id, isFlagged: false }),

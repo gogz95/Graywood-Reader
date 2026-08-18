@@ -15,3 +15,7 @@ coverage/
 *.db
 *.db-wal
 *.db-shm
+
+dist-server/
+
+data/.admin-bootstrap-password

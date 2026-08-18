@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile, UserRole, MangaItem } from '../types';
 import { Shield, User, Folder, Key, Trash2, Check, Sparkles, Database, Settings, BarChart3, X, AlertTriangle } from 'lucide-react';
+import { apiFetch } from '../utils/api';
 
 interface AdminPanelModalProps {
   currentUser: UserProfile;
@@ -30,9 +31,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
     setIsDeleting(true);
     try {
       // Call API endpoint with mandatory confirmation payload
-      const res = await fetch(`/api/admin/users/${userToDelete.id}`, {
+      const res = await apiFetch(`/api/admin/users/${userToDelete.id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm: true, confirmationText: confirmInput }),
       });
 

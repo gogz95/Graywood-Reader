@@ -72,6 +72,12 @@ export interface ChapterData {
   totalChapters: number;
   nextChapterNumber: number | null;
   prevChapterNumber: number | null;
+  /** True when the server could not extract live pages */
+  isPlaceholder?: boolean;
+  /** Human-readable reason when isPlaceholder is true */
+  loadError?: string;
+  /** True when the chapter has no pages because content is missing/unavailable */
+  contentUnavailable?: boolean;
 }
 
 export interface ReaderSettings {

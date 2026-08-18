@@ -33,6 +33,7 @@ import {
 } from './types';
 import { INITIAL_MANGA_DATABASE } from './data/initialManga';
 import { UserProfile, UserRole } from './types';
+import { apiFetch, clearAuthToken, getAuthToken } from './utils/api';
 
 
 
@@ -119,15 +120,30 @@ export default function App() {
   };
 
   const handleRegisterUser = (newUser: UserProfile) => {
-    setProfiles([...profiles, newUser]);
+    setProfiles((prev) => {
+      if (prev.some((p) => p.id === newUser.id)) {
+        return prev.map((p) => (p.id === newUser.id ? { ...p, ...newUser, password: undefined } : p));
+      }
+      return [...prev, { ...newUser, password: undefined }];
+    });
     setActiveProfileId(newUser.id);
     migrateClientSessionHistoryToUser(newUser.id);
   };
 
-  const handlePromoteUser = (userId: string, newRole: UserRole) => {
-    setProfiles((prev) =>
-      prev.map((p) => (p.id === userId ? { ...p, role: newRole } : p))
-    );
+  const handlePromoteUser = async (userId: string, newRole: UserRole) => {
+    try {
+      const res = await apiFetch('/api/admin/users/promote', {
+        method: 'POST',
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updated = data.user as UserProfile;
+        setProfiles((prev) => prev.map((p) => (p.id === userId ? { ...p, ...updated, password: undefined } : p)));
+      }
+    } catch (err) {
+      console.error('Promote user error:', err);
+    }
   };
 
   const handleDeleteProfile = (profileId: string) => {
@@ -135,7 +151,8 @@ export default function App() {
     const remaining = profiles.filter((p) => p.id !== profileId);
     setProfiles(remaining);
     if (activeProfileId === profileId) {
-      setActiveProfileId(remaining[0].id);
+      setActiveProfileId(remaining[0]?.id || 'usr_guest');
+      clearAuthToken();
     }
   };
 
@@ -170,7 +187,7 @@ export default function App() {
   // Fetch initial data from server
   const fetchMangaList = async () => {
     try {
-      const res = await fetch('/api/manga');
+      const res = await apiFetch('/api/manga');
       if (res.ok) {
         const data = await res.json();
         setMangaList(data);
@@ -182,7 +199,7 @@ export default function App() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/config');
+      const res = await apiFetch('/api/config');
       if (res.ok) {
         const data = await res.json();
         setConfig(data);
@@ -194,10 +211,11 @@ export default function App() {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch('/api/tracker/logs');
+      const res = await apiFetch('/api/tracker/logs');
       if (res.ok) {
         const data = await res.json();
         setLogs(data);
+
       }
     } catch (err) {
       console.error("Fetch logs error:", err);
@@ -244,7 +262,7 @@ export default function App() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await apiFetch('/api/settings');
       if (res.ok) {
         const data = await res.json();
         setAppSettings(data);
@@ -257,7 +275,7 @@ export default function App() {
   const handleSaveSettings = async (newSettings: AppSettings) => {
     setAppSettings(newSettings);
     try {
-      await fetch('/api/settings', {
+      await apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
@@ -270,7 +288,7 @@ export default function App() {
   const scanDuplicates = async () => {
     setIsScanningDuplicates(true);
     try {
-      const res = await fetch('/api/tracker/detect-duplicates', { method: 'POST' });
+      const res = await apiFetch('/api/tracker/detect-duplicates', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setDuplicates(data);
@@ -298,13 +316,13 @@ export default function App() {
 
   const fetchClientContext = async () => {
     try {
-      const res = await fetch('/api/auth/client-context');
+      const res = await apiFetch('/api/auth/client-context');
       if (res.ok) {
         const data = await res.json();
         setIsHostComputer(data.isHost);
-        if (!data.isHost) {
+        if (!data.isHost && !getAuthToken()) {
           setActiveProfileId('usr_guest');
-        } else {
+        } else if (data.isHost) {
           // Check per-device cached profile for host PC
           const cachedProfileId = localStorage.getItem(`graywood_${getDeviceId()}_active_profile`);
           if (cachedProfileId && profiles.some((p) => p.id === cachedProfileId)) {
@@ -314,6 +332,43 @@ export default function App() {
       }
     } catch (err) {
       console.error("Fetch client context error:", err);
+    }
+  };
+
+  const fetchProfiles = async () => {
+    try {
+      const res = await apiFetch('/api/profiles');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setProfiles(data.map((p: UserProfile) => ({ ...p, password: undefined })));
+        }
+      }
+    } catch (err) {
+      console.error('Fetch profiles error:', err);
+    }
+  };
+
+  const fetchAuthMe = async () => {
+    if (!getAuthToken()) return;
+    try {
+      const res = await apiFetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user?.id) {
+          setActiveProfileId(data.user.id);
+          setProfiles((prev) => {
+            if (prev.some((p) => p.id === data.user.id)) {
+              return prev.map((p) =>
+                p.id === data.user.id ? { ...p, ...data.user, password: undefined } : p
+              );
+            }
+            return [...prev, { ...data.user, password: undefined }];
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Fetch auth me error:', err);
     }
   };
 
@@ -354,7 +409,7 @@ export default function App() {
 
     for (const [mangaId, record] of entries) {
       try {
-        await fetch('/api/reader/mark-read', {
+        await apiFetch('/api/reader/mark-read', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mangaId, chapterNumber: record.currentChapter, userId: targetUserId }),
@@ -396,11 +451,12 @@ export default function App() {
   }, [activeProfileId]);
 
   useEffect(() => {
-    fetchClientContext();
-    fetchMangaList();
-    fetchConfig();
-    fetchLogs();
-    fetchSettings();
+    (async () => {
+      await fetchClientContext();
+      await fetchProfiles();
+      await fetchAuthMe();
+      await Promise.all([fetchMangaList(), fetchConfig(), fetchLogs(), fetchSettings()]);
+    })();
   }, []);
 
 
@@ -475,7 +531,7 @@ export default function App() {
   const handleRunAutoUpdate = async () => {
     setIsUpdating(true);
     try {
-      const res = await fetch('/api/tracker/auto-update', { method: 'POST' });
+      const res = await apiFetch('/api/tracker/auto-update', { method: 'POST' });
       if (res.ok) {
         await fetchMangaList();
         await fetchLogs();
@@ -518,7 +574,7 @@ export default function App() {
     }
 
     try {
-      await fetch(`/api/manga/increment/${id}`, { method: 'POST' });
+      await apiFetch(`/api/manga/increment/${id}`, { method: 'POST' });
     } catch (err) {
       console.error("Increment chapter error:", err);
     }
@@ -529,7 +585,7 @@ export default function App() {
     try {
       if (mangaData.id) {
         // Edit existing
-        const res = await fetch(`/api/manga/${mangaData.id}`, {
+        const res = await apiFetch(`/api/manga/${mangaData.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(mangaData),
@@ -539,7 +595,7 @@ export default function App() {
         }
       } else {
         // Add new
-        const res = await fetch('/api/manga', {
+        const res = await apiFetch('/api/manga', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(mangaData),
@@ -579,7 +635,7 @@ export default function App() {
   const handleDeleteManga = async (id: string) => {
     if (!confirm('Are you sure you want to remove this series from your tracker?')) return;
     try {
-      const res = await fetch(`/api/manga/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/manga/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setMangaList((prev) => prev.filter((m) => m.id !== id));
         if (selectedMangaDetail?.id === id) setSelectedMangaDetail(null);
@@ -599,7 +655,7 @@ export default function App() {
     newDescription: string
   ) => {
     try {
-      const res = await fetch('/api/tracker/merge-duplicates', {
+      const res = await apiFetch('/api/tracker/merge-duplicates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -624,7 +680,7 @@ export default function App() {
   // Update Subdomain
   const handleUpdateSubdomain = async (subdomain: string) => {
     try {
-      const res = await fetch('/api/config', {
+      const res = await apiFetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain }),
@@ -645,7 +701,7 @@ export default function App() {
   // Import DB
   const handleImportDb = async (data: MangaItem[], replaceExisting: boolean) => {
     try {
-      const res = await fetch('/api/db/import', {
+      const res = await apiFetch('/api/db/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data, replaceExisting }),
@@ -663,7 +719,7 @@ export default function App() {
   const handleResetDb = async () => {
     if (!confirm('Reset tracker database to sample dataset?')) return;
     try {
-      const res = await fetch('/api/db/reset', { method: 'POST' });
+      const res = await apiFetch('/api/db/reset', { method: 'POST' });
       if (res.ok) {
         await fetchMangaList();
         await fetchLogs();
@@ -693,25 +749,53 @@ export default function App() {
     }
   };
 
-  const handleOpenReader = (manga: MangaItem, chapterNumber?: number, chapterId?: string) => {
+  const handleOpenReader = async (manga: MangaItem, chapterNumber?: number, chapterId?: string) => {
     const isHostAdmin = activeProfile.role === 'admin';
     const isGuestClient = activeProfile.id === 'usr_guest';
 
-    let ch: number;
-    if (chapterId) {
+    let ch: number | undefined;
+    if (chapterId && chapterNumber !== undefined && chapterNumber > 0) {
       // Explicit chapter picked from the chapter list — always honor it.
-      ch = chapterNumber || 1;
-    } else if (isHostAdmin) {
-      // Host Administrator never tracks progress; always open the first chapter.
-      ch = 1;
+      ch = chapterNumber;
+    } else if (chapterNumber !== undefined && chapterNumber > 0) {
+      ch = chapterNumber;
+    } else if (!isHostAdmin && !isGuestClient && manga.currentChapter > 0) {
+      // Registered user: resume tracked progress.
+      ch = manga.currentChapter;
     } else if (isGuestClient) {
-      // Clients (guest) start at the first real chapter on their first connect,
-      // resuming only from their own locally-saved progress, if any.
       const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
-      ch = saved > 0 ? saved : 1;
-    } else {
-      // Registered returning user: resume from tracked progress.
-      ch = chapterNumber !== undefined ? chapterNumber : manga.currentChapter || 1;
+      if (saved > 0) ch = saved;
+    }
+
+    // Many live sources (esp. Asura) drop older chapters. Never default blindly to 1 —
+    // resolve the newest hosted chapter when we have no saved progress.
+    if (ch === undefined || ch <= 0) {
+      ch = manga.currentChapter > 0 ? manga.currentChapter : 0;
+      try {
+        const res = await apiFetch(`/api/reader/chapters/${encodeURIComponent(manga.id)}?order=desc`);
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            const nums = list
+              .map((c: any) => Number(c.chapterNumber ?? c.number))
+              .filter((n: number) => Number.isFinite(n) && n > 0);
+            if (nums.length > 0) {
+              const newest = Math.max(...nums);
+              const oldest = Math.min(...nums);
+              if (ch > 0 && ch >= oldest && ch <= newest) {
+                // keep saved progress if it still exists on the source
+              } else if (ch > 0 && ch < oldest) {
+                ch = oldest; // saved progress is below hosted range
+              } else {
+                ch = newest;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Reader] Failed to resolve live chapter list; falling back.', err);
+      }
+      if (!ch || ch <= 0) ch = Math.max(1, manga.latestChapter || 1);
     }
 
     setReaderTarget({ manga, chapterNumber: ch, chapterId });
@@ -788,7 +872,7 @@ export default function App() {
     }
 
     try {
-      await fetch('/api/reader/mark-read', {
+      await apiFetch('/api/reader/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mangaId, chapterNumber }),
@@ -971,12 +1055,19 @@ export default function App() {
       {authModalOpen && (
         <AuthModal
           onLogin={(user) => {
+            setProfiles((prev) => {
+              if (prev.some((p) => p.id === user.id)) {
+                return prev.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p));
+              }
+              return [...prev, { ...user, password: undefined }];
+            });
             setActiveProfileId(user.id);
             migrateClientSessionHistoryToUser(user.id);
             setAuthModalOpen(false);
           }}
           onRegister={handleRegisterUser}
           existingUsers={profiles}
+          guestProfile={GUEST_PROFILE}
           onClose={() => setAuthModalOpen(false)}
         />
       )}
@@ -1022,10 +1113,12 @@ export default function App() {
         />
       )}
 
-
-
-
-
+      {analyticsOpen && (
+        <AnalyticsModal
+          mangaList={displayMangaList}
+          onClose={() => setAnalyticsOpen(false)}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-edge bg-surface/60 py-6 pb-24 md:pb-6 text-center text-xs text-muted">
