@@ -620,11 +620,15 @@ export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
 export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
   if (!items || items.length === 0) return;
   SqliteDb.bulkUpsertManga(items);
+  // Fix #4: Build an index so each lookup is O(1) instead of O(n)
+  const idxMap = new Map<string, number>();
+  mangaDatabase.forEach((m, i) => idxMap.set(m.id, i));
   for (const item of items) {
-    const idx = mangaDatabase.findIndex((m) => m.id === item.id);
-    if (idx !== -1) {
-      mangaDatabase[idx] = item;
+    const existingIdx = idxMap.get(item.id);
+    if (existingIdx !== undefined) {
+      mangaDatabase[existingIdx] = item;
     } else {
+      idxMap.set(item.id, mangaDatabase.length);
       mangaDatabase.push(item);
     }
   }
@@ -6901,7 +6905,7 @@ async function startServer() {
   }
 
   // 3. Start listening immediately (sub-50ms launch time)
-  app.listen(PORT, HOST, () => {
+  httpServer = app.listen(PORT, HOST, () => {
     console.log(`[Fast Launch Engine] Subdomain Tracker running on http://${HOST}:${PORT}`);
     console.log(`[Fast Launch Engine] SQLite database ready (${mangaDatabase.length} series)`);
   });
@@ -6920,6 +6924,8 @@ startServer();
 // =========================================================
 // GRACEFUL SHUTDOWN — flush pending state & write legacy JSON backup
 // =========================================================
+// Fix #21: Capture the HTTP server so graceful shutdown can drain connections.
+let httpServer: ReturnType<typeof app.listen> | null = null;
 let isShuttingDown = false;
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
@@ -6940,7 +6946,17 @@ function gracefulShutdown(signal: string) {
   } catch (err) {
     console.error('[Shutdown] Error while flushing state:', err);
   }
-  process.exit(0);
+  // Close the HTTP server to stop accepting new connections and let in-flight
+  // requests drain before exiting. Fall back to immediate exit after 5s.
+  if (httpServer) {
+    const forceTimer = setTimeout(() => process.exit(0), 5000);
+    httpServer.close(() => {
+      clearTimeout(forceTimer);
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
 }
 
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

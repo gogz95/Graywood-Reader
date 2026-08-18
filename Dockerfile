@@ -6,13 +6,13 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++
-
 COPY package*.json ./
 
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
-RUN npm ci
+RUN apk add --no-cache python3 make g++ && \
+    npm ci && \
+    apk del python3 make g++
 
 COPY . .
 

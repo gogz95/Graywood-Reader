@@ -22,5 +22,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "server.ts", "sqlite-db.ts", "server", "rebuild-db.ts", "vite.config.mts"],
+  "exclude": ["node_modules", "dist", "dist-server", "kotatsu-parsers", "kotatsu-parsers-redo", "kotatsu-app"]
 }

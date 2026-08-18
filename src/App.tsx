@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 
 import { Navbar } from './components/Navbar';
 import { MangaDetailModal } from './components/MangaDetailModal';
 import { AddEditModal } from './components/AddEditModal';
 import { ChapterListModal } from './components/ChapterListModal';
+import { ConfirmModal } from './components/ConfirmModal';
 
 // Lazy-loaded tab views — only the active tab's JS is fetched & rendered
 const LibraryView = lazy(() => import('./components/LibraryView').then(m => ({ default: m.LibraryView })));
@@ -29,24 +30,16 @@ import {
   DuplicateCandidate,
   OpenApiManga,
   AppSettings,
-  AppNavTab,
 } from './types';
 import { INITIAL_MANGA_DATABASE } from './data/initialManga';
-import { UserProfile, UserRole } from './types';
-import { apiFetch, clearAuthToken, getAuthToken } from './utils/api';
-
-
-
-
-const GUEST_PROFILE: UserProfile = {
-  id: 'usr_guest',
-  name: 'Guest Reader',
-  username: 'guest',
-  email: 'guest@graywood.app',
-  avatar: '👤',
-  role: 'user',
-  createdAt: new Date().toISOString(),
-};
+import { apiFetch } from './utils/api';
+import { useAuth, GUEST_PROFILE, getDeviceId } from './hooks/useAuth';
+import { useRouting, TAB_PATHS } from './hooks/useRouting';
+import {
+  useReaderSession,
+  saveClientSessionProgress,
+  getClientSessionHistory,
+} from './hooks/useReaderSession';
 
 // Lightweight skeleton shown while lazy chunk loads
 const ViewFallback = () => (
@@ -56,41 +49,75 @@ const ViewFallback = () => (
 );
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<AppNavTab>('library');
-
-  // Host PC Connection & Security State
-  const [isHostComputer, setIsHostComputer] = useState<boolean>(true);
-
   // Incognito Mode State
   const [isIncognito, setIsIncognito] = useState(false);
 
-  // Multi-User Profile & Auth State
-  const [profiles, setProfiles] = useState<UserProfile[]>([
-    {
-      id: 'usr_admin',
-      name: 'Host Administrator',
-      username: 'admin',
-      email: 'admin@manga.dev',
-      avatar: '🛡️',
-      role: 'admin',
-      createdAt: new Date().toISOString(),
-    },
-    GUEST_PROFILE,
-  ]);
-  const [activeProfileId, setActiveProfileId] = useState<string>('usr_admin');
-  const [userProfileModalOpen, setUserProfileModalOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  // Authentication & Profiles Hook
+  const {
+    profiles,
+    setProfiles,
+    activeProfileId,
+    setActiveProfileId,
+    activeProfile,
+    isHostComputer,
+    userProfileModalOpen,
+    setUserProfileModalOpen,
+    authModalOpen,
+    setAuthModalOpen,
+    adminPanelOpen,
+    setAdminPanelOpen,
+    fetchClientContext,
+    fetchProfiles,
+    fetchAuthMe,
+    handleCreateProfile,
+    handleRegisterUser,
+    handleLoginUser,
+    handlePromoteUser,
+    handleDeleteProfile,
+  } = useAuth();
 
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
-
 
   // Manga Library Database State
   const [mangaList, setMangaList] = useState<MangaItem[]>(INITIAL_MANGA_DATABASE);
 
+  // Modals state
+  const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingManga, setEditingManga] = useState<MangaItem | null>(null);
+  const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
+  const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
 
+  // Non-blocking Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
-  const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
+  const closeConfirmModal = () => setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+
+  // Reader Mode state
+  const [readerTarget, setReaderTarget] = useState<{ manga: MangaItem; chapterNumber: number; chapterId?: string } | null>(null);
+  const [chapterListTarget, setChapterListTarget] = useState<MangaItem | null>(null);
+
+  // Routing Hook
+  const { activeTab, updateUrl, handleTabChange } = useRouting({
+    mangaList,
+    onOpenSeriesDetail: (manga) => setSelectedMangaDetail(manga),
+    onOpenReaderFromUrl: (manga, chapterNumber) => setReaderTarget({ manga, chapterNumber }),
+  });
+
+  // Client Session Hook
+  useReaderSession();
 
   // Per-User Privacy Isolation Filter
   // Admin sees ALL series across the server; Standard User sees only their own private library!
@@ -103,59 +130,6 @@ export default function App() {
   const myLibraryList = useMemo(() => {
     return displayMangaList.filter((item) => item.isFavorite === true);
   }, [displayMangaList]);
-
-
-  const handleCreateProfile = (name: string, avatar: string) => {
-    const newProf: UserProfile = {
-      id: 'usr_' + Date.now(),
-      name,
-      username: name.toLowerCase().replace(/\s+/g, '_'),
-      email: `${name.toLowerCase().replace(/\s+/g, '_')}@manga.dev`,
-      avatar,
-      role: 'user',
-      createdAt: new Date().toISOString(),
-    };
-    setProfiles([...profiles, newProf]);
-    setActiveProfileId(newProf.id);
-  };
-
-  const handleRegisterUser = (newUser: UserProfile) => {
-    setProfiles((prev) => {
-      if (prev.some((p) => p.id === newUser.id)) {
-        return prev.map((p) => (p.id === newUser.id ? { ...p, ...newUser, password: undefined } : p));
-      }
-      return [...prev, { ...newUser, password: undefined }];
-    });
-    setActiveProfileId(newUser.id);
-    migrateClientSessionHistoryToUser(newUser.id);
-  };
-
-  const handlePromoteUser = async (userId: string, newRole: UserRole) => {
-    try {
-      const res = await apiFetch('/api/admin/users/promote', {
-        method: 'POST',
-        body: JSON.stringify({ userId, role: newRole }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const updated = data.user as UserProfile;
-        setProfiles((prev) => prev.map((p) => (p.id === userId ? { ...p, ...updated, password: undefined } : p)));
-      }
-    } catch (err) {
-      console.error('Promote user error:', err);
-    }
-  };
-
-  const handleDeleteProfile = (profileId: string) => {
-    if (profiles.length <= 1) return;
-    const remaining = profiles.filter((p) => p.id !== profileId);
-    setProfiles(remaining);
-    if (activeProfileId === profileId) {
-      setActiveProfileId(remaining[0]?.id || 'usr_guest');
-      clearAuthToken();
-    }
-  };
-
 
   const [logs, setLogs] = useState<AutoUpdateLog[]>([]);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
@@ -173,17 +147,6 @@ export default function App() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
-  // Modals state
-  const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [editingManga, setEditingManga] = useState<MangaItem | null>(null);
-  const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
-  const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
-
-  // Reader Mode state
-  const [readerTarget, setReaderTarget] = useState<{ manga: MangaItem; chapterNumber: number; chapterId?: string } | null>(null);
-  const [chapterListTarget, setChapterListTarget] = useState<MangaItem | null>(null);
-
   // Fetch initial data from server
   const fetchMangaList = async () => {
     try {
@@ -193,7 +156,7 @@ export default function App() {
         setMangaList(data);
       }
     } catch (err) {
-      console.error("Fetch manga list error:", err);
+      console.error('Fetch manga list error:', err);
     }
   };
 
@@ -205,7 +168,7 @@ export default function App() {
         setConfig(data);
       }
     } catch (err) {
-      console.error("Fetch config error:", err);
+      console.error('Fetch config error:', err);
     }
   };
 
@@ -215,10 +178,9 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setLogs(data);
-
       }
     } catch (err) {
-      console.error("Fetch logs error:", err);
+      console.error('Fetch logs error:', err);
     }
   };
 
@@ -240,7 +202,6 @@ export default function App() {
     captchaApiKey: '',
     stealthMode: true,
     readerDefaults: {
-
       viewMode: 'webtoon',
       maxWidth: '850px',
       pageGap: 8,
@@ -268,7 +229,7 @@ export default function App() {
         setAppSettings(data);
       }
     } catch (err) {
-      console.error("Fetch settings error:", err);
+      console.error('Fetch settings error:', err);
     }
   };
 
@@ -281,7 +242,7 @@ export default function App() {
         body: JSON.stringify(newSettings),
       });
     } catch (err) {
-      console.error("Save settings error:", err);
+      console.error('Save settings error:', err);
     }
   };
 
@@ -294,132 +255,10 @@ export default function App() {
         setDuplicates(data);
       }
     } catch (err) {
-      console.error("Scan duplicates error:", err);
+      console.error('Scan duplicates error:', err);
     } finally {
       setIsScanningDuplicates(false);
     }
-  };
-
-  // Device-Specific Cache Helper (Stores preferences per device)
-  const getDeviceId = (): string => {
-    try {
-      let devId = localStorage.getItem('graywood_device_id');
-      if (!devId) {
-        devId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        localStorage.setItem('graywood_device_id', devId);
-      }
-      return devId;
-    } catch (_) {
-      return 'dev_default';
-    }
-  };
-
-  const fetchClientContext = async () => {
-    try {
-      const res = await apiFetch('/api/auth/client-context');
-      if (res.ok) {
-        const data = await res.json();
-        setIsHostComputer(data.isHost);
-        if (!data.isHost && !getAuthToken()) {
-          setActiveProfileId('usr_guest');
-        } else if (data.isHost) {
-          // Check per-device cached profile for host PC
-          const cachedProfileId = localStorage.getItem(`graywood_${getDeviceId()}_active_profile`);
-          if (cachedProfileId && profiles.some((p) => p.id === cachedProfileId)) {
-            setActiveProfileId(cachedProfileId);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Fetch client context error:", err);
-    }
-  };
-
-  const fetchProfiles = async () => {
-    try {
-      const res = await apiFetch('/api/profiles');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setProfiles(data.map((p: UserProfile) => ({ ...p, password: undefined })));
-        }
-      }
-    } catch (err) {
-      console.error('Fetch profiles error:', err);
-    }
-  };
-
-  const fetchAuthMe = async () => {
-    if (!getAuthToken()) return;
-    try {
-      const res = await apiFetch('/api/auth/me');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.authenticated && data.user?.id) {
-          setActiveProfileId(data.user.id);
-          setProfiles((prev) => {
-            if (prev.some((p) => p.id === data.user.id)) {
-              return prev.map((p) =>
-                p.id === data.user.id ? { ...p, ...data.user, password: undefined } : p
-              );
-            }
-            return [...prev, { ...data.user, password: undefined }];
-          });
-        }
-      }
-    } catch (err) {
-      console.error('Fetch auth me error:', err);
-    }
-  };
-
-  // ── CLIENT-SIDE SESSION READING HISTORY ENGINE ─────────────────────────────────────
-  const CLIENT_SESSION_STORAGE_KEY = 'graywood_client_session_reading_history';
-
-  const getClientSessionHistory = (): Record<string, { currentChapter: number; lastReadAt: string }> => {
-    try {
-      const raw = localStorage.getItem(CLIENT_SESSION_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      return {};
-    }
-  };
-
-  const saveClientSessionProgress = (mangaId: string, chapterNumber: number) => {
-    try {
-      const history = getClientSessionHistory();
-      const existingCh = history[mangaId]?.currentChapter || 0;
-      const nextCh = Math.max(existingCh, chapterNumber);
-      history[mangaId] = {
-        currentChapter: nextCh,
-        lastReadAt: new Date().toISOString(),
-      };
-      localStorage.setItem(CLIENT_SESSION_STORAGE_KEY, JSON.stringify(history));
-      console.log(`[Client Session Engine] Saved reading progress Ch. ${nextCh} for ${mangaId} in client session storage.`);
-    } catch (err) {
-      console.error("[Client Session Engine] Storage error:", err);
-    }
-  };
-
-  const migrateClientSessionHistoryToUser = async (targetUserId: string) => {
-    const sessionHistory = getClientSessionHistory();
-    const entries = Object.entries(sessionHistory);
-    if (entries.length === 0) return;
-
-    console.log(`[Client Session Engine] Migrating ${entries.length} client session reading entries to user ${targetUserId}...`);
-
-    for (const [mangaId, record] of entries) {
-      try {
-        await apiFetch('/api/reader/mark-read', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mangaId, chapterNumber: record.currentChapter, userId: targetUserId }),
-        });
-      } catch (_) {}
-    }
-
-    try {
-      localStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
-    } catch (_) {}
   };
 
   // Synchronize Client-Side Session Reading Progress when Guest profile is active
@@ -457,8 +296,7 @@ export default function App() {
       await fetchAuthMe();
       await Promise.all([fetchMangaList(), fetchConfig(), fetchLogs(), fetchSettings()]);
     })();
-  }, []);
-
+  }, [fetchClientContext, fetchProfiles, fetchAuthMe]);
 
   // Synchronize App Theme on body element (+ browser chrome / PWA color)
   useEffect(() => {
@@ -472,61 +310,6 @@ export default function App() {
     }
   }, [appSettings.appTheme]);
 
-  // ── URL & HTML5 HISTORY ROUTING ENGINE ─────────────────────────────────────
-  const updateUrl = (path: string) => {
-    if (window.location.pathname !== path) {
-      window.history.pushState(null, '', path);
-    }
-  };
-
-  const handleTabChange = (tab: AppNavTab) => {
-    setActiveTab(tab);
-    const tabPaths: Record<string, string> = {
-      library: '/',
-      browse: '/browse',
-      sources: '/sources',
-      autoupdate: '/autoupdate',
-      duplicates: '/duplicates',
-      openapi: '/openapi',
-    };
-    updateUrl(tabPaths[tab] || '/');
-  };
-
-  useEffect(() => {
-    const syncRouteFromUrl = () => {
-      const path = window.location.pathname;
-      if (path.startsWith('/browse')) {
-        setActiveTab('browse');
-      } else if (path.startsWith('/sources')) {
-        setActiveTab('sources');
-      } else if (path.startsWith('/autoupdate')) {
-        setActiveTab('autoupdate');
-      } else if (path.startsWith('/duplicates')) {
-        setActiveTab('duplicates');
-      } else if (path.startsWith('/openapi')) {
-        setActiveTab('openapi');
-      } else if (path.startsWith('/series/')) {
-        const id = path.split('/series/')[1]?.split('?')[0];
-        const item = mangaList.find((m) => m.id === id);
-        if (item) setSelectedMangaDetail(item);
-      } else if (path.startsWith('/reader/')) {
-        const parts = path.split('/reader/')[1]?.split('/');
-        const id = parts?.[0];
-        const ch = parts?.[1] ? parseInt(parts[1], 10) : 1;
-        const item = mangaList.find((m) => m.id === id);
-        if (item) setReaderTarget({ manga: item, chapterNumber: ch });
-      } else {
-        setActiveTab('library');
-      }
-    };
-
-    syncRouteFromUrl();
-    window.addEventListener('popstate', syncRouteFromUrl);
-    return () => window.removeEventListener('popstate', syncRouteFromUrl);
-  }, [mangaList]);
-
-
-
   // Run Auto-Update Crawler
   const handleRunAutoUpdate = async () => {
     setIsUpdating(true);
@@ -538,7 +321,7 @@ export default function App() {
         await fetchConfig();
       }
     } catch (err) {
-      console.error("Auto update error:", err);
+      console.error('Auto update error:', err);
     } finally {
       setIsUpdating(false);
     }
@@ -547,15 +330,16 @@ export default function App() {
   // Increment Chapter (+1)
   const handleIncrementChapter = async (id: string) => {
     if (activeProfile.role === 'admin') {
-      // Host Administrator never keeps read-chapter history.
-      console.log("[Host Admin] Chapter progress is not tracked for the Host Administrator.");
+      console.log('[Host Admin] Chapter progress is not tracked for the Host Administrator.');
       return;
     }
-    let nextCh = 1;
+    const current = mangaList.find((m) => m.id === id);
+    if (!current) return;
+    const nextCh = current.currentChapter + 1;
+
     setMangaList((prev) =>
       prev.map((m) => {
         if (m.id === id) {
-          nextCh = m.currentChapter + 1;
           return {
             ...m,
             currentChapter: nextCh,
@@ -568,7 +352,6 @@ export default function App() {
     );
 
     if (activeProfileId === 'usr_guest') {
-      // Guest / Unregistered Client: Save strictly on client side!
       saveClientSessionProgress(id, nextCh);
       return;
     }
@@ -576,7 +359,7 @@ export default function App() {
     try {
       await apiFetch(`/api/manga/increment/${id}`, { method: 'POST' });
     } catch (err) {
-      console.error("Increment chapter error:", err);
+      console.error('Increment chapter error:', err);
     }
   };
 
@@ -584,7 +367,6 @@ export default function App() {
   const handleSaveManga = async (mangaData: Partial<MangaItem>) => {
     try {
       if (mangaData.id) {
-        // Edit existing
         const res = await apiFetch(`/api/manga/${mangaData.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -594,7 +376,6 @@ export default function App() {
           await fetchMangaList();
         }
       } else {
-        // Add new
         const res = await apiFetch('/api/manga', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -605,7 +386,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Save manga error:", err);
+      console.error('Save manga error:', err);
     }
   };
 
@@ -631,18 +412,30 @@ export default function App() {
     await handleSaveManga(newItemData);
   };
 
-  // Delete Series
-  const handleDeleteManga = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this series from your tracker?')) return;
-    try {
-      const res = await apiFetch(`/api/manga/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setMangaList((prev) => prev.filter((m) => m.id !== id));
-        if (selectedMangaDetail?.id === id) setSelectedMangaDetail(null);
-      }
-    } catch (err) {
-      console.error("Delete manga error:", err);
-    }
+  // Delete Series with non-blocking confirmation dialog
+  const handleDeleteManga = (id: string) => {
+    const item = mangaList.find((m) => m.id === id);
+    const itemTitle = item ? `"${item.title}"` : 'this series';
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remove Series',
+      message: `Are you sure you want to remove ${itemTitle} from your tracker?`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await apiFetch(`/api/manga/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setMangaList((prev) => prev.filter((m) => m.id !== id));
+            if (selectedMangaDetail?.id === id) setSelectedMangaDetail(null);
+          }
+        } catch (err) {
+          console.error('Delete manga error:', err);
+        }
+      },
+    });
   };
 
   // Execute Duplicate Merge
@@ -673,7 +466,7 @@ export default function App() {
         await scanDuplicates();
       }
     } catch (err) {
-      console.error("Merge duplicates error:", err);
+      console.error('Merge duplicates error:', err);
     }
   };
 
@@ -689,7 +482,7 @@ export default function App() {
         await fetchConfig();
       }
     } catch (err) {
-      console.error("Update subdomain error:", err);
+      console.error('Update subdomain error:', err);
     }
   };
 
@@ -711,23 +504,32 @@ export default function App() {
         await scanDuplicates();
       }
     } catch (err) {
-      console.error("Import DB error:", err);
+      console.error('Import DB error:', err);
     }
   };
 
-  // Reset DB
-  const handleResetDb = async () => {
-    if (!confirm('Reset tracker database to sample dataset?')) return;
-    try {
-      const res = await apiFetch('/api/db/reset', { method: 'POST' });
-      if (res.ok) {
-        await fetchMangaList();
-        await fetchLogs();
-        await scanDuplicates();
-      }
-    } catch (err) {
-      console.error("Reset DB error:", err);
-    }
+  // Reset DB with non-blocking confirmation dialog
+  const handleResetDb = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reset Tracker Database',
+      message: 'Are you sure you want to reset the tracker database to the sample dataset? This cannot be undone.',
+      confirmLabel: 'Reset Database',
+      variant: 'warning',
+      onConfirm: async () => {
+        closeConfirmModal();
+        try {
+          const res = await apiFetch('/api/db/reset', { method: 'POST' });
+          if (res.ok) {
+            await fetchMangaList();
+            await fetchLogs();
+            await scanDuplicates();
+          }
+        } catch (err) {
+          console.error('Reset DB error:', err);
+        }
+      },
+    });
   };
 
   // Reader Launch Handlers
@@ -736,16 +538,7 @@ export default function App() {
     if (manga) {
       updateUrl(`/series/${manga.id}`);
     } else {
-      const tabPaths: Record<string, string> = {
-        library: '/',
-        browse: '/browse',
-        sources: '/sources',
-        updates: '/updates',
-        autoupdate: '/autoupdate',
-        duplicates: '/duplicates',
-        openapi: '/openapi',
-      };
-      updateUrl(tabPaths[activeTab] || '/');
+      updateUrl(TAB_PATHS[activeTab] || '/');
     }
   };
 
@@ -755,20 +548,16 @@ export default function App() {
 
     let ch: number | undefined;
     if (chapterId && chapterNumber !== undefined && chapterNumber > 0) {
-      // Explicit chapter picked from the chapter list — always honor it.
       ch = chapterNumber;
     } else if (chapterNumber !== undefined && chapterNumber > 0) {
       ch = chapterNumber;
     } else if (!isHostAdmin && !isGuestClient && manga.currentChapter > 0) {
-      // Registered user: resume tracked progress.
       ch = manga.currentChapter;
     } else if (isGuestClient) {
       const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
       if (saved > 0) ch = saved;
     }
 
-    // Many live sources (esp. Asura) drop older chapters. Never default blindly to 1 —
-    // resolve the newest hosted chapter when we have no saved progress.
     if (ch === undefined || ch <= 0) {
       ch = manga.currentChapter > 0 ? manga.currentChapter : 0;
       try {
@@ -783,9 +572,9 @@ export default function App() {
               const newest = Math.max(...nums);
               const oldest = Math.min(...nums);
               if (ch > 0 && ch >= oldest && ch <= newest) {
-                // keep saved progress if it still exists on the source
+                // keep saved progress
               } else if (ch > 0 && ch < oldest) {
-                ch = oldest; // saved progress is below hosted range
+                ch = oldest;
               } else {
                 ch = newest;
               }
@@ -804,15 +593,7 @@ export default function App() {
 
   const handleCloseReader = () => {
     setReaderTarget(null);
-    const tabPaths: Record<string, string> = {
-      library: '/',
-      browse: '/browse',
-      sources: '/sources',
-      autoupdate: '/autoupdate',
-      duplicates: '/duplicates',
-      openapi: '/openapi',
-    };
-    updateUrl(tabPaths[activeTab] || '/');
+    updateUrl(TAB_PATHS[activeTab] || '/');
   };
 
   const handleOpenChapters = (manga: MangaItem) => {
@@ -824,8 +605,6 @@ export default function App() {
     setSubmitBugModalOpen(true);
   };
 
-  // Called by the Flag Issue modal after a user picks a category: opens the bug-reporting tool
-  // pre-filled with the chosen category and the flagged series context.
   const handleReportMangaIssue = (category: FlagCategory, manga: MangaItem) => {
     setBugModalInitialData({
       title: `[${category.label}] ${manga.title}`,
@@ -839,13 +618,12 @@ export default function App() {
 
   const handleMarkChapterRead = async (mangaId: string, chapterNumber: number) => {
     if (isIncognito) {
-      console.log("[Incognito] Private reading mode active - read history suppressed.");
+      console.log('[Incognito] Private reading mode active - read history suppressed.');
       return;
     }
 
     if (activeProfile.role === 'admin') {
-      // Host Administrator never keeps read-chapter history.
-      console.log("[Host Admin] Read progress is not tracked for the Host Administrator.");
+      console.log('[Host Admin] Read progress is not tracked for the Host Administrator.');
       return;
     }
 
@@ -866,7 +644,6 @@ export default function App() {
     );
 
     if (activeProfileId === 'usr_guest') {
-      // Guest / Unregistered Client: Save strictly on client side!
       saveClientSessionProgress(mangaId, chapterNumber);
       return;
     }
@@ -878,7 +655,7 @@ export default function App() {
         body: JSON.stringify({ mangaId, chapterNumber }),
       });
     } catch (err) {
-      console.error("Mark read error:", err);
+      console.error('Mark read error:', err);
     }
   };
 
@@ -916,47 +693,71 @@ export default function App() {
       {/* Main View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-24 md:pb-6">
         <Suspense fallback={<ViewFallback />}>
-        {activeTab === 'library' && (
-          <LibraryView
-            mangaList={myLibraryList}
-            searchQuery={searchQuery}
+          {activeTab === 'library' && (
+            <LibraryView
+              mangaList={myLibraryList}
+              searchQuery={searchQuery}
+              onIncrementChapter={handleIncrementChapter}
+              onSelectManga={handleSelectMangaDetail}
+              onQuickEdit={(manga) => {
+                setEditingManga(manga);
+                setAddModalOpen(true);
+              }}
+              onDeleteManga={handleDeleteManga}
+              onAddNew={() => {
+                setEditingManga(null);
+                setAddModalOpen(true);
+              }}
+              onOpenReader={handleOpenReader}
+              onOpenChapters={handleOpenChapters}
+            />
+          )}
 
-            onIncrementChapter={handleIncrementChapter}
-            onSelectManga={handleSelectMangaDetail}
-            onQuickEdit={(manga) => {
-              setEditingManga(manga);
-              setAddModalOpen(true);
-            }}
-            onDeleteManga={handleDeleteManga}
-            onAddNew={() => {
-              setEditingManga(null);
-              setAddModalOpen(true);
-            }}
-            onOpenReader={handleOpenReader}
-            onOpenChapters={handleOpenChapters}
-          />
-        )}
+          {activeTab === 'browse' && (
+            <BrowseView
+              searchQuery={searchQuery}
+              onSelectManga={handleSelectMangaDetail}
+              onOpenReader={handleOpenReader}
+              onTrack={handleSaveManga}
+            />
+          )}
 
-        {activeTab === 'browse' && (
-          <BrowseView
-            searchQuery={searchQuery}
-            onSelectManga={handleSelectMangaDetail}
-            onOpenReader={handleOpenReader}
-            onTrack={handleSaveManga}
-          />
-        )}
+          {activeTab === 'sources' && (
+            <KotatsuSourcesView
+              onAddToTracker={handleSaveManga}
+              onOpenReader={handleOpenReader}
+              onSelectManga={handleSelectMangaDetail}
+            />
+          )}
 
+          {activeTab === 'autoupdate' && (
+            <AutoUpdateView
+              logs={logs}
+              config={config}
+              mangaList={displayMangaList}
+              onRunAutoUpdate={handleRunAutoUpdate}
+              isUpdating={isUpdating}
+              isAdmin={activeProfile.role === 'admin'}
+              onOpenReader={handleOpenReader}
+            />
+          )}
 
+          {activeTab === 'duplicates' && (
+            <DuplicateFinderView
+              candidates={duplicates}
+              onScanDuplicates={scanDuplicates}
+              isScanning={isScanningDuplicates}
+              onExecuteMerge={handleExecuteMerge}
+            />
+          )}
 
-
-
-        {activeTab === 'sources' && (
-          <KotatsuSourcesView
-            onAddToTracker={handleSaveManga}
-            onOpenReader={handleOpenReader}
-            onSelectManga={handleSelectMangaDetail}
-          />
-        )}
+          {activeTab === 'openapi' && (
+            <OpenApiFinderView
+              existingIds={mangaList.map((m) => m.id)}
+              existingTitles={mangaList.map((m) => m.title)}
+              onAddFromOpenApi={handleAddFromOpenApi}
+            />
+          )}
         </Suspense>
       </main>
 
@@ -995,15 +796,15 @@ export default function App() {
       {/* Fullscreen Kotatsu Reader Mode View */}
       {readerTarget && (
         <Suspense fallback={null}>
-        <ReaderView
-          manga={readerTarget.manga}
-          initialChapterNumber={readerTarget.chapterNumber}
-          initialChapterId={readerTarget.chapterId}
-          defaultSettings={appSettings.readerDefaults}
-          onClose={handleCloseReader}
-          onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
-          onReport={handleReportMangaIssue}
-        />
+          <ReaderView
+            manga={readerTarget.manga}
+            initialChapterNumber={readerTarget.chapterNumber}
+            initialChapterId={readerTarget.chapterId}
+            defaultSettings={appSettings.readerDefaults}
+            onClose={handleCloseReader}
+            onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
+            onReport={handleReportMangaIssue}
+          />
         </Suspense>
       )}
 
@@ -1020,51 +821,39 @@ export default function App() {
       {/* Kotatsu Settings Modal (Contains Duplicates Merger & DB Sync) */}
       {isSettingsOpen && (
         <Suspense fallback={null}>
-        <SettingsModal
-          settings={appSettings}
-          onSaveSettings={handleSaveSettings}
-          onClose={() => setIsSettingsOpen(false)}
-          onRefreshData={() => {
-            fetchMangaList();
-            fetchConfig();
-            fetchLogs();
-            fetchSettings();
-          }}
-          duplicateCandidates={duplicates}
-          onScanDuplicates={scanDuplicates}
-          isScanningDuplicates={isScanningDuplicates}
-          onExecuteMerge={handleExecuteMerge}
-          dbConfig={config}
-          mangaCount={mangaList.length}
-          onUpdateSubdomain={handleUpdateSubdomain}
-          onExportDb={handleExportDb}
-          onImportDb={handleImportDb}
-          onResetDb={handleResetDb}
-          activeProfile={activeProfile}
-          logs={logs}
-          mangaList={mangaList}
-          onRunAutoUpdate={handleRunAutoUpdate}
-          isUpdating={isUpdating}
-        />
+          <SettingsModal
+            settings={appSettings}
+            onSaveSettings={handleSaveSettings}
+            onClose={() => setIsSettingsOpen(false)}
+            onRefreshData={() => {
+              fetchMangaList();
+              fetchConfig();
+              fetchLogs();
+              fetchSettings();
+            }}
+            duplicateCandidates={duplicates}
+            onScanDuplicates={scanDuplicates}
+            isScanningDuplicates={isScanningDuplicates}
+            onExecuteMerge={handleExecuteMerge}
+            dbConfig={config}
+            mangaCount={mangaList.length}
+            onUpdateSubdomain={handleUpdateSubdomain}
+            onExportDb={handleExportDb}
+            onImportDb={handleImportDb}
+            onResetDb={handleResetDb}
+            activeProfile={activeProfile}
+            logs={logs}
+            mangaList={mangaList}
+            onRunAutoUpdate={handleRunAutoUpdate}
+            isUpdating={isUpdating}
+          />
         </Suspense>
       )}
-
-
 
       {/* User Registration & Sign In Auth Modal */}
       {authModalOpen && (
         <AuthModal
-          onLogin={(user) => {
-            setProfiles((prev) => {
-              if (prev.some((p) => p.id === user.id)) {
-                return prev.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p));
-              }
-              return [...prev, { ...user, password: undefined }];
-            });
-            setActiveProfileId(user.id);
-            migrateClientSessionHistoryToUser(user.id);
-            setAuthModalOpen(false);
-          }}
+          onLogin={handleLoginUser}
           onRegister={handleRegisterUser}
           existingUsers={profiles}
           guestProfile={GUEST_PROFILE}
@@ -1113,12 +902,24 @@ export default function App() {
         />
       )}
 
+      {/* Analytics Modal */}
       {analyticsOpen && (
         <AnalyticsModal
           mangaList={displayMangaList}
           onClose={() => setAnalyticsOpen(false)}
         />
       )}
+
+      {/* Reusable Non-blocking Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        variant={confirmModal.variant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+      />
 
       {/* Footer */}
       <footer className="border-t border-edge bg-surface/60 py-6 pb-24 md:pb-6 text-center text-xs text-muted">

@@ -52,8 +52,7 @@ const getAdaptiveConcurrency = (): number => {
   return Math.min(cores, 8);
 };
 
-// Memory TTL (milliseconds) - auto-revoke blobs older than TTL
-const DEFAULT_CACHING_TTL = 30 * 60 * 1000; // 30 minutes
+// Fix #6: Removed unused DEFAULT_CACHING_TTL (was 30 min, never referenced).
 const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 // Browser cache expiration (24 hours)
@@ -123,15 +122,12 @@ export class KotatsuImageLoader {
   private pageUrls: string[];
   private sourceUrl: string;
   private onStateChange?: (states: Map<number, PageLoadState>) => void;
-  private autoUpdateInterval: number;
-  private _currentPageIndex: number = -1;
-  private _cacheEnabled: boolean;
+  // Fix #5: Removed dead fields (_currentPageIndex, autoUpdateInterval, _networkMonitor).
   private _browserCache: Map<string, { url: string; timestamp: number; }>;
-  private _networkMonitor: ((speed: 'slow' | 'normal' | 'fast') => void) | null = null;
-  private _gcInterval: number | null = null;
+  private _gcInterval: ReturnType<typeof setInterval> | null = null;
 
   // Configuration from user or defaults
-  private config: ImageLoaderConfig;
+  private config: Required<ImageLoaderConfig>;
 
   constructor(
     pageUrls: string[],
@@ -160,22 +156,21 @@ export class KotatsuImageLoader {
       priorityMode: config.priorityMode ?? 'default',
     };
 
-    this.concurrency = this.config.maxConcurrency!;
-    this.preloadAhead = this.config.preloadAhead!;
-    this.preloadBehind = this.config.preloadBehind!;
-    this.maxCacheTTL = this.config.cacheTTL!;
+    this.concurrency = this.config.maxConcurrency;
+    this.preloadAhead = this.config.preloadAhead;
+    this.preloadBehind = this.config.preloadBehind;
+    this.maxCacheTTL = this.config.cacheTTL;
 
     // Initialize cache
     this.cache = new Map();
     this.activeDownloads = new Set();
     this.queue = [];
-    this.autoUpdateInterval = 0;
 
     // Initialize browser cache
     this._browserCache = new Map();
 
     // Initialize cache entries for all pages
-    pageUrls.forEach((url, idx) => {
+    pageUrls.forEach((_url, idx) => {
       this.cache.set(idx, {
         index: idx,
         status: 'pending',
@@ -184,6 +179,11 @@ export class KotatsuImageLoader {
         lastUpdated: 0,
       });
     });
+
+    // Fix #9: Start blob GC interval to revoke stale blob URLs and prevent memory growth.
+    if (this.config.enableMemoryGC && this.config.gcIntervalMs > 0) {
+      this._gcInterval = setInterval(() => this.runGarbageCollection(), this.config.gcIntervalMs);
+    }
   }
 
   /**
@@ -214,7 +214,8 @@ export class KotatsuImageLoader {
   }
 
   /**
-   * Trigger manual retry for a specific page index
+   * Trigger manual retry for a specific page index.
+   * Fix #8: `recover()` now delegates here — both methods were identical.
    */
   public retryPage(pageIndex: number): void {
     const state = this.cache.get(pageIndex);
@@ -228,6 +229,14 @@ export class KotatsuImageLoader {
         this.processQueue();
       }
     }
+  }
+
+  /**
+   * Retry a failed page download (alias for retryPage for backward compat).
+   * Fix #8: Deduplicated — was a copy-paste of retryPage.
+   */
+  public recover(pageIndex: number): void {
+    this.retryPage(pageIndex);
   }
 
   /**
@@ -263,7 +272,34 @@ export class KotatsuImageLoader {
       clearInterval(this._gcInterval);
       this._gcInterval = null;
     }
-    this._currentPageIndex = -1;
+  }
+
+  /**
+   * Fix #9: Garbage-collect blob URLs older than maxCacheTTL to prevent
+   * unbounded memory growth during long reading sessions.
+   */
+  private runGarbageCollection(): void {
+    const now = Date.now();
+    this.cache.forEach((state) => {
+      if (
+        state.status === 'loaded' &&
+        state.blobUrl?.startsWith('blob:') &&
+        state.timestamp > 0 &&
+        now - state.timestamp > this.maxCacheTTL
+      ) {
+        URL.revokeObjectURL(state.blobUrl);
+        state.blobUrl = undefined;
+        state.status = 'pending';
+        state.attempts = 0;
+      }
+    });
+
+    // Also expire stale browser-cache entries
+    for (const [key, entry] of this._browserCache) {
+      if (now - entry.timestamp > BROWSER_CACHE_TTL) {
+        this._browserCache.delete(key);
+      }
+    }
   }
 
   private processQueue(): void {
@@ -273,24 +309,6 @@ export class KotatsuImageLoader {
 
       if (state && state.status === 'pending') {
         this.downloadPage(nextIndex);
-      }
-    }
-  }
-
-  /**
-   * Retry a failed page download (e.g. after a page timed out or errored).
-   * @param pageIndex index to retry
-   */
-  public recover(pageIndex: number): void {
-    const state = this.cache.get(pageIndex);
-    if (state) {
-      state.status = 'pending';
-      state.attempts = 0;
-      state.error = undefined;
-      this.notify();
-      if (!this.queue.includes(pageIndex)) {
-        this.queue.unshift(pageIndex); // High priority
-        this.processQueue();
       }
     }
   }
@@ -363,10 +381,17 @@ export class KotatsuImageLoader {
       state.status = 'loaded';
       state.blobUrl = blobUrl;
       state.error = undefined;
+
+      // Fix #24: Populate browser cache after successful download
+      if (this.config.enableBrowserCache) {
+        const cacheKey = this.makeCacheKey(rawUrl);
+        this._browserCache.set(cacheKey, { url: blobUrl, timestamp: Date.now() });
+      }
     } catch (err: any) {
       console.warn(`[Kotatsu Image Loader] Page ${pageIndex + 1} download attempt ${state.attempts} failed:`, err.message);
 
-      if (state.attempts < 3) {
+      // Fix #20: Use config for retry count & delay instead of hardcoded values
+      if (state.attempts < this.config.maxRetryAttempts) {
         // Retry with backoff
         state.status = 'pending';
         setTimeout(() => {
@@ -374,7 +399,7 @@ export class KotatsuImageLoader {
             this.queue.push(pageIndex);
             this.processQueue();
           }
-        }, state.attempts * 1000);
+        }, state.attempts * this.config.retryDelayMs);
       } else {
         state.status = 'error';
         state.error = err.message || 'Image download failed';
@@ -403,10 +428,17 @@ export class KotatsuImageLoader {
   }
 
   /**
+   * Fix #11: Use encodeURIComponent instead of btoa() which throws on non-Latin1 chars.
+   */
+  private makeCacheKey(rawUrl: string): string {
+    return encodeURIComponent(rawUrl + this.sourceUrl);
+  }
+
+  /**
    * Check browser cache for a URL
    */
   private checkBrowserCache(rawUrl: string): { url: string; isCached: boolean } | null {
-    const cacheKey = btoa(rawUrl + this.sourceUrl);
+    const cacheKey = this.makeCacheKey(rawUrl);
     const cachedEntry = this._browserCache.get(cacheKey);
     if (cachedEntry && Date.now() - cachedEntry.timestamp < BROWSER_CACHE_TTL) {
       return { url: cachedEntry.url, isCached: true };
