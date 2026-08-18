@@ -113,6 +113,8 @@ export interface PageStickyNote {
   createdAt: string;
   updatedAt: string;
   color?: 'yellow' | 'blue' | 'purple' | 'green';
+  /** Owner of the note — resolved server-side from the auth token, never trusted from clients. */
+  userId?: string;
 }
 
 export interface AppSettings {

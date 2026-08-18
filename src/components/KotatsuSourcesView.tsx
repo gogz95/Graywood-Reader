@@ -224,7 +224,6 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     try {
       const res = await apiFetch('/api/settings/cache/clear', { method: 'POST' });
       if (res.ok) {
-        sessionStorage.clear();
         showToast('✓ App cache & temp canvas buffers cleared successfully!');
       } else {
         showToast('✓ Cache cleared!');

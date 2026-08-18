@@ -144,9 +144,28 @@ export const AUTH_SIGNING_KEY = crypto.createHash('sha256')
   .digest();
 
 export function signAuthToken(payload: Record<string, unknown>): string {
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + AUTH_TOKEN_TTL_MS }), 'utf8').toString('base64url');
+  const body = Buffer.from(JSON.stringify({
+    ...payload,
+    jti: crypto.randomBytes(8).toString('hex'), // unique token id → enables revocation (logout)
+    exp: Date.now() + AUTH_TOKEN_TTL_MS,
+  }), 'utf8').toString('base64url');
   const sig = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
   return `${body}.${sig}`;
+}
+
+/**
+ * Revoked token ids (jti). Populated by /api/auth/logout. In-memory only:
+ * a restart clears the list, but tokens are short-lived (<= AUTH_TOKEN_TTL_MS)
+ * and rotation of ENCRYPTION_SECRET invalidates every token anyway.
+ */
+const revokedTokenJtis = new Set<string>();
+
+export function revokeAuthToken(jti: string): void {
+  if (jti) revokedTokenJtis.add(jti);
+}
+
+export function isAuthTokenRevoked(jti: string): boolean {
+  return revokedTokenJtis.has(jti);
 }
 
 export function verifyAuthToken(token: string): Record<string, unknown> | null {
@@ -160,6 +179,7 @@ export function verifyAuthToken(token: string): Record<string, unknown> | null {
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (typeof payload.exp === 'number' && payload.exp < Date.now()) return null;
+    if (typeof payload.jti === 'string' && revokedTokenJtis.has(payload.jti)) return null;
     return payload;
   } catch {
     return null;
@@ -189,6 +209,75 @@ export function isHostRequest(req: express.Request): boolean {
   // A forged header from a remote client can therefore never elevate to a host.
   const clientIp = (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   return clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost';
+}
+
+// =========================================================
+// HOST-ONLY GATE FOR GLOBAL SETTINGS & DESTRUCTIVE OPERATIONS
+// =========================================================
+// Per-user library CRUD stays open to all users, but anything that mutates
+// global server state (settings, config, backups, bulk syncs, source toggles,
+// crawler) is restricted to the host computer. Without a token/session system
+// this prevents any LAN/remote client from overwriting the whole database.
+export const HOST_ONLY_PATHS = new Set<string>([
+  '/api/config',
+  '/api/settings',
+  '/api/settings/backup/export',
+  '/api/settings/backup/import',
+  '/api/settings/cache/clear',
+  '/api/manga/sync-from-apis',
+  '/api/manga/refresh-all-metadata',
+  '/api/kotatsu/sync-database',
+  '/api/kotatsu/sources/toggle',
+  '/api/kotatsu/sources/purge-disabled',
+  '/api/crawler/bypass-fetch',
+  // Database import/export/reset (destructive or full-library exfil)
+  '/api/db/export',
+  '/api/db/import',
+  '/api/db/reset',
+  '/api/db/refresh-all',
+  // Tracker bulk / destructive
+  '/api/tracker/auto-update',
+  '/api/tracker/detect-duplicates',
+  '/api/tracker/merge-duplicates',
+  '/api/tracker/dismiss-duplicate',
+  // Kotatsu / scrape bulk mutations
+  '/api/kotatsu/sources/activate',
+  '/api/kotatsu/sources/deactivate',
+  '/api/kotatsu/sources/activate-all',
+  '/api/kotatsu/sources/deactivate-all',
+  '/api/kotatsu/pull-all-sources',
+  '/api/scrape/update-all-series',
+  '/api/scrape/audit-sources',
+  '/api/scrape/source-catalog',
+  '/api/mangadex/pull-bulk-catalog',
+  // AI bulk (API key / load)
+  '/api/ai/enrich-metadata',
+  '/api/ai/find-similar',
+]);
+// GET requests to host-only paths are allowed (read-only config/health info),
+// except these sensitive exports which leak the full database.
+export const SENSITIVE_GET_PATHS = new Set<string>([
+  '/api/settings/backup/export',
+  '/api/db/export',
+]);
+
+// Normalize a request path: collapse trailing slashes and decode %2F so that
+// `/api/config/`, `/api/settings//backup` etc. can never bypass the host gate.
+export function normalizeGatePath(p: string): string {
+  let path = p;
+  while (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  try { path = decodeURIComponent(path); } catch { /* keep as-is on malformed input */ }
+  return path;
+}
+
+// Prefix-based host-gate: a request is protected if its (normalized) path equals
+// a host-only path OR falls under one of its sub-paths (e.g. /api/settings/*).
+export function isHostOnlyPath(p: string): boolean {
+  const norm = normalizeGatePath(p);
+  for (const base of HOST_ONLY_PATHS) {
+    if (norm === base || norm.startsWith(base + '/')) return true;
+  }
+  return false;
 }
 
 // =========================================================
@@ -233,7 +322,36 @@ export async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
   return parsed;
 }
 
-export async function streamProxiedImage(response: Response, res: express.Response): Promise<boolean> {
+/**
+ * SSRF-safe fetch that follows redirects MANUALLY, re-validating every hop
+ * against assertSafeProxyTarget. Plain fetch() would silently follow a 3xx
+ * from a public host to an internal address (cloud metadata, LAN service),
+ * defeating the initial URL check.
+ */
+export async function fetchWithSsrfGuard(
+  rawUrl: string,
+  init: RequestInit = {},
+  maxRedirects = 5
+): Promise<Response> {
+  let currentUrl = rawUrl;
+  for (let hop = 0; ; hop++) {
+    await assertSafeProxyTarget(currentUrl);
+    const res = await fetch(currentUrl, { ...init, redirect: 'manual' });
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      if (hop >= maxRedirects) {
+        throw new Error(`Blocked: too many redirects (> ${maxRedirects})`);
+      }
+      // Drop the redirect body without consuming it fully.
+      try { await res.body?.cancel(); } catch { /* best effort */ }
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+    return res;
+  }
+}
+
+export async function streamProxiedImage(response: Response, res: express.Response, req?: express.Request): Promise<boolean> {
   const declaredLength = Number(response.headers.get('content-length') || 0);
   if (declaredLength > MAX_PROXY_IMAGE_BYTES) {
     res.setHeader('Content-Type', 'text/plain');
@@ -252,19 +370,30 @@ export async function streamProxiedImage(response: Response, res: express.Respon
   const abortOnOverflow = () => controller.abort();
   const capTimer = setTimeout(abortOnOverflow, 60000);
 
+  // Track client disconnects so the backpressure wait below can never hang
+  // forever when the reader tab is closed mid-stream.
+  let clientGone = false;
+  const onClose = () => { clientGone = true; };
+  if (req) req.once('close', onClose);
+
   try {
     for await (const chunk of body) {
+      if (clientGone) break;
       received += chunk.length;
       if (received > MAX_PROXY_IMAGE_BYTES) {
         controller.abort();
         throw new Error('Proxied image exceeded size cap during streaming');
       }
       if (!res.write(Buffer.from(chunk))) {
-        await new Promise((resolve) => res.once('drain', resolve));
+        await new Promise<void>((resolve) => {
+          res.once('drain', resolve);
+          if (req) req.once('close', resolve);
+        });
+        if (clientGone) break;
       }
     }
     clearTimeout(capTimer);
-    res.end();
+    if (!clientGone) res.end();
     return true;
   } catch (err: any) {
     clearTimeout(capTimer);
@@ -273,5 +402,7 @@ export async function streamProxiedImage(response: Response, res: express.Respon
       res.status(502).send(err?.message || 'Streaming failed');
     }
     return false;
+  } finally {
+    if (req) req.removeListener('close', onClose);
   }
 }

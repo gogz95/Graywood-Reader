@@ -7,9 +7,14 @@ import {
   verifyPassword,
   signAuthToken,
   verifyAuthToken,
+  revokeAuthToken,
   isPrivateOrReservedIp,
   assertSafeProxyTarget,
+  fetchWithSsrfGuard,
   isHostRequest,
+  normalizeGatePath,
+  isHostOnlyPath,
+  HOST_ONLY_PATHS,
 } from '../server/security';
 import { isImageProxyPath } from '../server/rateLimit';
 
@@ -127,5 +132,75 @@ describe('rate-limit path classification', () => {
     expect(isImageProxyPath('/api/manga')).toBe(false);
     expect(isImageProxyPath('/api/health')).toBe(false);
     expect(isImageProxyPath('/')).toBe(false);
+  });
+});
+
+describe('host gate path normalization', () => {
+  it('strips trailing slashes', () => {
+    expect(normalizeGatePath('/api/config/')).toBe('/api/config');
+    expect(normalizeGatePath('/api/settings///')).toBe('/api/settings');
+  });
+
+  it('decodes percent-encoded segments once', () => {
+    expect(normalizeGatePath('/api/%73ettings')).toBe('/api/settings');
+    // malformed sequences are kept as-is (no throw)
+    expect(normalizeGatePath('/api/%E0%A4%A')).toBe('/api/%E0%A4%A');
+  });
+
+  it('protects host-only paths including sub-paths', () => {
+    expect(isHostOnlyPath('/api/config')).toBe(true);
+    expect(isHostOnlyPath('/api/config/')).toBe(true);
+    expect(isHostOnlyPath('/api/settings/backup/export')).toBe(true);
+    expect(isHostOnlyPath('/api/db/reset')).toBe(true);
+  });
+
+  it('does not over-match unrelated or prefix-similar paths', () => {
+    expect(isHostOnlyPath('/api/manga')).toBe(false);
+    expect(isHostOnlyPath('/api/health')).toBe(false);
+    // "/api/configx" is NOT under "/api/config"
+    expect(isHostOnlyPath('/api/configx')).toBe(false);
+    expect(isHostOnlyPath('/api/config-extended')).toBe(false);
+  });
+
+  it('keeps destructive and settings endpoints in the protected set', () => {
+    for (const p of ['/api/db/import', '/api/db/export', '/api/settings', '/api/crawler/bypass-fetch']) {
+      expect(HOST_ONLY_PATHS.has(p)).toBe(true);
+    }
+  });
+});
+
+describe('token revocation (logout)', () => {
+  it('issues a unique jti per token and revokes it on demand', () => {
+    const token = signAuthToken({ sub: 'usr_test', role: 'user' });
+    const payload = verifyAuthToken(token);
+    expect(typeof payload?.jti).toBe('string');
+    expect((payload?.jti as string).length).toBeGreaterThan(0);
+
+    // Token verifies before revocation, fails after.
+    expect(verifyAuthToken(token)).not.toBeNull();
+    revokeAuthToken(String(payload?.jti));
+    expect(verifyAuthToken(token)).toBeNull();
+  });
+
+  it('two tokens for the same user are independent', () => {
+    const a = signAuthToken({ sub: 'usr_x' });
+    const b = signAuthToken({ sub: 'usr_x' });
+    const pa = verifyAuthToken(a);
+    revokeAuthToken(String(pa?.jti));
+    expect(verifyAuthToken(a)).toBeNull();
+    expect(verifyAuthToken(b)).not.toBeNull();
+  });
+});
+
+describe('fetchWithSsrfGuard (pre-flight validation)', () => {
+  it('rejects non-http(s) protocols without performing a request', async () => {
+    await expect(fetchWithSsrfGuard('file:///etc/passwd')).rejects.toThrow();
+    await expect(fetchWithSsrfGuard('gopher://1.1.1.1/')).rejects.toThrow();
+  });
+
+  it('rejects private/reserved targets without performing a request', async () => {
+    await expect(fetchWithSsrfGuard('http://127.0.0.1:8191/v1')).rejects.toThrow();
+    await expect(fetchWithSsrfGuard('http://169.254.169.254/latest/meta-data/')).rejects.toThrow();
+    await expect(fetchWithSsrfGuard('http://10.0.0.5/internal')).rejects.toThrow();
   });
 });

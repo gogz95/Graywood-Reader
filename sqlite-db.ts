@@ -154,7 +154,7 @@ db.exec(`
     PRIMARY KEY (user_id, manga_id)
   );
 
-  -- Private page sticky notes
+  -- Private page sticky notes (per-user: user_id scopes visibility/ownership)
   CREATE TABLE IF NOT EXISTS page_sticky_notes (
     id TEXT PRIMARY KEY,
     manga_id TEXT NOT NULL,
@@ -163,13 +163,23 @@ db.exec(`
     note_text TEXT NOT NULL,
     color TEXT DEFAULT 'yellow',
     created_at TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    user_id TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_user_fav_user ON user_favorites(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_lib_user ON user_library_state(user_id, last_read_at);
   CREATE INDEX IF NOT EXISTS idx_sticky_notes_manga ON page_sticky_notes(manga_id, chapter_number);
 `);
+
+// Sticky notes gained per-user ownership after the table shipped. Add the
+// column on legacy databases and attribute pre-existing notes to the host
+// admin (they were created on the host before multi-user notes existed).
+// NOTE: the user_id index is created AFTER the ALTER TABLE so legacy
+// databases (whose table predates the column) don't fail the main exec.
+try { db.exec('ALTER TABLE page_sticky_notes ADD COLUMN user_id TEXT'); } catch (e) {}
+try { db.exec(`UPDATE page_sticky_notes SET user_id = 'usr_admin' WHERE user_id IS NULL`); } catch (e) {}
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_sticky_notes_user ON page_sticky_notes(user_id)'); } catch (e) {}
 
 // Prepared Statements for Sub-millisecond Execution
 const stmtGetAllManga = db.prepare('SELECT * FROM manga ORDER BY lastUpdated DESC');
@@ -296,6 +306,9 @@ const stmtGetReadingProgressForChapter = db.prepare(`
 const stmtGetReadingActivity = db.prepare(`
   SELECT * FROM reading_activity WHERE user_id = ? ORDER BY date ASC
 `);
+const stmtGetReadingProgressByUser = db.prepare(`
+  SELECT * FROM reading_progress WHERE user_id = ? ORDER BY last_read_at DESC
+`);
 const stmtUpsertReadingActivity = db.prepare(`
   INSERT INTO reading_activity (date, user_id, chapters_read, minutes_spent)
   VALUES (@date, @user_id, @chapters_read, @minutes_spent)
@@ -378,7 +391,7 @@ function mapMangaItemToRow(item: MangaItem) {
     status: item.status || 'reading',
     currentChapter: item.currentChapter || 0,
     totalChapters: item.totalChapters || null,
-    latestChapter: item.latestChapter || 100,
+    latestChapter: item.latestChapter || 1,
     lastUpdated: item.lastUpdated || new Date().toISOString(),
     rating: item.rating || 9.0,
     sourceUrl: item.sourceUrl || '',
@@ -698,6 +711,11 @@ export const SqliteDb = {
     return stmtGetReadingActivity.all(userId);
   },
 
+  /** All page-level reading position rows for a user (GDPR export/erasure). */
+  getAllReadingProgressForUser(userId: string): any[] {
+    return stmtGetReadingProgressByUser.all(userId);
+  },
+
   // ── Per-user favorites ─────────────────────────────────────────────────────
   setUserFavorite(userId: string, mangaId: string, isFavorite: boolean) {
     stmtUpsertUserFavorite.run({
@@ -772,16 +790,16 @@ export const SqliteDb = {
     });
   },
 
-  getStickyNotes(mangaId: string): PageStickyNote[] {
-    return getStickyNotes(mangaId);
+  getStickyNotes(mangaId: string, userId?: string): PageStickyNote[] {
+    return getStickyNotes(mangaId, userId);
   },
 
   saveStickyNote(note: PageStickyNote): void {
     saveStickyNote(note);
   },
 
-  deleteStickyNote(id: string): boolean {
-    return deleteStickyNote(id);
+  deleteStickyNote(id: string, userId?: string): boolean {
+    return deleteStickyNote(id, userId);
   },
 };
 
@@ -826,11 +844,15 @@ function migrateGlobalLibraryToUserTables() {
 }
 
 /**
- * Sticky Notes Helpers
+ * Sticky Notes Helpers (per-user: every note is owned by the user that
+ * created it; reads/deletes are scoped to that user by the callers).
  */
-export function getStickyNotes(mangaId: string): PageStickyNote[] {
+export function getStickyNotes(mangaId: string, userId?: string): PageStickyNote[] {
   try {
-    return db.prepare('SELECT id, manga_id as mangaId, chapter_number as chapterNumber, page_index as pageIndex, note_text as noteText, color, created_at as createdAt, updated_at as updatedAt FROM page_sticky_notes WHERE manga_id = ? ORDER BY chapter_number ASC, page_index ASC').all(mangaId) as PageStickyNote[];
+    if (userId) {
+      return db.prepare('SELECT id, manga_id as mangaId, chapter_number as chapterNumber, page_index as pageIndex, note_text as noteText, color, created_at as createdAt, updated_at as updatedAt, user_id as userId FROM page_sticky_notes WHERE manga_id = ? AND user_id = ? ORDER BY chapter_number ASC, page_index ASC').all(mangaId, userId) as PageStickyNote[];
+    }
+    return db.prepare('SELECT id, manga_id as mangaId, chapter_number as chapterNumber, page_index as pageIndex, note_text as noteText, color, created_at as createdAt, updated_at as updatedAt, user_id as userId FROM page_sticky_notes WHERE manga_id = ? ORDER BY chapter_number ASC, page_index ASC').all(mangaId) as PageStickyNote[];
   } catch {
     return [];
   }
@@ -839,8 +861,8 @@ export function getStickyNotes(mangaId: string): PageStickyNote[] {
 export function saveStickyNote(note: PageStickyNote): void {
   try {
     db.prepare(`
-      INSERT INTO page_sticky_notes (id, manga_id, chapter_number, page_index, note_text, color, created_at, updated_at)
-      VALUES (@id, @mangaId, @chapterNumber, @pageIndex, @noteText, @color, @createdAt, @updatedAt)
+      INSERT INTO page_sticky_notes (id, manga_id, chapter_number, page_index, note_text, color, created_at, updated_at, user_id)
+      VALUES (@id, @mangaId, @chapterNumber, @pageIndex, @noteText, @color, @createdAt, @updatedAt, @userId)
       ON CONFLICT(id) DO UPDATE SET
         note_text = excluded.note_text,
         color = excluded.color,
@@ -854,15 +876,19 @@ export function saveStickyNote(note: PageStickyNote): void {
       color: note.color || 'yellow',
       createdAt: note.createdAt || new Date().toISOString(),
       updatedAt: note.updatedAt || new Date().toISOString(),
+      userId: note.userId || null,
     });
   } catch (err) {
     console.error('Error saving sticky note:', err);
   }
 }
 
-export function deleteStickyNote(id: string): boolean {
+export function deleteStickyNote(id: string, userId?: string): boolean {
   try {
-    const res = db.prepare('DELETE FROM page_sticky_notes WHERE id = ?').run(id);
+    // Ownership enforced: a scoped delete only removes the caller's own note.
+    const res = userId
+      ? db.prepare('DELETE FROM page_sticky_notes WHERE id = ? AND user_id = ?').run(id, userId)
+      : db.prepare('DELETE FROM page_sticky_notes WHERE id = ?').run(id);
     return res.changes > 0;
   } catch {
     return false;

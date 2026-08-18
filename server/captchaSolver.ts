@@ -1,4 +1,5 @@
 import { URL } from 'url';
+import { fetchWithSsrfGuard } from './security';
 
 export interface ChallengeDetectionResult {
   isChallenge: boolean;
@@ -349,9 +350,9 @@ export async function fetchWithChallengeBypass(
     ...(options.headers || {}),
   };
 
-  // Step 1: Direct Stealth Fetch
+  // Step 1: Direct Stealth Fetch (redirect-safe SSRF guard on every hop)
   try {
-    const directRes = await fetch(targetUrl, {
+    const directRes = await fetchWithSsrfGuard(targetUrl, {
       headers: defaultHeaders,
       signal: AbortSignal.timeout(timeoutMs),
     });

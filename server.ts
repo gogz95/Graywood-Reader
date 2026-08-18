@@ -20,12 +20,17 @@ import {
   AUTH_SIGNING_KEY,
   signAuthToken,
   verifyAuthToken,
+  revokeAuthToken,
   toPublicUser,
   isHostRequest,
   isPrivateOrReservedIp,
   assertSafeProxyTarget,
+  fetchWithSsrfGuard,
   MAX_PROXY_IMAGE_BYTES,
   streamProxiedImage,
+  normalizeGatePath,
+  isHostOnlyPath,
+  SENSITIVE_GET_PATHS,
 } from "./server/security";
 import {
   rateLimitMiddleware,
@@ -38,6 +43,9 @@ import {
   checkLoginRateLimit,
   recordLoginFailure,
   clearLoginFailures,
+  checkAccountLockout,
+  recordAccountFailure,
+  clearAccountFailures,
 } from "./server/rateLimit";
 import {
   detectChallenge,
@@ -125,7 +133,6 @@ app.set('trust proxy', (ip: string) => {
 });
 
 app.use(express.json({ limit: "10mb" }));
-app.use(opdsRouter);
 
 // Response compression (shrinks the multi-MB library payloads by ~80%)
 app.use(compression());
@@ -145,78 +152,24 @@ app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  // CSP is only applied to production builds: the Vite dev server injects
+  // inline scripts (react-refresh preamble) that a strict policy would block.
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self'; " +
+      "object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    );
+  }
   next();
 });
 
 // =========================================================
 // HOST-ONLY GATE FOR GLOBAL SETTINGS & DESTRUCTIVE OPERATIONS
 // =========================================================
-// Per-user library CRUD stays open to all users, but anything that mutates
-// global server state (settings, config, backups, bulk syncs, source toggles,
-// crawler) is restricted to the host computer. Without a token/session system
-// this prevents any LAN/remote client from overwriting the whole database.
-const HOST_ONLY_PATHS = new Set<string>([
-  '/api/config',
-  '/api/settings',
-  '/api/settings/backup/export',
-  '/api/settings/backup/import',
-  '/api/settings/cache/clear',
-  '/api/manga/sync-from-apis',
-  '/api/manga/refresh-all-metadata',
-  '/api/kotatsu/sync-database',
-  '/api/kotatsu/sources/toggle',
-  '/api/kotatsu/sources/purge-disabled',
-  '/api/crawler/bypass-fetch',
-  // Database import/export/reset (destructive or full-library exfil)
-  '/api/db/export',
-  '/api/db/import',
-  '/api/db/reset',
-  '/api/db/refresh-all',
-  // Tracker bulk / destructive
-  '/api/tracker/auto-update',
-  '/api/tracker/detect-duplicates',
-  '/api/tracker/merge-duplicates',
-  '/api/tracker/dismiss-duplicate',
-  // Kotatsu / scrape bulk mutations
-  '/api/kotatsu/sources/activate',
-  '/api/kotatsu/sources/deactivate',
-  '/api/kotatsu/sources/activate-all',
-  '/api/kotatsu/sources/deactivate-all',
-  '/api/kotatsu/pull-all-sources',
-  '/api/scrape/update-all-series',
-  '/api/scrape/audit-sources',
-  '/api/scrape/source-catalog',
-  '/api/mangadex/pull-bulk-catalog',
-  // AI bulk (API key / load)
-  '/api/ai/enrich-metadata',
-  '/api/ai/find-similar',
-]);
-// GET requests to host-only paths are allowed (read-only config/health info),
-// except these sensitive exports which leak the full database.
-const SENSITIVE_GET_PATHS = new Set<string>([
-  '/api/settings/backup/export',
-  '/api/db/export',
-]);
-
-// Normalize a request path: collapse trailing slashes and decode %2F so that
-// `/api/config/`, `/api/settings//backup` etc. can never bypass the host gate.
-function normalizeGatePath(p: string): string {
-  let path = p;
-  while (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
-  try { path = decodeURIComponent(path); } catch { /* keep as-is on malformed input */ }
-  return path;
-}
-
-// Prefix-based host-gate: a request is protected if its (normalized) path equals
-// a host-only path OR falls under one of its sub-paths (e.g. /api/settings/*).
-function isHostOnlyPath(p: string): boolean {
-  const norm = normalizeGatePath(p);
-  for (const base of HOST_ONLY_PATHS) {
-    if (norm === base || norm.startsWith(base + '/')) return true;
-  }
-  return false;
-}
-
+// The protected path set (HOST_ONLY_PATHS / SENSITIVE_GET_PATHS) and the
+// normalization helpers live in server/security.ts so they are unit-testable.
 app.use((req, res, next) => {
   const path = normalizeGatePath(req.path);
   if (!isHostOnlyPath(path)) return next();
@@ -242,6 +195,22 @@ function resolveRequestUserId(req: express.Request): string | null {
   if (authed?.id) return authed.id;
   if (isHostRequest(req)) return 'usr_admin';
   return null;
+}
+
+/**
+ * Shared-catalog write gate. The manga catalog is GLOBAL state: creating,
+ * editing or deleting rows must never be possible for anonymous remote
+ * clients. Allowed: the host machine, or any authenticated (token) user.
+ */
+function canWriteCatalog(req: express.Request): boolean {
+  return isHostRequest(req) || !!(req as any).user;
+}
+
+function rejectCatalogWrite(res: express.Response): void {
+  res.status(401).json({
+    error: 'Unauthorized',
+    message: 'Catalog changes require a login token (or the host computer).',
+  });
 }
 
 // Resolve the authenticated user (if any) from an Authorization header only.
@@ -280,6 +249,9 @@ app.use((req, res, next) => {
 
 // Mount scoped routers AFTER the host-gate / rate-limit / auth middleware chain
 // so they are covered by the same protections as the rest of the API.
+// (opdsRouter intentionally lives here too — mounting it before the chain used
+// to expose the whole catalog feed without auth/rate-limit/logging.)
+app.use(opdsRouter);
 app.use(notesRouter);
 app.use(localLibraryRouter);
 
@@ -329,28 +301,9 @@ let userProfiles: UserProfile[] = [
 ];
 
 
-let autoUpdateLogs: AutoUpdateLog[] = [
-  {
-    id: 'log-1',
-    mangaId: 'm2',
-    mangaTitle: 'The Beginning After The End',
-    previousChapter: 185,
-    newChapter: 190,
-    source: 'Tapas / AsuraScans',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    type: 'manhwa',
-  },
-  {
-    id: 'log-2',
-    mangaId: 'm6',
-    mangaTitle: 'Magic Emperor',
-    previousChapter: 580,
-    newChapter: 585,
-    source: 'NightScans',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    type: 'manhua',
-  },
-];
+// No fabricated demo entries: the update log starts empty and only ever
+// contains real scan results produced by this server.
+let autoUpdateLogs: AutoUpdateLog[] = [];
 
 let syncConfig: DatabaseSyncConfig = {
   subdomain: 'tracker.manhuahub.app',
@@ -486,6 +439,15 @@ export function syncResetManga(items: MangaItem[]) {
   mangaDatabase = [...items];
   syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
+}
+
+/**
+ * Canonical manga lookup: SQLite is the source of truth, with the in-memory
+ * array as a fallback so handlers never disagree about which rows exist.
+ */
+function resolveManga(id: string): MangaItem | undefined {
+  if (!id) return undefined;
+  return SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id) || undefined;
 }
 
 function applySyncConfigRestored(config: DatabaseSyncConfig) {
@@ -1299,9 +1261,10 @@ const MANGA_CREATE_FIELDS = {
 };
 
 app.post("/api/manga", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const body = req.body || {};
   const newItem: MangaItem = {
-    id: String(body.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`),
+    id: String(body.id || `m_${crypto.randomUUID()}`),
     title: MANGA_CREATE_FIELDS.title(body.title),
     altTitles: MANGA_CREATE_FIELDS.altTitles(body.altTitles),
     type: MANGA_CREATE_FIELDS.type(body.type),
@@ -1397,6 +1360,7 @@ app.post("/api/manga/refresh-all-metadata", async (_req, res) => {
 });
 
 app.put("/api/manga/:id", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
   const existing = SqliteDb.getMangaById(id);
   if (!existing) {
@@ -1430,7 +1394,7 @@ app.put("/api/manga/:id", (req, res) => {
 
   syncAddOrUpdateManga(updatedItem);
   if (body.isFavorite !== undefined) {
-    const uid = resolveRequestUserId(req) || 'usr_admin';
+    const uid = resolveRequestUserId(req) || 'usr_guest';
     SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(body.isFavorite));
   }
   const uid = resolveRequestUserId(req);
@@ -1444,7 +1408,7 @@ app.post("/api/manga/increment/:id", (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req) || 'usr_guest';
   const overlay = SqliteDb.applyUserOverlay([existing], userId)[0];
   const newChapter = (Number(overlay.currentChapter) || 0) + 1;
   SqliteDb.setUserLibraryChapter(userId, id, newChapter, {
@@ -1461,13 +1425,14 @@ app.post("/api/manga/toggle-favorite", (req, res) => {
   const existing = SqliteDb.getMangaById(id);
   if (!existing) return res.status(404).json({ error: "Manga not found" });
 
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req) || 'usr_guest';
   SqliteDb.setUserFavorite(userId, String(id), Boolean(isFavorite));
   const updated = SqliteDb.applyUserOverlay([existing], userId)[0];
   res.json({ success: true, manga: updated });
 });
 
 app.post("/api/manga/toggle-flag", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id, isFlagged, flagReason } = req.body || {};
   if (!id) return res.status(400).json({ error: "Missing manga id" });
 
@@ -1502,6 +1467,7 @@ app.post("/api/manga/toggle-flag", (req, res) => {
 });
 
 app.delete("/api/manga/:id", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
   syncDeleteManga(id);
   res.json({ success: true, message: "Deleted successfully from SQLite and persistent database" });
@@ -1523,7 +1489,7 @@ app.delete("/api/manga/:id", (req, res) => {
 let lastMangaDexRequestTime = 0;
 const MANGADEX_MIN_INTERVAL_MS = 220; // Max ~4.5 req/sec (safely under 5 req/sec limit)
 
-async function fetchMangaDex(url: string, options: any = {}): Promise<any> {
+async function fetchMangaDex(url: string, options: any = {}, retriesLeft = 3): Promise<any> {
   const now = Date.now();
   const timeSinceLast = now - lastMangaDexRequestTime;
   if (timeSinceLast < MANGADEX_MIN_INTERVAL_MS) {
@@ -1548,11 +1514,17 @@ async function fetchMangaDex(url: string, options: any = {}): Promise<any> {
   const retryAfter = response.headers.get('x-ratelimit-retry-after');
 
   if (response.status === 429) {
+    // Bounded retry: a persistently quota-exhausted API must never cause
+    // unbounded recursion.
+    if (retriesLeft <= 0) {
+      console.warn('[MangaDex API Rate Limiter] 429 quota still exceeded after retries; giving up for this call.');
+      return response;
+    }
     const retryUnix = Number(retryAfter) || Math.floor(Date.now() / 1000) + 5;
     const waitMs = Math.max(1000, (retryUnix * 1000) - Date.now());
-    console.warn(`[MangaDex API Rate Limiter] 429 Quota Exceeded. Waiting ${waitMs}ms before retrying...`);
+    console.warn(`[MangaDex API Rate Limiter] 429 Quota Exceeded. Waiting ${waitMs}ms before retrying (${retriesLeft} retries left)...`);
     await new Promise((r) => setTimeout(r, waitMs));
-    return fetchMangaDex(url, options);
+    return fetchMangaDex(url, options, retriesLeft - 1);
   }
 
   return response;
@@ -1699,7 +1671,7 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
       try { referer = new URL(targetUrl).origin + '/'; } catch (e) { referer = 'https://mangadex.org'; }
     }
 
-    const response = await fetch(targetUrl, {
+    const response = await fetchWithSsrfGuard(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
         'Referer': referer,
@@ -1724,7 +1696,7 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
     // Same-origin serving: 7-day immutable caching with ETag for instant re-reads
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('Content-Disposition', 'inline');
-    await streamProxiedImage(response, res);
+    await streamProxiedImage(response, res, req);
   } catch (err: any) {
     console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {
@@ -1797,7 +1769,7 @@ app.get("/api/mangadex/search", async (req, res) => {
           coverImage,
           description,
           genres: tags.length ? tags : ['Action', 'Fantasy'],
-          latestChapter: Number(m.attributes.lastChapter) || 100,
+          latestChapter: Number(m.attributes.lastChapter) || 1,
           publicationStatus: (m.attributes.status || 'ONGOING').toUpperCase(),
           source: 'MangaDex API',
           rating: 8.5,
@@ -2097,7 +2069,7 @@ app.post("/api/anilist/search", async (req, res) => {
           coverImage: m.coverImage?.large || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
           description: (m.description || '').replace(/<[^>]*>?/gm, '').substring(0, 300),
           genres: m.genres || ['Action', 'Fantasy'],
-          latestChapter: m.chapters || 100,
+          latestChapter: m.chapters || 1,
           publicationStatus: m.status || 'RELEASING',
           source: 'AniList GraphQL',
           rating: m.averageScore ? Number((m.averageScore / 10).toFixed(1)) : 8.5,
@@ -2680,8 +2652,15 @@ app.get("/api/db/export", (req, res) => {
   const format = req.query.format || 'json';
   if (format === 'csv') {
     const headers = "id,title,type,currentChapter,latestChapter,status,rating,sourceName\n";
+    // CSV injection guard: prefix formula-triggering cells so spreadsheet apps
+    // never evaluate user-controlled titles as expressions.
+    const csvCell = (v: unknown) => {
+      const s = String(v ?? '');
+      const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     const rows = mangaDatabase.map((m) =>
-      `"${m.id}","${m.title.replace(/"/g, '""')}","${m.type}",${m.currentChapter},${m.latestChapter},"${m.status}",${m.rating},"${m.sourceName}"`
+      `${csvCell(m.id)},${csvCell(m.title)},${csvCell(m.type)},${m.currentChapter},${m.latestChapter},${csvCell(m.status)},${m.rating},${csvCell(m.sourceName)}`
     ).join("\n");
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="manhua_tracker_export.csv"');
@@ -2761,7 +2740,7 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
   const { mangaId } = req.params;
   const order = (req.query.order as string) || 'desc'; // 'desc' or 'asc'
 
-  const manga = mangaDatabase.find((m) => m.id === mangaId);
+  const manga = resolveManga(mangaId);
   if (!manga) {
     return res.status(404).json({ error: "Manga not found" });
   }
@@ -5745,9 +5724,9 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
   const chapterNumber = Math.max(1, parseFloat(req.query.chapterNumber as string) || 1);
   let chapterId = (req.query.chapterId as string) || '';
 
-  const manga = mangaDatabase.find((m) => m.id === mangaId || m.apiId === mangaId);
+  const manga = resolveManga(String(mangaId || '')) || mangaDatabase.find((m) => m.apiId === mangaId);
   const mangaTitle = manga ? manga.title : 'Webtoon Series';
-  const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 200;
+  const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 1;
 
   // 1. MangaDex is used for METADATA only (search/enrichment/covers) and is intentionally
   //    NOT used as a reading source. Reading is resolved from the series' own live source
@@ -5903,6 +5882,8 @@ app.get("/api/reader/panel-image", (req, res) => {
 </svg>`;
     res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
+    // Never render as a document on direct navigation (defense-in-depth vs SVG script execution)
+    res.setHeader('Content-Disposition', 'attachment; filename="panel.svg"');
     return res.send(svg);
   }
   const chapterNext = escapeXml(chapter + 1);
@@ -6091,6 +6072,8 @@ app.get("/api/reader/panel-image", (req, res) => {
 
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'public, max-age=86400');
+  // Never render as a document on direct navigation (defense-in-depth vs SVG script execution)
+  res.setHeader('Content-Disposition', 'attachment; filename="panel.svg"');
   res.send(svg);
 });
 
@@ -6102,7 +6085,7 @@ app.post("/api/reader/mark-read", (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req) || 'usr_guest';
   const newChapterNum = Math.max(Number(chapterNumber) || 1, 0);
   SqliteDb.setUserLibraryChapter(userId, manga.id, newChapterNum, {
     status: manga.status === 'plan_to_read' ? 'reading' : manga.status,
@@ -6134,7 +6117,9 @@ app.post("/api/reader/mark-read", (req, res) => {
 // activity so the analytics/heatmap show real data instead of mock values.
 
 function resolveProgressUserId(req: express.Request): string {
-  return resolveRequestUserId(req) || 'usr_admin';
+  // Anonymous remote writes land in the shared guest bucket — NEVER on the
+  // host admin's personal progress/favorites.
+  return resolveRequestUserId(req) || 'usr_guest';
 }
 
 // Save (or update) the current reading position for a manga/chapter.
@@ -6266,6 +6251,70 @@ function clamp(min: number, max: number, v: number): number {
 }
 
 // Default App & Kotatsu Reader Settings in Server Memory
+// =========================================================
+// SETTINGS FIELD WHITELIST — defense-in-depth. POST /api/settings is already
+// host-only, but no client (or malformed backup file) may ever inject keys
+// outside these lists into persisted app state.
+// =========================================================
+const SETTINGS_ALLOWED_KEYS = new Set<string>([
+  'appTheme', 'libraryLayout', 'gridColumns', 'autoMarkReadPercent',
+  'enableDownloadOffline', 'sourceTimeoutSeconds',
+  'anilistConnected', 'anilistToken', 'anilistAutoSync',
+  'malConnected', 'malToken', 'malAutoSync',
+  'kitsuConnected', 'kitsuToken', 'kitsuAutoSync',
+  'mangadexConnected', 'privateModeEnabled', 'customUserAgent',
+  'enableCloudflareBypass', 'flareSolverrUrl', 'captchaSolverEnabled',
+  'captchaApiKey', 'stealthMode', 'preferredLanguage',
+  'autoFormatReadingMode', 'defaultMangaMode', 'defaultManhwaMode',
+  'defaultManhuaMode', 'readerDefaults',
+]);
+const READER_DEFAULTS_ALLOWED_KEYS = new Set<string>([
+  'viewMode', 'maxWidth', 'pageGap', 'bgColor', 'zoomLevel', 'autoMarkRead',
+  'imageFilter', 'autoScrollEnabled', 'autoScrollSpeed', 'tapZonesEnabled',
+  'cropWhiteMargins', 'showPageNumberOverlay', 'showPersistentPageBadge',
+  'autoNextChapter', 'mangaFitMode', 'preloadCount', 'autoFormatMode',
+  'rememberPerSeries', 'guidedPanelView', 'noPanelSpacing', 'prefetchNextChapter',
+]);
+const CONFIG_ALLOWED_KEYS = new Set<string>([
+  'subdomain', 'autoUpdateIntervalMinutes', 'enableWebCrawling', 'sources',
+  'disabledSources', 'removedSources', 'reactivatedSources', 'lastSyncTime', 'totalTracked',
+]);
+// Sentinel returned in place of the real captcha API key whenever settings
+// leave the server. Clients/backup files that send it back mean "no change".
+const MASKED_SECRET = '••••••••';
+
+function sanitizeIncomingSettings(raw: any): Record<string, any> {
+  const clean: Record<string, any> = {};
+  if (!raw || typeof raw !== 'object') return clean;
+  for (const key of Object.keys(raw)) {
+    if (!SETTINGS_ALLOWED_KEYS.has(key)) continue; // drop unknown/injected keys
+    clean[key] = raw[key];
+  }
+  if (clean.readerDefaults && typeof clean.readerDefaults === 'object') {
+    const rd: Record<string, any> = {};
+    for (const key of Object.keys(clean.readerDefaults)) {
+      if (READER_DEFAULTS_ALLOWED_KEYS.has(key)) rd[key] = clean.readerDefaults[key];
+    }
+    clean.readerDefaults = rd;
+  } else {
+    delete clean.readerDefaults;
+  }
+  // Secret handling: empty or masked values mean "keep the existing key".
+  if (clean.captchaApiKey === undefined || clean.captchaApiKey === '' || clean.captchaApiKey === MASKED_SECRET) {
+    delete clean.captchaApiKey;
+  }
+  return clean;
+}
+
+function sanitizeIncomingConfig(raw: any): Record<string, any> {
+  const clean: Record<string, any> = {};
+  if (!raw || typeof raw !== 'object') return clean;
+  for (const key of Object.keys(raw)) {
+    if (CONFIG_ALLOWED_KEYS.has(key)) clean[key] = raw[key];
+  }
+  return clean;
+}
+
 let appSettings = {
   appTheme: 'amber',
   libraryLayout: 'grid',
@@ -6355,7 +6404,8 @@ app.post('/api/crawler/bypass-fetch', async (req, res) => {
     }
 
     // Method 2: Direct Stealth Proxy with Chrome User-Agent & Referer Headers
-    const directRes = await fetch(targetUrl, {
+    // (redirect-safe: every hop is re-validated against the SSRF guard)
+    const directRes = await fetchWithSsrfGuard(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -6441,11 +6491,20 @@ app.get("/api/gdpr/export-data/:userId", (req, res) => {
   if (!user) return res.status(404).json({ error: "User not found" });
 
   const userSeries = mangaDatabase.filter((m) => m.userId === userId);
+  // Complete Article 15 bundle: profile + owned series + ALL per-user tables
+  // (favorites, library state, page-level reading position, daily activity).
+  const libraryState = Array.from(SqliteDb.getUserLibraryStateMap(userId).entries()).map(
+    ([mangaId, state]) => ({ mangaId, ...state })
+  );
   const gdprExportBundle = {
     complianceNotice: "GDPR Article 15 Data Portability Export",
     exportTimestamp: new Date().toISOString(),
     personalData: toPublicUser(user),
     userMangaLibrary: userSeries,
+    favorites: Array.from(SqliteDb.getUserFavoriteIds(userId)),
+    libraryState,
+    readingProgress: SqliteDb.getAllReadingProgressForUser(userId),
+    readingActivity: SqliteDb.getReadingActivity(userId),
   };
 
   res.setHeader('Content-Type', 'application/json');
@@ -6484,34 +6543,51 @@ app.delete("/api/gdpr/erase-data/:userId", (req, res) => {
 
 // GET Settings
 app.get("/api/settings", (req, res) => {
-  res.json(appSettings);
+  // Secrets never leave the server in plaintext: the captcha API key is
+  // replaced by a mask sentinel for EVERY caller (host UI included — the
+  // password input shows it as set without exposing the value).
+  res.json({
+    ...appSettings,
+    captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+  });
 });
 
 
-// POST Update Settings
+// POST Update Settings (host-only; whitelisted fields only)
 app.post("/api/settings", (req, res) => {
   if (req.body) {
+    const clean = sanitizeIncomingSettings(req.body);
     appSettings = {
       ...appSettings,
-      ...req.body,
+      ...clean,
       readerDefaults: {
         ...appSettings.readerDefaults,
-        ...(req.body.readerDefaults || {}),
+        ...(clean.readerDefaults || {}),
       },
     };
     saveDatabaseToDisk();
   }
-  res.json({ success: true, settings: appSettings });
+  res.json({
+    success: true,
+    settings: {
+      ...appSettings,
+      captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+    },
+  });
 });
 
-// Export Backup JSON
+// Export Backup JSON (host-only — see SENSITIVE_GET_PATHS)
 app.get("/api/settings/backup/export", (req, res) => {
   const backup = {
     version: `${APP_VERSION}-kotatsu`,
     exportedAt: new Date().toISOString(),
     mangaDatabase: SqliteDb.getAllManga(),
     config: syncConfig,
-    appSettings,
+    // Secret material is masked in exports; import keeps the existing key.
+    appSettings: {
+      ...appSettings,
+      captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+    },
   };
 
   res.setHeader('Content-Type', 'application/json');
@@ -6519,7 +6595,7 @@ app.get("/api/settings/backup/export", (req, res) => {
   res.send(JSON.stringify(backup, null, 2));
 });
 
-// Import Backup JSON
+// Import Backup JSON (host-only; all incoming keys whitelisted)
 app.post("/api/settings/backup/import", (req, res) => {
   try {
     const { mangaDatabase: importedManga, config: importedConfig, appSettings: importedSettings } = req.body;
@@ -6527,14 +6603,23 @@ app.post("/api/settings/backup/import", (req, res) => {
       syncBulkAddOrUpdateManga(importedManga);
     }
     if (importedConfig) {
-      syncConfig = { ...syncConfig, ...importedConfig, totalTracked: mangaDatabase.length };
-      if (Array.isArray(importedConfig.disabledSources)) {
+      const cleanConfig = sanitizeIncomingConfig(importedConfig);
+      syncConfig = { ...syncConfig, ...cleanConfig, totalTracked: mangaDatabase.length };
+      if (Array.isArray(cleanConfig.disabledSources)) {
         disabledSourceIds.clear();
-        importedConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
+        cleanConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(String(id)));
       }
     }
     if (importedSettings) {
-      appSettings = { ...appSettings, ...importedSettings };
+      const cleanSettings = sanitizeIncomingSettings(importedSettings);
+      appSettings = {
+        ...appSettings,
+        ...cleanSettings,
+        readerDefaults: {
+          ...appSettings.readerDefaults,
+          ...(cleanSettings.readerDefaults || {}),
+        },
+      };
     }
     saveDatabaseToDisk();
     res.json({ success: true, count: SqliteDb.getMangaCount() });
@@ -6572,6 +6657,22 @@ app.get("/api/auth/client-context", (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   const clientIp = (req.ip || req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
 
+  const { username, email, password } = req.body || {};
+  const identifier = String(username || email || '').trim().toLowerCase();
+  const pass = String(password || '');
+
+  // Per-account lockout applies to EVERY caller (also protects against
+  // distributed brute force across many IPs).
+  const accountBlock = checkAccountLockout(identifier);
+  if (accountBlock) {
+    logger.warn('Auth', `Login blocked: account "${identifier}" is locked`, { retryAfterSeconds: accountBlock.retryAfterSeconds });
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      message: accountBlock.message,
+      retryAfterSeconds: accountBlock.retryAfterSeconds,
+    });
+  }
+
   // Login brute-force rate limiting (skipped for host/localhost)
   if (clientIp !== '127.0.0.1' && clientIp !== '::1') {
     const block = checkLoginRateLimit(clientIp);
@@ -6585,9 +6686,6 @@ app.post("/api/auth/login", async (req, res) => {
     }
   }
 
-  const { username, email, password } = req.body || {};
-  const identifier = String(username || email || '').trim().toLowerCase();
-  const pass = String(password || '');
   if (!identifier || !pass) {
     return res.status(400).json({ error: 'Bad Request', message: 'username/email and password are required.' });
   }
@@ -6597,6 +6695,7 @@ app.post("/api/auth/login", async (req, res) => {
   );
   if (!user || !user.password) {
     recordLoginFailure(clientIp);
+    recordAccountFailure(identifier);
     logger.warn('Auth', `Failed login attempt for "${identifier}" from ${clientIp}`);
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
   }
@@ -6604,12 +6703,14 @@ app.post("/api/auth/login", async (req, res) => {
   const ok = await verifyPasswordAsync(pass, user.password);
   if (!ok) {
     recordLoginFailure(clientIp);
+    recordAccountFailure(identifier);
     logger.warn('Auth', `Failed login attempt for "${user.username}" (bad password) from ${clientIp}`);
     return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
   }
 
-  // Successful login — clear any prior failure records
+  // Successful login — clear any prior failure records (IP + account)
   clearLoginFailures(clientIp);
+  clearAccountFailures(identifier);
   logger.info('Auth', `User "${user.username}" logged in from ${clientIp}`);
 
   const token = signAuthToken({ sub: user.id, role: user.role });
@@ -6618,6 +6719,20 @@ app.post("/api/auth/login", async (req, res) => {
     expiresInMs: AUTH_TOKEN_TTL_MS,
     user: toPublicUser(user),
   });
+});
+
+// Logout: revoke the presented token (jti) so it stops verifying immediately.
+app.post("/api/auth/logout", (req, res) => {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (token) {
+    const payload = verifyAuthToken(token);
+    if (payload && typeof payload.jti === 'string') {
+      revokeAuthToken(payload.jti);
+      logger.info('Auth', `Token ${payload.jti} revoked via logout (user ${String(payload.sub || '?')})`);
+    }
+  }
+  res.json({ success: true });
 });
 
 // Register a new user account. Passwords are scrypt-hashed before storage.
@@ -6686,9 +6801,17 @@ app.post("/api/auth/register", (req, res) => {
   });
 });
 
-// Public profile list (never includes password hashes).
-app.get("/api/profiles", (_req, res) => {
-  res.json(userProfiles.map(toPublicUser));
+// Public profile list (never includes password hashes). Emails are PII:
+// only the host or the profile's owner may see them — everyone else gets an
+// empty string instead of a full account enumeration surface.
+app.get("/api/profiles", (req, res) => {
+  const actor = (req as any).user as UserProfile | null;
+  const hostCaller = isHostRequest(req);
+  res.json(userProfiles.map((u) => {
+    const pub = toPublicUser(u);
+    if (!hostCaller && actor?.id !== u.id) pub.email = '';
+    return pub;
+  }));
 });
 
 // Return the currently authenticated user (or null). Never requires auth.
@@ -6785,6 +6908,9 @@ const BUGS_FILE_PATH = path.join(process.cwd(), "BUGS.md");
 
 // Submit Bug Endpoint -> Appends directly to BUGS.md
 app.post("/api/bugs/submit", (req, res) => {
+  // Writing to a repo file is global state: host or authenticated users only
+  // (prevents anonymous remote clients from growing BUGS.md without bound).
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const {
     title,
     priority,

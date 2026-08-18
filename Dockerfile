@@ -40,6 +40,13 @@ COPY --from=builder /app/package.json ./package.json
 
 RUN mkdir -p /app/data/storage
 
+# Run as the unprivileged node user (created by the official node images).
+# NOTE: with a bind-mounted ./data volume the host directory ownership wins —
+# ensure the host folder is writable by the container's uid (e.g. chown to
+# uid 1000) or the server will fail to persist.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
 VOLUME ["/app/data"]

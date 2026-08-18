@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { User, Lock, Mail, UserPlus, LogIn, X, Eye, EyeOff, UserCheck } from 'lucide-react';
-import { apiFetch, setAuthToken, clearAuthToken } from '../utils/api';
+import { apiFetch, setAuthToken, clearAuthToken, logout } from '../utils/api';
 
 interface AuthModalProps {
   onLogin: (user: UserProfile) => void;
@@ -58,6 +58,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleGuestQuickSignIn = () => {
+    // Revoke any previous session token server-side before dropping to guest.
+    void logout();
     clearAuthToken();
     const guest: UserProfile =
       guestProfile ||

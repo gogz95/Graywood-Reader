@@ -20,6 +20,17 @@ const LOGIN_FAILURE_WINDOW_MS = 15 * 60_000; // 15-minute sliding window
 const LOGIN_BLOCK_DURATION_MS = 30 * 60_000; // 30-minute block after breach
 const loginFailures = new Map<string, { count: number; firstFailure: number; blockedUntil: number | null }>();
 
+// =========================================═
+// PER-ACCOUNT LOCKOUT (distributed brute force defense)
+// =========================================═
+// IP-based blocking alone cannot stop attackers rotating source IPs. This
+// tracks failures per account identifier (username/email, lower-cased) and
+// locks the ACCOUNT itself for a shorter window, regardless of source IP.
+const MAX_ACCOUNT_FAILURES = 5;
+const ACCOUNT_FAILURE_WINDOW_MS = 15 * 60_000;
+const ACCOUNT_BLOCK_DURATION_MS = 15 * 60_000;
+const accountFailures = new Map<string, { count: number; firstFailure: number; blockedUntil: number | null }>();
+
 export function isImageProxyPath(p: string): boolean {
   return (
     p === '/api/reader/proxy-image' ||
@@ -45,6 +56,14 @@ setInterval(() => {
       loginFailures.delete(ip);
     } else if (!fail.blockedUntil && now - fail.firstFailure > LOGIN_FAILURE_WINDOW_MS) {
       loginFailures.delete(ip);
+    }
+  }
+  // Cleanup stale per-account failure records
+  for (const [id, fail] of accountFailures) {
+    if (fail.blockedUntil && now > fail.blockedUntil) {
+      accountFailures.delete(id);
+    } else if (!fail.blockedUntil && now - fail.firstFailure > ACCOUNT_FAILURE_WINDOW_MS) {
+      accountFailures.delete(id);
     }
   }
 }, 30_000);
@@ -114,6 +133,64 @@ export function recordLoginFailure(ip: string): void {
 /** Clear login failure records for the given IP (e.g. on successful login). */
 export function clearLoginFailures(ip: string): void {
   loginFailures.delete(ip);
+}
+
+/**
+ * Check whether a login attempt against the given account identifier
+ * (lower-cased username/email) should be blocked, regardless of source IP.
+ */
+export function checkAccountLockout(identifier: string): { blocked: true; message: string; retryAfterSeconds: number } | null {
+  if (!identifier) return null;
+  const now = Date.now();
+  const record = accountFailures.get(identifier);
+  if (!record) return null;
+
+  if (record.blockedUntil && now < record.blockedUntil) {
+    const retryAfter = Math.ceil((record.blockedUntil - now) / 1000);
+    return {
+      blocked: true,
+      message: `This account is temporarily locked after too many failed attempts. Try again in ${retryAfter} seconds.`,
+      retryAfterSeconds: retryAfter,
+    };
+  }
+  if (record.blockedUntil && now >= record.blockedUntil) {
+    accountFailures.delete(identifier);
+    return null;
+  }
+  if (now - record.firstFailure > ACCOUNT_FAILURE_WINDOW_MS) {
+    accountFailures.delete(identifier);
+    return null;
+  }
+  if (record.count >= MAX_ACCOUNT_FAILURES) {
+    record.blockedUntil = now + ACCOUNT_BLOCK_DURATION_MS;
+    return {
+      blocked: true,
+      message: `This account is temporarily locked after too many failed attempts. Try again in ${ACCOUNT_BLOCK_DURATION_MS / 60_000} minutes.`,
+      retryAfterSeconds: Math.ceil(ACCOUNT_BLOCK_DURATION_MS / 1000),
+    };
+  }
+  return null;
+}
+
+/** Record a failed login attempt against the given account identifier. */
+export function recordAccountFailure(identifier: string): void {
+  if (!identifier) return;
+  const now = Date.now();
+  const record = accountFailures.get(identifier);
+  if (!record || now - record.firstFailure > ACCOUNT_FAILURE_WINDOW_MS) {
+    accountFailures.set(identifier, { count: 1, firstFailure: now, blockedUntil: null });
+  } else {
+    record.count++;
+    if (record.count >= MAX_ACCOUNT_FAILURES) {
+      record.blockedUntil = now + ACCOUNT_BLOCK_DURATION_MS;
+      console.warn(`[Login Rate Limiter] Account "${identifier}" locked after ${record.count} failed attempts (${ACCOUNT_BLOCK_DURATION_MS / 60_000}m lock).`);
+    }
+  }
+}
+
+/** Clear per-account failure records (e.g. on successful login). */
+export function clearAccountFailures(identifier: string): void {
+  if (identifier) accountFailures.delete(identifier);
 }
 
 export function rateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {

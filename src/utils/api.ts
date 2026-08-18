@@ -25,6 +25,26 @@ export function clearAuthToken(): void {
 }
 
 /**
+ * Full logout: revoke the token server-side (its jti is blacklisted) and
+ * clear local storage. Best-effort — local clearing always happens even if
+ * the server call fails.
+ */
+export async function logout(): Promise<void> {
+  const token = getAuthToken();
+  if (token) {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      /* offline / server gone — still clear locally */
+    }
+  }
+  clearAuthToken();
+}
+
+/**
  * fetch() wrapper that injects Authorization when a token is present.
  * Clears the token on 401 so the UI can fall back to guest.
  */
