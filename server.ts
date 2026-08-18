@@ -3168,6 +3168,39 @@ export async function updateDatabaseWithAllAvailableSeries(): Promise<{
     console.warn('[Database Engine] Manhwa18 bulk update warning:', e.message);
   }
 
+  // 5. Ingest from ALL registered madara/mangathemesia sources (1 page each, polite pacing)
+  //    This fills the catalog with discoverable series from every enabled source.
+  const extraSources = ENGINE_SOURCE_REGISTRY.filter(
+    (s) => !['asura','flame','manhwa18','manhwa18cc','aquamanga','manhuaplus','manhuaplusorg',
+             'harimanga','anisascans','adultwebtoon','mangaread','manhwabuddy','manhuafast',
+             'kunmanga','topmanhua','manhwaclan','weebcentral','atsumoe','demonicscans','beehentai',
+             'manhuascan','ravenscans','luminous','night','hentai20','hotcomics','daycomics',
+             'batoto','comickfun','comick','mangatx'].includes(s.id) &&
+    s.engine === 'madara' && !disabledSourceIds.has(s.id)
+  ).slice(0, 60); // Cap at 60 additional sources per scan to stay within time limits
+
+  let extraPulled = 0;
+  for (const src of extraSources) {
+    try {
+      const srcDef = KOTATSU_SOURCES.find(s => s.id === src.id);
+      if (!srcDef) continue;
+      const result = await getSourcePopularSeries(srcDef, 1, 15);
+      const items = Array.isArray(result) ? result : (result?.items || []);
+      if (items.length > 0) {
+        const res = integrateKotatsuSourcesAndMerge(items);
+        totalNew += res.newCount;
+        totalMerged += res.mergedCount;
+        extraPulled += items.length;
+        sourceCounts[src.id] = items.length;
+      }
+      // Polite spacing between source requests
+      await new Promise(r => setTimeout(r, 800));
+    } catch { /* skip broken sources */ }
+  }
+  if (extraPulled > 0) {
+    console.log(`[Database Engine] Extra sources: +${extraPulled} series from ${extraSources.length} madara sources`);
+  }
+
   // 5. MangaDex is metadata-only — DO NOT ingest its series as standalone sources.
   //    Instead, backfill MangaDex metadata (apiId, cover, description, genres,
   //    alt-titles) onto existing live-source rows that are missing it.
@@ -3875,6 +3908,8 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
   const scrapedItems: any[] = [];
 
   // 3. Generic live catalog scraper (Kotatsu parser URL conventions by engine type)
+  //    Now uses fetchWithChallengeBypass for Cloudflare resilience + cheerio DOM parsing
+  //    instead of regex, with exponential backoff retry (max 3 attempts).
   try {
     let catalogUrl: string;
     if (sourceDef.engineType === 'madara') {
@@ -3887,53 +3922,82 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
       catalogUrl = page === 1 ? `${sourceDef.baseUrl}/series` : `${sourceDef.baseUrl}/series?page=${page}`;
     }
 
-    const liveRes = await fetch(catalogUrl, {
-      signal: AbortSignal.timeout(4000),
-      headers: {
-        'User-Agent': SCRAPER_UA,
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-
-    if (liveRes.ok) {
-      const html = await liveRes.text();
+    // Retry with exponential backoff (max 3 attempts: 4s, 8s, 16s timeout)
+    let html: string | null = null;
+    for (let attempt = 0; attempt < 3 && !html; attempt++) {
+      try {
+        const timeout = [4000, 8000, 16000][attempt] || 4000;
+        const liveRes = await fetchWithChallengeBypass(catalogUrl, {
+          headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+          enableCloudflareBypass: appSettings.enableCloudflareBypass,
+          flareSolverrUrl: appSettings.flareSolverrUrl,
+          captchaSolverEnabled: appSettings.captchaSolverEnabled,
+          captchaApiKey: appSettings.captchaApiKey,
+          timeoutMs: timeout,
+          sourceId: sourceDef.id,
+          onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
+        });
+        if (liveRes.ok && liveRes.html) {
+          html = liveRes.html;
+          if (liveRes.bypassed) console.log(`[Catalog Scraper] ${sourceDef.name}: bypassed via ${liveRes.methodUsed}`);
+          updateSourceHealth(sourceDef.id, liveRes.html, liveRes.status);
+        } else {
+          updateSourceHealth(sourceDef.id, null, liveRes.status || 500);
+          if (attempt < 2) { console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} failed. Retrying...`); await new Promise(r => setTimeout(r, timeout)); }
+        }
+      } catch (fetchErr: any) {
+        updateSourceHealth(sourceDef.id, null, 0, fetchErr?.message);
+        if (attempt < 2) { console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} errored. Retrying...`); await new Promise(r => setTimeout(r, [4000,8000,16000][attempt])); }
+      }
+    }
+    if (html) {
+      const $ = cheerio.load(html);
       const allImgs: string[] = [];
-      const imgRx = /<img[^>]+src=["']([^"']+)["'][^>]*/gi;
-      let imgM;
-      while ((imgM = imgRx.exec(html)) !== null) {
-        const src = imgM[1];
-        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|banner|icon/i.test(src)) {
+      $('img').each((_i, el) => {
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|banner|icon|placeholder/i.test(src)) {
           allImgs.push(src.startsWith('http') ? src : `${sourceDef.baseUrl.replace(/\/$/, '')}${src}`);
         }
-      }
+      });
 
-      const linkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]{3,120})<\/a>/gi;
-      let lm;
       const seenTitles = new Set<string>();
-      while ((lm = linkRx.exec(html)) !== null) {
-        const href = lm[1];
-        const title = lm[2].trim();
+      const pushItem = (href: string, title: string) => {
         const normTitle = title.toLowerCase();
+        if (!href || title.length < 2 || seenTitles.has(normTitle)) return;
+        if (/nav|menu|home|login|register|sign|account|cookie|privacy|about|dmca|contact/i.test(title)) return;
+        if (!/\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)) return;
+        seenTitles.add(normTitle);
+        scrapedItems.push({
+          id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
+          title,
+          sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl.replace(/\/$/, '')}${href}`,
+          coverImage: allImgs[scrapedItems.length] || '',
+          sourceName: sourceDef.name,
+          description: `Live directory entry from ${sourceDef.name}`,
+          genres: ['Action', 'Fantasy'],
+          latestChapter: 10,
+          type: sourceDef.id.includes('manhua') ? 'manhua' : sourceDef.id.includes('manhwa') ? 'manhwa' : 'manga',
+        });
+      };
 
-        if (
-          href && title && !seenTitles.has(normTitle) &&
-          !/nav|menu|home|login|register|sign|account|cookie|privacy|about|dmca|contact/i.test(title) &&
-          /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)
-        ) {
-          seenTitles.add(normTitle);
-          scrapedItems.push({
-            id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
-            title,
-            sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl.replace(/\/$/, '')}${href}`,
-            coverImage: allImgs[scrapedItems.length] ||
-              'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80',
-            sourceName: sourceDef.name,
-            description: `Live directory entry from ${sourceDef.name}`,
-            genres: ['Action', 'Fantasy'],
-            latestChapter: 10,
-            type: sourceDef.id.includes('manhua') ? 'manhua' : sourceDef.id.includes('manhwa') ? 'manhwa' : 'manga',
-          });
+      // ── Structured selectors for Madara & MangaThemesia themes ──
+      const madaraSels = ['.manga-title-badges', '.page-item-detail .h5 a', 'h3.h5 a', 'h3 a',
+        '.post-title a', '.entry-title a', '.listupd .bsx .tt a', '.utao .uta .luf a',
+        '.series-title a', '.manga-title a'];
+      let found = false;
+      for (const sel of madaraSels) {
+        const links = $(sel).toArray();
+        if (links.length > 0) {
+          found = true;
+          links.forEach(el => { const a = $(el); pushItem(a.attr('href') || '', a.text().trim()); });
+          break;
         }
+      }
+      // ── Fallback: generic <a> extraction ──
+      if (!found) {
+        $('a').each((_i, el) => {
+          const a = $(el); pushItem(a.attr('href') || '', a.text().trim());
+        });
       }
     }
   } catch (e) {
@@ -4327,47 +4391,14 @@ app.get("/api/kotatsu/search-all", async (req, res) => {
   res.json(enriched);
 });
 
-// Live Domain Sources Registry — auto-derived from ENGINE_SOURCE_REGISTRY
+// Live Domain Sources Registry — dynamically derived from ENGINE_SOURCE_REGISTRY.
 // Each entry maps a domainId to a URL-matching domain substring.
+// Rebuilt via buildLiveDomainsFromRegistry() at startup and whenever the registry changes.
 
-const REGISTERED_LIVE_DOMAINS: { id: string; domain: string; name: string }[] = [
-  // MangaDex is NOT a reading source (metadata-only) — removed.
-  { id: 'asura',     domain: 'asura',         name: 'Asura Scans' },
-  { id: 'flame',     domain: 'flame',         name: 'Flame Comics' },
-  // ── Madara Engine sources ──────────────────────────────────────────────────
-  { id: 'manhwa18',   domain: 'manhwa18',      name: 'Manhwa18' },
-  { id: 'manhwa18cc', domain: 'manhwa18.cc',   name: 'Manhwa18.cc' },
-  { id: 'aquamanga',  domain: 'aqua',          name: 'Aqua Manga' },
-  { id: 'manhuaplus', domain: 'manhuaplus',    name: 'Manhua Plus' },
-  { id: 'manhuaplusorg', domain: 'manhuaplus.org', name: 'ManhuaPlus.org' },
-  { id: 'harimanga',  domain: 'harimanga',     name: 'Hari Manga' },
-  { id: 'anisascans', domain: 'anisascans',    name: 'Anisa Scans' },
-  { id: 'adultwebtoon', domain: 'adultwebtoon', name: 'Adult Webtoon' },
-  { id: 'mangaread',  domain: 'mangaread',     name: 'MangaRead' },
-  { id: 'manhwabuddy', domain: 'manhwabuddy',  name: 'Manhwa Buddy' },
-  { id: 'manhuafast', domain: 'manhuafast',    name: 'Manhua Fast' },
-  { id: 'kunmanga',   domain: 'kunmanga',      name: 'Kun Manga' },
-  { id: 'topmanhua',  domain: 'topmanhua',     name: 'Top Manhua' },
-  { id: 'manhwaclan', domain: 'manhwaclan',    name: 'Manhwa Clan' },
-  { id: 'weebcentral', domain: 'weebcentral',  name: 'Weeb Central' },
-  { id: 'atsumoe',    domain: 'atsu',          name: 'Atsu Moe' },
-  { id: 'demonicscans', domain: 'demonicscans', name: 'Demonic Scans' },
-  { id: 'beehentai',  domain: 'beehentai',     name: 'BeeHentai' },
-  // ── MangaReader Engine sources ─────────────────────────────────────────────
-  { id: 'manhuascan', domain: 'manhuascan',    name: 'ManhuaScan' },
-  { id: 'ravenscans', domain: 'ravenscans',    name: 'Raven Scans' },
-  { id: 'luminous',   domain: 'luminous',      name: 'Luminous Scans' },
-  { id: 'night',      domain: 'nightscans',    name: 'Night Scans' },
-  { id: 'hentai20',   domain: 'hentai20',      name: 'Hentai20' },
-  // ── HotComics Engine sources ───────────────────────────────────────────────
-  { id: 'hotcomics',  domain: 'hotcomics',     name: 'HotComics' },
-  { id: 'daycomics',  domain: 'daycomics',     name: 'DayComics' },
-  // ── Custom API sources ────────────────────────────────────────────────────
-  { id: 'batoto',     domain: 'bato.to',       name: 'Bato.to' },
-  { id: 'comickfun',  domain: 'comick.fun',    name: 'ComickFun' },
-  { id: 'comick',     domain: 'comick.io',     name: 'ComicK' },
-  { id: 'mangatx',    domain: 'mangatx',       name: 'Manga TX' },
-];
+/** Get the current live domain list. Always reflects the latest engine registry state. */
+function getLiveDomains(): { id: string; domain: string; name: string }[] {
+  return buildLiveDomainsFromRegistry();
+}
 
 // Match the live-domain registry against a URL, preferring the LONGEST matching
 // domain so that overlapping substrings resolve correctly (e.g. "manhwa18.cc"
@@ -4375,7 +4406,7 @@ const REGISTERED_LIVE_DOMAINS: { id: string; domain: string; name: string }[] = 
 function matchLiveDomain(url: string): { id: string; domain: string; name: string } | undefined {
   const lower = (url || '').toLowerCase();
   let best: { id: string; domain: string; name: string } | undefined;
-  for (const d of REGISTERED_LIVE_DOMAINS) {
+  for (const d of getLiveDomains()) {
     if (lower.includes(d.domain.toLowerCase())) {
       if (!best || d.domain.length > best.domain.length) best = d;
     }
@@ -4774,7 +4805,9 @@ interface EngineSourceConfig {
   madaraPostReq?: boolean;          // use admin-ajax manga_get_chapters (default true)
 }
 
-const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [
+/** Statically curated sources with hand-tuned per-site overrides.
+ *  These take priority over auto-generated entries from catalog.json. */
+const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   // ── Madara Engine (WP-Manga theme) — covers 50+ sources ──────────────────
   { id: 'manhwa18',    name: 'Manhwa18',          domain: 'manhwa18.com',    engine: 'manhwa18', lang: 'en', isNsfw: true },
   { id: 'manhwa18cc',  name: 'Manhwa18.cc',        domain: 'manhwa18.cc',     engine: 'madara', lang: 'en', isNsfw: true,
@@ -4810,21 +4843,138 @@ const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [
   { id: 'comick',      name: 'ComicK',             domain: 'comick.io',       engine: 'comickfun', lang: 'en', isNsfw: false },
 ];
 
+// ============================================================================
+// DYNAMIC ENGINE REGISTRY — auto-populated from catalog.json at startup
+// Merges hand-tuned CURATED_ENGINE_SOURCES with auto-generated entries for
+// every madara/mangathemesia source in the catalog, closing the 97% coverage gap.
+// ============================================================================
+const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [...CURATED_ENGINE_SOURCES];
+const curatedEngineIds = new Set(CURATED_ENGINE_SOURCES.map(s => s.id));
+
+/** Derive a clean domain substring from a baseUrl for URL matching. */
+function domainFromBaseUrl(baseUrl: string): string {
+  try { return new URL(baseUrl).hostname.replace(/^www\./, ''); }
+  catch { return baseUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, ''); }
+}
+
+/** One-time sync: append auto-generated engine configs for every catalog source
+ *  whose engineType is madara or mangathemesia and that isn't already curated. */
+function syncEngineRegistryFromCatalog(): void {
+  const catalog = ALL_SOURCES_CATALOG;
+  let added = 0;
+  for (const src of catalog) {
+    if (curatedEngineIds.has(src.id)) continue;
+    const domain = domainFromBaseUrl(src.baseUrl);
+    if (!domain) continue;
+    if (src.engineType === 'madara') {
+      ENGINE_SOURCE_REGISTRY.push({
+        id: src.id, name: src.name, domain, engine: 'madara',
+        lang: src.lang, isNsfw: src.isNsfw,
+      });
+      added++;
+    } else if (src.engineType === 'mangathemesia') {
+      ENGINE_SOURCE_REGISTRY.push({
+        id: src.id, name: src.name, domain, engine: 'madara',
+        lang: src.lang, isNsfw: src.isNsfw,
+        madaraSelectTestAsync: 'ul.row-content-chapter',
+        madaraSelectChapter: 'li',
+      });
+      added++;
+    }
+  }
+  if (added > 0) console.log(`[Engine Registry] Auto-registered ${added} sources from catalog (madara + mangathemesia). Total: ${ENGINE_SOURCE_REGISTRY.length}`);
+}
+
+/** Rebuild the LIVE_DOMAINS array from the current ENGINE_SOURCE_REGISTRY. */
+function buildLiveDomainsFromRegistry(): { id: string; domain: string; name: string }[] {
+  return ENGINE_SOURCE_REGISTRY.map(e => ({ id: e.id, domain: e.domain, name: e.name }));
+}
+
+// ── Run sync at module init (catalog.json is already loaded by now) ──
+syncEngineRegistryFromCatalog();
+
 function getEngineConfig(domainId: string): EngineSourceConfig | undefined {
   return ENGINE_SOURCE_REGISTRY.find((s) => s.id === domainId);
 }
 // ============================================================================
 // MADARA ENGINE EXTRACTOR (WP-Manga / Madara Theme)
-// Based on Kotatsu's MadaraParser.kt — covers 50+ sources
+// Based on Kotatsu's MadaraParser.kt — covers 500+ auto-registered sources
+// Now with Cloudflare bypass and exponential-backoff retry (max 3 attempts).
 // ============================================================================
 
 async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceConfig): Promise<ResolvedChapter[]> {
   const origin = new URL(targetUrl).origin;
   const headers = { ...UA_HEADERS, 'Referer': origin + '/' };
+
+  // ── Retry helper: fetch HTML with Cloudflare bypass + exponential backoff ──
+  const fetchHtml = async (url: string, postBody?: string): Promise<string | null> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const timeout = [8000, 16000, 30000][attempt] || 8000;
+        const opts: any = {
+          headers: postBody
+            ? { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
+            : headers,
+          enableCloudflareBypass: appSettings.enableCloudflareBypass,
+          flareSolverrUrl: appSettings.flareSolverrUrl,
+          captchaSolverEnabled: appSettings.captchaSolverEnabled,
+          captchaApiKey: appSettings.captchaApiKey,
+          timeoutMs: timeout,
+          sourceId: config.id,
+          onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+        };
+        if (postBody) opts.method = 'POST'; else { opts.method = 'GET'; }
+        const res = postBody
+          ? await fetchWithPostBypass(url, postBody, opts)
+          : await fetchWithChallengeBypass(url, opts);
+
+        if (res.ok && res.html) {
+          updateSourceHealth(config.id, res.html, res.status);
+          if (res.bypassed) console.log(`[Madara Engine] ${config.name}: bypassed via ${res.methodUsed}`);
+          return res.html;
+        }
+        updateSourceHealth(config.id, null, res.status || 500);
+        if (attempt < 2) {
+          console.warn(`[Madara Engine] ${config.name} attempt ${attempt+1} failed (HTTP ${res.status}). Retrying...`);
+          await new Promise(r => setTimeout(r, timeout));
+        }
+      } catch (err: any) {
+        updateSourceHealth(config.id, null, 0, err?.message);
+        if (attempt < 2) {
+          console.warn(`[Madara Engine] ${config.name} attempt ${attempt+1} errored. Retrying...`);
+          await new Promise(r => setTimeout(r, [8000,16000,30000][attempt]));
+        }
+      }
+    }
+    return null;
+  };
+
+  // ── POST variant: fetchWithChallengeBypass doesn't support POST, so we POST via direct fetch with bypass headers ──
+  async function fetchWithPostBypass(url: string, body: string, opts: any): Promise<{ ok: boolean; html: string | null; status: number; bypassed: boolean; methodUsed?: string }> {
+    try {
+      const res = await fetch(url, { method: 'POST', headers: opts.headers, body, signal: AbortSignal.timeout(opts.timeoutMs) });
+      const text = await res.text();
+      if (res.ok) return { ok: true, html: text, status: res.status, bypassed: false, methodUsed: 'Direct POST' };
+      // Try FlareSolverr as fallback
+      if (opts.enableCloudflareBypass && opts.flareSolverrUrl) {
+        const { solveWithFlareSolverr } = await import('./server/captchaSolver');
+        const sr = await solveWithFlareSolverr(url, opts.flareSolverrUrl, Math.round(opts.timeoutMs / 1000));
+        if (sr.ok && sr.html) return { ok: true, html: sr.html, status: 200, bypassed: true, methodUsed: 'FlareSolverr Fallback (POST)' };
+      }
+      return { ok: false, html: null, status: res.status, bypassed: false };
+    } catch (e: any) {
+      if (opts.enableCloudflareBypass && opts.flareSolverrUrl) {
+        const { solveWithFlareSolverr } = await import('./server/captchaSolver');
+        const sr = await solveWithFlareSolverr(url, opts.flareSolverrUrl, Math.round(opts.timeoutMs / 1000));
+        if (sr.ok && sr.html) return { ok: true, html: sr.html, status: 200, bypassed: true, methodUsed: 'FlareSolverr Fallback (POST)' };
+      }
+      return { ok: false, html: null, status: 0, bypassed: false };
+    }
+  }
+
   try {
-    const pageRes = await fetch(targetUrl, { headers });
-    if (!pageRes.ok) return [];
-    const html = await pageRes.text();
+    const html = await fetchHtml(targetUrl);
+    if (!html) return [];
     const $ = cheerio.load(html);
 
     // Path 1 (Kotatsu): if the chapter list is already inline on the series page
@@ -4846,26 +4996,13 @@ async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceCon
         // Path 2 (Kotatsu): admin-ajax manga_get_chapters (config.madaraPostReq, default true)
         if (config.madaraPostReq !== false) {
           const formBody = `action=manga_get_chapters&manga=${mangaId}`;
-          const ajaxRes = await fetch(`${origin}/wp-admin/admin-ajax.php`, {
-            method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: formBody,
-          });
-          if (ajaxRes.ok) {
-            const ajaxHtml = await ajaxRes.text();
-            if (ajaxHtml.trim().length > 0) chaptersHtml = ajaxHtml;
-          }
+          const ajaxHtml = await fetchHtml(`${origin}/wp-admin/admin-ajax.php`, formBody);
+          if (ajaxHtml && ajaxHtml.trim().length > 0) chaptersHtml = ajaxHtml;
         }
         // Path 3 (Kotatsu default): POST {mangaUrl}/ajax/chapters/ with empty body.
-        // Many current Madara sites use this relative route instead of admin-ajax.
         if (!chaptersHtml) {
-          try {
-            const relRes = await fetch(`${targetUrl.replace(/\/$/, '')}/ajax/chapters/`, {
-              method: 'POST', headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-            });
-            if (relRes.ok) {
-              const relHtml = await relRes.text();
-              if (relHtml.trim().length > 0) chaptersHtml = relHtml;
-            }
-          } catch (_) { /* fall to generic parse of the page */ }
+          const relHtml = await fetchHtml(`${targetUrl.replace(/\/$/, '')}/ajax/chapters/`, '');
+          if (relHtml && relHtml.trim().length > 0) chaptersHtml = relHtml;
         }
       } else {
         // No holder/id found — the chapters may still be present inline with a
