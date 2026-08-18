@@ -40,6 +40,8 @@ import {
   getClientSessionHistory,
 } from './hooks/useReaderSession';
 import { getAniListMediaId, syncAniListProgress } from './utils/aniListScrobbler';
+import { getMALMediaId, syncMALProgress } from './utils/malScrobbler';
+import { getKitsuMediaId, syncKitsuProgress } from './utils/kitsuScrobbler';
 
 // Lightweight skeleton shown while lazy chunk loads
 const ViewFallback = () => (
@@ -211,6 +213,11 @@ export default function App() {
     enableDownloadOffline: true,
     sourceTimeoutSeconds: 15,
     anilistConnected: true,
+    malConnected: false,
+    malAutoSync: false,
+    kitsuConnected: false,
+    kitsuAutoSync: false,
+    privateModeEnabled: false,
     mangadexConnected: true,
     customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
     enableCloudflareBypass: true,
@@ -664,17 +671,23 @@ export default function App() {
       return;
     }
 
+    const isPrivate = appSettings.privateModeEnabled;
+
     setMangaList((prev) =>
       prev.map((m) => {
         if (m.id === mangaId) {
           const nextCh = Math.max(m.currentChapter, chapterNumber);
-          return {
+          const updates: any = {
             ...m,
             currentChapter: nextCh,
             latestChapter: Math.max(m.latestChapter, nextCh),
-            lastReadAt: new Date().toISOString(),
             status: m.status === 'plan_to_read' ? 'reading' : m.status,
           };
+          // In private mode don't update last-read timestamp used by analytics/history.
+          if (!isPrivate) {
+            updates.lastReadAt = new Date().toISOString();
+          }
+          return updates;
         }
         return m;
       })
@@ -685,6 +698,11 @@ export default function App() {
       return;
     }
 
+    // Private mode: do not persist server history or scrobble to trackers.
+    if (isPrivate) {
+      return;
+    }
+
     try {
       await apiFetch('/api/reader/mark-read', {
         method: 'POST',
@@ -692,18 +710,40 @@ export default function App() {
         body: JSON.stringify({ mangaId, chapterNumber }),
       });
 
-      // AniList Live Scrobbler (Sync progress to AniList if token is configured)
+      const mangaItem = mangaList.find((m) => m.id === mangaId);
+      if (!mangaItem) return;
+
+      // AniList Live Scrobbler
       if (appSettings.anilistConnected && appSettings.anilistToken && appSettings.anilistAutoSync) {
-        const mangaItem = mangaList.find((m) => m.id === mangaId);
-        if (mangaItem) {
-          getAniListMediaId(mangaItem.title)
-            .then((mediaId) => {
-              if (mediaId && appSettings.anilistToken) {
-                syncAniListProgress(appSettings.anilistToken, mediaId, chapterNumber, mangaItem.status === 'completed');
-              }
-            })
-            .catch(() => {});
-        }
+        getAniListMediaId(mangaItem.title)
+          .then((mediaId) => {
+            if (mediaId && appSettings.anilistToken) {
+              syncAniListProgress(appSettings.anilistToken!, mediaId, chapterNumber, mangaItem.status === 'completed');
+            }
+          })
+          .catch(() => {});
+      }
+
+      // MyAnimeList Live Scrobbler
+      if (appSettings.malConnected && appSettings.malToken && appSettings.malAutoSync) {
+        getMALMediaId(mangaItem.title)
+          .then((mediaId) => {
+            if (mediaId && appSettings.malToken) {
+              syncMALProgress(appSettings.malToken, mediaId, chapterNumber, mangaItem.status);
+            }
+          })
+          .catch(() => {});
+      }
+
+      // Kitsu Live Scrobbler
+      if (appSettings.kitsuConnected && appSettings.kitsuToken && appSettings.kitsuAutoSync) {
+        getKitsuMediaId(mangaItem.title)
+          .then((mediaId) => {
+            if (mediaId && appSettings.kitsuToken) {
+              syncKitsuProgress(appSettings.kitsuToken, mediaId, chapterNumber, mangaItem.status);
+            }
+          })
+          .catch(() => {});
       }
     } catch (err) {
       console.error('Mark read error:', err);
@@ -892,6 +932,7 @@ export default function App() {
             initialChapterNumber={readerTarget.chapterNumber}
             initialChapterId={readerTarget.chapterId}
             defaultSettings={appSettings.readerDefaults}
+            privateModeEnabled={appSettings.privateModeEnabled}
             onClose={handleCloseReader}
             onMarkChapterRead={(chNum) => handleMarkChapterRead(readerTarget.manga.id, chNum)}
             onReport={handleReportMangaIssue}

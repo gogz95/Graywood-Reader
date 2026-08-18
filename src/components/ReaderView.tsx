@@ -68,6 +68,7 @@ interface ReaderViewProps {
   initialChapterNumber: number;
   initialChapterId?: string;
   defaultSettings?: ReaderSettings;
+  privateModeEnabled?: boolean;
   onClose: () => void;
   onMarkChapterRead: (chapterNum: number) => void;
   /** Opens the bug-reporting tool pre-filled for the flagged series. */
@@ -80,6 +81,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   initialChapterNumber,
   initialChapterId,
   defaultSettings,
+  privateModeEnabled,
   onClose,
   onMarkChapterRead,
   onReport,
@@ -648,6 +650,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           isOfflineAvailable={isOfflineAvailable}
           isDownloadingOffline={isDownloadingOffline}
           downloadProgress={downloadProgress}
+          privateModeEnabled={privateModeEnabled}
           onClose={onClose}
           onPrevChapter={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
           onNextChapter={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}

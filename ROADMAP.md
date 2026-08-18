@@ -8,14 +8,8 @@ This document outlines the planned future features, community requests, and arch
 
 > Based on competitive analysis vs. Mihon, Kotatsu-Redo, Suwayomi, Komga, and Paperback (Aug 2026). #1–5 are the blockers preventing feature-completeness.
 
-### 🔄 1. MyAnimeList (MAL) & Kitsu Live Scrobblers
-- Provide OAuth2 sync for **MyAnimeList** (18M+ users, #1 platform) and **Kitsu**, in addition to existing AniList. Auto-update chapter numbers and status across all connected platforms.
-
-### 🔔 2. New Chapter Push Notifications (Discord & Telegram Webhooks)
+### 🔄 1. New Chapter Push Notifications (Discord & Telegram Webhooks)
 - Dispatch rich webhooks when scanner detects new chapters for "Reading" list series. Discord: embedded message with cover art, chapter number, release group, 1-click read link. Telegram: instant push notification to private chat/channel.
-
-### 🕶️ 3. Incognito / Private Reading Mode
-- Per-session reading that doesn't record history, scrobble to trackers, or update `lastReadAt`/analytics. "👁️ Private" badge in reader header. Mirrors Kotatsu-Redo.
 
 ### 🗂️ 4. User-Defined Categories / Custom Shelves
 - Visual shelf organization beyond flat tags (e.g. "Currently Reading", "Weekend Binge", "Dropped but Maybe"). Drag-and-drop, shelf-specific unread counters. Mirrors Kotatsu-Redo / Mihon.
@@ -97,3 +91,5 @@ This document outlines the planned future features, community requests, and arch
 - ✅ **OPDS 1.2 Upgrade** — catalog search, pagination, cover proxying (Aug 2026)
 - ✅ **Offline Storage Rework** — Blob-based, per-series storage, LRU eviction, Download All (Aug 2026)
 - ✅ **Local CBZ / ZIP Library Ingestion** — STORAGE_PATH folder scanner, cover streaming (Aug 2026)
+- ✅ **MyAnimeList (MAL) & Kitsu Live Scrobblers** — chapter progress sync alongside AniList (Aug 2026)
+- ✅ **Incognito / Private Reading Mode** — no history, no scrobbling, no analytics, 👁️ Private badge (Aug 2026)

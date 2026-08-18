@@ -6,32 +6,6 @@ import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
 import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
-
-// Ad protection: known ad network domains are excluded from chapter page images
-const KNOWN_AD_DOMAINS = [
-  'googleadservices', 'pagead2', 'googlesyndication', 'doubleclick',
-  'ads', 'adn', 'adtech', 'mediavine', 'raptive', 'springboard',
-  'content.ad', 'outbrain', 'taboola', 'revcontent', 'nativo',
-  'push', 'popunder', 'click-under', 'interstitial'
-];
-
-// Check if an image src belongs to a known ad network
-function isAdImageSrc(src: string, origin: string): boolean {
-  try {
-    const url = new URL(src, origin);
-    const hostname = url.hostname.toLowerCase();
-    for (const adDomain of KNOWN_AD_DOMAINS) {
-      if (hostname.includes(adDomain)) return true;
-    }
-    const lowerSrc = src.toLowerCase();
-    if (/.*[/_](ad|banner|popunder|interstitial|media)(\?|$)/i.test(src)) return true;
-    // Google AdSense domain check (simplified)
-    // Google AdSense domain check (simplified)
-    return false;
-  } catch {
-    return false;
-  }
-}
 import {
   resolveEncryptionSecret,
   ENCRYPTION_SECRET,
@@ -96,6 +70,30 @@ import {
   ensureSourceInRegistry,
   getSourceById,
 } from "./server/sources/sourcesCatalog";
+
+// === AD PROTECTION ===
+const KNOWN_AD_DOMAINS = [
+  'googleadservices', 'pagead2', 'googlesyndication', 'doubleclick',
+  'ads', 'adn', 'adtech', 'mediavine', 'raptive', 'springboard',
+  'content.ad', 'outbrowse', 'taboola', 'revcontent', 'nativo',
+  'push', 'popunder', 'click-under', 'interstitial'
+];
+
+function isAdImageSrc(src: string, origin: string): boolean {
+  try {
+    const url = new URL(src, origin);
+    const hostname = url.hostname.toLowerCase();
+    for (const d of KNOWN_AD_DOMAINS) { if (hostname.includes(d)) return true; }
+    if (/.*[/_](ad|banner|popunder|interstitial|media)(\?|$)/i.test(src)) return true;
+    if (hostname.includes('google')) return true;
+    return false;
+  } catch { return false; }
+}
+
+function stripAdElements($root: any): void {
+  const selectors = ['.ad-', '.banner-', '.popunder-', '.overlay-', '[class*=adsbygoogle]', '[id*=ad-]'];
+  for (const sel of selectors) { try { $root.find(sel).remove(); } catch {} }
+}
 
 export {
   encryptPII,
@@ -3710,7 +3708,8 @@ app.get('/api/scrape/browse', async (req, res) => {
 // local SQLite library. This endpoint aggregates popular/live series across a
 // curated set of enabled, alive sources, dedupes them by normalized title, and
 // paginates. A short-TTL cache keeps repeat calls from hammering the sources.
-const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonic', 'manhwa18'];
+// Curated sources that should always appear first in the default explore feed.
+const DEFAULT_EXPLORE_SOURCE_IDS = ['asurascans', 'flamecomics', 'weebcentral', 'demonicscans', 'manhwa18'];
 // ── Explore Catalog Buffer ──────────────────────────────────────────────────
 // Instead of scraping sources live on every request, we buffer the consolidated
 // explore catalog in memory and refresh it automatically (once on startup + a
@@ -3721,6 +3720,10 @@ const EXPLORE_CACHE_TTL_MS = Number(process.env.EXPLORE_CACHE_TTL_MS) || 60 * 60
 const EXPLORE_WARM_PAGES = Math.max(1, Math.min(6, Number(process.env.EXPLORE_WARM_PAGES) || 3)); // pages warmed per source
 const EXPLORE_WARM_LIMIT = 40; // items requested per source page during warm-up (can be increased for better coverage)
 const EXPLORE_DOMAIN_SPACING_MS = 1200; // min gap between requests to the same domain (politeness)
+// Cap how many sources are warmed per refresh cycle so the background buffer
+// stays bounded even when the catalog contains hundreds of entries.
+const EXPLORE_MAX_WARM_SOURCES = Math.max(4, Math.min(60, Number(process.env.EXPLORE_MAX_WARM_SOURCES) || 30));
+let exploreSourceRotationIndex = 0;
 
 interface ExploreBufferEntry {
   items: any[];                 // consolidated (cross-source, deduped, ordered) list w/ __sourceId
@@ -3747,19 +3750,38 @@ function dedupeExploreItems(aggregated: any[]): any[] {
   }
   return deduped;
 }
+function getEligibleExploreSources(): SourceDefinition[] {
+  return KOTATSU_SOURCES.filter(
+    (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+  );
+}
+
 function defaultExploreSources(): SourceDefinition[] {
+  const eligible = getEligibleExploreSources();
   const picks: SourceDefinition[] = [];
+  const seen = new Set<string>();
+
+  // 1. Curated priority sources always appear first when they are alive/enabled.
   for (const id of DEFAULT_EXPLORE_SOURCE_IDS) {
-    const s = KOTATSU_SOURCES.find(
-      (src) => src.id === id && src.id !== 'mangadex' && !disabledSourceIds.has(src.id) && isSourceAlive(src.id)
-    );
-    if (s) picks.push(s);
+    const s = eligible.find((src) => src.id === id);
+    if (s) {
+      picks.push(s);
+      seen.add(id);
+    }
   }
-  if (picks.length === 0) {
-    picks.push(...KOTATSU_SOURCES.filter(
-      (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
-    ).slice(0, 4));
+
+  // 2. Fill remaining slots with the rest of the live sources. Rotate the start
+  //    index each refresh so, over time, every enabled live source is included
+  //    in the aggregated catalog.
+  const others = eligible.filter((s) => !seen.has(s.id));
+  const totalOthers = others.length;
+  if (totalOthers > 0) {
+    const start = exploreSourceRotationIndex % totalOthers;
+    const rotated = [...others.slice(start), ...others.slice(0, start)];
+    const remainingSlots = Math.max(0, EXPLORE_MAX_WARM_SOURCES - picks.length);
+    picks.push(...rotated.slice(0, remainingSlots));
   }
+
   return picks;
 }
 function throttleExploreDomain(host: string): Promise<void> {
@@ -4097,6 +4119,16 @@ async function buildExploreBuffer(): Promise<ExploreBufferEntry | null> {
     }
   }
   const deduped = dedupeExploreItems(aggregated);
+
+  // Advance the rotation window so the next refresh surfaces a different slice
+  // of the remaining live sources.
+  const eligible = getEligibleExploreSources();
+  const othersTotal = Math.max(0, eligible.length - DEFAULT_EXPLORE_SOURCE_IDS.length);
+  if (othersTotal > 0) {
+    const step = Math.max(1, EXPLORE_MAX_WARM_SOURCES - DEFAULT_EXPLORE_SOURCE_IDS.length);
+    exploreSourceRotationIndex = (exploreSourceRotationIndex + step) % othersTotal;
+  }
+
   return {
     items: deduped,
     sourceIds: sources.map((s) => s.id),
@@ -6243,6 +6275,11 @@ let appSettings = {
   sourceTimeoutSeconds: 15,
   anilistConnected: true,
   mangadexConnected: true,
+  malConnected: false,
+  malAutoSync: false,
+  kitsuConnected: false,
+  kitsuAutoSync: false,
+  privateModeEnabled: false,
   customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
   // Automated Cloudflare & Captcha Solver Config
   enableCloudflareBypass: true,

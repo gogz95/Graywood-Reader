@@ -125,7 +125,14 @@ export interface AppSettings {
   anilistConnected: boolean;
   anilistToken?: string;
   anilistAutoSync?: boolean;
+  malConnected?: boolean;
+  malToken?: string;
+  malAutoSync?: boolean;
+  kitsuConnected?: boolean;
+  kitsuToken?: string;
+  kitsuAutoSync?: boolean;
   mangadexConnected: boolean;
+  privateModeEnabled?: boolean;
   customUserAgent: string;
   // Automated Cloudflare & Captcha Solver Properties
   enableCloudflareBypass: boolean;

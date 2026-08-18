@@ -83,7 +83,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         const res = await apiFetch('/api/kotatsu/sources');
         if (res.ok) {
           const list: SourceDefinition[] = await res.json();
-          const defaults = ['asurascans', 'flamecomics', 'weebcentral', 'demonic'];
+          const defaults = ['asurascans', 'flamecomics', 'weebcentral', 'demonicscans', 'manhwa18'];
           const ordered = [...defaults];
           for (const s of list) {
             if (!ordered.includes(s.id)) ordered.push(s.id);

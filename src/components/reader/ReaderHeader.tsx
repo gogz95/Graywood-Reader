@@ -30,6 +30,7 @@ export interface ReaderHeaderProps {
   isOfflineAvailable: boolean;
   isDownloadingOffline: boolean;
   downloadProgress: { loaded: number; total: number } | null;
+  privateModeEnabled?: boolean;
   onClose: () => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
@@ -59,6 +60,7 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
   isOfflineAvailable,
   isDownloadingOffline,
   downloadProgress,
+  privateModeEnabled,
   onClose,
   onPrevChapter,
   onNextChapter,
@@ -84,8 +86,13 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
         </button>
 
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-primary truncate hover:text-accent transition-colors">
+          <h2 className="text-sm font-bold text-primary truncate hover:text-accent transition-colors flex items-center gap-2">
             {manga.title}
+            {privateModeEnabled && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-danger/10 text-danger border border-danger/30 text-[10px] font-bold">
+                👁️ Private
+              </span>
+            )}
           </h2>
           <div className="flex items-center gap-2 text-xs text-secondary font-medium">
             <span className="text-accent font-bold">Ch. {currentChapterNum}</span>
