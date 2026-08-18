@@ -87,6 +87,9 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
         if (Array.isArray(data.genres)) setGenresStr(data.genres.join(', '));
         if (data.latestChapter) setLatestChapter(data.latestChapter);
         if (data.rating) setRating(data.rating);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || `AI enrichment failed (HTTP ${res.status}).`);
       }
     } catch (err) {
       console.error(err);

@@ -52,11 +52,3 @@ export async function migrateClientSessionHistoryToUser(targetUserId: string): P
     localStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
   } catch (_) {}
 }
-
-export function useReaderSession() {
-  return {
-    getClientSessionHistory,
-    saveClientSessionProgress,
-    migrateClientSessionHistoryToUser,
-  };
-}

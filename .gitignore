@@ -20,6 +20,9 @@ dist-server/
 
 data/.admin-bootstrap-password
 
+# Runtime artifacts
+*.pid
+
 # Detached external repositories
 kotatsu-app/
 kotatsu-parsers/

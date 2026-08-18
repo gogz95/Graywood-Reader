@@ -35,6 +35,44 @@ _No active bugs._
 
 > Bugs that have been resolved are moved here for historical reference.
 
+### [BUG-034] Server crashed at boot in production mode (httpServer TDZ ReferenceError)
+- **Status**: `fixed`
+- **Priority**: `critical`
+- **Auto-fix**: `yes`
+- **File(s)**: `server.ts`
+- **Description**: `httpServer = app.listen(...)` was assigned inside `startServer()` (called at module load) while `let httpServer` was declared ~50 lines LATER in the file. In production mode (when `dist/` exists) the async function body runs synchronously up to `app.listen`, so the assignment hit the temporal dead zone and threw `ReferenceError: Cannot access 'httpServer' before initialization`, killing the process via an unhandled rejection. Dev mode (no `dist/`) survived only because `await import('vite')` deferred the assignment until after module init.
+- **Steps to Reproduce**:
+  1. `npm run build`
+  2. `npm run dev` (or run the bundled server) with `dist/` present
+  3. Process exits with the TDZ ReferenceError
+- **Expected**: Server boots in both dev and production modes.
+- **Actual**: Production boot crashed before serving any request.
+- **Fixed in**: 2026-08-18 — Moved the `httpServer` / `isShuttingDown` declarations above `startServer()` with an explanatory comment. Verified boot + `/api/health` with `dist/` present.
+
+### [BUG-035] OPDS `/api/opds/local/:id` route nested inside the series handler (route leak)
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/routes/opds.ts`, `server.ts`
+- **Description**: `opdsRouter.get('/api/opds/local/:id', ...)` was defined inside the chapter `for` loop of the `/api/opds/series/:id` handler. The route therefore (a) did not exist until the first series feed request and (b) was RE-REGISTERED once per chapter on every series request, leaking handler copies on the router indefinitely (memory growth + route bloat). Additionally, `server.ts` contained duplicate `/api/opds/catalog.xml` and `/api/opds/series/:id` handlers that were fully shadowed by `opdsRouter` (mounted first) — dead code.
+- **Fixed in**: 2026-08-18 — Moved `/api/opds/local/:id` to module scope in `opds.ts` and removed the unreachable duplicate OPDS handlers from `server.ts`.
+
+### [BUG-036] AI endpoints fabricated data when Gemini was unavailable
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `yes`
+- **File(s)**: `server.ts`, `src/components/AddEditModal.tsx`
+- **Description**: `/api/ai/enrich-metadata` returned invented metadata (`latestChapter: 100/120`, `rating: 8.5/9.0`, generic genres/description) both when no `GEMINI_API_KEY` was configured and when the AI call failed — silently polluting the Add/Edit form. `/api/ai/find-similar` returned fake "recommendations". This contradicted the project's explicit "no fabricated fallbacks" policy (see BUG-007).
+- **Fixed in**: 2026-08-18 — Both endpoints now return honest errors/empty results (503 without key, 502 on failure, `[]` for similar); `AddEditModal` surfaces the server error message instead of applying fake data. Also centralized the Gemini model name into a single `GEMINI_MODEL` constant.
+
+### [BUG-037] Reading analytics never reported `favoriteGenre`; duplicate dismissal never wired
+- **Status**: `fixed`
+- **Priority**: `low`
+- **Auto-fix**: `yes`
+- **File(s)**: `server.ts`, `src/App.tsx`
+- **Description**: `/api/reader/analytics` omitted `favoriteGenre` (required by the `ReadingAnalytics` type), so the Analytics modal always showed it empty. Separately, `DuplicateFinderView` exposes `onDismissDuplicate` and the server has `/api/tracker/dismiss-duplicate`, but `App.tsx` never passed the handler, so dismissing a duplicate was UI-local only and resurfaced on the next scan.
+- **Fixed in**: 2026-08-18 — Analytics now computes the user's weighted favorite genre; `App.tsx` wires `handleDismissDuplicate` through to the existing endpoint.
+
 ### [BUG-033] App.tsx business logic monolith & blocking confirmation dialogs
 - **Status**: `fixed`
 - **Priority**: `medium`

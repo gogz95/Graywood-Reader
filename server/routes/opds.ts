@@ -159,8 +159,33 @@ opdsRouter.get('/api/opds/series/:id', (req: Request, res: Response) => {
 
     const totalChapters = Math.max(manga.latestChapter, manga.currentChapter, 1);
     for (let ch = totalChapters; ch >= 1; ch--) {
+      // Each chapter opens the in-app reader via a standard HTML acquisition
+      // link (usable by browser/web-capable OPDS clients) instead of a raw JSON
+      // feed that e-readers cannot consume.
+      xml += `  <entry>
+    <title>${title} - Chapter ${ch}</title>
+    <id>urn:uuid:graywood-series-${escapeXml(manga.id)}-ch-${ch}</id>
+    <updated>${updated}</updated>
+    <summary>Chapter ${ch} of ${title}</summary>
+    <link rel="http://opds-spec.org/image" href="${cover}" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="${cover}" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="/reader/${encodeURIComponent(manga.id)}/${ch}" type="text/html"/>
+  </entry>
+`;
+    }
 
-// GET /api/opds/local/:id - Local archive page feed (each page = an image acquisition)
+    xml += `</feed>`;
+    res.setHeader('Content-Type', `${CATALOG_FEED_TYPE};charset=utf-8`);
+    res.send(xml);
+  } catch (err: any) {
+    res.status(500).send(`<?xml version="1.0"?><error>${escapeXml(err.message)}</error>`);
+  }
+});
+
+// GET /api/opds/local/:id - Local archive page feed (each page = an image acquisition).
+// NOTE: registered at module scope (it was previously nested inside the series
+// handler above, so it only existed after the first series request and leaked
+// duplicate registrations on every call).
 opdsRouter.get('/api/opds/local/:id', (req: Request, res: Response) => {
   try {
     const id = String(req.params.id);
@@ -189,29 +214,6 @@ opdsRouter.get('/api/opds/local/:id', (req: Request, res: Response) => {
   </entry>
 `;
     }
-    xml += `</feed>`;
-    res.setHeader('Content-Type', `${CATALOG_FEED_TYPE};charset=utf-8`);
-    res.send(xml);
-  } catch (err: any) {
-    res.status(500).send(`<?xml version="1.0"?><error>${escapeXml(err.message)}</error>`);
-  }
-});
-
-      // Each chapter opens the in-app reader via a standard HTML acquisition
-      // link (usable by browser/web-capable OPDS clients) instead of a raw JSON
-      // feed that e-readers cannot consume.
-      xml += `  <entry>
-    <title>${title} - Chapter ${ch}</title>
-    <id>urn:uuid:graywood-series-${escapeXml(manga.id)}-ch-${ch}</id>
-    <updated>${updated}</updated>
-    <summary>Chapter ${ch} of ${title}</summary>
-    <link rel="http://opds-spec.org/image" href="${cover}" type="image/jpeg"/>
-    <link rel="http://opds-spec.org/image/thumbnail" href="${cover}" type="image/jpeg"/>
-    <link rel="http://opds-spec.org/acquisition" href="/reader/${encodeURIComponent(manga.id)}/${ch}" type="text/html"/>
-  </entry>
-`;
-    }
-
     xml += `</feed>`;
     res.setHeader('Content-Type', `${CATALOG_FEED_TYPE};charset=utf-8`);
     res.send(xml);

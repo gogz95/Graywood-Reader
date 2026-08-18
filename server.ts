@@ -3,11 +3,8 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import dns from "dns";
-import net from "net";
 import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
-import { INITIAL_MANGA_DATABASE } from "./src/data/initialManga";
 import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
 import {
   resolveEncryptionSecret,
@@ -2426,7 +2423,7 @@ app.post("/api/tracker/detect-duplicates", async (req, res) => {
       }));
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
+        model: GEMINI_MODEL,
         contents: `Analyze this JSON list of Manhwa & Manhua titles in a user's tracking database:
 ${JSON.stringify(dbTitlesList)}
 
@@ -2543,6 +2540,9 @@ app.post("/api/tracker/merge-duplicates", (req, res) => {
 // GEMINI AI ENRICHMENT & METADATA
 // ==========================================
 
+// Centralized model name so upgrades only touch one line.
+const GEMINI_MODEL = "gemini-3.6-flash";
+
 app.post("/api/ai/enrich-metadata", async (req, res) => {
   const { title } = req.body;
   if (!title) {
@@ -2551,22 +2551,14 @@ app.post("/api/ai/enrich-metadata", async (req, res) => {
 
   const ai = getGeminiClient();
   if (!ai) {
-    // Fallback response without AI key
-    return res.json({
-      title,
-      altTitles: [`${title} (Romanized)`, `${title} (Alternative)`],
-      type: title.toLowerCase().includes('manhua') || title.toLowerCase().includes('cultivation') ? 'manhua' : 'manhwa',
-      description: `${title} is an exciting Korean/Chinese webtoon following supernatural battles, levelling systems, and martial prowess.`,
-      genres: ['Action', 'Fantasy', 'System', 'Adventure'],
-      latestChapter: 120,
-      rating: 9.0,
-      sourceName: 'OpenAPI Feeds',
-    });
+    // Honest failure: never fabricate metadata — fake chapter counts/ratings
+    // would silently corrupt real series data in the Add/Edit form.
+    return res.status(503).json({ error: "Gemini API key not configured. Set GEMINI_API_KEY on the server to use AI metadata enrichment." });
   }
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: GEMINI_MODEL,
       contents: `You are an expert Manhwa & Manhua database curator. Provide metadata for the title: "${title}".
 Return JSON object:
 {
@@ -2592,15 +2584,9 @@ Return JSON object:
     console.error("AI Metadata enrichment error:", err);
   }
 
-  res.json({
-    title,
-    altTitles: [`${title} Alt`],
-    type: 'manhwa',
-    description: `Series metadata for ${title}`,
-    genres: ['Action', 'Fantasy'],
-    latestChapter: 100,
-    rating: 8.5,
-  });
+  // Honest failure instead of fabricated metadata (fake latestChapter/rating
+  // values were polluting the Add/Edit form when the AI call failed).
+  res.status(502).json({ error: "AI metadata enrichment failed. Check the server logs and GEMINI_API_KEY." });
 });
 
 // AI Similar Recommendations
@@ -2609,17 +2595,15 @@ app.post("/api/ai/find-similar", async (req, res) => {
   const ai = getGeminiClient();
 
   if (!ai) {
-    const genreStr = (genres && genres.length > 0) ? genres[0] : 'Action';
-    return res.json([
-      { title: `Top Rated ${genreStr} Series`, type: 'manhwa', reason: `High match score based on ${genreStr} themes` },
-      { title: `Similar ${title || 'Webtoon'} Recommendation`, type: 'manhwa', reason: `Matches narrative style and plot tropes of ${title || 'your library'}` }
-    ]);
+    // No fabricated recommendations — an empty list lets the UI show its
+    // honest "no results" state instead of fake AI suggestions.
+    return res.json([]);
   }
 
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: GEMINI_MODEL,
       contents: `Given the Manhwa/Manhua series "${title}" with genres [${(genres || []).join(', ')}], suggest 4 top-tier similar Manhwa or Manhua series.
 Return JSON array:
 [
@@ -2703,7 +2687,7 @@ app.post("/api/db/reset", (req, res) => {
     console.log('[Database Engine] Full database wipe completed — all series purged.');
     return res.json({ success: true, count: 0, message: 'Database fully cleared for rebuild' });
   }
-  syncResetManga(INITIAL_MANGA_DATABASE);
+  syncResetManga([]);
   res.json({ success: true, count: mangaDatabase.length });
 });
 
@@ -4294,9 +4278,6 @@ app.get("/api/kotatsu/search-all", async (req, res) => {
   const sourceResults = await Promise.allSettled(
     sourcesToQuery.map(async (source) => {
       try {
-        const qs = query
-          ? `/api/kotatsu/search?sourceId=${source.id}&q=${encodeURIComponent(query)}&limit=${Math.ceil(limit/3)}`
-          : `/api/kotatsu/search?sourceId=${source.id}&limit=${Math.ceil(limit/3)}`;
         // Internal call: invoke the handler logic directly instead of HTTP loop
         const items = await getSourcePopularSeries(source, page, Math.ceil(limit/3));
         return Array.isArray(items) ? items : (items?.items || []).map((it: any) => ({ ...it, sourceName: source.name }));
@@ -6012,6 +5993,18 @@ app.get("/api/reader/analytics", (req, res) => {
   for (const r of rows) dayMap.set(r.date, Number(r.chapters_read) || 0);
   const dates = [...dayMap.keys()].sort();
 
+  // Favorite genre: most common genre across the user's personal library
+  // (favorites & in-progress series weigh more), mirroring the recommendation
+  // weighting used by the frontend.
+  const genreScore = new Map<string, number>();
+  for (const m of SqliteDb.applyUserOverlay(SqliteDb.getAllManga(), userId)) {
+    const weight = (m.isFavorite ? 3 : 0) + (m.status === 'reading' ? 2 : 0) + 1;
+    for (const g of m.genres || []) {
+      genreScore.set(g, (genreScore.get(g) || 0) + weight);
+    }
+  }
+  const favoriteGenre = [...genreScore.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+
   // Current streak: trailing consecutive days with activity, ending today.
   const today = new Date().toISOString().substring(0, 10);
   let currentStreak = 0;
@@ -6034,6 +6027,7 @@ app.get("/api/reader/analytics", (req, res) => {
     longestStreakDays: longestStreak,
     totalChaptersRead,
     totalTimeMinutes,
+    favoriteGenre,
     activities: rows.map((r) => {
       const chapters = Number(r.chapters_read) || 0;
       return {
@@ -6201,83 +6195,10 @@ app.post("/api/solver/check-balance", async (req, res) => {
 // ============================================================================
 // OPDS 1.2 CATALOG SERVER (FOR E-READERS: KOBO, MOON+ READER, PANELS, PAPERBACK)
 // ============================================================================
-
-app.get('/api/opds/catalog.xml', (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const updated = new Date().toISOString();
-
-  let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
-  <id>urn:graywood:catalog</id>
-  <title>Graywood Reader OPDS Catalog</title>
-  <updated>${updated}</updated>
-  <author><name>Graywood Reader</name></author>
-  <link rel="self" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-  <link rel="start" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-`;
-
-  for (const manga of mangaDatabase) {
-    const coverUrl = manga.coverImage?.startsWith('http')
-      ? `${baseUrl}/api/proxy/image?url=${encodeURIComponent(manga.coverImage)}`
-      : manga.coverImage || '';
-
-    xml += `  <entry>
-    <title>${escapeXml(manga.title)}</title>
-    <id>urn:graywood:manga:${escapeXml(manga.id)}</id>
-    <updated>${manga.lastUpdated || updated}</updated>
-    <summary>${escapeXml(manga.description || `${manga.type} · Chapter ${manga.currentChapter}/${manga.latestChapter}`)}</summary>
-    <content type="text">${escapeXml(manga.description || '')}</content>
-    <category term="${escapeXml(manga.type || 'manga')}" label="${escapeXml(manga.type || 'manga')}"/>
-    ${coverUrl ? `<link rel="http://opds-spec.org/image" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
-    ${coverUrl ? `<link rel="http://opds-spec.org/image/thumbnail" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
-    <link rel="subsection" href="${baseUrl}/api/opds/series/${encodeURIComponent(manga.id)}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  </entry>\n`;
-  }
-
-  xml += `</feed>`;
-
-  res.setHeader('Content-Type', 'application/atom+xml; charset=utf-8');
-  res.send(xml);
-});
-
-app.get('/api/opds/series/:id', (req, res) => {
-  const { id } = req.params;
-  const manga = mangaDatabase.find((m) => m.id === id);
-  if (!manga) return res.status(404).send('Series not found');
-
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  const updated = manga.lastUpdated || new Date().toISOString();
-  const coverUrl = manga.coverImage?.startsWith('http')
-    ? `${baseUrl}/api/proxy/image?url=${encodeURIComponent(manga.coverImage)}`
-    : manga.coverImage || '';
-
-  let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opds="http://opds-spec.org/2010/catalog">
-  <id>urn:graywood:manga:${escapeXml(manga.id)}</id>
-  <title>${escapeXml(manga.title)}</title>
-  <updated>${updated}</updated>
-  <author><name>${escapeXml(manga.sourceName || 'Graywood Reader')}</name></author>
-  <link rel="self" href="${baseUrl}/api/opds/series/${encodeURIComponent(manga.id)}" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-  <link rel="up" href="${baseUrl}/api/opds/catalog.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
-  ${coverUrl ? `<link rel="http://opds-spec.org/image" href="${escapeXml(coverUrl)}" type="image/jpeg"/>` : ''}
-`;
-
-  const total = manga.latestChapter || manga.totalChapters || 1;
-  for (let ch = total; ch >= 1; ch--) {
-    xml += `  <entry>
-    <title>${escapeXml(manga.title)} - Chapter ${ch}</title>
-    <id>urn:graywood:manga:${escapeXml(manga.id)}:chapter:${ch}</id>
-    <updated>${updated}</updated>
-    <summary>Chapter ${ch} of ${escapeXml(manga.title)}</summary>
-    <link rel="http://opds-spec.org/acquisition" href="${baseUrl}/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&amp;chapterNumber=${ch}" type="application/json"/>
-  </entry>\n`;
-  }
-
-  xml += `</feed>`;
-
-  res.setHeader('Content-Type', 'application/atom+xml; charset=utf-8');
-  res.send(xml);
-});
+// All OPDS endpoints (/api/opds/catalog.xml, /api/opds/search,
+// /api/opds/series/:id, /api/opds/local/:id) live in server/routes/opds.ts.
+// The duplicate catalog.xml & series handlers that used to sit here were
+// unreachable (opdsRouter is mounted first) and have been removed.
 
 // ============================================================================
 // HIGH-PERFORMANCE IMAGE PROXY WITH ETAGS & IMMUTABLE CACHING
@@ -6735,6 +6656,13 @@ app.get("/api/bugs", (_req, res) => {
 // VITE MIDDLEWARE SETUP FOR DEV & PROD
 // ==========================================
 
+// Fix #21: Capture the HTTP server so graceful shutdown can drain connections.
+// IMPORTANT: these must be declared BEFORE startServer() — in production mode
+// (dist/ present) the async function body runs synchronously up to app.listen,
+// and assigning to a not-yet-declared `let` throws a TDZ ReferenceError at boot.
+let httpServer: ReturnType<typeof app.listen> | null = null;
+let isShuttingDown = false;
+
 async function startServer() {
   // 1. Fast load persistent database from SQLite
   loadDatabaseFromDisk();
@@ -6786,9 +6714,6 @@ startServer();
 // =========================================================
 // GRACEFUL SHUTDOWN — flush pending state & write legacy JSON backup
 // =========================================================
-// Fix #21: Capture the HTTP server so graceful shutdown can drain connections.
-let httpServer: ReturnType<typeof app.listen> | null = null;
-let isShuttingDown = false;
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;

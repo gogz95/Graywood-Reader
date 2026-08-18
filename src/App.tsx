@@ -32,12 +32,10 @@ import {
   AppSettings,
   ReadingStatus,
 } from './types';
-import { INITIAL_MANGA_DATABASE } from './data/initialManga';
 import { apiFetch } from './utils/api';
 import { useAuth, GUEST_PROFILE, getDeviceId } from './hooks/useAuth';
 import { useRouting, TAB_PATHS } from './hooks/useRouting';
 import {
-  useReaderSession,
   saveClientSessionProgress,
   getClientSessionHistory,
 } from './hooks/useReaderSession';
@@ -81,7 +79,7 @@ export default function App() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   // Manga Library Database State
-  const [mangaList, setMangaList] = useState<MangaItem[]>(INITIAL_MANGA_DATABASE);
+  const [mangaList, setMangaList] = useState<MangaItem[]>([]);
 
   // Modals state
   const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);
@@ -138,9 +136,6 @@ export default function App() {
     onOpenReaderFromUrl: (manga, chapterNumber) => setReaderTarget({ manga, chapterNumber }),
   });
 
-  // Client Session Hook
-  useReaderSession();
-
   // Per-User Privacy Isolation Filter
   // Admin sees ALL series across the server; Standard User sees only their own private library!
   const displayMangaList = mangaList.filter((item) => {
@@ -162,7 +157,7 @@ export default function App() {
     enableWebCrawling: true,
     sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
     lastSyncTime: new Date().toISOString(),
-    totalTracked: INITIAL_MANGA_DATABASE.length,
+    totalTracked: 0,
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -499,6 +494,19 @@ export default function App() {
     }
   };
 
+  // Dismiss Duplicate Pair (persisted server-side so it never resurfaces in scans)
+  const handleDismissDuplicate = async (candidateId: string, primaryId: string, secondaryId: string) => {
+    try {
+      await apiFetch('/api/tracker/dismiss-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId, primaryId, secondaryId }),
+      });
+    } catch (err) {
+      console.error('Dismiss duplicate error:', err);
+    }
+  };
+
   // Update Subdomain
   const handleUpdateSubdomain = async (subdomain: string) => {
     try {
@@ -830,6 +838,7 @@ export default function App() {
               onScanDuplicates={scanDuplicates}
               isScanning={isScanningDuplicates}
               onExecuteMerge={handleExecuteMerge}
+              onDismissDuplicate={handleDismissDuplicate}
             />
           )}
 
