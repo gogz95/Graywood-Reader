@@ -315,5 +315,68 @@ img[loading="lazy"] {
   transform: translateZ(0);
 }
 
+/* ── Modern Glassmorphism & Micro-Interaction Utility Tokens ──────────────── */
+.glass-panel {
+  background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent);
+}
 
+.glass-modal {
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid color-mix(in srgb, var(--edge-strong) 60%, transparent);
+}
 
+.glass-dropdown {
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--edge);
+  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px -3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.glow-accent-sm {
+  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ── Shimmer Skeleton Loader ──────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg-elevated) 80%, transparent) 25%,
+    color-mix(in srgb, var(--edge-strong) 40%, var(--bg-elevated)) 37%,
+    color-mix(in srgb, var(--bg-elevated) 80%, transparent) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Card hover lift & active press micro-animations */
+.card-interactive {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.4);
+}
+
+.card-interactive:active {
+  transform: translateY(-1px) scale(0.995);
+}

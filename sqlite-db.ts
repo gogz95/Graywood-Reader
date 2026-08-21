@@ -435,6 +435,32 @@ const stmtCleanupCachedPages = db.prepare(`
   DELETE FROM chapter_pages_cache WHERE expires_at <= ?
 `);
 
+// ── Category & Junction Precompiled Statements ──────────────────────────────
+const stmtGetCategoriesForUser = db.prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY sort_order ASC, name ASC');
+const stmtGetCategoryCountsForUser = db.prepare(`
+  SELECT mc.category_id, COUNT(DISTINCT mc.manga_id) as series_count
+  FROM manga_categories mc
+  WHERE mc.user_id = ?
+  GROUP BY mc.category_id
+`);
+const stmtGetCategoryByIdAndUser = db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?');
+const stmtInsertCategory = db.prepare(`
+  INSERT INTO categories (id, user_id, name, description, color, icon, sort_order, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const stmtUpdateCategory = db.prepare(`
+  UPDATE categories SET name = ?, description = ?, color = ?, icon = ?, sort_order = ?
+  WHERE id = ? AND user_id = ?
+`);
+const stmtDeleteCategoryMangaLinks = db.prepare('DELETE FROM manga_categories WHERE category_id = ? AND user_id = ?');
+const stmtDeleteCategory = db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?');
+const stmtGetMangaCategories = db.prepare('SELECT category_id FROM manga_categories WHERE manga_id = ? AND user_id = ?');
+const stmtGetMangaCategoriesAllForUser = db.prepare('SELECT manga_id, category_id FROM manga_categories WHERE user_id = ?');
+const stmtInsertMangaCategory = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
+const stmtDeleteMangaCategoryOne = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND category_id = ? AND user_id = ?');
+const stmtDeleteMangaCategoriesForManga = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?');
+
+
 // Helper Serializers & Deserializers
 function mapRowToMangaItem(row: any): MangaItem {
   return {
@@ -885,14 +911,39 @@ export const SqliteDb = {
   },
 
   /**
+   * Fast-path overlay for a single series (used on chapter increments, detail views, etc.)
+   * Performs targeted point-lookups instead of full table scans.
+   */
+  applyUserOverlayOne(manga: MangaItem, userId: string | null | undefined): MangaItem {
+    if (!userId) return manga;
+    const isFav = this.isUserFavorite(userId, manga.id);
+    const stateRow = stmtGetUserLibraryStateOne.get(userId, manga.id) as { current_chapter?: number; last_read_at?: string; status?: string } | undefined;
+    const catRows = stmtGetMangaCategories.all(manga.id, userId) as { category_id: string }[];
+    const categories = catRows.map((r) => r.category_id);
+
+    return {
+      ...manga,
+      isFavorite: isFav,
+      currentChapter: stateRow ? (Number(stateRow.current_chapter) || 0) : (Number(manga.currentChapter) || 0),
+      lastReadAt: stateRow?.last_read_at || manga.lastReadAt,
+      status: (stateRow?.status as MangaItem['status']) || manga.status,
+      categories,
+    };
+  },
+
+  /**
    * Overlay per-user favorite + chapter progress onto catalog rows for API responses.
    * Shared catalog fields stay global; isFavorite/currentChapter/lastReadAt become personal.
    */
   applyUserOverlay(items: MangaItem[], userId: string | null | undefined): MangaItem[] {
-    if (!userId) return items;
+    if (!userId || items.length === 0) return items;
+    if (items.length === 1) {
+      return [this.applyUserOverlayOne(items[0], userId)];
+    }
+
     const favs = this.getUserFavoriteIds(userId);
     const userStateMap = this.getUserLibraryStateMap(userId);
-    const catRows = db.prepare('SELECT manga_id, category_id FROM manga_categories WHERE user_id = ?').all(userId) as { manga_id: string; category_id: string }[];
+    const catRows = stmtGetMangaCategoriesAllForUser.all(userId) as { manga_id: string; category_id: string }[];
     const catMap = new Map<string, string[]>();
     for (const r of catRows) {
       const arr = catMap.get(r.manga_id) || [];
@@ -916,13 +967,8 @@ export const SqliteDb = {
   },
 
   getCategories(userId: string): UserCategory[] {
-    const rows = db.prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY sort_order ASC, name ASC').all(userId) as any[];
-    const countRows = db.prepare(`
-      SELECT mc.category_id, COUNT(DISTINCT mc.manga_id) as series_count
-      FROM manga_categories mc
-      WHERE mc.user_id = ?
-      GROUP BY mc.category_id
-    `).all(userId) as any[];
+    const rows = stmtGetCategoriesForUser.all(userId) as any[];
+    const countRows = stmtGetCategoryCountsForUser.all(userId) as any[];
     const countMap = new Map<string, number>();
     for (const cr of countRows) countMap.set(cr.category_id, cr.series_count);
 
@@ -940,10 +986,7 @@ export const SqliteDb = {
   },
 
   createCategory(category: UserCategory): UserCategory {
-    db.prepare(`
-      INSERT INTO categories (id, user_id, name, description, color, icon, sort_order, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    stmtInsertCategory.run(
       category.id,
       category.userId || 'usr_admin',
       category.name,
@@ -957,7 +1000,7 @@ export const SqliteDb = {
   },
 
   updateCategory(id: string, updates: Partial<UserCategory>, userId: string): UserCategory | null {
-    const existing = db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    const existing = stmtGetCategoryByIdAndUser.get(id, userId) as any;
     if (!existing) return null;
     const name = updates.name !== undefined ? updates.name : existing.name;
     const description = updates.description !== undefined ? updates.description : existing.description;
@@ -965,10 +1008,7 @@ export const SqliteDb = {
     const icon = updates.icon !== undefined ? updates.icon : existing.icon;
     const sortOrder = updates.sortOrder !== undefined ? updates.sortOrder : existing.sort_order;
 
-    db.prepare(`
-      UPDATE categories SET name = ?, description = ?, color = ?, icon = ?, sort_order = ?
-      WHERE id = ? AND user_id = ?
-    `).run(name, description, color, icon, sortOrder, id, userId);
+    stmtUpdateCategory.run(name, description, color, icon, sortOrder, id, userId);
 
     return {
       id,
@@ -984,24 +1024,23 @@ export const SqliteDb = {
 
   deleteCategory(id: string, userId: string): boolean {
     const tx = db.transaction(() => {
-      db.prepare('DELETE FROM manga_categories WHERE category_id = ? AND user_id = ?').run(id, userId);
-      db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').run(id, userId);
+      stmtDeleteCategoryMangaLinks.run(id, userId);
+      stmtDeleteCategory.run(id, userId);
     });
     tx();
     return true;
   },
 
   getMangaCategories(mangaId: string, userId: string): string[] {
-    const rows = db.prepare('SELECT category_id FROM manga_categories WHERE manga_id = ? AND user_id = ?').all(mangaId, userId) as { category_id: string }[];
+    const rows = stmtGetMangaCategories.all(mangaId, userId) as { category_id: string }[];
     return rows.map((r) => r.category_id);
   },
 
   setMangaCategories(mangaId: string, categoryIds: string[], userId: string): void {
     const tx = db.transaction(() => {
-      db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?').run(mangaId, userId);
-      const stmt = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
+      stmtDeleteMangaCategoriesForManga.run(mangaId, userId);
       for (const catId of categoryIds) {
-        if (catId && catId.trim()) stmt.run(mangaId, catId.trim(), userId);
+        if (catId && catId.trim()) stmtInsertMangaCategory.run(mangaId, catId.trim(), userId);
       }
     });
     tx();
@@ -1009,17 +1048,14 @@ export const SqliteDb = {
 
   bulkAssignCategory(mangaIds: string[], categoryId: string, action: 'add' | 'remove' | 'set', userId: string): void {
     const tx = db.transaction(() => {
-      const insertStmt = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
-      const deleteStmt = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND category_id = ? AND user_id = ?');
-
       for (const mangaId of mangaIds) {
         if (action === 'add') {
-          insertStmt.run(mangaId, categoryId, userId);
+          stmtInsertMangaCategory.run(mangaId, categoryId, userId);
         } else if (action === 'remove') {
-          deleteStmt.run(mangaId, categoryId, userId);
+          stmtDeleteMangaCategoryOne.run(mangaId, categoryId, userId);
         } else if (action === 'set') {
-          db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?').run(mangaId, userId);
-          insertStmt.run(mangaId, categoryId, userId);
+          stmtDeleteMangaCategoriesForManga.run(mangaId, userId);
+          stmtInsertMangaCategory.run(mangaId, categoryId, userId);
         }
       }
     });

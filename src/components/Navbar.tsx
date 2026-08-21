@@ -80,6 +80,23 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSubmitBugModal,
 }) => {
   const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Focus search on Ctrl+K, Cmd+K, or pressing '/' when not in an input
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const isGuest = activeProfile.id === 'usr_guest';
   const showAdmin = activeProfile.role === 'admin' && isHostComputer;
@@ -109,13 +126,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     <div className="relative w-full">
       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
       <input
+        ref={searchInputRef}
         type="search"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         placeholder="Search series, author, or genre..."
-        className="w-full pl-9.5 pr-16 py-2 text-xs rounded-xl bg-surface/80 border border-edge hover:border-edge-strong focus:border-accent text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all"
+        className="w-full pl-9.5 pr-20 py-2 text-xs rounded-xl bg-surface/80 border border-edge hover:border-edge-strong focus:border-accent text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all"
       />
-      {searchQuery && (
+      {searchQuery ? (
         <button
           onClick={() => setSearchQuery('')}
           aria-label="Clear search"
@@ -123,6 +141,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           Clear
         </button>
+      ) : (
+        <kbd className="hidden sm:flex items-center gap-0.5 absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-elevated/70 border border-edge/60 pointer-events-none">
+          <span className="text-[11px]">⌘</span>K
+        </kbd>
       )}
     </div>
   );
