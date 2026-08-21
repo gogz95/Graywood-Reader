@@ -5950,12 +5950,18 @@ async function fetchManhwa18ChapterList(seriesUrl: string, domain: string): Prom
   try {
     const normalized = normalizeLiveTargetUrl(seriesUrl);
     const origin = (() => { try { return new URL(normalized).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(normalized, {
+    const bypassRes = await fetchWithChallengeBypass(normalized, {
       headers: { ...UA_HEADERS, 'Referer': origin + '/' },
-      signal: AbortSignal.timeout(15000),
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
     });
-    if (!res.ok) return [];
-    const html = await res.text();
+    if (!bypassRes.ok || !bypassRes.html) return [];
+    const html = bypassRes.html;
     const $ = cheerio.load(html);
     // Primary Kotatsu selector + broader fallbacks used by the current theme
     let anchors = $('.card-body > .list-chapters > a').toArray();
@@ -5986,12 +5992,18 @@ async function fetchManhwa18ChapterList(seriesUrl: string, domain: string): Prom
 async function fetchManhwa18ChapterPages(chapterUrl: string, domain: string): Promise<string[] | null> {
   try {
     const origin = (() => { try { return new URL(chapterUrl).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(chapterUrl, {
+    const bypassRes = await fetchWithChallengeBypass(chapterUrl, {
       headers: { ...UA_HEADERS, 'Referer': origin + '/' },
-      signal: AbortSignal.timeout(15000),
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
     });
-    if (!res.ok) return null;
-    const html = await res.text();
+    if (!bypassRes.ok || !bypassRes.html) return null;
+    const html = bypassRes.html;
     const $ = cheerio.load(html);
     const pages: string[] = [];
     const pushSrc = (raw: string) => {

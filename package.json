@@ -8,7 +8,7 @@
     },
     "scripts": {
         "dev": "tsx server.ts",
-        "build:server": "esbuild server.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist-server/server.cjs --packages=external",
+        "build:server": "esbuild server.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist-server/server.cjs --packages=external",
         "build": "vite build && npm run build:server",
         "start": "node dist-server/server.cjs",
         "start:prod": "node dist-server/server.cjs",
