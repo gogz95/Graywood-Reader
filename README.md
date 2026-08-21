@@ -153,8 +153,24 @@ This project is deeply indebted to and inspired by the incredible work of the op
 
 ---
 
+## ⚖️ Legal Disclaimer
+
+**Graywood Reader** is an open-source, self-hosted indexer, catalog manager, and reader application. It is provided strictly as a technical tool for organizing, browsing, and reading content that users already have access to or that is made available publicly on the internet.
+
+- **No Content Hosting or Distribution:** The developers, maintainers, and contributors of Graywood Reader do not host, store, stream, publish, or distribute any copyrighted media, manga, manhwa, manhua, or comic chapters on any central server, cloud service, or within this repository.
+- **Third-Party Sources & Parsers:**
+  - All parser definitions, scraper scripts, and API connectors are technical instructions designed to interpret publicly accessible web documents and endpoints.
+  - The developers have no ownership, affiliation, control, or partnership with any third-party websites, domains, CDNs, or scanlation groups accessed through these parsers.
+  - We do not monitor, curate, or guarantee the accuracy, legality, safety, copyright status, or availability of any content hosted by third-party websites.
+- **Local Caching & User Control:** Any temporary image proxying, browser storage (`IndexedDB`), or offline downloads (`STORAGE_PATH`) operate exclusively on the user's own local hardware or self-hosted server environment, executed solely at the user's direction.
+- **User Responsibility:** Users assume full responsibility for how they use this software, including verifying that their access and storage of materials comply with applicable local copyright laws, intellectual property rights, and the terms of service of the third-party websites they access.
+- **Copyright & DMCA Notices:** Because Graywood Reader is a standalone client software application that does not host or transmit media files through any developer-owned infrastructure, any copyright infringement claims or takedown notices regarding specific content must be directed to the third-party web hosts and source operators actually hosting the media.
+
+---
+
 ## 📄 License
 
 **Graywood Reader** is free software licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [`LICENSE`](LICENSE) for the full text.
 
 Third-party dependencies and vendored parser licenses are documented in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) and [`NOTICE`](NOTICE).
+
