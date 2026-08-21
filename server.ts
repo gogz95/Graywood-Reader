@@ -106,6 +106,7 @@ import {
 import {
   scrapeWeebCentral,
   searchWeebCentral,
+  fetchWeebCentralSeriesMetadata,
   fetchWeebCentralChapterList,
   fetchWeebCentralChapterPages,
 } from "./server/scrapers/weebCentral";
@@ -753,11 +754,12 @@ app.get("/api/manga", (req, res) => {
   if (overlayUserId) {
     allManga = SqliteDb.applyUserOverlay(allManga, overlayUserId);
   } else {
-    // Anonymous/remote without token: never expose another user's favorites/progress
+    // Anonymous/remote without token: never expose another user's favorites/progress/categories
     allManga = allManga.map((m) => ({
       ...m,
       isFavorite: false,
       currentChapter: 0,
+      categories: [],
     }));
   }
 
@@ -955,6 +957,426 @@ app.post("/api/manga/:id/refresh-metadata", async (req, res) => {
     res.status(500).json({ error: "Failed to refresh metadata", details: err.message });
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/manga/:id/pull-metadata-from-source
+//
+// Jellyfin-inspired "pick metadata from a specific source" endpoint.
+//
+// Body:
+//   sourceUrl  — the URL of the source entry for this series
+//   sourceName — human-readable source name (used for routing to the scraper)
+//   fields     — array of atomic/aggregative fields to pull from that source
+//                e.g. ["title","coverImage","description","rating","genres","altTitles"]
+//                Omit (or pass []) to pull ALL supported fields.
+//
+// Behaviour:
+//   1. Routes to the appropriate scraper (Asura, WeebCentral, Flame, MangaDex)
+//      based on the sourceUrl / sourceName.
+//   2. Fetches live metadata from that scraper.
+//   3. Merges ONLY the requested fields onto the stored manga item.
+//   4. Marks those fields in metadataOverrides so they survive future refreshes.
+//   5. Persists and returns the updated manga.
+// ---------------------------------------------------------------------------
+app.post("/api/manga/:id/pull-metadata-from-source", async (req, res) => {
+  const { id } = req.params;
+  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!existing) return res.status(404).json({ error: "Manga not found" });
+
+  const { sourceUrl, sourceName, fields } = req.body as {
+    sourceUrl: string;
+    sourceName: string;
+    fields?: string[];
+  };
+  if (!sourceUrl) return res.status(400).json({ error: "sourceUrl is required" });
+
+  const ALLOWED_FIELDS = ['title', 'description', 'coverImage', 'rating', 'genres', 'altTitles'] as const;
+  type AllowedField = (typeof ALLOWED_FIELDS)[number];
+  const fieldsToApply: AllowedField[] = (
+    Array.isArray(fields) && fields.length > 0
+      ? fields.filter((f): f is AllowedField => ALLOWED_FIELDS.includes(f as AllowedField))
+      : [...ALLOWED_FIELDS]
+  );
+
+  if (fieldsToApply.length === 0) {
+    return res.status(400).json({ error: "No valid fields requested" });
+  }
+
+  // ── Fetch metadata from the appropriate scraper ──────────────────────────
+  let fetched: Partial<MangaItem> | null = null;
+  const srcLower = (sourceName || '').toLowerCase();
+  const urlLower = (sourceUrl || '').toLowerCase();
+
+  try {
+    if (urlLower.includes('asura') || srcLower.includes('asura')) {
+      const meta = await fetchAsuraSeriesMetadata(sourceUrl);
+      if (meta) fetched = meta;
+
+    } else if (urlLower.includes('weebcentral') || srcLower.includes('weeb')) {
+      const scraped = await fetchWeebCentralSeriesMetadata(sourceUrl);
+      if (scraped) fetched = scraped as Partial<MangaItem>;
+
+    } else if (urlLower.includes('flamecomics') || srcLower.includes('flame')) {
+      const ctx = await fetchFlameSeriesContext(sourceUrl);
+      if (ctx?.matchedSeries) {
+        fetched = {
+          title: ctx.matchedSeries.title,
+          coverImage: ctx.matchedSeries.thumb,
+          genres: ctx.matchedSeries.genres || [],
+          description: ctx.matchedSeries.synopsis || '',
+        };
+      }
+
+    } else if (urlLower.includes('mangadex') || srcLower.includes('mangadex')) {
+      // Resolve MangaDex ID from URL or existing apiId
+      const mdIdMatch = sourceUrl.match(/\/title\/([a-f0-9-]+)/i);
+      const mdId = mdIdMatch?.[1] || existing.apiId;
+      if (mdId) {
+        const mdRes = await fetchMangaDex(`https://api.mangadex.org/manga/${mdId}?includes[]=cover_art`);
+        if (mdRes.ok) {
+          const mdJson = await mdRes.json();
+          const attrs = mdJson.data?.attributes || {};
+          const rels = mdJson.data?.relationships || [];
+          const coverRel = rels.find((r: any) => r.type === 'cover_art');
+          const coverFileName = coverRel?.attributes?.fileName;
+          fetched = {
+            title: preferEnglishTitle(attrs.title) || undefined,
+            description: attrs.description?.en || Object.values(attrs.description || {})[0] as string | undefined,
+            coverImage: coverFileName ? `/api/mangadex/image-proxy?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${mdId}/${coverFileName}.512.jpg`)}` : undefined,
+            rating: existing.rating, // MangaDex doesn't expose a public rating
+            genres: Array.isArray(attrs.tags) ? attrs.tags.map((t: any) => t.attributes?.name?.en).filter(Boolean) : [],
+            altTitles: Array.isArray(attrs.altTitles) ? attrs.altTitles.map((t: any) => Object.values(t)[0]).filter(Boolean) as string[] : [],
+          };
+        }
+      }
+
+    } else {
+      // Generic fallback: try scraping via WeebCentral series metadata fetcher
+      const scraped = await fetchWeebCentralSeriesMetadata(sourceUrl).catch(() => null);
+      if (scraped) fetched = scraped as Partial<MangaItem>;
+    }
+  } catch (err: any) {
+    console.warn(`[pull-metadata-from-source] Scraper error for ${sourceUrl}:`, err.message);
+    return res.status(502).json({ error: "Source scraper error", details: err.message });
+  }
+
+  if (!fetched) {
+    return res.status(404).json({ error: "Could not fetch metadata from that source" });
+  }
+
+  // ── Apply only the requested fields ─────────────────────────────────────
+  const updated: MangaItem = { ...existing };
+  const appliedFields: string[] = [];
+
+  for (const field of fieldsToApply) {
+    const value = fetched[field as keyof typeof fetched];
+    if (value === undefined || value === null) continue;
+
+    if (field === 'title' && typeof value === 'string' && value.trim()) {
+      updated.title = value.trim();
+      appliedFields.push(field);
+    } else if (field === 'description' && typeof value === 'string' && value.trim()) {
+      updated.description = value.trim();
+      appliedFields.push(field);
+    } else if (field === 'coverImage' && typeof value === 'string' && value.trim()) {
+      updated.coverImage = value.trim();
+      appliedFields.push(field);
+    } else if (field === 'rating' && typeof value === 'number' && value > 0) {
+      updated.rating = value;
+      appliedFields.push(field);
+    } else if (field === 'genres' && Array.isArray(value) && value.length > 0) {
+      // Aggregative: union with existing
+      updated.genres = Array.from(new Set([...updated.genres, ...value as string[]])).filter(Boolean);
+      appliedFields.push(field);
+    } else if (field === 'altTitles' && Array.isArray(value) && value.length > 0) {
+      // Aggregative: union with existing
+      updated.altTitles = Array.from(new Set([...updated.altTitles, ...value as string[]])).filter(Boolean);
+      appliedFields.push(field);
+    }
+  }
+
+  if (appliedFields.length === 0) {
+    return res.status(200).json({ success: false, manga: existing, message: "No new metadata found from that source" });
+  }
+
+  // ── Record applied fields as metadataOverrides ───────────────────────────
+  // Atomic fields the user explicitly chose from a source are treated as
+  // manual overrides — exactly like Jellyfin's "lock field" feature.
+  const atomicApplied = appliedFields.filter((f) => ['title', 'description', 'coverImage', 'rating'].includes(f));
+  updated.metadataOverrides = Array.from(
+    new Set([...(existing.metadataOverrides || []), ...atomicApplied])
+  );
+  updated.lastUpdated = new Date().toISOString();
+
+  // ── Persist ──────────────────────────────────────────────────────────────
+  SqliteDb.upsertManga(updated);
+  const idx = mangaDatabase.findIndex((m) => m.id === id);
+  if (idx !== -1) mangaDatabase[idx] = updated;
+  saveDatabaseToDisk();
+
+  console.log(`[pull-metadata-from-source] Applied [${appliedFields.join(', ')}] from '${sourceName}' for '${updated.title}'`);
+  res.json({
+    success: true,
+    manga: updated,
+    appliedFields,
+    message: `Applied ${appliedFields.join(', ')} from ${sourceName}`,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/manga/:id/metadata-options
+//
+// Jellyfin & Plex inspired Metadata Studio endpoint.
+// Aggregates all artwork, covers, titles, overviews, ratings, and genres from
+// all available sources for this series (plus MangaDex volume covers if linked).
+// ---------------------------------------------------------------------------
+app.get("/api/manga/:id/metadata-options", async (req, res) => {
+  const { id } = req.params;
+  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!manga) return res.status(404).json({ error: "Manga not found" });
+
+  // 1. Gather all unique source candidates
+  interface SourceOption {
+    sourceName: string;
+    sourceUrl: string;
+    title?: string;
+    description?: string;
+    coverImage?: string;
+    covers?: Array<{ url: string; label?: string }>;
+    rating?: number;
+    genres?: string[];
+    altTitles?: string[];
+  }
+
+  const sourceCandidates: Array<{ name: string; url: string }> = [];
+  const seenUrls = new Set<string>();
+
+  const addCandidate = (name: string, url: string) => {
+    if (!url) return;
+    const norm = url.toLowerCase().trim();
+    if (seenUrls.has(norm)) return;
+    seenUrls.add(norm);
+    sourceCandidates.push({ name: name || 'Source', url });
+  };
+
+  for (const s of manga.availableSources || []) {
+    addCandidate(s.sourceName || 'Source', s.sourceUrl || '');
+  }
+  if (manga.sourceUrl) {
+    addCandidate(manga.sourceName || 'Primary Source', manga.sourceUrl);
+  }
+
+  // Also check MangaDex ID
+  let mdId = manga.apiId || (manga.id?.startsWith('md_') ? manga.id.replace('md_', '') : null) || manga.sourceUrl?.match(/\/title\/([a-f0-9-]+)/i)?.[1];
+
+  const sourceResults: SourceOption[] = [];
+
+  // 2. Fetch each source in parallel with timeout
+  await Promise.allSettled([
+    // MangaDex fetch if available
+    (async () => {
+      if (!mdId && manga.title && manga.title !== 'Unknown') {
+        try {
+          const cleanTitle = manga.title.replace(/\s*\([^)]*\)/g, '').trim();
+          if (cleanTitle.length > 2) {
+            const searchRes = await fetchMangaDex(
+              `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=3&includes[]=cover_art`
+            );
+            if (searchRes.ok) {
+              const searchJson = await searchRes.json();
+              if (searchJson.data?.[0]?.id) {
+                mdId = searchJson.data[0].id;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (mdId) {
+        try {
+          const [mdRes, coverRes] = await Promise.all([
+            fetchMangaDex(`https://api.mangadex.org/manga/${mdId}?includes[]=cover_art`),
+            fetchMangaDex(`https://api.mangadex.org/cover?manga[]=${mdId}&limit=50&order[volume]=desc`).catch(() => null),
+          ]);
+
+          if (mdRes.ok) {
+            const mdJson = await mdRes.json();
+            const attrs = mdJson.data?.attributes || {};
+            const rels = mdJson.data?.relationships || [];
+            const primaryCoverRel = rels.find((r: any) => r.type === 'cover_art');
+            const primaryFileName = primaryCoverRel?.attributes?.fileName;
+
+            const allCovers: Array<{ url: string; label?: string }> = [];
+            if (primaryFileName) {
+              allCovers.push({
+                url: `/api/mangadex/image-proxy?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${mdId}/${primaryFileName}.512.jpg`)}`,
+                label: 'Main Cover (MangaDex)',
+              });
+            }
+
+            if (coverRes && coverRes.ok) {
+              const coverJson = await coverRes.json();
+              const coverData = Array.isArray(coverJson.data) ? coverJson.data : [];
+              for (const c of coverData) {
+                const fn = c.attributes?.fileName;
+                const vol = c.attributes?.volume;
+                const locale = c.attributes?.locale;
+                if (fn && fn !== primaryFileName) {
+                  allCovers.push({
+                    url: `/api/mangadex/image-proxy?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${mdId}/${fn}.512.jpg`)}`,
+                    label: vol ? `Vol. ${vol}${locale ? ` (${locale.toUpperCase()})` : ''}` : `Alt Cover${locale ? ` (${locale.toUpperCase()})` : ''}`,
+                  });
+                }
+              }
+            }
+
+            sourceResults.push({
+              sourceName: 'MangaDex API',
+              sourceUrl: `https://mangadex.org/title/${mdId}`,
+              title: preferEnglishTitle(attrs.title) || manga.title,
+              description: attrs.description?.en || Object.values(attrs.description || {})[0] as string || '',
+              coverImage: allCovers[0]?.url,
+              covers: allCovers,
+              genres: Array.isArray(attrs.tags) ? attrs.tags.map((t: any) => t.attributes?.name?.en).filter(Boolean) : [],
+              altTitles: Array.isArray(attrs.altTitles) ? attrs.altTitles.map((t: any) => Object.values(t)[0]).filter(Boolean) as string[] : [],
+            });
+          }
+        } catch (_) {}
+      }
+    })(),
+
+    // Other sources fetch
+    ...sourceCandidates.map(async (cand) => {
+      const urlLower = cand.url.toLowerCase();
+      const nameLower = cand.name.toLowerCase();
+
+      try {
+        if (urlLower.includes('asura') || nameLower.includes('asura')) {
+          const meta = await fetchAsuraSeriesMetadata(cand.url);
+          if (meta) {
+            sourceResults.push({
+              sourceName: cand.name || 'Asura Scans',
+              sourceUrl: cand.url,
+              title: meta.title,
+              description: meta.description,
+              coverImage: meta.coverImage,
+              covers: meta.coverImage ? [{ url: meta.coverImage, label: 'Default Artwork (Asura)' }] : [],
+              rating: meta.rating,
+              genres: meta.genres || [],
+              altTitles: meta.altTitles || [],
+            });
+          }
+        } else if (urlLower.includes('weebcentral') || nameLower.includes('weeb')) {
+          const scraped = await fetchWeebCentralSeriesMetadata(cand.url);
+          if (scraped) {
+            sourceResults.push({
+              sourceName: cand.name || 'Weeb Central',
+              sourceUrl: cand.url,
+              title: scraped.title,
+              description: scraped.description,
+              coverImage: scraped.coverImage,
+              covers: scraped.coverImage ? [{ url: scraped.coverImage, label: 'Official Artwork (Weeb Central)' }] : [],
+              genres: scraped.genres || [],
+              rating: scraped.rating,
+            });
+          }
+        } else if (urlLower.includes('flamecomics') || nameLower.includes('flame')) {
+          const ctx = await fetchFlameSeriesContext(cand.url);
+          if (ctx?.matchedSeries) {
+            const thumb = ctx.matchedSeries.thumb;
+            sourceResults.push({
+              sourceName: cand.name || 'Flame Comics',
+              sourceUrl: cand.url,
+              title: ctx.matchedSeries.title,
+              description: ctx.matchedSeries.synopsis,
+              coverImage: thumb,
+              covers: thumb ? [{ url: thumb, label: 'Series Poster (Flame Comics)' }] : [],
+              genres: ctx.matchedSeries.genres || [],
+            });
+          }
+        } else {
+          // Generic scraper fallback
+          const scraped = await fetchWeebCentralSeriesMetadata(cand.url).catch(() => null);
+          if (scraped && (scraped.title || scraped.coverImage)) {
+            sourceResults.push({
+              sourceName: cand.name,
+              sourceUrl: cand.url,
+              title: scraped.title,
+              description: scraped.description,
+              coverImage: scraped.coverImage,
+              covers: scraped.coverImage ? [{ url: scraped.coverImage, label: cand.name }] : [],
+              genres: scraped.genres || [],
+            });
+          }
+        }
+      } catch (_) {}
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    current: {
+      id: manga.id,
+      title: manga.title,
+      description: manga.description,
+      coverImage: manga.coverImage,
+      rating: manga.rating,
+      genres: manga.genres,
+      altTitles: manga.altTitles,
+      metadataOverrides: manga.metadataOverrides || [],
+    },
+    sources: sourceResults,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/manga/:id/custom-metadata-update
+//
+// Plex / Jellyfin style metadata field locking & custom artwork updater.
+// ---------------------------------------------------------------------------
+app.post("/api/manga/:id/custom-metadata-update", (req, res) => {
+  const { id } = req.params;
+  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!manga) return res.status(404).json({ error: "Manga not found" });
+
+  const {
+    title,
+    description,
+    coverImage,
+    rating,
+    genres,
+    altTitles,
+    metadataOverrides,
+  } = req.body || {};
+
+  const updated: MangaItem = { ...manga };
+
+  if (typeof title === 'string' && title.trim()) updated.title = title.trim();
+  if (typeof description === 'string') updated.description = description.trim();
+  if (typeof coverImage === 'string' && coverImage.trim()) updated.coverImage = coverImage.trim();
+  if (typeof rating === 'number' && !isNaN(rating)) updated.rating = rating;
+  if (Array.isArray(genres)) updated.genres = Array.from(new Set(genres.map(String).filter(Boolean)));
+  if (Array.isArray(altTitles)) updated.altTitles = Array.from(new Set(altTitles.map(String).filter(Boolean)));
+  if (Array.isArray(metadataOverrides)) {
+    updated.metadataOverrides = Array.from(new Set(metadataOverrides.map(String).filter(Boolean)));
+  }
+
+  updated.lastUpdated = new Date().toISOString();
+
+  SqliteDb.upsertManga(updated);
+  const idx = mangaDatabase.findIndex((m) => m.id === id);
+  if (idx !== -1) mangaDatabase[idx] = updated;
+  saveDatabaseToDisk();
+
+  res.json({
+    success: true,
+    manga: updated,
+    message: "Metadata and artwork updated successfully",
+  });
+});
+
+
+
 
 /**
  * Test whether an anchor href looks like a real manga/series content path across
@@ -1229,13 +1651,19 @@ app.post("/api/manga/refresh-all-metadata", async (_req, res) => {
 
 // Categories & Shelves Endpoints
 app.get("/api/categories", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.json([]);
+  }
   const categories = SqliteDb.getCategories(userId);
   res.json(categories);
 });
 
 app.post("/api/categories", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required to create custom shelves" });
+  }
   const { name, description, color, icon, sortOrder } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ error: "Category name is required" });
@@ -1257,7 +1685,10 @@ app.post("/api/categories", (req, res) => {
 });
 
 app.put("/api/categories/:id", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required to update custom shelves" });
+  }
   const { id } = req.params;
   const updates = req.body || {};
 
@@ -1270,7 +1701,10 @@ app.put("/api/categories/:id", (req, res) => {
 });
 
 app.delete("/api/categories/:id", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required to delete custom shelves" });
+  }
   const { id } = req.params;
 
   SqliteDb.deleteCategory(id, userId);
@@ -1278,7 +1712,10 @@ app.delete("/api/categories/:id", (req, res) => {
 });
 
 app.post("/api/categories/assign", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required to assign shelves" });
+  }
   const { mangaId, categoryIds } = req.body || {};
   if (!mangaId || !Array.isArray(categoryIds)) {
     return res.status(400).json({ error: "mangaId and categoryIds array are required" });
@@ -1292,7 +1729,10 @@ app.post("/api/categories/assign", (req, res) => {
 });
 
 app.post("/api/categories/bulk-assign", (req, res) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  if (!userId) {
+    return res.status(401).json({ error: "Authentication required to bulk assign shelves" });
+  }
   const { mangaIds, categoryId, action = 'add' } = req.body || {};
   if (!Array.isArray(mangaIds) || !categoryId) {
     return res.status(400).json({ error: "mangaIds array and categoryId are required" });
@@ -1447,7 +1887,7 @@ app.put("/api/manga/:id", (req, res) => {
     isFavorite: body.isFavorite !== undefined ? Boolean(body.isFavorite) : existing.isFavorite,
     isFlagged: body.isFlagged !== undefined ? Boolean(body.isFlagged) : existing.isFlagged,
     flagReason: body.flagReason !== undefined ? String(body.flagReason) : existing.flagReason,
-    categories: body.categories !== undefined && Array.isArray(body.categories) ? body.categories : existing.categories,
+    categories: existing.categories,
     lastUpdated: new Date().toISOString(),
   };
 
@@ -5461,87 +5901,8 @@ function migrateStaleSourceUrlsInDatabase(): number {
 }
 
 export function migrateImportedBackupsToFavorites(): number {
-  const allManga = SqliteDb.getAllManga();
-  const profiles = SqliteDb.getAllProfiles();
-  const adminId = profiles.find((p: any) => p.role === 'admin')?.id || 'usr_admin';
-
-  let fixed = 0;
-  const colorList = ['#f59e0b', '#f43f5e', '#10b981', '#a855f7', '#0ea5e9', '#6366f1', '#06b6d4', '#ec4899'];
-
-  for (const m of allManga) {
-    if (m.id.startsWith('kotatsu_') || m.id.startsWith('tachi_')) {
-      if (!m.isFavorite) {
-        m.isFavorite = true;
-        SqliteDb.toggleFavorite(m.id, true);
-        fixed++;
-      }
-      const hasWorkingSource = Boolean(m.sourceUrl && m.sourceUrl.trim().length > 0 && !isMangaDexSourceLink(m.sourceName, m.sourceUrl));
-      if (!hasWorkingSource && !m.isFlagged) {
-        m.isFlagged = true;
-        m.flagReason = 'Missing source';
-        SqliteDb.toggleFlag(m.id, true, 'Missing source');
-      }
-      SqliteDb.setUserFavorite(adminId, m.id, true);
-      if (m.userId) {
-        SqliteDb.setUserFavorite(m.userId, m.id, true);
-      }
-      for (const p of profiles) {
-        SqliteDb.setUserFavorite(p.id, m.id, true);
-      }
-
-      // Restore category links from backup metadata
-      if (Array.isArray(m.categories) && m.categories.length > 0) {
-        const targetUsers = [adminId, m.userId, ...profiles.map((p: any) => p.id)].filter(Boolean);
-        for (const uid of Array.from(new Set(targetUsers))) {
-          const userCats = SqliteDb.getCategories(uid);
-          const userCatMap = new Map<string, string>();
-          for (const c of userCats) {
-            userCatMap.set(c.name.toLowerCase().trim(), c.id);
-            userCatMap.set(c.id, c.id);
-          }
-
-          const resolvedIds: string[] = [];
-          for (const rawCat of m.categories) {
-            const trimmed = String(rawCat).trim();
-            if (!trimmed) continue;
-            let catId = userCatMap.get(trimmed.toLowerCase()) || userCatMap.get(trimmed);
-            if (!catId) {
-              catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-              const pickColor = colorList[userCats.length % colorList.length];
-              SqliteDb.createCategory({
-                id: catId,
-                name: trimmed,
-                color: pickColor,
-                icon: 'Bookmark',
-                sortOrder: userCats.length,
-                userId: uid,
-                createdAt: new Date().toISOString(),
-              });
-              userCatMap.set(trimmed.toLowerCase(), catId);
-              userCatMap.set(catId, catId);
-              userCats.push({ id: catId, name: trimmed, sortOrder: userCats.length, userId: uid });
-            }
-            resolvedIds.push(catId);
-          }
-          if (resolvedIds.length > 0) {
-            SqliteDb.setMangaCategories(m.id, resolvedIds, uid);
-          }
-        }
-      }
-
-      if (m.currentChapter > 0 || m.status) {
-        const targetUsers = [adminId, m.userId, ...profiles.map((p: any) => p.id)].filter(Boolean);
-        for (const uid of Array.from(new Set(targetUsers))) {
-          SqliteDb.setUserLibraryChapter(uid, m.id, m.currentChapter, { status: m.status });
-        }
-      }
-    }
-  }
-  if (fixed > 0) {
-    console.log(`[Migration] Ensured ${fixed} imported backup series are marked as favorites in Library.`);
-    saveDatabaseToDisk();
-  }
-  return fixed;
+  // Deprecated: Per-user categories and favorites are handled during individual backup import.
+  return 0;
 }
 
 const UA_HEADERS = {
@@ -7635,12 +7996,6 @@ async function startServer() {
   try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
     console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
   }
-
-  // 1c. Ensure imported Kotatsu/Tachiyomi backups are active favorites in Library
-  try { migrateImportedBackupsToFavorites(); } catch (e) {
-    console.warn('[Migration] backup favorites migration failed:', (e as Error)?.message || e);
-  }
-
 
   // 1c. Purge any residual Reaper Scans items from memory & SQLite
   purgeReaperScansFromAllStorage();

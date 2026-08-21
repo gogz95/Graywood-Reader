@@ -1,13 +1,29 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
 import { SqliteDb } from '../sqlite-db';
+import { signAuthToken } from '../server/security';
 
 describe('User-Defined Categories & Custom Shelves', () => {
   const testUserId = 'usr_cat_tester';
+  const createdTestCatIds: string[] = [];
+
+  afterEach(() => {
+    // Clean up any test categories
+    for (const catId of createdTestCatIds) {
+      try {
+        SqliteDb.deleteCategory(catId, testUserId);
+        SqliteDb.deleteCategory(catId, 'usr_admin');
+        SqliteDb.deleteCategory(catId, 'usr_user_a');
+        SqliteDb.deleteCategory(catId, 'usr_user_b');
+      } catch (_) {}
+    }
+    createdTestCatIds.length = 0;
+  });
 
   it('creates, lists, updates, and deletes categories in SQLite', () => {
     const catId = `cat_test_${Date.now()}`;
+    createdTestCatIds.push(catId);
     const newCat = SqliteDb.createCategory({
       id: catId,
       name: 'Weekend Binge',
@@ -63,6 +79,7 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(createRes.body).toHaveProperty('id');
     expect(createRes.body.name).toBe('Masterpieces');
     const createdId = createRes.body.id;
+    createdTestCatIds.push(createdId);
 
     // 2. Get categories via API
     const getRes = await request(app).get('/api/categories');
@@ -108,11 +125,77 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(deleteRes.body.success).toBe(true);
   });
 
-  it('restores and auto-creates categories from backup bulk import', async () => {
-    const backupCategoryName = `Imported Category ${Date.now()}`;
+  it('guarantees complete shelf isolation between different users', async () => {
+    const userA = { id: 'usr_user_a', username: 'user_a', role: 'user' as const };
+    const userB = { id: 'usr_user_b', username: 'user_b', role: 'user' as const };
+    const tokenA = signAuthToken({ sub: userA.id, ...userA });
+    const tokenB = signAuthToken({ sub: userB.id, ...userB });
+
+    // 1. User A creates a private shelf "User A Favorites"
+    const createResA = await request(app)
+      .post('/api/categories')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({
+        name: 'User A Favorites',
+        description: 'Private shelf for User A',
+        color: '#f43f5e',
+      });
+    expect(createResA.status).toBe(201);
+    const catIdA = createResA.body.id;
+    createdTestCatIds.push(catIdA);
+
+    // 2. User A assigns manga m_isolation_test to catIdA
+    const mangaTestId = 'm_isolation_test_series';
+    const assignResA = await request(app)
+      .post('/api/categories/assign')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({
+        mangaId: mangaTestId,
+        categoryIds: [catIdA],
+      });
+    expect(assignResA.status).toBe(200);
+    expect(assignResA.body.categories).toEqual([catIdA]);
+
+    // 3. User B fetches their categories -> must NOT contain User A's shelf
+    const getResB = await request(app)
+      .get('/api/categories')
+      .set('Authorization', `Bearer ${tokenB}`);
+    expect(getResB.status).toBe(200);
+    expect(getResB.body.some((c: any) => c.id === catIdA || c.name === 'User A Favorites')).toBe(false);
+
+    // 4. User B gets manga overlay -> mangaTestId must NOT have catIdA in categories for User B
+    const mangaItem = {
+      id: mangaTestId,
+      title: 'Isolation Manga',
+      categories: [catIdA], // Even if global object had categories
+    } as any;
+    const overlayB = SqliteDb.applyUserOverlay([mangaItem], userB.id);
+    expect(overlayB[0].categories).toEqual([]);
+
+    // 5. User B tries to update User A's category -> rejected 404
+    const updateResB = await request(app)
+      .put(`/api/categories/${catIdA}`)
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: 'Hacked by User B' });
+    expect(updateResB.status).toBe(404);
+
+    // 6. User B tries to delete User A's category -> User A's category still exists
+    await request(app)
+      .delete(`/api/categories/${catIdA}`)
+      .set('Authorization', `Bearer ${tokenB}`);
+    const checkCatsA = SqliteDb.getCategories(userA.id);
+    expect(checkCatsA.some((c) => c.id === catIdA)).toBe(true);
+
+    // Clean up
+    SqliteDb.deleteCategory(catIdA, userA.id);
+  });
+
+  it('restores and auto-creates categories for importing user only on bulk import', async () => {
+    const backupCategoryName = `Imported Test Shelf ${Date.now()}`;
+    const testSeriesId = `kotatsu_backup_cat_${Date.now()}`;
     const backupItems = [
       {
-        id: `kotatsu_backup_cat_${Date.now()}`,
+        id: testSeriesId,
         title: 'Overgeared',
         sourceName: 'Asura Scans',
         sourceUrl: 'https://asurascans.com/comics/overgeared',
@@ -128,15 +211,24 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(importRes.status).toBe(201);
     expect(importRes.body.count).toBe(1);
 
-    // Verify category was automatically created in user categories
+    // Verify category was created for admin/host
     const getCatsRes = await request(app).get('/api/categories');
     expect(getCatsRes.status).toBe(200);
     const foundCat = getCatsRes.body.find((c: any) => c.name === backupCategoryName);
     expect(foundCat).toBeDefined();
+    if (foundCat) createdTestCatIds.push(foundCat.id);
 
-    // Verify manga is linked to this category
+    // Verify manga is linked to this category for admin
     const mangaCategories = SqliteDb.getMangaCategories(backupItems[0].id, 'usr_admin');
-    expect(mangaCategories).toContain(foundCat.id);
+    expect(mangaCategories).toContain(foundCat?.id);
+
+    // Verify other users do NOT have this category automatically injected
+    const otherUserCats = SqliteDb.getCategories('usr_other_random_user');
+    expect(otherUserCats.some((c) => c.name === backupCategoryName)).toBe(false);
+
+    // Clean up
+    if (foundCat) SqliteDb.deleteCategory(foundCat.id, 'usr_admin');
+    SqliteDb.deleteManga(testSeriesId);
   });
 
   it('restores user reading progress on backup bulk import', async () => {
@@ -166,6 +258,9 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(itemState).toBeDefined();
     expect(itemState?.currentChapter).toBe(142);
     expect(itemState?.status).toBe('reading');
+
+    // Clean up
+    SqliteDb.deleteManga(progressMangaId);
   });
 
   it('correctly detects 18+ / NSFW manga for library toggle', async () => {

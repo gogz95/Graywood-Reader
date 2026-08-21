@@ -74,7 +74,16 @@ export function resolveAuthUser(req: express.Request): UserProfile | null {
   const payload = verifyAuthToken(token);
   if (!payload || typeof payload.sub !== 'string') return null;
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- live binding (declared below)
-  return userProfiles.find((u) => u.id === payload.sub) || null;
+  const inMem = userProfiles.find((u) => u.id === payload.sub);
+  if (inMem) return inMem;
+  const fromDb = SqliteDb.getProfileById(payload.sub);
+  if (fromDb) return fromDb;
+  return {
+    id: payload.sub,
+    name: (payload.username as string) || (payload.name as string) || payload.sub,
+    username: (payload.username as string) || payload.sub,
+    role: (payload.role as any) || 'user',
+  } as UserProfile;
 }
 
 // ============================================================================

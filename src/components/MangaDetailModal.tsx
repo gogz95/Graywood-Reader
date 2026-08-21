@@ -23,9 +23,12 @@ import {
   RefreshCw,
   AlertTriangle,
   Folder,
+  Palette,
 } from 'lucide-react';
 import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 import { SourceFinderModal } from './SourceFinderModal';
+import { MetadataStudioModal } from './MetadataStudioModal';
+import { MetadataPersonalizerPanel } from './MetadataPersonalizerPanel';
 
 interface MangaDetailModalProps {
   manga: MangaItem;
@@ -60,8 +63,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [isSourceFinderOpen, setIsSourceFinderOpen] = useState(false);
+  const [isMetadataStudioOpen, setIsMetadataStudioOpen] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>(manga.categories || []);
+
+  React.useEffect(() => {
+    setActiveCategoryIds(manga.categories || []);
+  }, [manga.id, manga.categories]);
 
   React.useEffect(() => {
     apiFetch('/api/categories')
@@ -166,11 +174,22 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
           </button>
 
           <div className="flex flex-col sm:flex-row gap-5 items-start">
-            <img
-              src={manga.coverImage}
-              alt={manga.title}
-              className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-app shadow-xl border border-edge"
-            />
+            <div
+              className="relative group cursor-pointer shrink-0"
+              onClick={() => setIsMetadataStudioOpen(true)}
+              title="Click to personalize cover art & metadata across sources"
+            >
+              <img
+                src={manga.coverImage}
+                alt={manga.title}
+                className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-app shadow-xl border border-edge group-hover:opacity-90 group-hover:scale-[1.02] transition-all"
+              />
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-opacity p-2 text-center text-white">
+                <Palette className="w-5 h-5 text-accent" />
+                <span className="text-[11px] font-bold">Poster Studio</span>
+                <span className="text-[9px] text-secondary">Click to customize</span>
+              </div>
+            </div>
 
             <div className="space-y-2 flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -353,6 +372,16 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => setIsMetadataStudioOpen(true)}
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm"
+                  title="Personalize artwork, choose covers from available sources & lock fields (Jellyfin/Plex style)"
+                >
+                  <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
+                  <span>Poster & Metadata Studio</span>
+                </button>
+
+                <button
                   onClick={handleRefreshMetadata}
                   disabled={isRefreshingMetadata}
                   className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-50 text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
@@ -436,6 +465,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               </div>
             </div>
           )}
+
+          {/* Metadata Personalizer & Source Options */}
+          <MetadataPersonalizerPanel
+            manga={manga}
+            onUpdateManga={onUpdateManga}
+            onOpenStudio={() => setIsMetadataStudioOpen(true)}
+          />
 
           {/* Synopsis */}
           <div className="space-y-1.5">
@@ -577,6 +613,14 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
           setFlagReason(updated.flagReason || '');
           onUpdateManga(updated);
         }}
+      />
+
+      {/* Jellyfin & Plex Style Poster & Metadata Studio Modal */}
+      <MetadataStudioModal
+        manga={manga}
+        isOpen={isMetadataStudioOpen}
+        onClose={() => setIsMetadataStudioOpen(false)}
+        onUpdateManga={onUpdateManga}
       />
     </div>
   );

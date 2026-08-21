@@ -175,7 +175,7 @@ export default function App() {
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
   // Fetch initial data from server
-  const fetchMangaList = async () => {
+  const fetchMangaList = useCallback(async () => {
     try {
       const res = await apiFetch('/api/manga');
       if (res.ok) {
@@ -185,7 +185,7 @@ export default function App() {
     } catch (err) {
       console.error('Fetch manga list error:', err);
     }
-  };
+  }, []);
 
   const fetchConfig = async () => {
     try {
@@ -368,6 +368,9 @@ export default function App() {
 
   // Synchronize Client-Side Session Reading Progress when Guest profile is active
   useEffect(() => {
+    fetchMangaList();
+    window.dispatchEvent(new CustomEvent('refresh-categories'));
+
     if (activeProfileId === 'usr_guest') {
       const sessionHistory = getClientSessionHistory();
       if (Object.keys(sessionHistory).length > 0) {
@@ -392,7 +395,7 @@ export default function App() {
         localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, activeProfileId);
       } catch (_) {}
     }
-  }, [activeProfileId]);
+  }, [activeProfileId, fetchMangaList]);
 
   useEffect(() => {
     (async () => {

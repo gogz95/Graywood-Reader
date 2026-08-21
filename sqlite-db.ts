@@ -102,6 +102,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_manga_categories_cat ON manga_categories(category_id);
 `);
 
+try {
+  db.exec(`
+    DELETE FROM categories WHERE name LIKE 'Imported Category %';
+    DELETE FROM manga_categories WHERE category_id NOT IN (SELECT id FROM categories);
+  `);
+} catch (e) { }
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY,
@@ -693,6 +700,10 @@ export const SqliteDb = {
     return stmtGetAllProfiles.all();
   },
 
+  getProfileById(id: string): any {
+    return db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) || null;
+  },
+
   upsertProfile(profile: any) {
     stmtUpsertProfile.run({
       id: profile.id,
@@ -886,7 +897,7 @@ export const SqliteDb = {
         currentChapter: state ? state.currentChapter : (Number(m.currentChapter) || 0),
         lastReadAt: state?.lastReadAt || m.lastReadAt,
         status: (state?.status as MangaItem['status']) || m.status,
-        categories: userCats !== undefined ? userCats : (m.categories || []),
+        categories: userCats || [],
       };
     });
   },

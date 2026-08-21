@@ -164,6 +164,45 @@ export async function searchWeebCentral(query: string): Promise<WeebCentralSerie
   }
 }
 
+/** Fetch detailed metadata for a specific Weeb Central series URL or ID. */
+export async function fetchWeebCentralSeriesMetadata(seriesUrlOrSlug: string): Promise<WeebCentralSeriesItem | null> {
+  try {
+    const seriesId = extractWeebCentralSeriesId(seriesUrlOrSlug);
+    const targetUrl = seriesId ? `https://weebcentral.com/series/${seriesId}` : seriesUrlOrSlug;
+    const res = await fetch(targetUrl, {
+      headers: UA_HEADERS,
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const rawTitle = $('h1').first().text().trim() || $('title').text().replace(/ - Weeb Central.*/i, '').trim();
+    const title = cleanWeebCentralTitle(rawTitle);
+    if (!title) return null;
+    const cover = $('img[src*="/covers/"], main img, article img').first().attr('src') || '';
+    const desc = $('p.description, .description, main p').first().text().trim().replace(/\s+/g, ' ');
+    const genres: string[] = [];
+    $('a[href*="/search?tags="], .tag, .badge').each((_, el) => {
+      const tagText = $(el).text().trim();
+      if (tagText && !genres.includes(tagText)) genres.push(tagText);
+    });
+    return {
+      id: `weebcentral_${seriesId || 'series'}`,
+      title,
+      sourceUrl: targetUrl,
+      coverImage: cover,
+      sourceName: 'Weeb Central',
+      description: desc,
+      genres: genres.length > 0 ? genres : ['Manga'],
+      type: 'manga',
+    };
+  } catch (err: any) {
+    console.warn('[WeebCentral Scraper] fetchSeriesMetadata error:', err.message);
+    return null;
+  }
+}
+
+
 /** Enumerate all chapters for a Weeb Central series. */
 export async function fetchWeebCentralChapterList(seriesUrl: string): Promise<ResolvedScraperChapter[]> {
   try {
