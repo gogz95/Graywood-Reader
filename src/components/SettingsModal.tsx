@@ -1222,26 +1222,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                             imported = await parseKotatsuBackup(text, activeProfile?.id || 'usr_admin');
                           }
 
-                          // Use fast bulk import endpoint with fallback
+                          // Use atomic bulk import endpoint
                           const bulkRes = await apiFetch('/api/manga/bulk-import', {
                             method: 'POST',
                             body: JSON.stringify(imported),
                           });
+                          const data = await bulkRes.json().catch(() => ({}));
                           if (bulkRes.ok) {
                             onRefreshData();
                             showToast(`Successfully restored ${imported.length} series from Kotatsu backup!`);
                           } else {
-                            // Fallback to sequential posts
-                            let added = 0;
-                            for (const item of imported) {
-                              await apiFetch('/api/manga', {
-                                method: 'POST',
-                                body: JSON.stringify(item),
-                              });
-                              added++;
-                            }
-                            onRefreshData();
-                            showToast(`Successfully restored ${added} series from Kotatsu backup!`);
+                            throw new Error(data.message || data.error || 'Failed to restore Kotatsu backup');
                           }
                         } catch (err: any) {
                           alert(`Failed to import Kotatsu backup: ${err.message}`);
@@ -1305,20 +1296,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                             method: 'POST',
                             body: JSON.stringify(imported),
                           });
+                          const data = await bulkRes.json().catch(() => ({}));
                           if (bulkRes.ok) {
                             onRefreshData();
                             showToast(`Successfully restored ${imported.length} series from Tachiyomi backup!`);
                           } else {
-                            let added = 0;
-                            for (const item of imported) {
-                              await apiFetch('/api/manga', {
-                                method: 'POST',
-                                body: JSON.stringify(item),
-                              });
-                              added++;
-                            }
-                            onRefreshData();
-                            showToast(`Successfully restored ${added} series from Tachiyomi backup!`);
+                            throw new Error(data.message || data.error || 'Failed to restore Tachiyomi backup');
                           }
                         } catch (err: any) {
                           alert(`Failed to import Tachiyomi backup: ${err.message}`);

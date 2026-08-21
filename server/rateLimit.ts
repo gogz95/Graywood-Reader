@@ -5,7 +5,7 @@ import express from 'express';
 // ==========================================
 export const ipRequestCounts = new Map<string, { count: number; resetTime: number }>();
 export const ipProxyRequestCounts = new Map<string, { count: number; resetTime: number }>();
-export const RATE_LIMIT_MAX = 300; // max 300 API requests per minute
+export const RATE_LIMIT_MAX = 1200; // max 1200 API requests per minute for normal clients
 export const RATE_LIMIT_PROXY_MAX = 2400; // image proxy: ~40 pages × retries
 export const RATE_LIMIT_WINDOW = 60 * 1000;
 
@@ -197,6 +197,16 @@ export function rateLimitMiddleware(req: express.Request, res: express.Response,
   // Allow all requests on localhost or host IP
   const clientIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
   if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
+    return next();
+  }
+
+  // Exempt backup restoration and batch operations
+  if (
+    req.path === '/api/manga/bulk-import' ||
+    req.path.startsWith('/api/settings/backup') ||
+    req.path.startsWith('/api/db/import') ||
+    req.path.startsWith('/api/gdpr')
+  ) {
     return next();
   }
 
