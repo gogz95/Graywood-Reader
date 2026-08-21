@@ -4,8 +4,10 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-## 🚀 Implemented Milestones (Completed)
-
+- ✅ **Strict 18+ / NSFW Guest Access Lockdown** (Aug 2026)
+  - Unauthenticated remote clients and guest users (`usr_guest`) are completely blocked from viewing, browsing, searching, or reading adult explicit content (403 Forbidden with login modal prompts).
+- ✅ **Full Router Modularization of `server.ts`** (Aug 2026)
+  - Successfully modularized monolithic `server.ts` (~8,200 lines down to ~650 lines) into dedicated domain routers (`manga`, `reader`, `sources`, `explore`, `tracker`, `localLibrary`, `auth`, `admin`, `settings`, `categories`, `progress`, `notes`, `bugs`, `webhooks`, `gdpr`, `opds`).
 - ✅ **Scheduled Automated Local Backups (`/data/backups/`)** (Aug 2026)
   - Configurable background backup worker with rolling retention limit.
   - Full UI controls in Settings to create, download, delete, and 1-click restore backup snapshots.
@@ -38,6 +40,18 @@ This document outlines the implemented milestones, architectural enhancements, a
 ---
 
 ## 🔮 Future Backlog
+
+### 📖 Canvas-Based Landscape Spread Auto-Splitting (Mihon-Style)
+- Automatically detect wide landscape double-page scans (`width > height * 1.2`) in manga/webtoon mode and split them into two sequential portrait pages for comfortable mobile viewing.
+
+### 🏷️ Tri-State Category & Tag Filters (`Include` / `Exclude` / `Ignore`)
+- Upgrade library and browse genre filters to 3-state logic (`+Include`, `-Exclude`, `Ignore`) to allow fine-grained catalog filtering (e.g. Include `Action` + `Fantasy`, but Exclude `Harem`).
+
+### ⚡ Headless Next.js `buildId` In-Memory Caching
+- Cache Next.js `buildId` for scrapers (e.g. FlameComics) in memory with a 10-minute TTL to avoid redundant homepage HTTP requests during batch library updates.
+
+### 📚 EPUB & Light Novel Reflowable Text Viewer
+- Integrate a dedicated reflowable text/EPUB reader engine (`epub.js`) with custom typography, font sizing, and chapter navigation for light novels and web novels.
 
 ### 🎮 Discord Rich Presence (RPC)
 - Broadcast active reading session to Discord ("Reading Solo Leveling — Ch 142" with cover art + elapsed time) for desktop/Electron wrapper.
