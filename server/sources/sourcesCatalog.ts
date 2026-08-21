@@ -1,6 +1,20 @@
 import fs from 'fs';
 import path from 'path';
-import { SourceDefinition, SourceEngineType, DatabaseSyncConfig, isMangaDexSourceLink } from '../../src/types';
+import { SourceDefinition, SourceEngineType, DatabaseSyncConfig, isMangaDexSourceLink, MangaItem } from '../../src/types';
+
+export type { SourceDefinition, SourceEngineType };
+
+export function isContentPath(p: string): boolean {
+  if (!p) return false;
+  return /\/(read|chapter|manga|comic|series|view|comic-detail)\//i.test(p) ||
+         /[-_/](ch(?:apter)?|ep(?:isode)?)[-_/]?\d+/i.test(p);
+}
+
+export function isNavText(t: string): boolean {
+  if (!t) return true;
+  const lower = t.toLowerCase().trim();
+  return ['next', 'prev', 'previous', 'first', 'last', 'index', 'home', 'back', 'chapter list', 'all chapters'].includes(lower);
+}
 
 // Curated active fallback sources in case catalog.json is unavailable.
 // IMPORTANT — engine labels:
@@ -347,4 +361,39 @@ export function getRegisteredSource(sourceId: string): IMangaSource | undefined 
 export function getSourceMetadataConfidence(sourceId: string): number {
   return getRegisteredSource(sourceId)?.metadataConfidence ?? 70;
 }
+
+/**
+ * Check if a given series belongs to a disabled source using O(1) SOURCE_MAP lookups.
+ */
+export function isSeriesFromDisabledSource(m: MangaItem): boolean {
+  if (disabledSourceIds.size === 0) return false;
+
+  const sName = (m.sourceName || '').toLowerCase();
+  const sUrl = (m.sourceUrl || '').toLowerCase();
+
+  for (const disabledId of disabledSourceIds) {
+    const sourceDef = getSourceById(disabledId);
+    if (!sourceDef) continue;
+
+    const sourceNameLower = sourceDef.name.toLowerCase();
+    const sourceIdLower = sourceDef.id.toLowerCase();
+    const baseDomain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+
+    // Check if series belongs to this disabled source
+    const matchesName = sName.includes(sourceIdLower) || sName.includes(sourceNameLower);
+    const matchesUrl = sUrl && (sUrl.includes(sourceIdLower) || sUrl.includes(baseDomain));
+
+    if (matchesName || matchesUrl) {
+      // MangaDex API fallback exception: if MangaDex is enabled and item has apiId, keep it!
+      const mangadexIsEnabled = !disabledSourceIds.has('mangadex');
+      if (mangadexIsEnabled && (m.apiId || m.id.startsWith('md_') || (m.syncedFromApi && m.syncedFromApi.includes('MangaDex')))) {
+        return false;
+      }
+      return true;
+    }
+  }
+
+  return false;
+}
+
 

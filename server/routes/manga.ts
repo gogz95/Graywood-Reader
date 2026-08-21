@@ -25,7 +25,7 @@ import { preferEnglishTitle } from '../../src/utils/metadataHelpers';
 import { fetchAsuraSeriesMetadata, ASURA_API_HEADERS } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
 import { searchWeebCentral, fetchWeebCentralSeriesMetadata } from '../scrapers/weebCentral';
-import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive } from '../sources/sourcesCatalog';
+import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive, isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { APP_USER_AGENT } from '../version';
 
@@ -53,32 +53,6 @@ const MANGA_CREATE_FIELDS = {
   isFavorite: (v: any) => Boolean(v),
   isNsfw: (v: any, all: any) => (v !== undefined ? Boolean(v) : isNsfwManga(all)),
 };
-
-function isSeriesFromDisabledSourceInternal(m: MangaItem): boolean {
-  if (disabledSourceIds.size === 0) return false;
-  const sName = (m.sourceName || '').toLowerCase();
-  const sUrl = (m.sourceUrl || '').toLowerCase();
-
-  for (const disabledId of disabledSourceIds) {
-    const sourceDef = KOTATSU_SOURCES.find((s) => s.id === disabledId);
-    if (!sourceDef) continue;
-    const sourceNameLower = sourceDef.name.toLowerCase();
-    const sourceIdLower = sourceDef.id.toLowerCase();
-    const baseDomain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
-
-    const matchesName = sName.includes(sourceIdLower) || sName.includes(sourceNameLower);
-    const matchesUrl = sUrl && (sUrl.includes(sourceIdLower) || sUrl.includes(baseDomain));
-
-    if (matchesName || matchesUrl) {
-      const mangadexIsEnabled = !disabledSourceIds.has('mangadex');
-      if (mangadexIsEnabled && (m.apiId || m.id.startsWith('md_') || (m.syncedFromApi && m.syncedFromApi.includes('MangaDex')))) {
-        return false;
-      }
-      return true;
-    }
-  }
-  return false;
-}
 
 export function isContentPath(href: string): boolean {
   if (!href || typeof href !== 'string') return false;
@@ -108,7 +82,7 @@ mangaRouter.get('/', (req, res) => {
   const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
 
   let allManga = SqliteDb.getAllManga();
-  allManga = allManga.filter((m) => !isSeriesFromDisabledSourceInternal(m));
+  allManga = allManga.filter((m) => !isSeriesFromDisabledSource(m));
 
   const overlayUserId = resolveRequestUserId(req);
   if (overlayUserId) {

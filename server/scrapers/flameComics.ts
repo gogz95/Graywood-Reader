@@ -20,18 +20,34 @@ export interface ResolvedScraperChapter {
   pageCount: number;
 }
 
-export async function fetchFlameComicsBuildId(): Promise<string | null> {
+let cachedBuildId: string | null = null;
+let cachedBuildIdTime = 0;
+const FLAME_BUILD_ID_TTL = 5 * 60 * 1000; // 5 minutes
+
+export async function fetchFlameComicsBuildId(forceRefresh = false): Promise<string | null> {
+  const now = Date.now();
+  if (!forceRefresh && cachedBuildId && (now - cachedBuildIdTime < FLAME_BUILD_ID_TTL)) {
+    return cachedBuildId;
+  }
+
   try {
     const homeRes = await fetch('https://flamecomics.xyz/', {
       headers: UA_HEADERS,
       signal: AbortSignal.timeout(12000),
     });
-    if (!homeRes.ok) return null;
+    if (!homeRes.ok) {
+      return cachedBuildId; // fallback to stale cache if network fails
+    }
     const homeHtml = await homeRes.text();
     const buildIdMatch = homeHtml.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
-    return buildIdMatch ? buildIdMatch[1] : null;
+    if (buildIdMatch?.[1]) {
+      cachedBuildId = buildIdMatch[1];
+      cachedBuildIdTime = now;
+      return cachedBuildId;
+    }
+    return cachedBuildId;
   } catch {
-    return null;
+    return cachedBuildId;
   }
 }
 

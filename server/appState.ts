@@ -139,7 +139,7 @@ export let syncConfig: DatabaseSyncConfig = {
   autoUpdateIntervalMinutes: 60,
   enableWebCrawling: true,
   sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
-  disabledSources: Array.from(disabledSourceIds),
+  disabledSources: disabledSourceIds ? Array.from(disabledSourceIds) : [],
   removedSources: [],
   reactivatedSources: [],
   lastSyncTime: new Date().toISOString(),
@@ -702,4 +702,19 @@ export type AppSettings = typeof appSettings;
 
 export function setAppSettings(next: AppSettings): void {
   appSettings = next;
+}
+
+let geminiClient: any = null;
+export function getGeminiClient(): any {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  if (!geminiClient) {
+    try {
+      const { GoogleGenAI } = require("@google/genai");
+      geminiClient = new GoogleGenAI({ apiKey: key });
+    } catch {
+      return null;
+    }
+  }
+  return geminiClient;
 }

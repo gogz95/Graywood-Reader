@@ -8,6 +8,7 @@ import {
 } from '../../src/utils/metadataHelpers';
 import { fetchAsuraSeriesMetadata } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
+import { isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import { APP_USER_AGENT } from '../version';
 
 // ── Rate-Limiting & Compliance Engine for MangaDex API ────────────────────────
@@ -338,7 +339,60 @@ export async function refreshSingleMangaMetadata(manga: MangaItem): Promise<Mang
   if (idx !== -1) {
     mangaDatabase[idx] = manga;
   }
-  saveDatabaseToDisk();
-
   return manga;
+}
+
+export async function enrichWithMangaDexMetadata<T extends { title: string; coverImage?: string; description?: string; genres?: string[]; altTitles?: string[]; apiId?: string | null }>(items: T[]): Promise<T[]> {
+  if (!items || items.length === 0) return items;
+  return Promise.all(
+    items.map(async (item) => {
+      try {
+        if (!item.title) return item;
+        const meta = await getMangaDexMetadataByTitle(item.title);
+        if (!meta) return item;
+
+        return {
+          ...item,
+          apiId: item.apiId || meta.apiId || null,
+          coverImage: item.coverImage || meta.coverImage || '',
+          description: item.description || meta.description || '',
+          genres: (item.genres && item.genres.length > 0) ? item.genres : (meta.genres || []),
+          altTitles: (item.altTitles && item.altTitles.length > 0) ? item.altTitles : (meta.altTitles || []),
+        };
+      } catch {
+        return item;
+      }
+    })
+  );
+}
+
+export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
+  purgedCount: number;
+  refreshedCount: number;
+}> {
+  let purgedCount = 0;
+  let refreshedCount = 0;
+
+  const validItems: MangaItem[] = [];
+  for (const m of mangaDatabase) {
+    if (isSeriesFromDisabledSource(m)) {
+      SqliteDb.deleteManga(m.id);
+      purgedCount++;
+    } else {
+      validItems.push(m);
+    }
+  }
+
+  mangaDatabase.length = 0;
+  mangaDatabase.push(...validItems);
+
+  for (const m of mangaDatabase.slice(0, 50)) {
+    try {
+      await refreshSingleMangaMetadata(m);
+      refreshedCount++;
+    } catch {}
+  }
+
+  saveDatabaseToDisk();
+  return { purgedCount, refreshedCount };
 }

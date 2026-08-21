@@ -5,7 +5,17 @@
 
 import fs from 'fs';
 import path from 'path';
-import { mangaDatabase, userProfiles, autoUpdateLogs, syncConfig, appSettings, saveDatabaseToDisk, replaceMangaDatabase } from '../appState';
+import {
+  mangaDatabase,
+  userProfiles,
+  autoUpdateLogs,
+  syncConfig,
+  appSettings,
+  buildEncryptedProfiles,
+  buildEncryptedSettings,
+  saveDatabaseToDisk,
+  replaceMangaDatabase,
+} from '../appState';
 import { SqliteDb } from '../../sqlite-db';
 
 export interface BackupFileInfo {
@@ -78,14 +88,16 @@ export function createBackupNow(customLabel = ''): { success: boolean; filename?
     const filename = `graywood_backup_${stamp}${suffix}.json`;
     const fullPath = path.join(dir, filename);
 
-    // Build complete export snapshot
+    // Build complete export snapshot with encrypted PII and settings
     const payload = {
       version: 2,
+      gdprEncrypted: true,
       exportedAt: now.toISOString(),
       generator: 'Graywood-Reader Auto-Backup',
       totalSeries: mangaDatabase.length,
       mangaDatabase,
-      userProfiles,
+      userProfiles: buildEncryptedProfiles(),
+      appSettings: buildEncryptedSettings(),
       syncConfig,
       autoUpdateLogs: autoUpdateLogs.slice(0, 100),
     };

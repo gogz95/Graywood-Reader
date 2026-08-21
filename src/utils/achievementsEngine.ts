@@ -270,6 +270,13 @@ export function computeReadingAchievements(mangaList: MangaItem[]): {
     }
   } catch {}
 
+  if (totalChapters === 0 && mangaList.length === 0) {
+    hasNightReading = false;
+    hasMorningReading = false;
+    currentStreak = 0;
+    longestStreak = 0;
+  }
+
   const uniqueSourcesCount = sourceSet.size;
   const distinctGenresCount = genreMap.size;
 
