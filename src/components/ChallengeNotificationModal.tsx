@@ -73,6 +73,7 @@ export const ChallengeNotificationModal: React.FC<ChallengeNotificationModalProp
   const [expandedCookieId, setExpandedCookieId] = useState<string | null>(null);
   const [manualCookies, setManualCookies] = useState<Record<string, string>>({});
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [flaggingId, setFlaggingId] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);

@@ -2,7 +2,7 @@
 # MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # ==============================================================================
 
-FROM node:lts-alpine AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -10,16 +10,17 @@ COPY package*.json ./
 
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache python3 make g++ && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
     npm ci && \
-    apk del python3 make g++
+    apt-get purge -y --auto-remove python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
 RUN npm run build
 
-FROM node:lts-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
@@ -29,10 +30,11 @@ ENV HOST=0.0.0.0
 
 COPY package*.json ./
 
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache python3 make g++ libstdc++ wget && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ wget ca-certificates && \
     npm ci --omit=dev && \
-    apk del python3 make g++
+    apt-get purge -y --auto-remove python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
@@ -40,13 +42,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/BUGS.md ./BUGS.md
 COPY --from=builder /app/package.json ./package.json
 
-RUN mkdir -p /app/data/storage
+RUN mkdir -p /app/data/storage && chown -R node:node /app
 
-# Run as the unprivileged node user (created by the official node images).
-# NOTE: with a bind-mounted ./data volume the host directory ownership wins —
-# ensure the host folder is writable by the container's uid (e.g. chown to
-# uid 1000) or the server will fail to persist.
-RUN chown -R node:node /app
 USER node
 
 EXPOSE 3000
