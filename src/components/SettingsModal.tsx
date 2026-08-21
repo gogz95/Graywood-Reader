@@ -32,7 +32,8 @@ import {
   Sparkles,
   AlertTriangle,
   ExternalLink,
-  Eye
+  Eye,
+  Upload
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
@@ -93,7 +94,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   isUpdating = false,
 }) => {
   const [activeSection, setActiveSection] = useState<
-    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'duplicates' | 'subdomain' | 'backup'
+    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'duplicates' | 'subdomain' | 'restore' | 'backup'
   >('reader');
   const isAdmin = activeProfile?.role === 'admin';
 
@@ -379,6 +380,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
 
           <button
             type="button"
+            onClick={() => setActiveSection('restore')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
+              activeSection === 'restore'
+                ? 'bg-accent text-accent-fg shadow-md font-black'
+                : 'text-secondary hover:text-primary hover:bg-elevated/60'
+            }`}
+          >
+            <Upload className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
+            <span>Backup & Restore</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveSection('backup')}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
               activeSection === 'backup'
@@ -386,8 +400,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Download className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent" />
-            <span>Backups & Storage</span>
+            <HardDrive className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent" />
+            <span>System Storage</span>
             {!isAdmin && (
               <span title="Admin access required" className="inline-flex">
                 <Lock className="w-3 h-3 text-muted" />
@@ -1146,15 +1160,284 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
             )
           )}
 
-          {/* 6. BACKUPS & STORAGE */}
+          {/* 6. BACKUP RESTORATION & LIBRARY MIGRATION (Available to all logged-in users) */}
+          {activeSection === 'restore' && (
+            <div className="space-y-6 text-xs sm:text-sm">
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-accent-2/10 text-accent-2 border border-accent-2/20">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-primary text-sm sm:text-base">
+                      Library Backup & Cross-Platform Migration
+                    </h3>
+                    <p className="text-secondary text-xs">
+                      Restore and sync your tracked manga, chapters, and reading progress from external reader apps or backup files directly into your personal account.
+                    </p>
+                  </div>
+                </div>
+                {(!activeProfile || activeProfile.id === 'usr_guest') && (
+                  <div className="p-3 bg-warning/10 border border-warning/30 rounded-xl text-warning text-xs font-semibold flex items-center gap-2 mt-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>You are browsing as a guest. Restoring backups will add series to the local catalog. Log in to permanently isolate your private library.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Kotatsu Backup Migration Card */}
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-primary text-sm flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-accent-2" />
+                    Kotatsu Ecosystem Backup Migration
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-2/20 text-accent-2 border border-accent-2/30">
+                    ZIP & JSON Standard
+                  </span>
+                </div>
+
+                <p className="text-secondary text-xs">
+                  Restore your complete library, categories, and reading history from Kotatsu app backups (supports <code className="text-primary font-mono text-[11px]">.bk.zip</code>, <code className="text-primary font-mono text-[11px]">.zip</code>, or <code className="text-primary font-mono text-[11px]">.json</code>).
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <label className="px-4 py-2.5 rounded-xl bg-accent-2/20 hover:bg-accent-2/30 text-accent-2 border border-accent-2/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
+                    <Download className="w-4 h-4 rotate-180" />
+                    <span>Import Kotatsu Backup (.zip / .json)</span>
+                    <input
+                      type="file"
+                      accept=".zip,.json,.bk.zip,application/zip,application/json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          let imported: MangaItem[] = [];
+                          if (file.name.endsWith('.zip') || file.type.includes('zip')) {
+                            const arrayBuffer = await file.arrayBuffer();
+                            imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
+                          } else {
+                            const text = await file.text();
+                            imported = await parseKotatsuBackup(text, activeProfile?.id || 'usr_admin');
+                          }
+
+                          // Use fast bulk import endpoint with fallback
+                          const bulkRes = await apiFetch('/api/manga/bulk-import', {
+                            method: 'POST',
+                            body: JSON.stringify(imported),
+                          });
+                          if (bulkRes.ok) {
+                            onRefreshData();
+                            showToast(`Successfully restored ${imported.length} series from Kotatsu backup!`);
+                          } else {
+                            // Fallback to sequential posts
+                            let added = 0;
+                            for (const item of imported) {
+                              await apiFetch('/api/manga', {
+                                method: 'POST',
+                                body: JSON.stringify(item),
+                              });
+                              added++;
+                            }
+                            onRefreshData();
+                            showToast(`Successfully restored ${added} series from Kotatsu backup!`);
+                          }
+                        } catch (err: any) {
+                          alert(`Failed to import Kotatsu backup: ${err.message}`);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const jsonStr = exportToKotatsuBackup(mangaList);
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `kotatsu_backup_${new Date().toISOString().split('T')[0]}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showToast('Kotatsu backup exported!');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export Kotatsu Backup (.json)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tachiyomi / Mihon Backup Migration Card */}
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-primary text-sm flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-info" />
+                    Tachiyomi & Mihon Ecosystem Backup Migration
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-info/20 text-info border border-info/30">
+                    v2 Backup Standard
+                  </span>
+                </div>
+
+                <p className="text-secondary text-xs">
+                  Migrate all your tracked manga, reading progress, and categories directly between Tachiyomi / Mihon and Graywood Reader.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <label className="px-4 py-2.5 rounded-xl bg-info/20 hover:bg-info/30 text-info border border-info/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
+                    <Download className="w-4 h-4 rotate-180" />
+                    <span>Import Tachiyomi Backup (.json)</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const text = await file.text();
+                          const imported = parseTachiyomiBackup(text, activeProfile?.id || 'usr_admin');
+                          const bulkRes = await apiFetch('/api/manga/bulk-import', {
+                            method: 'POST',
+                            body: JSON.stringify(imported),
+                          });
+                          if (bulkRes.ok) {
+                            onRefreshData();
+                            showToast(`Successfully restored ${imported.length} series from Tachiyomi backup!`);
+                          } else {
+                            let added = 0;
+                            for (const item of imported) {
+                              await apiFetch('/api/manga', {
+                                method: 'POST',
+                                body: JSON.stringify(item),
+                              });
+                              added++;
+                            }
+                            onRefreshData();
+                            showToast(`Successfully restored ${added} series from Tachiyomi backup!`);
+                          }
+                        } catch (err: any) {
+                          alert(`Failed to import Tachiyomi backup: ${err.message}`);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const jsonStr = exportToTachiyomiBackup(mangaList);
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `tachiyomi_backup_${new Date().toISOString().split('T')[0]}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showToast('Tachiyomi backup exported!');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export Tachiyomi Backup (.json)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Personal Library JSON Snapshot Card */}
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-primary text-sm flex items-center gap-2">
+                    <Folder className="w-4 h-4 text-accent" />
+                    Personal Library JSON Snapshot
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent border border-accent/30">
+                    Native JSON
+                  </span>
+                </div>
+
+                <p className="text-secondary text-xs">
+                  Export an immediate JSON file containing all manga series in your active library, or import previous library JSON saves.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <label className="px-4 py-2.5 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent border border-accent/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
+                    <Download className="w-4 h-4 rotate-180" />
+                    <span>Import Library JSON (.json)</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const text = await file.text();
+                          const parsed = JSON.parse(text);
+                          const items: MangaItem[] = Array.isArray(parsed)
+                            ? parsed
+                            : parsed.mangaDatabase || parsed.mangas || parsed.items || [];
+                          if (!Array.isArray(items) || items.length === 0) {
+                            throw new Error('No valid manga items found in JSON file');
+                          }
+                          await apiFetch('/api/manga/bulk-import', {
+                            method: 'POST',
+                            body: JSON.stringify(items),
+                          });
+                          onRefreshData();
+                          showToast(`Successfully restored ${items.length} series into your library!`);
+                        } catch (err: any) {
+                          alert(`Failed to import library JSON: ${err.message}`);
+                        }
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const payload = {
+                        exportedAt: new Date().toISOString(),
+                        user: activeProfile?.name || 'User',
+                        count: mangaList.length,
+                        items: mangaList,
+                      };
+                      const jsonStr = JSON.stringify(payload, null, 2);
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `graywood_library_${activeProfile?.username || 'user'}_${new Date().toISOString().split('T')[0]}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showToast('Library JSON backup downloaded!');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Export My Library (.json)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 7. SYSTEM STORAGE & DATABASE (Host / Admin Only) */}
           {activeSection === 'backup' && (
             isAdmin ? (
               <div className="space-y-6 text-xs sm:text-sm">
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                   <div className="font-bold text-primary text-sm flex items-center gap-2">
                     <HardDrive className="w-4 h-4 text-accent" />
-                    Library Backups & Cache Management
+                    System Database Snapshots & Cache Buffer
                   </div>
+                  <p className="text-secondary text-xs">
+                    Host administrative controls for global server configuration, SQLite database backups, and disk cache cleanup.
+                  </p>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -1162,7 +1445,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       className="px-4 py-2.5 rounded-xl bg-success hover:bg-success text-accent-fg font-bold flex items-center gap-2 shadow-lg transition-all"
                     >
                       <Download className="w-4 h-4" />
-                      <span>Export JSON Backup</span>
+                      <span>Export Full System Backup</span>
                     </button>
 
                     <button
@@ -1172,148 +1455,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                     >
                       <Trash2 className="w-4 h-4" />
                       <span>Clear Image Cache Buffer</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tachiyomi / Mihon Backup Migration Card */}
-                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-primary text-sm flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-info" />
-                      Tachiyomi & Mihon Ecosystem Backup Migration
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-info/20 text-info border border-info/30">
-                      v2 Backup Standard
-                    </span>
-                  </div>
-
-                  <p className="text-secondary text-xs">
-                    Migrate all your tracked manga, reading progress, and categories directly between Tachiyomi / Mihon and Graywood Reader.
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <label className="px-4 py-2.5 rounded-xl bg-info/20 hover:bg-info/30 text-info border border-info/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
-                      <Download className="w-4 h-4 rotate-180" />
-                      <span>Import Tachiyomi Backup (.json)</span>
-                      <input
-                        type="file"
-                        accept=".json"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const text = await file.text();
-                            const imported = parseTachiyomiBackup(text, activeProfile?.id || 'usr_admin');
-                            let added = 0;
-                            for (const item of imported) {
-                              await apiFetch('/api/manga', {
-                                method: 'POST',
-                                body: JSON.stringify(item),
-                              });
-                              added++;
-                            }
-                            onRefreshData();
-                            showToast(`Successfully imported ${added} series from Tachiyomi backup!`);
-                          } catch (err: any) {
-                            alert(`Failed to import Tachiyomi backup: ${err.message}`);
-                          }
-                        }}
-                      />
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const jsonStr = exportToTachiyomiBackup(mangaList);
-                        const blob = new Blob([jsonStr], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `tachiyomi_backup_${new Date().toISOString().split('T')[0]}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        showToast('Tachiyomi backup exported!');
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Export Tachiyomi Backup (.json)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Kotatsu Backup Migration Card */}
-                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-primary text-sm flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-accent-2" />
-                      Kotatsu Ecosystem Backup Migration
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-2/20 text-accent-2 border border-accent-2/30">
-                      ZIP & JSON Standard
-                    </span>
-                  </div>
-
-                  <p className="text-secondary text-xs">
-                    Restore your complete library, categories, and reading history from Kotatsu app backups (supports <code className="text-primary font-mono text-[11px]">.bk.zip</code>, <code className="text-primary font-mono text-[11px]">.zip</code>, or <code className="text-primary font-mono text-[11px]">.json</code>).
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <label className="px-4 py-2.5 rounded-xl bg-accent-2/20 hover:bg-accent-2/30 text-accent-2 border border-accent-2/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
-                      <Download className="w-4 h-4 rotate-180" />
-                      <span>Import Kotatsu Backup (.zip / .json)</span>
-                      <input
-                        type="file"
-                        accept=".zip,.json,.bk.zip,application/zip,application/json"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            let imported: MangaItem[] = [];
-                            if (file.name.endsWith('.zip') || file.type.includes('zip')) {
-                              const arrayBuffer = await file.arrayBuffer();
-                              imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
-                            } else {
-                              const text = await file.text();
-                              imported = await parseKotatsuBackup(text, activeProfile?.id || 'usr_admin');
-                            }
-                            let added = 0;
-                            for (const item of imported) {
-                              await apiFetch('/api/manga', {
-                                method: 'POST',
-                                body: JSON.stringify(item),
-                              });
-                              added++;
-                            }
-                            onRefreshData();
-                            showToast(`Successfully imported ${added} series from Kotatsu backup!`);
-                          } catch (err: any) {
-                            alert(`Failed to import Kotatsu backup: ${err.message}`);
-                          }
-                        }}
-                      />
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const jsonStr = exportToKotatsuBackup(mangaList);
-                        const blob = new Blob([jsonStr], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `kotatsu_backup_${new Date().toISOString().split('T')[0]}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        showToast('Kotatsu backup exported!');
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>Export Kotatsu Backup (.json)</span>
                     </button>
                   </div>
                 </div>
@@ -1364,7 +1505,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                 </div>
               </div>
             ) : (
-              renderAdminLockNotice('Database Backups & Data Isolation')
+              renderAdminLockNotice('System Storage & Database Controls')
             )
           )}
         </div>

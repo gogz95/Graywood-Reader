@@ -306,6 +306,9 @@ export async function parseKotatsuBackup(
   let favouritesList: KotatsuFavouriteEntry[] = [];
   let historyList: KotatsuHistoryEntry[] = [];
   const categoriesMap: Map<string | number, string> = new Map();
+  const statisticsMap = new Map<string, { timeSpentSeconds?: number; chaptersRead?: number; lastRead?: number | string; pagesRead?: number }>();
+  let totalImportedReadingTime = 0;
+  let totalImportedChaptersStat = 0;
 
   // 1. If binary input or string starting with PK signature -> Unpack ZIP
   if (input instanceof ArrayBuffer || input instanceof Uint8Array || (typeof input === 'string' && input.startsWith('PK'))) {
@@ -322,11 +325,17 @@ export async function parseKotatsuBackup(
 
     if (isZipBuffer(buf)) {
       const files = await unzipArchive(buf);
+
+      const getBase = (filePath: string) => {
+        const parts = filePath.replace(/\\/g, '/').split('/');
+        return (parts[parts.length - 1] || '').toLowerCase().trim();
+      };
       
       // Parse categories if available
       for (const [name, content] of Object.entries(files)) {
-        const lower = name.toLowerCase();
-        if (lower.includes('categor') && lower.endsWith('.json')) {
+        const base = getBase(name);
+        if (base === 'sources' || base === 'sources.json') continue; // Ignore sources file
+        if (base === 'categories' || base === 'categories.json' || base === 'favourites_categories' || base === 'favourites_categories.json' || base.includes('categor')) {
           try {
             const parsedCats = JSON.parse(content);
             const list: KotatsuCategory[] = Array.isArray(parsedCats) ? parsedCats : parsedCats.categories || [];
@@ -341,19 +350,87 @@ export async function parseKotatsuBackup(
 
       // Parse history if available
       for (const [name, content] of Object.entries(files)) {
-        const lower = name.toLowerCase();
-        if (lower.includes('history') && lower.endsWith('.json')) {
+        const base = getBase(name);
+        if (base === 'sources' || base === 'sources.json') continue;
+        if (base === 'history' || base === 'history.json' || (base.includes('history') && !base.includes('categor'))) {
           try {
             const parsedHistory = JSON.parse(content);
-            historyList = Array.isArray(parsedHistory) ? parsedHistory : parsedHistory.history || [];
+            const list = Array.isArray(parsedHistory) ? parsedHistory : parsedHistory.history || [];
+            if (Array.isArray(list) && list.length > 0) {
+              historyList.push(...list);
+            }
           } catch {}
         }
       }
 
-      // Parse favourites / manga
+      // Parse bookmarks if available
+      const bookmarksList: any[] = [];
       for (const [name, content] of Object.entries(files)) {
-        const lower = name.toLowerCase();
-        if ((lower.includes('favourit') || lower.includes('favorit') || lower.includes('manga')) && lower.endsWith('.json')) {
+        const base = getBase(name);
+        if (base === 'sources' || base === 'sources.json') continue;
+        if (base === 'bookmarks' || base === 'bookmarks.json') {
+          try {
+            const parsedBm = JSON.parse(content);
+            const list = Array.isArray(parsedBm) ? parsedBm : parsedBm.bookmarks || [];
+            if (Array.isArray(list) && list.length > 0) {
+              bookmarksList.push(...list);
+            }
+          } catch {}
+        }
+      }
+
+      // Parse statistics if available (e.g. statistics or statistics.json)
+      for (const [name, content] of Object.entries(files)) {
+        const base = getBase(name);
+        if (base === 'sources' || base === 'sources.json') continue;
+        if (base === 'statistics' || base === 'statistics.json' || base.includes('statistic')) {
+          try {
+            const parsedStats = JSON.parse(content);
+            const rawList = Array.isArray(parsedStats)
+              ? parsedStats
+              : parsedStats.manga || parsedStats.items || parsedStats.entries || (typeof parsedStats === 'object' ? Object.values(parsedStats).filter((v: any) => typeof v === 'object' && v !== null) : []);
+
+            if (typeof parsedStats.totalReadingTime === 'number') {
+              totalImportedReadingTime = parsedStats.totalReadingTime > 100000 ? Math.round(parsedStats.totalReadingTime / 1000) : parsedStats.totalReadingTime;
+            } else if (typeof parsedStats.timeSpent === 'number') {
+              totalImportedReadingTime = parsedStats.timeSpent;
+            }
+
+            for (const item of rawList) {
+              if (!item || typeof item !== 'object') continue;
+              const id = item.mangaId !== undefined ? String(item.mangaId) : item.manga_id !== undefined ? String(item.manga_id) : item.id !== undefined ? String(item.id) : '';
+              const title = item.manga?.title || item.title ? String(item.manga?.title || item.title).toLowerCase().trim() : '';
+              
+              const rawTime = item.timeSpent || item.time || item.duration || item.totalReadingTime || 0;
+              const timeSpentSeconds = rawTime > 100000 ? Math.round(rawTime / 1000) : rawTime;
+              const chaptersRead = item.chaptersRead || item.chapters || item.read || item.count || 0;
+              const lastRead = item.lastRead || item.last_read || item.updatedAt || item.updated_at || item.time;
+              const pagesRead = item.pagesRead || item.pages || item.page;
+
+              const statObj = { timeSpentSeconds, chaptersRead, lastRead, pagesRead };
+              if (id) statisticsMap.set(id, statObj);
+              if (title) statisticsMap.set(title, statObj);
+              if (timeSpentSeconds > 0) totalImportedReadingTime += timeSpentSeconds;
+              if (chaptersRead > 0) totalImportedChaptersStat += chaptersRead;
+            }
+          } catch {}
+        }
+      }
+
+      // Parse favourites / manga (ignore sources)
+      for (const [name, content] of Object.entries(files)) {
+        const base = getBase(name);
+        if (base === 'sources' || base === 'sources.json') continue; // Explicitly ignore sources
+        if (
+          base === 'favourites' ||
+          base === 'favourites.json' ||
+          base === 'favorites' ||
+          base === 'favorites.json' ||
+          base === 'manga' ||
+          base === 'mangas' ||
+          base === 'manga.json' ||
+          ((base.includes('favourit') || base.includes('favorit') || base.includes('manga')) && !base.includes('categor'))
+        ) {
           try {
             const parsedFavs = JSON.parse(content);
             const list = Array.isArray(parsedFavs) 
@@ -363,6 +440,22 @@ export async function parseKotatsuBackup(
               favouritesList.push(...list);
             }
           } catch {}
+        }
+      }
+
+      // If history is empty but bookmarks exist, use bookmarks as history fallback
+      if (historyList.length === 0 && bookmarksList.length > 0) {
+        for (const bm of bookmarksList) {
+          if (bm) {
+            historyList.push({
+              manga: bm.manga,
+              mangaId: bm.mangaId || bm.manga_id || bm.manga?.id,
+              chapter: bm.chapter,
+              chapterId: bm.chapterId || bm.chapter_id || bm.chapter?.id,
+              page: bm.page,
+              updatedAt: bm.createdAt || bm.created_at,
+            });
+          }
         }
       }
     }
@@ -391,7 +484,33 @@ export async function parseKotatsuBackup(
           }
         }
       }
+      if (parsed.statistics) {
+        const rawList = Array.isArray(parsed.statistics) ? parsed.statistics : parsed.statistics.manga || [];
+        for (const item of rawList) {
+          if (!item || typeof item !== 'object') continue;
+          const id = item.mangaId !== undefined ? String(item.mangaId) : item.manga_id !== undefined ? String(item.manga_id) : '';
+          const title = item.title ? String(item.title).toLowerCase().trim() : '';
+          const timeSpentSeconds = item.timeSpent || item.time || 0;
+          const chaptersRead = item.chaptersRead || item.read || 0;
+          const statObj = { timeSpentSeconds, chaptersRead, lastRead: item.lastRead };
+          if (id) statisticsMap.set(id, statObj);
+          if (title) statisticsMap.set(title, statObj);
+          if (timeSpentSeconds > 0) totalImportedReadingTime += timeSpentSeconds;
+        }
+      }
     }
+  }
+
+  // Save imported statistics summary to localStorage if in browser
+  if (typeof window !== 'undefined' && window.localStorage && (totalImportedReadingTime > 0 || statisticsMap.size > 0)) {
+    try {
+      window.localStorage.setItem('kotatsu_imported_statistics', JSON.stringify({
+        importedAt: new Date().toISOString(),
+        totalReadingTimeSeconds: totalImportedReadingTime,
+        totalChaptersRead: totalImportedChaptersStat,
+        seriesCount: statisticsMap.size || favouritesList.length,
+      }));
+    } catch {}
   }
 
   if (favouritesList.length === 0) {
@@ -487,6 +606,14 @@ export async function parseKotatsuBackup(
       }
     }
 
+    // Check statistics map for reading chapters and time integration
+    const stat = (mId ? statisticsMap.get(mId) : null) || statisticsMap.get(title.toLowerCase().trim()) || (sourceUrl ? statisticsMap.get(sourceUrl) : null);
+    if (stat) {
+      if (stat.chaptersRead && stat.chaptersRead > currentChapter) {
+        currentChapter = stat.chaptersRead;
+      }
+    }
+
     // Favorites & Pinning
     const catId = entry.categoryId !== undefined ? entry.categoryId : entry.category_id;
     const catName = catId !== undefined ? categoriesMap.get(catId) : '';
@@ -499,8 +626,16 @@ export async function parseKotatsuBackup(
     // Timestamps
     const createdAtMs = entry.createdAt || entry.created_at || (m as any).createdAt;
     const addedAt = createdAtMs ? new Date(Number(createdAtMs)).toISOString() : new Date().toISOString();
-    const updatedAtMs = hist?.updatedAt || hist?.updated_at || hist?.last_read_at;
+    const updatedAtMs = hist?.updatedAt || hist?.updated_at || hist?.last_read_at || (stat?.lastRead ? Number(stat.lastRead) : null);
     const lastReadAt = updatedAtMs ? new Date(Number(updatedAtMs)).toISOString() : addedAt;
+
+    let notes = 'Imported from Kotatsu backup';
+    if (stat && stat.timeSpentSeconds && stat.timeSpentSeconds > 0) {
+      const hrs = Math.floor(stat.timeSpentSeconds / 3600);
+      const mins = Math.round((stat.timeSpentSeconds % 3600) / 60);
+      const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      notes = `Imported from Kotatsu backup • ${timeStr} reading time`;
+    }
 
     const id = `kotatsu_${Date.now()}_${i}_${title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16)}`;
 
@@ -521,7 +656,7 @@ export async function parseKotatsuBackup(
       sourceUrl,
       sourceName,
       autoUpdateEnabled: true,
-      notes: 'Imported from Kotatsu backup',
+      notes,
       addedAt,
       lastReadAt,
       userId,

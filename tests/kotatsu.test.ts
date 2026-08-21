@@ -186,6 +186,77 @@ describe('Kotatsu ZIP archive backup import', () => {
     expect(item.isFavorite).toBe(true); // mapped through category id 10 ("Favorites")
     expect(item.userId).toBe('usr_zip_user');
   });
+
+  it('unpacks realistic Kotatsu backup with extensionless files and ignores sources', async () => {
+    const zip = new AdmZip();
+
+    const favouritesData = JSON.stringify([
+      {
+        categoryId: 1,
+        pinned: true,
+        manga: {
+          id: 999,
+          title: 'Murim Login',
+          source: 'ASURASCANS',
+          coverUrl: 'https://example.com/murim.jpg',
+          state: 'ONGOING',
+          genres: ['Action', 'Martial Arts', 'Manhwa'],
+          chapters: [
+            { id: 10, name: 'Chapter 10', number: 10 },
+            { id: 11, name: 'Chapter 11', number: 11 },
+          ],
+        },
+      },
+    ]);
+
+    const historyData = JSON.stringify([
+      {
+        mangaId: 999,
+        chapter: { id: 11, name: 'Chapter 11', number: 11 },
+        page: 12,
+      },
+    ]);
+
+    const categoriesData = JSON.stringify([
+      { id: 1, name: 'Favorites' },
+    ]);
+
+    const sourcesData = JSON.stringify([
+      { id: 'asurascans', name: 'Asura Scans', enabled: true },
+    ]);
+
+    const settingsData = JSON.stringify({ theme: 'dark' });
+    const statisticsData = JSON.stringify([
+      {
+        mangaId: 999,
+        timeSpent: 7200, // 2h 0m
+        chaptersRead: 11,
+        lastRead: 1700000000000,
+      },
+    ]);
+
+    // Add exact extensionless files as seen in Kotatsu backups
+    zip.addFile('favourites', Buffer.from(favouritesData, 'utf-8'));
+    zip.addFile('history', Buffer.from(historyData, 'utf-8'));
+    zip.addFile('categories', Buffer.from(categoriesData, 'utf-8'));
+    zip.addFile('sources', Buffer.from(sourcesData, 'utf-8'));
+    zip.addFile('settings', Buffer.from(settingsData, 'utf-8'));
+    zip.addFile('statistics', Buffer.from(statisticsData, 'utf-8'));
+
+    const zipBuffer = zip.toBuffer();
+    const items = await parseKotatsuBackup(zipBuffer, 'usr_kotatsu');
+
+    expect(items).toHaveLength(1);
+    const item = items[0];
+    expect(item.title).toBe('Murim Login');
+    expect(item.sourceName).toBe('Asura Scans');
+    expect(item.status).toBe('reading');
+    expect(item.type).toBe('manhwa');
+    expect(item.currentChapter).toBe(11);
+    expect(item.isFavorite).toBe(true);
+    expect(item.userId).toBe('usr_kotatsu');
+    expect(item.notes).toContain('2h 0m reading time');
+  });
 });
 
 describe('Kotatsu export', () => {
@@ -213,6 +284,7 @@ describe('Kotatsu export', () => {
         type: 'manhwa',
         autoUpdateEnabled: true,
         isFlagged: false,
+        notes: '',
       },
     ]);
 

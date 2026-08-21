@@ -840,6 +840,61 @@ app.post("/api/manga", (req, res) => {
   res.status(201).json(uid ? SqliteDb.applyUserOverlay([newItem], uid)[0] : newItem);
 });
 
+// Bulk Manga Import / Restore Endpoint (available to all authenticated users & host)
+app.post("/api/manga/bulk-import", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+  const rawList = Array.isArray(req.body) ? req.body : req.body?.items;
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    return res.status(400).json({ error: "Invalid items array" });
+  }
+
+  const reqUser = (req as any).user;
+  const userId = reqUser ? reqUser.id : null;
+  const uid = resolveRequestUserId(req) || userId;
+
+  const processedItems: MangaItem[] = rawList.map((body: any) => ({
+    id: String(body.id || `m_${crypto.randomUUID()}`),
+    title: MANGA_CREATE_FIELDS.title(body.title),
+    altTitles: MANGA_CREATE_FIELDS.altTitles(body.altTitles),
+    type: MANGA_CREATE_FIELDS.type(body.type),
+    coverImage: MANGA_CREATE_FIELDS.coverImage(body.coverImage),
+    description: MANGA_CREATE_FIELDS.description(body.description),
+    genres: MANGA_CREATE_FIELDS.genres(body.genres),
+    status: MANGA_CREATE_FIELDS.status(body.status) as MangaItem['status'],
+    currentChapter: MANGA_CREATE_FIELDS.currentChapter(body.currentChapter),
+    totalChapters: MANGA_CREATE_FIELDS.totalChapters(body.totalChapters),
+    latestChapter: MANGA_CREATE_FIELDS.latestChapter(body.latestChapter, body),
+    lastUpdated: new Date().toISOString(),
+    rating: MANGA_CREATE_FIELDS.rating(body.rating),
+    sourceUrl: MANGA_CREATE_FIELDS.sourceUrl(body.sourceUrl),
+    sourceName: MANGA_CREATE_FIELDS.sourceName(body.sourceName),
+    autoUpdateEnabled: MANGA_CREATE_FIELDS.autoUpdateEnabled(body.autoUpdateEnabled),
+    notes: MANGA_CREATE_FIELDS.notes(body.notes),
+    addedAt: body.addedAt || new Date().toISOString(),
+    lastReadAt: body.lastReadAt || new Date().toISOString(),
+    syncedFromApi: MANGA_CREATE_FIELDS.syncedFromApi(body.syncedFromApi),
+    apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
+    isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
+    userId,
+  }));
+
+  syncBulkAddOrUpdateManga(processedItems);
+
+  if (uid) {
+    for (const item of processedItems) {
+      if (item.isFavorite) {
+        SqliteDb.setUserFavorite(uid, item.id, true);
+      }
+    }
+  }
+
+  res.status(201).json({
+    success: true,
+    count: processedItems.length,
+    totalTracked: SqliteDb.getMangaCount(),
+  });
+});
+
 // Single Manga Metadata Refresh Endpoint
 app.post("/api/manga/:id/refresh-metadata", async (req, res) => {
   const { id } = req.params;

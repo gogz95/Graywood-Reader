@@ -20,9 +20,23 @@ interface StatisticsModalProps {
 }
 
 export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onClose }) => {
+  const importedKotatsuStats = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('kotatsu_imported_statistics');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  }, []);
+
   const totalSeries = mangaList.length;
   const totalChaptersRead = mangaList.reduce((acc, m) => acc + (m.currentChapter || 0), 0);
-  const totalEstMinutes = totalChaptersRead * 4.5;
+  
+  // Calculate total reading minutes including actual imported Kotatsu time
+  const importedSeconds = importedKotatsuStats?.totalReadingTimeSeconds || 0;
+  const totalEstMinutes = importedSeconds > 0 
+    ? Math.round(importedSeconds / 60)
+    : totalChaptersRead * 4.5;
+
   const estHours = Math.floor(totalEstMinutes / 60);
   const estMinsLeft = Math.round(totalEstMinutes % 60);
 
@@ -89,6 +103,32 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onC
             <div className="text-[11px] font-bold text-secondary">Total Library</div>
           </div>
         </div>
+
+        {/* Kotatsu Backup Lifetime Analytics Badge */}
+        {importedKotatsuStats && (
+          <div className="p-4 rounded-2xl bg-accent-2/10 border border-accent-2/30 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-accent-2/20 text-accent-2">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-extrabold text-primary flex items-center gap-2">
+                  <span>Kotatsu Backup Lifetime Analytics Synced</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent-2/20 text-accent-2">
+                    Verified
+                  </span>
+                </div>
+                <div className="text-secondary text-[11px]">
+                  Restored reading statistics across {importedKotatsuStats.seriesCount || totalSeries} series
+                  {importedKotatsuStats.totalReadingTimeSeconds ? ` with ${Math.floor(importedKotatsuStats.totalReadingTimeSeconds / 3600)}h ${(Math.round(importedKotatsuStats.totalReadingTimeSeconds % 3600) / 60).toFixed(0)}m logged` : ''}.
+                </div>
+              </div>
+            </div>
+            <span className="text-accent-2 font-mono font-bold text-[11px] shrink-0">
+              {importedKotatsuStats.totalChaptersRead || totalChaptersRead} Ch. Read
+            </span>
+          </div>
+        )}
 
         {/* 2. READING STATUS BREAKDOWN */}
         <div className="p-4 bg-app rounded-2xl border border-edge space-y-3">
