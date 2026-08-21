@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
+import { SourceFinderModal } from './SourceFinderModal';
 
 interface MangaDetailModalProps {
   manga: MangaItem;
@@ -56,6 +57,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [showFlagDropdown, setShowFlagDropdown] = useState(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [isSourceFinderOpen, setIsSourceFinderOpen] = useState(false);
 
   const handleRefreshMetadata = useCallback(async () => {
     setIsRefreshingMetadata(true);
@@ -254,6 +256,27 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 ))}
               </div>
 
+              {/* Missing Source Notice */}
+              {!hasWorkingReaderSource(manga) && (
+                <div className="p-3.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <span className="font-bold block text-amber-300">Missing Reading Source</span>
+                      <span className="text-[11px] text-secondary">This series is in your library but has no linked chapter source.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSourceFinderOpen(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Find Alternative Sources</span>
+                  </button>
+                </div>
+              )}
+
               {/* Built-in Reader Action Buttons */}
               <div className="flex flex-wrap items-center gap-2 pt-2">
                 {hasWorkingReaderSource(manga) && (
@@ -291,6 +314,16 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                     <span>External Site</span>
                   </a>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsSourceFinderOpen(true)}
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 border border-accent-2/30 text-accent-2 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm"
+                  title="Search active online sources for this series"
+                >
+                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-2" />
+                  <span>Find Alternative Sources</span>
+                </button>
 
                 <button
                   onClick={handleRefreshMetadata}
@@ -468,6 +501,18 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
           </div>
         </div>
       </div>
+
+      {/* Alternative Sources Finder Modal */}
+      <SourceFinderModal
+        manga={manga}
+        isOpen={isSourceFinderOpen}
+        onClose={() => setIsSourceFinderOpen(false)}
+        onSourceAttached={(updated) => {
+          setIsFlagged(Boolean(updated.isFlagged));
+          setFlagReason(updated.flagReason || '');
+          onUpdateManga(updated);
+        }}
+      />
     </div>
   );
 });

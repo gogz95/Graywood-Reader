@@ -3,7 +3,7 @@
  * Converts Kotatsu ZIP (.bk.zip / .zip) and JSON backups into Graywood MangaItems and vice-versa.
  */
 
-import { MangaItem, MangaType, ReadingStatus } from '../types';
+import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../types';
 
 export interface KotatsuChapter {
   id?: number | string;
@@ -187,20 +187,21 @@ export function detectKotatsuFormat(genres: string[], title: string): MangaType 
  * Helper to decompress deflate-raw or deflate payload.
  */
 async function decompressDeflateStream(slice: Uint8Array): Promise<string> {
+  const cleanSlice = new Uint8Array(slice);
   if (typeof DecompressionStream !== 'undefined') {
     try {
       const ds = new DecompressionStream('deflate-raw');
       const writer = ds.writable.getWriter();
-      writer.write(slice as any);
-      writer.close();
+      await writer.write(cleanSlice);
+      await writer.close();
       const response = new Response(ds.readable);
       return await response.text();
     } catch {
       try {
         const ds = new DecompressionStream('deflate');
         const writer = ds.writable.getWriter();
-        writer.write(slice as any);
-        writer.close();
+        await writer.write(cleanSlice);
+        await writer.close();
         const response = new Response(ds.readable);
         return await response.text();
       } catch {}
@@ -208,13 +209,13 @@ async function decompressDeflateStream(slice: Uint8Array): Promise<string> {
   }
 
   // Node.js fallback (tests & server)
-  if (typeof process !== 'undefined') {
+  if (typeof process !== 'undefined' && (process as any).versions?.node) {
     try {
       const zlib = await import('zlib');
       try {
-        return zlib.inflateRawSync(Buffer.from(slice)).toString('utf-8');
+        return zlib.inflateRawSync(Buffer.from(cleanSlice)).toString('utf-8');
       } catch {
-        return zlib.inflateSync(Buffer.from(slice)).toString('utf-8');
+        return zlib.inflateSync(Buffer.from(cleanSlice)).toString('utf-8');
       }
     } catch {}
   }
@@ -516,41 +517,69 @@ export async function parseKotatsuBackup(
     }
   }
 
-  // 2. If no files were extracted, parse as raw JSON
-  if (favouritesList.length === 0 && typeof input === 'string') {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(input);
-    } catch (err: any) {
-      throw new Error(`Invalid Kotatsu backup format: ${err.message}`);
+  // 2. If no files were extracted from ZIP, parse as raw JSON or compressed JSON
+  if (favouritesList.length === 0) {
+    let jsonString = '';
+    if (typeof input === 'string') {
+      jsonString = input;
+    } else {
+      try {
+        const u8 = input instanceof Uint8Array ? input : new Uint8Array(input);
+        // Check if GZIP format (0x1F, 0x8B)
+        if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+          if (typeof DecompressionStream !== 'undefined') {
+            const ds = new DecompressionStream('gzip');
+            const writer = ds.writable.getWriter();
+            await writer.write(new Uint8Array(u8));
+            await writer.close();
+            jsonString = await new Response(ds.readable).text();
+          } else if (typeof process !== 'undefined' && (process as any).versions?.node) {
+            const zlib = await import('zlib');
+            jsonString = zlib.gunzipSync(Buffer.from(u8)).toString('utf-8');
+          }
+        } else {
+          jsonString = new TextDecoder('utf-8').decode(u8);
+        }
+      } catch {
+        jsonString = typeof input === 'string' ? input : new TextDecoder('utf-8').decode(input);
+      }
     }
 
-    if (Array.isArray(parsed)) {
-      favouritesList = parsed;
-    } else if (typeof parsed === 'object' && parsed !== null) {
-      favouritesList = parsed.favourites || parsed.favorites || parsed.manga || parsed.mangas || [];
-      if (Array.isArray(parsed.history)) {
-        historyList = parsed.history;
+    if (jsonString && jsonString.trim().length > 0) {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonString);
+      } catch (err: any) {
+        throw new Error(`Invalid Kotatsu backup format: ${err.message}`);
       }
-      if (Array.isArray(parsed.categories)) {
-        for (const cat of parsed.categories) {
-          if (cat && cat.id !== undefined && cat.name) {
-            categoriesMap.set(cat.id, cat.name);
+
+      if (Array.isArray(parsed)) {
+        favouritesList = parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        favouritesList = parsed.favourites || parsed.favorites || parsed.manga || parsed.mangas || [];
+        if (Array.isArray(parsed.history)) {
+          historyList = parsed.history;
+        }
+        if (Array.isArray(parsed.categories)) {
+          for (const cat of parsed.categories) {
+            if (cat && cat.id !== undefined && cat.name) {
+              categoriesMap.set(cat.id, cat.name);
+            }
           }
         }
-      }
-      if (parsed.statistics) {
-        const rawList = Array.isArray(parsed.statistics) ? parsed.statistics : parsed.statistics.manga || [];
-        for (const item of rawList) {
-          if (!item || typeof item !== 'object') continue;
-          const id = item.mangaId !== undefined ? String(item.mangaId) : item.manga_id !== undefined ? String(item.manga_id) : '';
-          const title = item.title ? String(item.title).toLowerCase().trim() : '';
-          const timeSpentSeconds = item.timeSpent || item.time || 0;
-          const chaptersRead = item.chaptersRead || item.read || 0;
-          const statObj = { timeSpentSeconds, chaptersRead, lastRead: item.lastRead };
-          if (id) statisticsMap.set(id, statObj);
-          if (title) statisticsMap.set(title, statObj);
-          if (timeSpentSeconds > 0) totalImportedReadingTime += timeSpentSeconds;
+        if (parsed.statistics) {
+          const rawList = Array.isArray(parsed.statistics) ? parsed.statistics : parsed.statistics.manga || [];
+          for (const item of rawList) {
+            if (!item || typeof item !== 'object') continue;
+            const id = item.mangaId !== undefined ? String(item.mangaId) : item.manga_id !== undefined ? String(item.manga_id) : '';
+            const title = item.title ? String(item.title).toLowerCase().trim() : '';
+            const timeSpentSeconds = item.timeSpent || item.time || 0;
+            const chaptersRead = item.chaptersRead || item.read || 0;
+            const statObj = { timeSpentSeconds, chaptersRead, lastRead: item.lastRead };
+            if (id) statisticsMap.set(id, statObj);
+            if (title) statisticsMap.set(title, statObj);
+            if (timeSpentSeconds > 0) totalImportedReadingTime += timeSpentSeconds;
+          }
         }
       }
     }
@@ -669,14 +698,8 @@ export async function parseKotatsuBackup(
       }
     }
 
-    // Favorites & Pinning
-    const catId = entry.categoryId !== undefined ? entry.categoryId : entry.category_id;
-    const catName = catId !== undefined ? categoriesMap.get(catId) : '';
-    const isFavorite = Boolean(
-      entry.pinned || 
-      (catName && catName.toLowerCase().includes('favorit')) ||
-      (Array.isArray(entry.categories) && entry.categories.some((c: any) => String(c.name || c).toLowerCase().includes('favorit')))
-    );
+    // Favorites & Library inclusion: all items in a Kotatsu backup are user library items
+    const isFavorite = entry.favorite !== false && (entry as any).isFavorite !== false;
 
     // Timestamps
     const createdAtMs = entry.createdAt || entry.created_at || (m as any).createdAt;
@@ -692,6 +715,9 @@ export async function parseKotatsuBackup(
       notes = `Imported from Kotatsu backup • ${timeStr} reading time`;
     }
 
+    const hasWorkingSource = Boolean(sourceUrl && sourceUrl.trim().length > 0 && !isMangaDexSourceLink(sourceName, sourceUrl));
+    const isFlagged = !hasWorkingSource;
+    const flagReason = !hasWorkingSource ? 'Missing source' : undefined;
     const id = `kotatsu_${Date.now()}_${i}_${title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16)}`;
 
     importedItems.push({
@@ -716,7 +742,8 @@ export async function parseKotatsuBackup(
       lastReadAt,
       userId,
       isFavorite,
-      isFlagged: false,
+      isFlagged,
+      flagReason,
     });
   }
 

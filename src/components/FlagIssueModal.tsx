@@ -35,6 +35,13 @@ export const FLAG_CATEGORIES: FlagCategory[] = [
     flagReason: 'Loads wrong series',
   },
   {
+    id: 'missing_source',
+    label: 'Missing source',
+    description: 'No working reading source or chapter parser is linked.',
+    icon: <AlertTriangle className="w-5 h-5" />,
+    flagReason: 'Missing source',
+  },
+  {
     id: 'other',
     label: 'Other Fault',
     description: 'Any other problem with this series or its content.',

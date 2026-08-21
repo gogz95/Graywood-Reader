@@ -1101,6 +1101,25 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Floating Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm bg-elevated/95 backdrop-blur-md border border-accent-2/50 text-primary px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+          <div className="w-8 h-8 rounded-xl bg-accent-2/20 border border-accent-2/40 flex items-center justify-center shrink-0 text-accent-2">
+            <Check className="w-4 h-4" />
+          </div>
+          <div className="flex-1 text-xs font-bold text-primary pr-1">
+            {toast}
+          </div>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="p-1 text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -207,7 +207,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 4500);
   };
 
   const handleSave = async () => {
@@ -245,7 +245,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
       }}
       className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
     >
-      <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-3xl max-w-4xl w-full max-h-[92vh] sm:max-h-[88vh] overflow-hidden shadow-2xl flex flex-col my-0 sm:my-auto">
+      <div className="relative bg-surface border border-edge rounded-t-3xl sm:rounded-3xl max-w-4xl w-full max-h-[92vh] sm:max-h-[88vh] overflow-hidden shadow-2xl flex flex-col my-0 sm:my-auto">
         
         {/* Streamlined Header */}
         <div className="p-5 bg-gradient-to-r from-app via-surface to-app border-b border-edge flex items-center justify-between">
@@ -412,12 +412,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
 
         {/* Tab Contents */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 text-primary">
-          {toastMessage && (
-            <div className="p-3 bg-success/20 border border-success/40 text-success rounded-xl text-xs font-bold flex items-center gap-2 animate-bounce">
-              <Check className="w-4 h-4" />
-              <span>{toastMessage}</span>
-            </div>
-          )}
 
           {/* 1. READER DEFAULTS & PRACTICAL OPTIONS */}
           {activeSection === 'reader' && (
@@ -1513,6 +1507,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
             <span>Save Settings</span>
           </button>
         </div>
+        {/* Floating Toast Notification */}
+        {toastMessage && (
+          <div className="absolute bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 max-w-sm sm:max-w-md bg-elevated/95 backdrop-blur-md border border-success/50 text-primary px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+            <div className="w-8 h-8 rounded-xl bg-success/20 border border-success/40 flex items-center justify-center shrink-0 text-success">
+              <Check className="w-4 h-4" />
+            </div>
+            <div className="flex-1 text-xs font-bold text-primary pr-1">
+              {toastMessage}
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="p-1 text-secondary hover:text-primary transition-colors rounded-lg hover:bg-surface"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

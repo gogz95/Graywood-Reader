@@ -127,6 +127,31 @@ describe('Kotatsu JSON backup import', () => {
     expect(items[0].sourceName).toBe('MangaDex');
   });
 
+  it('parses JSON from ArrayBuffer / Uint8Array', async () => {
+    const rawJson = JSON.stringify(jsonBackup);
+    const buffer = Buffer.from(rawJson, 'utf-8');
+    const items = await parseKotatsuBackup(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), 'usr_buf');
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('Tower of God');
+    expect(items[0].userId).toBe('usr_buf');
+  });
+
+  it('flags items with Missing source when sourceUrl is absent while retaining isFavorite', async () => {
+    const backupWithoutSource = [
+      {
+        title: 'Unknown Webtoon',
+        genres: ['Action'],
+        state: 'ONGOING',
+      },
+    ];
+
+    const items = await parseKotatsuBackup(JSON.stringify(backupWithoutSource), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].isFavorite).toBe(true);
+    expect(items[0].isFlagged).toBe(true);
+    expect(items[0].flagReason).toBe('Missing source');
+  });
+
   it('throws on invalid JSON or empty backup', async () => {
     await expect(parseKotatsuBackup('invalid json content')).rejects.toThrow();
     await expect(parseKotatsuBackup('{"favourites":[]}')).rejects.toThrow('No manga entries found');

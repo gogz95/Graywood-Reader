@@ -282,5 +282,44 @@ describe('Live Source Feeds & Progress Endpoints', () => {
     // Returns either 200 (if found) or 404 (if not tracked) rather than 404 Cannot GET
     expect([200, 404]).toContain(res.status);
   });
+
+  it('GET /api/manga/:id/find-sources returns alternative sources and POST attach-source links it', async () => {
+    // Create a test series with missing source
+    const createRes = await request(app)
+      .post('/api/manga')
+      .send({
+        title: 'Solo Leveling',
+        sourceName: 'Kotatsu Import',
+        sourceUrl: '',
+        isFavorite: true,
+        isFlagged: true,
+        flagReason: 'Missing source',
+      });
+    expect(createRes.status).toBe(201);
+    const createdId = createRes.body.id;
+
+    // Search alternative sources
+    const findRes = await request(app).get(`/api/manga/${createdId}/find-sources`);
+    expect(findRes.status).toBe(200);
+    expect(findRes.body).toHaveProperty('results');
+    expect(Array.isArray(findRes.body.results)).toBe(true);
+
+    // Attach an alternative source
+    const attachRes = await request(app)
+      .post(`/api/manga/${createdId}/attach-source`)
+      .send({
+        sourceName: 'Asura Scans',
+        sourceUrl: 'https://asurascans.com/comics/solo-leveling',
+        latestChapter: 200,
+        setAsPrimary: true,
+      });
+
+    expect(attachRes.status).toBe(200);
+    expect(attachRes.body.success).toBe(true);
+    expect(attachRes.body.manga.sourceName).toBe('Asura Scans');
+    expect(attachRes.body.manga.sourceUrl).toBe('https://asurascans.com/comics/solo-leveling');
+    expect(attachRes.body.manga.isFlagged).toBe(false);
+    expect(attachRes.body.manga.availableSources).toHaveLength(1);
+  });
 });
 

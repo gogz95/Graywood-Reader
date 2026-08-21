@@ -914,6 +914,206 @@ app.post("/api/manga/:id/refresh-metadata", async (req, res) => {
   }
 });
 
+// Search Alternative Sources for Manga Endpoint
+app.get("/api/manga/:id/find-sources", async (req, res) => {
+  const { id } = req.params;
+  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!manga) {
+    return res.status(404).json({ error: "Manga not found" });
+  }
+
+  const queryParam = ((req.query.q as string) || '').trim();
+  const query = queryParam || manga.title;
+  const results: any[] = [];
+  const seenUrls = new Set<string>();
+  if (manga.sourceUrl) seenUrls.add(manga.sourceUrl.toLowerCase());
+
+  // 1. Check top enabled alive Kotatsu sources (up to 12 active sources)
+  const candidateSources = KOTATSU_SOURCES.filter(
+    (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+  ).slice(0, 12);
+
+  await Promise.allSettled(
+    candidateSources.map(async (sourceDef) => {
+      try {
+        let items: any[] = [];
+        if (sourceDef.id === 'asurascans') {
+          const cleanQuery = query.replace(/^asura_/i, '').replace(/[-_]/g, ' ').trim();
+          const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(cleanQuery || query)}`, {
+            headers: ASURA_API_HEADERS,
+            signal: AbortSignal.timeout(6000),
+          });
+          if (asuraRes.ok) {
+            const json = await asuraRes.json();
+            const data: any[] = Array.isArray(json?.data) ? json.data : [];
+            items = data.map((s: any) => ({
+              sourceName: 'Asura Scans',
+              sourceId: 'asurascans',
+              sourceUrl: `https://asurascans.com${s.public_url || `/comics/${s.slug || s.id}`}`,
+              title: s.title || 'Unknown',
+              coverImage: s.cover || '',
+              latestChapter: s.latest_chapter || s.total_chapters || undefined,
+            }));
+          }
+        } else {
+          let searchUrl = `${sourceDef.baseUrl}/?s=${encodeURIComponent(query)}`;
+          if (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics') {
+            searchUrl = `${sourceDef.baseUrl}/?s=${encodeURIComponent(query)}&post_type=wp-manga`;
+          } else if (sourceDef.engineType === 'foolslide') {
+            searchUrl = `${sourceDef.baseUrl}/search?search=${encodeURIComponent(query)}`;
+          }
+          const bypassRes = await fetchWithChallengeBypass(searchUrl, {
+            headers: {
+              'User-Agent': APP_USER_AGENT,
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+            timeoutMs: 6000,
+            sourceId: sourceDef.id,
+          });
+          if (bypassRes.ok && bypassRes.html) {
+            const $ = cheerio.load(bypassRes.html);
+            const origin = sourceDef.baseUrl.replace(/\/$/, '');
+            const resolveHref = (href: string) => href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+            const resolveCover = (el: any) => {
+              const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+              return src.startsWith('http') ? src : (src ? `${origin}${src}` : '');
+            };
+            const isContentPath = (href: string) => /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href);
+            const isNavText = (t: string) => /^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(t);
+
+            $('.listupd .bsx, .listupd .bs, .page-item-detail, .c-tabs-item__content').each((_i, el) => {
+              const a = $(el).find('a').first();
+              const href = a.attr('href') || '';
+              const title = ($(el).find('.tt, .bigor .tt, .post-title a, h3, h4').text() || a.attr('title') || '').trim();
+              const cover = resolveCover($(el).find('img').first());
+              if (href && title && isContentPath(href) && !isNavText(title)) {
+                items.push({
+                  sourceName: sourceDef.name,
+                  sourceId: sourceDef.id,
+                  sourceUrl: resolveHref(href),
+                  title,
+                  coverImage: cover || '',
+                });
+              }
+            });
+          }
+        }
+
+        for (const item of items) {
+          if (!item.sourceUrl) continue;
+          const urlKey = item.sourceUrl.toLowerCase();
+          if (seenUrls.has(urlKey)) continue;
+          seenUrls.add(urlKey);
+
+          const qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const tNorm = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const isExact = qNorm.length > 0 && (qNorm === tNorm || tNorm.includes(qNorm) || qNorm.includes(tNorm));
+          const confidence = qNorm === tNorm ? 'exact' : isExact ? 'high' : 'partial';
+
+          results.push({
+            ...item,
+            confidence,
+            isCurrent: manga.sourceUrl ? item.sourceUrl.toLowerCase() === manga.sourceUrl.toLowerCase() : false,
+          });
+        }
+      } catch {
+        // Source timeout or fail-fast handled silently
+      }
+    })
+  );
+
+  // Search existing SQLite catalog for same title from another working source
+  const dbMatches = SqliteDb.getAllManga().filter((m) => {
+    if (m.id === manga.id || !m.sourceUrl) return false;
+    if (isMangaDexSourceLink(m.sourceName, m.sourceUrl)) return false;
+    const mTitleNorm = m.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return mTitleNorm === qNorm || mTitleNorm.includes(qNorm);
+  });
+
+  for (const dbm of dbMatches) {
+    if (!dbm.sourceUrl) continue;
+    const urlKey = dbm.sourceUrl.toLowerCase();
+    if (!seenUrls.has(urlKey)) {
+      seenUrls.add(urlKey);
+      results.push({
+        sourceName: dbm.sourceName,
+        sourceId: dbm.sourceName.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        sourceUrl: dbm.sourceUrl,
+        title: dbm.title,
+        coverImage: dbm.coverImage,
+        latestChapter: dbm.latestChapter,
+        confidence: 'exact',
+        isCurrent: false,
+      });
+    }
+  }
+
+  results.sort((a, b) => {
+    const score = (c: string) => (c === 'exact' ? 3 : c === 'high' ? 2 : 1);
+    return score(b.confidence) - score(a.confidence);
+  });
+
+  res.json({
+    mangaId: manga.id,
+    title: manga.title,
+    query,
+    count: results.length,
+    results,
+  });
+});
+
+// Attach / Link Alternative Source Endpoint
+app.post("/api/manga/:id/attach-source", (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+  const { id } = req.params;
+  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!existing) {
+    return res.status(404).json({ error: "Manga not found" });
+  }
+
+  const { sourceName, sourceUrl, latestChapter, coverImage, setAsPrimary = true } = req.body || {};
+  if (!sourceUrl) {
+    return res.status(400).json({ error: "Missing sourceUrl" });
+  }
+
+  const newSourceName = sourceName || 'Live Source';
+  const available = Array.isArray(existing.availableSources) ? [...existing.availableSources] : [];
+
+  if (!available.some((s) => s.sourceUrl.toLowerCase() === sourceUrl.toLowerCase())) {
+    available.push({ sourceName: newSourceName, sourceUrl });
+  }
+
+  const updatedItem: MangaItem = {
+    ...existing,
+    sourceName: setAsPrimary ? newSourceName : existing.sourceName,
+    sourceUrl: setAsPrimary ? sourceUrl : existing.sourceUrl,
+    coverImage: (setAsPrimary && coverImage && !existing.coverImage) ? coverImage : existing.coverImage,
+    latestChapter: (latestChapter && Number(latestChapter) > (existing.latestChapter || 0)) ? Number(latestChapter) : existing.latestChapter,
+    availableSources: available,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  // If flagged for missing source, resolve it automatically
+  if (updatedItem.isFlagged && (!updatedItem.flagReason || updatedItem.flagReason.toLowerCase().includes('missing source'))) {
+    updatedItem.isFlagged = false;
+    updatedItem.flagReason = undefined;
+    updatedItem.flaggedAt = undefined;
+  }
+
+  syncAddOrUpdateManga(updatedItem);
+  const uid = resolveRequestUserId(req);
+  if (uid) {
+    SqliteDb.setUserFavorite(uid, updatedItem.id, true);
+  }
+
+  res.json({
+    success: true,
+    manga: uid ? SqliteDb.applyUserOverlay([updatedItem], uid)[0] : updatedItem,
+    message: `Linked ${newSourceName} to '${updatedItem.title}' successfully!`,
+  });
+});
+
 // Bulk Metadata Refresh Endpoint for All Tracked Manga
 app.post("/api/manga/refresh-all-metadata", async (_req, res) => {
   try {
@@ -4760,6 +4960,41 @@ function migrateStaleSourceUrlsInDatabase(): number {
   return changed;
 }
 
+export function migrateImportedBackupsToFavorites(): number {
+  const allManga = SqliteDb.getAllManga();
+  const profiles = SqliteDb.getAllProfiles();
+  const adminId = profiles.find((p: any) => p.role === 'admin')?.id || 'usr_admin';
+
+  let fixed = 0;
+  for (const m of allManga) {
+    if (m.id.startsWith('kotatsu_') || m.id.startsWith('tachi_')) {
+      if (!m.isFavorite) {
+        m.isFavorite = true;
+        SqliteDb.toggleFavorite(m.id, true);
+        fixed++;
+      }
+      const hasWorkingSource = Boolean(m.sourceUrl && m.sourceUrl.trim().length > 0 && !isMangaDexSourceLink(m.sourceName, m.sourceUrl));
+      if (!hasWorkingSource && !m.isFlagged) {
+        m.isFlagged = true;
+        m.flagReason = 'Missing source';
+        SqliteDb.toggleFlag(m.id, true, 'Missing source');
+      }
+      SqliteDb.setUserFavorite(adminId, m.id, true);
+      if (m.userId) {
+        SqliteDb.setUserFavorite(m.userId, m.id, true);
+      }
+      for (const p of profiles) {
+        SqliteDb.setUserFavorite(p.id, m.id, true);
+      }
+    }
+  }
+  if (fixed > 0) {
+    console.log(`[Migration] Ensured ${fixed} imported backup series are marked as favorites in Library.`);
+    saveDatabaseToDisk();
+  }
+  return fixed;
+}
+
 const UA_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -6376,6 +6611,11 @@ async function startServer() {
   // 1b. Rewrite stale live-source URLs (asuracomic.net → asurascans.com, /manhwa/ → /manga/, …)
   try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
     console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
+  }
+
+  // 1c. Ensure imported Kotatsu/Tachiyomi backups are active favorites in Library
+  try { migrateImportedBackupsToFavorites(); } catch (e) {
+    console.warn('[Migration] backup favorites migration failed:', (e as Error)?.message || e);
   }
 
 

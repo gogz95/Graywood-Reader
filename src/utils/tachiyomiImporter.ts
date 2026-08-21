@@ -3,7 +3,7 @@
  * Converts Tachiyomi/Mihon JSON backups into Graywood MangaItems and vice-versa.
  */
 
-import { MangaItem, MangaType, ReadingStatus } from '../types';
+import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../types';
 
 export interface TachiyomiMangaEntry {
   title?: string;
@@ -100,7 +100,7 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     let sourceName = 'Tachiyomi Import';
     let currentChapter = 0;
     let totalChapters = 1;
-    let isFavorite = false;
+    let isFavorite = true;
 
     // Handle Tuple/Array format from standard Tachiyomi v2 backup:
     // [url, title, source, artist, author, description, genre, status, thumbnail_url, ...]
@@ -113,9 +113,6 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       status = mapTachiyomiStatus(m[7]);
       coverImage = String(m[8] || '');
       sourceName = String(m[2] ? `Source #${m[2]}` : 'Tachiyomi Import');
-      if (entry.categories && entry.categories.includes('Favorites')) {
-        isFavorite = true;
-      }
     }
     // Handle Object-based format
     else if (typeof entry === 'object' && entry !== null) {
@@ -127,7 +124,9 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       genres = Array.isArray(m.genre) ? m.genre : Array.isArray(m.genres) ? m.genres : [];
       status = mapTachiyomiStatus(m.status);
       sourceName = m.sourceName || (m.source ? `Source #${m.source}` : 'Tachiyomi Import');
-      isFavorite = Boolean(entry.favorite || entry.isFavorite);
+      if (entry.favorite === false || entry.isFavorite === false) {
+        isFavorite = false;
+      }
     }
 
     if (!title) continue;
@@ -141,6 +140,9 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     }
 
     const type: MangaType = detectFormatFromGenres(genres, title);
+    const hasWorkingSource = Boolean(url && url.trim().length > 0 && !isMangaDexSourceLink(sourceName, url));
+    const isFlagged = !hasWorkingSource;
+    const flagReason = !hasWorkingSource ? 'Missing source' : undefined;
     const id = `tachi_${Date.now()}_${i}_${title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16)}`;
 
     importedItems.push({
@@ -165,7 +167,8 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       lastReadAt: new Date().toISOString(),
       userId,
       isFavorite,
-      isFlagged: false,
+      isFlagged,
+      flagReason,
     });
   }
 

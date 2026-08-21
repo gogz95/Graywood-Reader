@@ -469,12 +469,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       </span>
                     )}
 
-                    {manga.isFlagged && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-danger/90 text-white border border-danger shadow-md flex items-center gap-1">
+                    {manga.isFlagged ? (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black border shadow-md flex items-center gap-1 ${
+                        manga.flagReason?.toLowerCase().includes('missing source')
+                          ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
+                          : 'bg-danger/90 text-white border-danger'
+                      }`}>
                         <AlertTriangle className="w-3 h-3" />
-                        <span>FLAGGED</span>
+                        <span>{manga.flagReason?.toLowerCase().includes('missing source') ? 'NO SOURCE' : 'FLAGGED'}</span>
                       </span>
-                    )}
+                    ) : !isReaderAvailable(manga) ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-950/80 text-amber-400 border border-amber-500/30 shadow-md flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>NO SOURCE</span>
+                      </span>
+                    ) : null}
                   </div>
 
                   {/* Rating Badge */}
@@ -669,7 +678,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         </div>
                       </td>
                       <td className="py-3 px-4 font-bold text-accent">★ {manga.rating}</td>
-                      <td className="py-3 px-4 text-secondary">{manga.sourceName}</td>
+                      <td className="py-3 px-4 text-secondary">
+                        <div className="flex items-center gap-1.5">
+                          <span>{manga.sourceName}</span>
+                          {(manga.isFlagged && manga.flagReason?.toLowerCase().includes('missing source')) || !isReaderAvailable(manga) ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40" title="Missing reading source">
+                              No Source
+                            </span>
+                          ) : manga.isFlagged ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger/80 text-white" title={manga.flagReason}>
+                              Flagged
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
