@@ -54,6 +54,7 @@ import {
   checkSolverBalance,
   fetchWithChallengeBypass,
 } from "./server/captchaSolver";
+import { challengeManager } from "./server/challengeManager";
 import { sourceCircuitBreaker, CircuitState } from "./server/circuitBreaker";
 import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
@@ -1276,6 +1277,66 @@ app.post("/api/categories/bulk-assign", (req, res) => {
 
   SqliteDb.bulkAssignCategory(mangaIds, categoryId, action, userId);
   res.json({ success: true, count: mangaIds.length });
+});
+
+// ---- Challenge & Manual Captcha Notification Endpoints -------------------------
+app.get("/api/challenges", (req, res) => {
+  const challenges = challengeManager.getActiveChallenges();
+  const config = challengeManager.getConfig();
+  res.json({
+    count: challenges.length,
+    challenges,
+    config,
+  });
+});
+
+app.post("/api/challenges/config", (req, res) => {
+  const body = req.body || {};
+  const updated = challengeManager.updateConfig(body);
+  res.json({ success: true, config: updated });
+});
+
+app.post("/api/challenges/:id/dismiss", (req, res) => {
+  const { id } = req.params;
+  challengeManager.dismissChallenge(id);
+  res.json({ success: true });
+});
+
+app.post("/api/challenges/:id/solve-manual", async (req, res) => {
+  const { id } = req.params;
+  const { cookies, userAgent, sourceId } = req.body || {};
+
+  const challenges = challengeManager.getActiveChallenges();
+  const found = challenges.find((c) => c.id === id || c.sourceId === sourceId);
+
+  if (cookies && typeof cookies === 'string') {
+    const src = found?.sourceId || sourceId || id.replace(/^chn_/, '');
+    const cookieArr = cookies.split(';').map((s) => s.trim()).filter(Boolean);
+    sourceCustomCookies.set(src, cookieArr);
+    if (userAgent) {
+      sourceCustomUserAgents.set(src, userAgent.trim());
+    }
+  }
+
+  // Resolve challenge
+  if (found) {
+    challengeManager.resolveChallenge(found.sourceId);
+  } else if (sourceId) {
+    challengeManager.resolveChallenge(sourceId);
+  }
+
+  res.json({ success: true, message: "Challenge marked as resolved" });
+});
+
+app.post("/api/challenges/test", (req, res) => {
+  const testNotif = challengeManager.recordChallenge({
+    sourceId: 'asurascans_test',
+    sourceName: 'Asura Scans (Test)',
+    sourceUrl: 'https://asuracomic.net',
+    challengeType: 'cloudflare_turnstile',
+    httpStatus: 403,
+  });
+  res.json({ success: true, notification: testNotif });
 });
 
 app.put("/api/manga/:id", (req, res) => {

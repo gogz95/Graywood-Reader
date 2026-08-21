@@ -1,5 +1,6 @@
 import { URL } from 'url';
 import { fetchWithSsrfGuard } from './security';
+import { challengeManager } from './challengeManager';
 
 export interface ChallengeDetectionResult {
   isChallenge: boolean;
@@ -361,6 +362,9 @@ export async function fetchWithChallengeBypass(
     const challenge = detectChallenge(htmlText, directRes.status);
 
     if (!challenge.isChallenge && directRes.ok) {
+      if (options.sourceId) {
+        challengeManager.resolveChallenge(options.sourceId);
+      }
       return {
         ok: true,
         status: directRes.status,
@@ -386,6 +390,10 @@ export async function fetchWithChallengeBypass(
 
         if (solverResult.ok && solverResult.html) {
           console.log(`[Challenge Solver] FlareSolverr successfully bypassed challenge for ${origin}!`);
+
+          if (options.sourceId) {
+            challengeManager.resolveChallenge(options.sourceId);
+          }
 
           if (options.sourceId && options.onCookieUpdate && solverResult.cookies && solverResult.cookies.length > 0) {
             const cookieHeaders = solverResult.cookies.map((c) => `${c.name}=${c.value}`);
@@ -416,6 +424,9 @@ export async function fetchWithChallengeBypass(
 
         if (captchaResult.ok && captchaResult.token) {
           console.log(`[Challenge Solver] 2Captcha token received! Bypassed challenge.`);
+          if (options.sourceId) {
+            challengeManager.resolveChallenge(options.sourceId);
+          }
           return {
             ok: true,
             status: 200,
@@ -425,6 +436,17 @@ export async function fetchWithChallengeBypass(
           };
         }
       }
+
+      // If challenge was not automatically bypassed, record for user notification
+      const srcId = options.sourceId || origin.replace(/https?:\/\//, '').replace(/[^a-z0-9]/g, '');
+      challengeManager.recordChallenge({
+        sourceId: srcId,
+        sourceUrl: origin,
+        sampleUrl: targetUrl,
+        challengeType: challenge.type as any,
+        httpStatus: directRes.status,
+        siteKey: challenge.siteKey,
+      });
     }
 
     return {

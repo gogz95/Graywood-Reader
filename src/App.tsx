@@ -22,6 +22,7 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
+import { ChallengeNotificationModal } from './components/ChallengeNotificationModal';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
   MangaItem,

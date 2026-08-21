@@ -14,6 +14,7 @@ import {
   Sliders,
   Shield,
   EyeOff,
+  ShieldAlert,
 } from 'lucide-react';
 
 import { AppNavTab, UserProfile } from '../types';
@@ -26,6 +27,7 @@ interface NavbarProps {
   setSearchQuery: (q: string) => void;
   unreadCount: number;
   duplicateCount: number;
+  pendingChallengesCount?: number;
   onOpenAddModal: () => void;
   onRunAutoUpdate: () => void;
   isUpdating: boolean;
@@ -33,6 +35,7 @@ interface NavbarProps {
   isIncognito: boolean;
   onToggleIncognito: () => void;
   onOpenAnalytics: () => void;
+  onOpenChallengesModal?: () => void;
   activeProfile: UserProfile;
   isHostComputer?: boolean;
   onOpenProfileModal: () => void;
@@ -57,6 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setSearchQuery,
   unreadCount,
   duplicateCount,
+  pendingChallengesCount = 0,
   onOpenAddModal,
   onRunAutoUpdate,
   isUpdating,
@@ -64,6 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isIncognito,
   onToggleIncognito,
   onOpenAnalytics,
+  onOpenChallengesModal,
   activeProfile,
   isHostComputer = true,
   onOpenProfileModal,
@@ -85,24 +90,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   const tabs: Array<{
     id: AppNavTab;
     label: string;
-    mobileLabel: string;
-    icon: React.FC<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string }>;
     badge?: number;
+    title?: string;
   }> = [
-    { id: 'library', label: 'My Library', mobileLabel: 'Library', icon: BookOpen, badge: unreadCount },
-    { id: 'browse', label: 'Catalog', mobileLabel: 'Explore', icon: Compass },
-    { id: 'sources', label: 'Sources', mobileLabel: 'Sources', icon: Globe },
+    { id: 'library', label: 'Library', icon: BookOpen, badge: unreadCount, title: 'Your Manga Library' },
+    { id: 'browse', label: 'Browse', icon: Compass, title: 'Explore Popular & Trending Manga' },
+    { id: 'sources', label: 'Sources', icon: Globe, title: 'Manage Scraper Engines & Connectors' },
+    { id: 'updates', label: 'Scan Logs', icon: RefreshCw, title: 'Automatic Update History & Release Logs' },
+    { id: 'duplicates', label: 'Deduplicate', icon: Search, badge: duplicateCount, title: 'Merge Duplicate Series' },
   ];
 
   const searchInput = (
     <div className="relative w-full">
-      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
       <input
-        type="text"
-        placeholder="Search titles, tags, alt names..."
+        type="search"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full bg-inset/80 border border-edge rounded-xl pl-9 pr-16 py-2 text-sm text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent/60 focus:bg-inset transition-all"
+        placeholder="Search series, author, or genre..."
+        className="w-full pl-9.5 pr-16 py-2 text-xs rounded-xl bg-surface/80 border border-edge hover:border-edge-strong focus:border-accent text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all"
       />
       {searchQuery && (
         <button
@@ -180,6 +187,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Calendar className="w-4 h-4 text-info" />
               </button>
+
+              {/* Challenge / Captcha Alert Button */}
+              {pendingChallengesCount > 0 && onOpenChallengesModal && (
+                <button
+                  onClick={onOpenChallengesModal}
+                  title={`${pendingChallengesCount} source(s) require manual captcha solving or challenge verification`}
+                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-black rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 animate-pulse shadow-md transition-all"
+                >
+                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline">Captcha Alert</span>
+                  <span className="w-4 h-4 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center">
+                    {pendingChallengesCount}
+                  </span>
+                </button>
+              )}
 
               {showAdmin && (
                 <button
@@ -291,6 +313,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <RefreshCw className={`w-4 h-4 text-accent ${isUpdating ? 'animate-spin' : ''}`} />
               <span>{isUpdating ? 'Scanning...' : 'Update Library'}</span>
             </button>
+
+            {pendingChallengesCount > 0 && onOpenChallengesModal && (
+              <button
+                onClick={() => closeQuickMenu(onOpenChallengesModal)}
+                className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-2"
+              >
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+                <span>Captchas ({pendingChallengesCount})</span>
+              </button>
+            )}
 
             {onOpenSubmitBugModal && (
               <button
