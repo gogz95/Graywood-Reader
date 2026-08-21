@@ -3953,20 +3953,30 @@ app.post("/api/scrape/run-liveness", (req, res) => {
 
 // Kotatsu Multi-Source Live Search Endpoint (Enhanced)
 app.get("/api/kotatsu/search", async (req, res) => {
-  const sourceId = (req.query.sourceId as string) || 'mangadex';
-  const query = ((req.query.q as string) || '').trim();
+  // Resolve source alias (e.g., public domain) to internal source ID
+  const resolveAliasSourceId = (alias: string): string => {
+    const aliasMap: Record<string, string> = {
+      "reader.graywood.no": "asurascans",
+      // add future aliases here
+    };
+    return aliasMap[alias.toLowerCase()] || alias;
+  };
+
+  const rawSourceId = (req.query.sourceId as string) || "mangadex";
+  const sourceId = resolveAliasSourceId(rawSourceId);
+  const query = ((req.query.q as string) || "").trim();
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(Number(req.query.limit) || 24, 100);
   const offset = (page - 1) * limit;
-  const lang = (req.query.lang as string || 'en').toLowerCase();
-  const langFilter = lang === 'all' ? '' : `&availableTranslatedLanguage[]=${lang}`;
+  const lang = (req.query.lang as string || "en").toLowerCase();
+  const langFilter = lang === "all" ? "" : `&availableTranslatedLanguage[]=${lang}`;
 
   // MangaDex is a metadata-only background DB — never resolve to it as a reading source.
-  let sourceDef = KOTATSU_SOURCES.find((s) => s.id === sourceId && s.id !== 'mangadex');
+  let sourceDef = KOTATSU_SOURCES.find((s) => s.id === sourceId && s.id !== "mangadex");
   if (!sourceDef) {
     sourceDef =
-      KOTATSU_SOURCES.find((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)) ||
-      KOTATSU_SOURCES.find((s) => s.id !== 'mangadex');
+      KOTATSU_SOURCES.find((s) => s.id !== "mangadex" && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)) ||
+      KOTATSU_SOURCES.find((s) => s.id !== "mangadex");
   }
   if (!sourceDef) return res.json([]);
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
-import { resolveRequestUserId } from '../appState';
+import { resolveRequestUserId, mangaDatabase } from '../appState';
 
 // ============================================================================
 // READING PROGRESS & ACTIVITY PERSISTENCE API
@@ -11,6 +11,30 @@ import { resolveRequestUserId } from '../appState';
 // ============================================================================
 
 export const progressRouter = Router();
+
+// ------------------------------------------------------------
+// GET /api/reader/progress?sourceId=...&slug=...
+// Returns reading progress for a specific manga identified by its source ID and slug.
+// ------------------------------------------------------------
+progressRouter.get("/api/reader/progress", async (req, res) => {
+  const sourceId = (req.query.sourceId as string || "").trim();
+  const slug = (req.query.slug as string || "").trim();
+  if (!sourceId || !slug) {
+    return res.status(400).json({ error: "sourceId and slug are required" });
+  }
+  const userId = resolveProgressUserId(req);
+  // Find manga matching the sourceId and slug. We look at sourceName and sourceUrl.
+  const manga = mangaDatabase.find((m) => {
+    const nameMatch = m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase());
+    const urlMatch = m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase());
+    return nameMatch && urlMatch;
+  });
+  if (!manga) {
+    return res.status(404).json({ error: "Manga not found for given sourceId and slug" });
+  }
+  const rows = SqliteDb.getReadingProgress(manga.id, userId);
+  return res.json(rows);
+});
 
 function resolveProgressUserId(req: any): string {
   // Anonymous remote writes land in the shared guest bucket — NEVER on the
