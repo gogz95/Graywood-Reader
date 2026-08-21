@@ -362,6 +362,156 @@ describe('Kotatsu ZIP archive backup import', () => {
     expect(items[0].categories).toContain('Super Secret Shelf');
     expect(items[0].categories).toContain('Secondary Shelf');
   });
+
+  it('restores reading progress from separate chapters.json and history.json referencing chapter_id', async () => {
+    const zip = new AdmZip();
+    
+    const mangaData = JSON.stringify([
+      {
+        id: 701,
+        title: 'Solo Leveling',
+        source: 'ASURASCANS',
+        public_url: 'https://asurascans.com/manga/solo-leveling',
+        genres: ['Action', 'Fantasy', 'Manhwa'],
+        state: 'COMPLETED'
+      }
+    ]);
+
+    const favouritesData = JSON.stringify([
+      {
+        manga_id: 701,
+        category_id: 1,
+        created_at: 1700000000000
+      }
+    ]);
+
+    const chaptersData = JSON.stringify([
+      { id: 7001, manga_id: 701, name: 'Chapter 1', number: 1.0, read: true, last_page_read: 20 },
+      { id: 7002, manga_id: 701, name: 'Chapter 2', number: 2.0, read: true, last_page_read: 25 },
+      { id: 7003, manga_id: 701, name: 'Chapter 3: The Awakening', number: 3.0, read: true, last_page_read: 30 },
+      { id: 7004, manga_id: 701, name: 'Chapter 4', number: 4.0, read: false, last_page_read: 0 },
+      { id: 7005, manga_id: 701, name: 'Chapter 5', number: 5.0, read: false, last_page_read: 0 }
+    ]);
+
+    const historyData = JSON.stringify([
+      {
+        manga_id: 701,
+        chapter_id: 7003,
+        page: 30,
+        percent: 1.0,
+        updated_at: 1705000000000
+      }
+    ]);
+
+    const categoriesData = JSON.stringify([
+      { id: 1, name: 'Top Tier' }
+    ]);
+
+    zip.addFile('manga.json', Buffer.from(mangaData, 'utf-8'));
+    zip.addFile('favourites.json', Buffer.from(favouritesData, 'utf-8'));
+    zip.addFile('chapters.json', Buffer.from(chaptersData, 'utf-8'));
+    zip.addFile('history.json', Buffer.from(historyData, 'utf-8'));
+    zip.addFile('categories.json', Buffer.from(categoriesData, 'utf-8'));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_kotatsu');
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('Solo Leveling');
+    expect(items[0].currentChapter).toBe(3);
+    expect(items[0].totalChapters).toBe(5);
+    expect(items[0].categories).toContain('Top Tier');
+    expect(items[0].isFavorite).toBe(true);
+  });
+
+  it('restores reading progress from chapter read flags when history is not present', async () => {
+    const zip = new AdmZip();
+    
+    const mangaData = JSON.stringify([
+      {
+        id: 801,
+        title: 'Return of the Mount Hua Sect',
+        source: 'ASURASCANS',
+        public_url: 'https://asurascans.com/manga/mount-hua',
+        genres: ['Action', 'Martial Arts', 'Manhwa']
+      }
+    ]);
+
+    const chaptersData = JSON.stringify([
+      { id: 8001, manga_id: 801, name: 'Chapter 1', number: 1, read: true },
+      { id: 8002, manga_id: 801, name: 'Chapter 2', number: 2, read: true },
+      { id: 8003, manga_id: 801, name: 'Chapter 3', number: 3, read: true },
+      { id: 8004, manga_id: 801, name: 'Chapter 4', number: 4, read: true, last_page_read: 15 },
+      { id: 8005, manga_id: 801, name: 'Chapter 5', number: 5, read: false }
+    ]);
+
+    zip.addFile('manga.json', Buffer.from(mangaData, 'utf-8'));
+    zip.addFile('chapters.json', Buffer.from(chaptersData, 'utf-8'));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_kotatsu');
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('Return of the Mount Hua Sect');
+    expect(items[0].currentChapter).toBe(4);
+    expect(items[0].totalChapters).toBe(5);
+  });
+
+  it('restores reading progress from tracker sync entries in tracks.json', async () => {
+    const zip = new AdmZip();
+    
+    const mangaData = JSON.stringify([
+      {
+        id: 901,
+        title: 'Beginning After the End',
+        source: 'FLAME_COMICS',
+        public_url: 'https://flamecomics.com/series/tbate',
+        genres: ['Action', 'Fantasy', 'Manhwa']
+      }
+    ]);
+
+    const tracksData = JSON.stringify([
+      {
+        manga_id: 901,
+        tracker_id: 1, // AniList
+        last_chapter_read: 175,
+        total_chapters: 200,
+        score: 9.5
+      }
+    ]);
+
+    zip.addFile('manga.json', Buffer.from(mangaData, 'utf-8'));
+    zip.addFile('tracks.json', Buffer.from(tracksData, 'utf-8'));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_kotatsu');
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('Beginning After the End');
+    expect(items[0].currentChapter).toBe(175);
+    expect(items[0].totalChapters).toBe(200);
+  });
+
+  it('correctly parses chapter numbers from complex titles and decimal strings', async () => {
+    const zip = new AdmZip();
+    
+    const mangaData = JSON.stringify([
+      {
+        id: 950,
+        title: 'Chainsaw Man',
+        source: 'MANGADEX',
+        genres: ['Action', 'Supernatural']
+      }
+    ]);
+
+    const chaptersData = JSON.stringify([
+      { id: 1, manga_id: 950, name: 'Vol. 1 Ch. 1 - Dog & Chainsaw', read: true },
+      { id: 2, manga_id: 950, name: 'Vol. 5 Ch. 45.5 - Bonus Chapter', read: true },
+      { id: 3, manga_id: 950, name: 'Ch. 99 - Second Part', read: false }
+    ]);
+
+    zip.addFile('manga.json', Buffer.from(mangaData, 'utf-8'));
+    zip.addFile('chapters.json', Buffer.from(chaptersData, 'utf-8'));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_kotatsu');
+    expect(items).toHaveLength(1);
+    expect(items[0].currentChapter).toBe(45.5);
+    expect(items[0].totalChapters).toBe(99);
+  });
 });
 
 describe('Kotatsu export', () => {

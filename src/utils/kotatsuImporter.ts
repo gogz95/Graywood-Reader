@@ -7,17 +7,25 @@ import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../ty
 
 export interface KotatsuChapter {
   id?: number | string;
+  manga_id?: number | string;
+  mangaId?: number | string;
   name?: string;
   title?: string;
   number?: number;
+  number_float?: number;
   chapter_number?: number;
   url?: string;
   uploadDate?: number | string;
   upload_date?: number | string;
   scanlator?: string;
   branch?: string;
-  read?: boolean;
+  read?: boolean | number;
   last_page_read?: number;
+  lastPageRead?: number;
+  page?: number;
+  pages_count?: number;
+  pages?: number;
+  bookmark?: any;
 }
 
 export interface KotatsuManga {
@@ -52,6 +60,7 @@ export interface KotatsuManga {
   currentChapter?: number;
   progress?: number;
   lastChapterRead?: number;
+  totalChapters?: number;
 }
 
 export interface KotatsuFavouriteEntry {
@@ -62,14 +71,20 @@ export interface KotatsuFavouriteEntry {
   altTitle?: string | string[];
   url?: string;
   publicUrl?: string;
+  public_url?: string;
   coverUrl?: string;
   cover_url?: string;
+  largeCoverUrl?: string;
+  large_cover_url?: string;
+  thumbnail_url?: string;
   state?: number | string;
   status?: number | string;
   source?: string;
   genres?: any;
   description?: string;
   chapters?: KotatsuChapter[];
+  manga_id?: number | string;
+  mangaId?: number | string;
   categoryId?: number | string;
   category_id?: number | string;
   categories?: Array<string | { id?: number | string; name?: string }>;
@@ -96,9 +111,44 @@ export interface KotatsuHistoryEntry {
   page?: number;
   percent?: number;
   progress?: number;
+  scroll?: number;
+  createdAt?: number | string;
+  created_at?: number | string;
   updatedAt?: number | string;
   updated_at?: number | string;
   last_read_at?: number | string;
+}
+
+export interface KotatsuTrack {
+  id?: number | string;
+  manga_id?: number | string;
+  mangaId?: number | string;
+  tracker_id?: number;
+  service_id?: number;
+  last_chapter_read?: number;
+  lastChapterRead?: number;
+  chapters_read?: number;
+  chaptersRead?: number;
+  progress?: number;
+  chapter?: number;
+  score?: number;
+  rating?: number;
+  status?: number | string;
+  total_chapters?: number;
+  totalChapters?: number;
+}
+
+export interface KotatsuBookmark {
+  id?: number | string;
+  manga_id?: number | string;
+  mangaId?: number | string;
+  manga?: KotatsuManga;
+  chapter_id?: number | string;
+  chapterId?: number | string;
+  chapter?: KotatsuChapter;
+  page?: number;
+  createdAt?: number | string;
+  created_at?: number | string;
 }
 
 export interface KotatsuCategory {
@@ -114,9 +164,12 @@ export interface KotatsuBackupPayload {
   favorites?: KotatsuFavouriteEntry[];
   manga?: KotatsuManga[];
   mangas?: KotatsuManga[];
+  chapters?: KotatsuChapter[];
   history?: KotatsuHistoryEntry[];
   categories?: KotatsuCategory[];
-  bookmarks?: any[];
+  bookmarks?: KotatsuBookmark[];
+  tracks?: KotatsuTrack[];
+  trackings?: KotatsuTrack[];
 }
 
 /**
@@ -189,12 +242,62 @@ export function detectKotatsuFormat(genres: string[], title: string): MangaType 
 }
 
 /**
+ * Parses chapter number from string titles / names / URLs with high tolerance.
+ */
+export function parseChapterNumberFromString(str: string): number {
+  if (!str) return 0;
+  const clean = str.trim();
+  const directNum = parseFloat(clean);
+  if (!isNaN(directNum) && Number.isFinite(directNum) && directNum >= 0 && clean === String(directNum)) {
+    return directNum;
+  }
+
+  const regexes = [
+    /(?:chapter|chapitre|capitulo|capitolo|episode|ch\.|ch|ep\.|ep|#)\s*([0-9]+(?:\.[0-9]+)?)/i,
+    /(?:vol(?:ume)?\.?\s*[0-9]+\s+)?(?:ch(?:apter)?\.?\s*)([0-9]+(?:\.[0-9]+)?)/i,
+    /\/chapter-?([0-9]+(?:\.[0-9]+)?)/i,
+    /\/ch-?([0-9]+(?:\.[0-9]+)?)/i,
+    /\b([0-9]+(?:\.[0-9]+)?)\b/,
+  ];
+
+  for (const rx of regexes) {
+    const match = clean.match(rx);
+    if (match && match[1]) {
+      const parsed = parseFloat(match[1]);
+      if (!isNaN(parsed) && Number.isFinite(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Extracts a numeric chapter position from any chapter object or primitive value.
+ */
+export function extractChapterNumber(raw: any): number {
+  if (raw === undefined || raw === null) return 0;
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+  }
+  if (typeof raw === 'object') {
+    if (typeof raw.number === 'number' && Number.isFinite(raw.number) && raw.number >= 0) return raw.number;
+    if (typeof raw.chapter_number === 'number' && Number.isFinite(raw.chapter_number) && raw.chapter_number >= 0) return raw.chapter_number;
+    if (typeof raw.number_float === 'number' && Number.isFinite(raw.number_float) && raw.number_float >= 0) return raw.number_float;
+    const str = String(raw.name || raw.title || raw.url || raw.number || raw.chapter_number || '').trim();
+    return parseChapterNumberFromString(str);
+  }
+  if (typeof raw === 'string') {
+    return parseChapterNumberFromString(raw);
+  }
+  return 0;
+}
+
+/**
  * Extracts files from a ZIP archive ArrayBuffer / Uint8Array in standard JS environments.
  * Uses native DecompressionStream('deflate-raw') if available (modern browsers & Node 18+),
  * with support for uncompressed stored files.
- */
-/**
- * Helper to decompress deflate-raw or deflate payload.
  */
 async function decompressDeflateStream(slice: Uint8Array): Promise<string> {
   const cleanSlice = new Uint8Array(slice);
@@ -370,8 +473,13 @@ export async function parseKotatsuBackup(
   onProgress?: (status: string, percent: number) => void
 ): Promise<MangaItem[]> {
   onProgress?.('Extracting archive structure...', 8);
-  let favouritesList: KotatsuFavouriteEntry[] = [];
-  let historyList: KotatsuHistoryEntry[] = [];
+
+  const rawMangaList: KotatsuManga[] = [];
+  const rawFavouritesList: KotatsuFavouriteEntry[] = [];
+  const rawChaptersList: KotatsuChapter[] = [];
+  const rawHistoryList: KotatsuHistoryEntry[] = [];
+  const rawBookmarksList: KotatsuBookmark[] = [];
+  const rawTracksList: KotatsuTrack[] = [];
   const categoriesMap: Map<string | number, string> = new Map();
   const favToCategoriesMap = new Map<string, Array<string | number>>();
   const statisticsMap = new Map<string, { timeSpentSeconds?: number; chaptersRead?: number; lastRead?: number | string; pagesRead?: number }>();
@@ -398,11 +506,12 @@ export async function parseKotatsuBackup(
         const parts = filePath.replace(/\\/g, '/').split('/');
         return (parts[parts.length - 1] || '').toLowerCase().trim();
       };
-      
-      // Parse categories and favourites_categories junction tables
+
       for (const [name, content] of Object.entries(files)) {
         const base = getBase(name);
-        if (base === 'sources' || base === 'sources.json') continue; // Ignore sources file
+        if (base === 'sources' || base === 'sources.json' || base === 'settings' || base === 'settings.json') continue;
+
+        // Categories
         if (base === 'categories' || base === 'categories.json' || (base.includes('categor') && !base.includes('favourit') && !base.includes('favorit'))) {
           try {
             const parsedCats = JSON.parse(content);
@@ -426,7 +535,9 @@ export async function parseKotatsuBackup(
               }
             }
           } catch {}
-        } else if (base === 'favourites_categories' || base === 'favourites_categories.json' || base === 'favorites_categories' || base === 'favorites_categories.json' || base.includes('favourite_categor') || base.includes('favorite_categor') || base.includes('favourites_cat') || base.includes('favorites_cat')) {
+        }
+        // Favourites Categories junction
+        else if (base === 'favourites_categories' || base === 'favourites_categories.json' || base === 'favorites_categories' || base === 'favorites_categories.json' || base.includes('favourite_categor') || base.includes('favorite_categor') || base.includes('favourites_cat') || base.includes('favorites_cat')) {
           try {
             const parsedJunction = JSON.parse(content);
             const list: any[] = Array.isArray(parsedJunction)
@@ -468,44 +579,48 @@ export async function parseKotatsuBackup(
             }
           } catch {}
         }
-      }
-
-      // Parse history if available
-      for (const [name, content] of Object.entries(files)) {
-        const base = getBase(name);
-        if (base === 'sources' || base === 'sources.json') continue;
-        if (base === 'history' || base === 'history.json' || (base.includes('history') && !base.includes('categor'))) {
+        // Chapters (critical for reading progress & chapter count)
+        else if (base === 'chapters' || base === 'chapters.json' || base === 'chapter' || base === 'chapter.json' || (base.includes('chapter') && !base.includes('history'))) {
+          try {
+            const parsedChapters = JSON.parse(content);
+            const list = Array.isArray(parsedChapters) ? parsedChapters : parsedChapters.chapters || parsedChapters.items || [];
+            if (Array.isArray(list) && list.length > 0) {
+              rawChaptersList.push(...list);
+            }
+          } catch {}
+        }
+        // History
+        else if (base === 'history' || base === 'history.json' || (base.includes('history') && !base.includes('categor'))) {
           try {
             const parsedHistory = JSON.parse(content);
             const list = Array.isArray(parsedHistory) ? parsedHistory : parsedHistory.history || [];
             if (Array.isArray(list) && list.length > 0) {
-              historyList.push(...list);
+              rawHistoryList.push(...list);
             }
           } catch {}
         }
-      }
-
-      // Parse bookmarks if available
-      const bookmarksList: any[] = [];
-      for (const [name, content] of Object.entries(files)) {
-        const base = getBase(name);
-        if (base === 'sources' || base === 'sources.json') continue;
-        if (base === 'bookmarks' || base === 'bookmarks.json') {
+        // Bookmarks
+        else if (base === 'bookmarks' || base === 'bookmarks.json') {
           try {
             const parsedBm = JSON.parse(content);
             const list = Array.isArray(parsedBm) ? parsedBm : parsedBm.bookmarks || [];
             if (Array.isArray(list) && list.length > 0) {
-              bookmarksList.push(...list);
+              rawBookmarksList.push(...list);
             }
           } catch {}
         }
-      }
-
-      // Parse statistics if available (e.g. statistics or statistics.json)
-      for (const [name, content] of Object.entries(files)) {
-        const base = getBase(name);
-        if (base === 'sources' || base === 'sources.json') continue;
-        if (base === 'statistics' || base === 'statistics.json' || base.includes('statistic')) {
+        // Tracks (tracker sync progress)
+        else if (base === 'tracks' || base === 'tracks.json' || base === 'track' || base === 'track.json' || base === 'trackings' || base === 'trackings.json') {
+          try {
+            const parsedTracks = JSON.parse(content);
+            const list = Array.isArray(parsedTracks) ? parsedTracks : parsedTracks.tracks || parsedTracks.trackings || parsedTracks.items || [];
+            if (Array.isArray(list) && list.length > 0) {
+              rawTracksList.push(...list);
+            }
+          } catch {}
+        }
+        // Statistics
+        else if (base === 'statistics' || base === 'statistics.json' || base.includes('statistic')) {
           try {
             const parsedStats = JSON.parse(content);
             const rawList = Array.isArray(parsedStats)
@@ -522,7 +637,7 @@ export async function parseKotatsuBackup(
               if (!item || typeof item !== 'object') continue;
               const id = item.mangaId !== undefined ? String(item.mangaId) : item.manga_id !== undefined ? String(item.manga_id) : item.id !== undefined ? String(item.id) : '';
               const title = item.manga?.title || item.title ? String(item.manga?.title || item.title).toLowerCase().trim() : '';
-              
+
               const rawTime = item.timeSpent || item.time || item.duration || item.totalReadingTime || 0;
               const timeSpentSeconds = rawTime > 100000 ? Math.round(rawTime / 1000) : rawTime;
               const chaptersRead = item.chaptersRead || item.chapters || item.read || item.count || 0;
@@ -537,61 +652,38 @@ export async function parseKotatsuBackup(
             }
           } catch {}
         }
-      }
-
-      // Parse favourites / manga (ignore sources)
-      for (const [name, content] of Object.entries(files)) {
-        const base = getBase(name);
-        if (base === 'sources' || base === 'sources.json') continue; // Explicitly ignore sources
-        if (
-          base === 'favourites' ||
-          base === 'favourites.json' ||
-          base === 'favorites' ||
-          base === 'favorites.json' ||
-          base === 'manga' ||
-          base === 'mangas' ||
-          base === 'manga.json' ||
-          ((base.includes('favourit') || base.includes('favorit') || base.includes('manga')) && !base.includes('categor'))
-        ) {
+        // Favourites
+        else if (base === 'favourites' || base === 'favourites.json' || base === 'favorites' || base === 'favorites.json') {
           try {
             const parsedFavs = JSON.parse(content);
-            const list = Array.isArray(parsedFavs) 
-              ? parsedFavs 
-              : parsedFavs.favourites || parsedFavs.favorites || parsedFavs.mangas || parsedFavs.manga || [];
+            const list = Array.isArray(parsedFavs) ? parsedFavs : parsedFavs.favourites || parsedFavs.favorites || [];
             if (Array.isArray(list) && list.length > 0) {
-              favouritesList.push(...list);
+              rawFavouritesList.push(...list);
             }
           } catch {}
         }
-      }
-
-      // If history is empty but bookmarks exist, use bookmarks as history fallback
-      if (historyList.length === 0 && bookmarksList.length > 0) {
-        for (const bm of bookmarksList) {
-          if (bm) {
-            historyList.push({
-              manga: bm.manga,
-              mangaId: bm.mangaId || bm.manga_id || bm.manga?.id,
-              chapter: bm.chapter,
-              chapterId: bm.chapterId || bm.chapter_id || bm.chapter?.id,
-              page: bm.page,
-              updatedAt: bm.createdAt || bm.created_at,
-            });
-          }
+        // Manga catalog table
+        else if (base === 'manga' || base === 'mangas' || base === 'manga.json' || base === 'mangas.json') {
+          try {
+            const parsedManga = JSON.parse(content);
+            const list = Array.isArray(parsedManga) ? parsedManga : parsedManga.mangas || parsedManga.manga || [];
+            if (Array.isArray(list) && list.length > 0) {
+              rawMangaList.push(...list);
+            }
+          } catch {}
         }
       }
     }
   }
 
   // 2. If no files were extracted from ZIP, parse as raw JSON or compressed JSON
-  if (favouritesList.length === 0) {
+  if (rawFavouritesList.length === 0 && rawMangaList.length === 0) {
     let jsonString = '';
     if (typeof input === 'string') {
       jsonString = input;
     } else {
       try {
         const u8 = input instanceof Uint8Array ? input : new Uint8Array(input);
-        // Check if GZIP format (0x1F, 0x8B)
         if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
           if (typeof DecompressionStream !== 'undefined') {
             try {
@@ -619,12 +711,18 @@ export async function parseKotatsuBackup(
       }
 
       if (Array.isArray(parsed)) {
-        favouritesList = parsed;
+        rawFavouritesList.push(...parsed);
       } else if (typeof parsed === 'object' && parsed !== null) {
-        favouritesList = parsed.favourites || parsed.favorites || parsed.manga || parsed.mangas || [];
-        if (Array.isArray(parsed.history)) {
-          historyList = parsed.history;
-        }
+        if (Array.isArray(parsed.favourites)) rawFavouritesList.push(...parsed.favourites);
+        if (Array.isArray(parsed.favorites)) rawFavouritesList.push(...parsed.favorites);
+        if (Array.isArray(parsed.manga)) rawMangaList.push(...parsed.manga);
+        if (Array.isArray(parsed.mangas)) rawMangaList.push(...parsed.mangas);
+        if (Array.isArray(parsed.chapters)) rawChaptersList.push(...parsed.chapters);
+        if (Array.isArray(parsed.history)) rawHistoryList.push(...parsed.history);
+        if (Array.isArray(parsed.bookmarks)) rawBookmarksList.push(...parsed.bookmarks);
+        if (Array.isArray(parsed.tracks)) rawTracksList.push(...parsed.tracks);
+        if (Array.isArray(parsed.trackings)) rawTracksList.push(...parsed.trackings);
+
         const rawCats = parsed.categories || parsed.items || [];
         if (Array.isArray(rawCats)) {
           for (const cat of rawCats) {
@@ -651,6 +749,7 @@ export async function parseKotatsuBackup(
             }
           }
         }
+
         const rawJunction = parsed.favourites_categories || parsed.favorites_categories || [];
         if (Array.isArray(rawJunction)) {
           for (const j of rawJunction) {
@@ -664,6 +763,7 @@ export async function parseKotatsuBackup(
             }
           }
         }
+
         if (parsed.statistics) {
           const rawList = Array.isArray(parsed.statistics) ? parsed.statistics : parsed.statistics.manga || [];
           for (const item of rawList) {
@@ -689,138 +789,449 @@ export async function parseKotatsuBackup(
         importedAt: new Date().toISOString(),
         totalReadingTimeSeconds: totalImportedReadingTime,
         totalChaptersRead: totalImportedChaptersStat,
-        seriesCount: statisticsMap.size || favouritesList.length,
+        seriesCount: statisticsMap.size || (rawFavouritesList.length + rawMangaList.length),
       }));
     } catch {}
   }
 
-  if (favouritesList.length === 0) {
+  // 3. Index Chapters by Chapter ID and Manga ID
+  const chapterByIdMap = new Map<string, KotatsuChapter>();
+  const chaptersByMangaMap = new Map<string, KotatsuChapter[]>();
+
+  const indexChapter = (c: KotatsuChapter, defaultMangaId?: string | number) => {
+    if (!c) return;
+    if (c.id !== undefined) {
+      chapterByIdMap.set(String(c.id), c);
+    }
+    const mId = c.manga_id !== undefined ? String(c.manga_id) : c.mangaId !== undefined ? String(c.mangaId) : (defaultMangaId !== undefined ? String(defaultMangaId) : '');
+    if (mId) {
+      const arr = chaptersByMangaMap.get(mId) || [];
+      arr.push(c);
+      chaptersByMangaMap.set(mId, arr);
+    }
+  };
+
+  for (const ch of rawChaptersList) {
+    indexChapter(ch);
+  }
+
+  // Also index chapters embedded directly on manga / favourites
+  for (const m of rawMangaList) {
+    if (Array.isArray(m.chapters)) {
+      for (const ch of m.chapters) {
+        indexChapter(ch, m.id);
+      }
+    }
+  }
+  for (const f of rawFavouritesList) {
+    const m = f.manga || f;
+    const mId = m.id !== undefined ? m.id : f.manga_id || f.mangaId || f.id;
+    if (Array.isArray(m.chapters)) {
+      for (const ch of m.chapters) {
+        indexChapter(ch, mId);
+      }
+    }
+    if (Array.isArray(f.chapters)) {
+      for (const ch of f.chapters) {
+        indexChapter(ch, mId);
+      }
+    }
+  }
+
+  // 4. Index History by Manga ID, URL, Title, and Chapter ID
+  const historyByMangaMap = new Map<string, KotatsuHistoryEntry[]>();
+  for (const h of rawHistoryList) {
+    if (!h) continue;
+    const m = h.manga;
+    const keys: string[] = [];
+    if (h.mangaId !== undefined) keys.push(String(h.mangaId));
+    if (h.manga_id !== undefined) keys.push(String(h.manga_id));
+    if (m?.id !== undefined) keys.push(String(m.id));
+    if (m?.title) keys.push(m.title.toLowerCase().trim());
+    if (m?.publicUrl) keys.push(m.publicUrl);
+    if (m?.url) keys.push(m.url);
+
+    // Also index if embedded chapter has mangaId
+    if (h.chapter?.manga_id !== undefined) keys.push(String(h.chapter.manga_id));
+    if (h.chapter?.mangaId !== undefined) keys.push(String(h.chapter.mangaId));
+
+    // If chapterId exists, check indexed chapters to find parent manga_id
+    const chId = h.chapterId !== undefined ? String(h.chapterId) : h.chapter_id !== undefined ? String(h.chapter_id) : (h.chapter?.id !== undefined ? String(h.chapter.id) : '');
+    if (chId && chapterByIdMap.has(chId)) {
+      const parentCh = chapterByIdMap.get(chId)!;
+      const parentMId = parentCh.manga_id !== undefined ? String(parentCh.manga_id) : parentCh.mangaId !== undefined ? String(parentCh.mangaId) : '';
+      if (parentMId) keys.push(parentMId);
+    }
+
+    const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
+    for (const k of uniqueKeys) {
+      const arr = historyByMangaMap.get(k) || [];
+      arr.push(h);
+      historyByMangaMap.set(k, arr);
+    }
+  }
+
+  // 5. Index Tracks by Manga ID
+  const tracksByMangaMap = new Map<string, KotatsuTrack[]>();
+  for (const t of rawTracksList) {
+    if (!t) continue;
+    const keys: string[] = [];
+    if (t.manga_id !== undefined) keys.push(String(t.manga_id));
+    if (t.mangaId !== undefined) keys.push(String(t.mangaId));
+    if (t.id !== undefined) keys.push(String(t.id));
+
+    const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
+    for (const k of uniqueKeys) {
+      const arr = tracksByMangaMap.get(k) || [];
+      arr.push(t);
+      tracksByMangaMap.set(k, arr);
+    }
+  }
+
+  // 6. Index Bookmarks by Manga ID
+  const bookmarksByMangaMap = new Map<string, KotatsuBookmark[]>();
+  for (const bm of rawBookmarksList) {
+    if (!bm) continue;
+    const keys: string[] = [];
+    if (bm.manga_id !== undefined) keys.push(String(bm.manga_id));
+    if (bm.mangaId !== undefined) keys.push(String(bm.mangaId));
+    if (bm.manga?.id !== undefined) keys.push(String(bm.manga.id));
+
+    const chId = bm.chapter_id !== undefined ? String(bm.chapter_id) : bm.chapterId !== undefined ? String(bm.chapterId) : '';
+    if (chId && chapterByIdMap.has(chId)) {
+      const parentCh = chapterByIdMap.get(chId)!;
+      const parentMId = parentCh.manga_id !== undefined ? String(parentCh.manga_id) : parentCh.mangaId !== undefined ? String(parentCh.mangaId) : '';
+      if (parentMId) keys.push(parentMId);
+    }
+
+    const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
+    for (const k of uniqueKeys) {
+      const arr = bookmarksByMangaMap.get(k) || [];
+      arr.push(bm);
+      bookmarksByMangaMap.set(k, arr);
+    }
+  }
+
+  // 7. Unify Manga and Favourites entries
+  // In Kotatsu, manga.json holds manga details, and favourites.json holds user favourites / category junctions.
+  interface MergedMangaEntry {
+    manga: KotatsuManga;
+    favourite?: KotatsuFavouriteEntry;
+    isFavorite: boolean;
+  }
+
+  const uniqueEntriesMap = new Map<string, MergedMangaEntry>();
+  const aliasToCanonicalKey = new Map<string, string>();
+
+  const getCanonicalKey = (m?: KotatsuManga, f?: KotatsuFavouriteEntry, fallbackIndex: number = 0): string => {
+    const id = m?.id !== undefined && m?.id !== null ? String(m.id)
+      : f?.manga_id !== undefined && f?.manga_id !== null ? String(f.manga_id)
+      : f?.mangaId !== undefined && f?.mangaId !== null ? String(f.mangaId)
+      : f?.id !== undefined && f?.id !== null ? String(f.id)
+      : '';
+    if (id) return `id:${id}`;
+    const url = m?.publicUrl || m?.public_url || m?.url || f?.publicUrl || f?.public_url || f?.url;
+    if (url && url.trim()) return `url:${url.toLowerCase().trim()}`;
+    const title = m?.title || m?.name || f?.title || f?.name;
+    if (title && String(title).trim()) return `title:${String(title).toLowerCase().trim()}`;
+    return `item:${fallbackIndex}_${Math.random().toString(36).substring(2, 7)}`;
+  };
+
+  const registerAliases = (canonicalKey: string, m?: KotatsuManga, f?: KotatsuFavouriteEntry) => {
+    const id = m?.id !== undefined ? String(m.id) : (f?.manga_id !== undefined ? String(f.manga_id) : (f?.mangaId !== undefined ? String(f.mangaId) : (f?.id !== undefined ? String(f.id) : '')));
+    if (id) aliasToCanonicalKey.set(`id:${id}`, canonicalKey);
+    const title = m?.title || m?.name || f?.title || f?.name;
+    if (title && String(title).trim()) aliasToCanonicalKey.set(`title:${String(title).toLowerCase().trim()}`, canonicalKey);
+    const url = m?.publicUrl || m?.public_url || m?.url || f?.publicUrl || f?.public_url || f?.url;
+    if (url && url.trim()) aliasToCanonicalKey.set(`url:${url.toLowerCase().trim()}`, canonicalKey);
+  };
+
+  // Add all entries from manga table
+  for (let idx = 0; idx < rawMangaList.length; idx++) {
+    const m = rawMangaList[idx];
+    if (!m) continue;
+    const canonicalKey = getCanonicalKey(m, undefined, idx);
+    let entry = uniqueEntriesMap.get(canonicalKey);
+    if (!entry) {
+      entry = { manga: m, isFavorite: true };
+      uniqueEntriesMap.set(canonicalKey, entry);
+    } else {
+      entry.manga = { ...entry.manga, ...m };
+    }
+    registerAliases(canonicalKey, m);
+  }
+
+  // Merge entries from favourites table
+  for (let idx = 0; idx < rawFavouritesList.length; idx++) {
+    const f = rawFavouritesList[idx];
+    if (!f) continue;
+    const m = f.manga || f;
+    const mId = f.manga_id !== undefined ? f.manga_id : f.mangaId !== undefined ? f.mangaId : m?.id;
+    const title = m?.title || m?.name || f.title || f.name;
+    const url = m?.publicUrl || m?.public_url || m?.url || f.publicUrl || f.public_url || f.url;
+
+    let canonicalKey: string | undefined = undefined;
+    if (mId !== undefined && aliasToCanonicalKey.has(`id:${mId}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`id:${mId}`);
+    } else if (title && aliasToCanonicalKey.has(`title:${String(title).toLowerCase().trim()}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`title:${String(title).toLowerCase().trim()}`);
+    } else if (url && aliasToCanonicalKey.has(`url:${url.toLowerCase().trim()}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`url:${url.toLowerCase().trim()}`);
+    } else {
+      canonicalKey = getCanonicalKey(m, f, idx);
+    }
+
+    let entry = uniqueEntriesMap.get(canonicalKey!);
+    if (entry) {
+      entry.manga = { ...entry.manga, ...(f.manga || {}) };
+      if (f.title && !entry.manga.title) entry.manga.title = f.title;
+      if (f.source && !entry.manga.source) entry.manga.source = f.source;
+      if (f.coverUrl && !entry.manga.coverUrl) entry.manga.coverUrl = f.coverUrl;
+      entry.favourite = { ...(entry.favourite || {}), ...f };
+      if (f.favorite !== false && (f as any).isFavorite !== false) {
+        entry.isFavorite = true;
+      }
+    } else {
+      entry = {
+        manga: m || (f.manga_id ? { id: f.manga_id } : {}),
+        favourite: f,
+        isFavorite: f.favorite !== false && (f as any).isFavorite !== false,
+      };
+      uniqueEntriesMap.set(canonicalKey!, entry);
+    }
+    registerAliases(canonicalKey!, m, f);
+  }
+
+  // Collect unique series to import
+  const uniqueEntries = Array.from(uniqueEntriesMap.values());
+
+  if (uniqueEntries.length === 0) {
     throw new Error('No manga entries found in the Kotatsu backup.');
   }
 
-  onProgress?.(`Parsed ${favouritesList.length} series metadata entries. Resolving reading history & categories...`, 20);
-
-  // 3. Index history by manga identifier / url / title for reading progress
-  const historyMap = new Map<string, KotatsuHistoryEntry>();
-  for (const h of historyList) {
-    const m = h.manga;
-    const key1 = h.mangaId !== undefined ? String(h.mangaId) : '';
-    const key2 = h.manga_id !== undefined ? String(h.manga_id) : '';
-    const key3 = m?.id !== undefined ? String(m.id) : '';
-    const key4 = m?.title ? m.title.toLowerCase().trim() : '';
-    const key5 = m?.publicUrl || m?.url || '';
-
-    if (key1) historyMap.set(key1, h);
-    if (key2) historyMap.set(key2, h);
-    if (key3) historyMap.set(key3, h);
-    if (key4) historyMap.set(key4, h);
-    if (key5) historyMap.set(key5, h);
-  }
+  onProgress?.(`Parsed ${uniqueEntries.length} series metadata entries. Resolving reading history & categories...`, 20);
 
   const importedItems: MangaItem[] = [];
 
-  for (let i = 0; i < favouritesList.length; i++) {
-    const entry = favouritesList[i];
-    const m: KotatsuManga = entry.manga || entry;
-
-    const title = m.title || m.name || `Series #${i + 1}`;
-    if (!title) continue;
+  for (let i = 0; i < uniqueEntries.length; i++) {
+    const { manga: m, favourite: entry, isFavorite } = uniqueEntries[i];
+    const rawTitle = m.title || m.name || entry?.title || entry?.name;
+    const title = (rawTitle && String(rawTitle).trim()) || `Series #${i + 1}`;
+    if (!title || (title.startsWith('Series #') && !m.url && !m.publicUrl && !m.source)) {
+      // Skip pure junction stubs with zero metadata
+      continue;
+    }
 
     // Alt titles
-    const rawAlt = m.altTitle || m.alt_title;
-    const altTitles: string[] = Array.isArray(rawAlt) 
+    const rawAlt = m.altTitle || m.alt_title || entry?.altTitle;
+    const altTitles: string[] = Array.isArray(rawAlt)
       ? rawAlt.filter(Boolean).map(String)
-      : typeof rawAlt === 'string' && rawAlt.trim() 
-        ? [rawAlt.trim()] 
+      : typeof rawAlt === 'string' && rawAlt.trim()
+        ? [rawAlt.trim()]
         : [];
 
     // URLs & Cover
-    const sourceUrl = m.publicUrl || m.public_url || m.url || '';
-    const coverImage = m.largeCoverUrl || m.large_cover_url || m.coverUrl || m.cover_url || m.thumbnail_url || '';
-    const rawSource = m.source || (entry as any).source || 'Kotatsu';
+    const sourceUrl = m.publicUrl || m.public_url || m.url || entry?.publicUrl || entry?.url || '';
+    const coverImage = m.largeCoverUrl || m.large_cover_url || m.coverUrl || m.cover_url || m.thumbnail_url || entry?.coverUrl || entry?.cover_url || '';
+    const rawSource = m.source || (entry as any)?.source || 'Kotatsu';
     const sourceName = formatKotatsuSourceName(rawSource);
-    const description = m.description || m.summary || '';
+    const description = m.description || m.summary || entry?.description || '';
 
     // Genres
     let genres: string[] = [];
-    if (Array.isArray(m.genres)) {
-      genres = m.genres.map((g: any) => typeof g === 'string' ? g : g?.name || '').filter(Boolean);
-    } else if (typeof m.genres === 'string') {
-      genres = (m.genres as string).split(',').map(s => s.trim()).filter(Boolean);
+    const rawGenres = m.genres || entry?.genres;
+    if (Array.isArray(rawGenres)) {
+      genres = rawGenres.map((g: any) => typeof g === 'string' ? g : g?.name || '').filter(Boolean);
+    } else if (typeof rawGenres === 'string') {
+      genres = rawGenres.split(',').map(s => s.trim()).filter(Boolean);
     }
 
     // Status
-    const status = mapKotatsuStatus(m.state !== undefined ? m.state : m.status);
+    let status = mapKotatsuStatus(m.state !== undefined ? m.state : (m.status !== undefined ? m.status : (entry?.state !== undefined ? entry.state : entry?.status)));
     const type = detectKotatsuFormat(genres, title);
 
     // Rating
     let rating = 9.0;
-    if (typeof m.rating === 'number' && Number.isFinite(m.rating)) {
-      rating = m.rating <= 1 ? Number((m.rating * 10).toFixed(1)) : Number(m.rating.toFixed(1));
+    const rawRating = m.rating !== undefined ? m.rating : (entry as any)?.rating;
+    if (typeof rawRating === 'number' && Number.isFinite(rawRating)) {
+      rating = rawRating <= 1 ? Number((rawRating * 10).toFixed(1)) : Number(rawRating.toFixed(1));
     }
 
-    // Chapters & Reading Progress
-    const chapters = m.chapters || entry.chapters || [];
-    let totalChapters = chapters.length > 0 ? chapters.length : 1;
+    // ── CHAPTERS & READING PROGRESS RESOLUTION ──────────────────────────────
+    const mIdStr = m.id !== undefined ? String(m.id) : (entry?.id !== undefined ? String(entry.id) : (entry?.manga_id !== undefined ? String(entry.manga_id) : ''));
+    const titleKey = title.toLowerCase().trim();
+
+    // 1. Gather all associated chapters for this manga
+    const mangaChapters: KotatsuChapter[] = [
+      ...(mIdStr ? (chaptersByMangaMap.get(mIdStr) || []) : []),
+      ...(chaptersByMangaMap.get(titleKey) || []),
+      ...(Array.isArray(m.chapters) ? m.chapters : []),
+      ...(entry && Array.isArray(entry.chapters) ? entry.chapters : []),
+    ];
+
+    // Deduplicate chapters by ID or URL or number
+    const seenChKeys = new Set<string>();
+    const uniqueChapters: KotatsuChapter[] = [];
+    for (const c of mangaChapters) {
+      if (!c) continue;
+      const cKey = c.id !== undefined ? `id_${c.id}` : (c.url ? `url_${c.url}` : `num_${c.number}_${c.name}`);
+      if (!seenChKeys.has(cKey)) {
+        seenChKeys.add(cKey);
+        uniqueChapters.push(c);
+      }
+    }
+
     let currentChapter = 0;
+    let totalChapters = uniqueChapters.length > 0 ? uniqueChapters.length : 1;
 
-    // Check history map for this manga
-    const mId = m.id !== undefined ? String(m.id) : '';
-    const hist = (mId ? historyMap.get(mId) : null) || historyMap.get(title.toLowerCase().trim()) || (sourceUrl ? historyMap.get(sourceUrl) : null);
+    // A. Calculate progress from read flags in chapters table
+    for (const c of uniqueChapters) {
+      const isRead = Boolean(c.read === true || c.read === 1 || (c.last_page_read && c.last_page_read > 0) || (c.page && c.page > 0));
+      if (isRead) {
+        const chNum = extractChapterNumber(c);
+        if (chNum > currentChapter) {
+          currentChapter = chNum;
+        }
+      }
+    }
+    const readCount = uniqueChapters.filter(c => c.read === true || c.read === 1 || (c.last_page_read && c.last_page_read > 0)).length;
+    if (readCount > currentChapter) {
+      currentChapter = readCount;
+    }
 
-    if (hist) {
-      if (hist.chapter?.number !== undefined && Number.isFinite(hist.chapter.number)) {
-        currentChapter = Math.max(currentChapter, Math.floor(hist.chapter.number));
-      } else if (hist.chapter?.chapter_number !== undefined && Number.isFinite(hist.chapter.chapter_number)) {
-        currentChapter = Math.max(currentChapter, Math.floor(hist.chapter.chapter_number));
-      } else if (hist.chapterId !== undefined && chapters.length > 0) {
-        const foundIdx = chapters.findIndex(c => String(c.id) === String(hist.chapterId));
-        if (foundIdx !== -1) {
-          currentChapter = foundIdx + 1;
+    // B. Calculate progress from History entries
+    const historyListForManga: KotatsuHistoryEntry[] = [
+      ...(mIdStr ? (historyByMangaMap.get(mIdStr) || []) : []),
+      ...(historyByMangaMap.get(titleKey) || []),
+      ...(sourceUrl ? (historyByMangaMap.get(sourceUrl) || []) : []),
+    ];
+
+    let latestHistoryTimestamp: number | null = null;
+
+    for (const hist of historyListForManga) {
+      if (!hist) continue;
+      const histTime = Number(hist.updatedAt || hist.updated_at || hist.last_read_at || hist.createdAt || hist.created_at);
+      if (histTime && (!latestHistoryTimestamp || histTime > latestHistoryTimestamp)) {
+        latestHistoryTimestamp = histTime;
+      }
+
+      // Check embedded chapter object on history
+      if (hist.chapter) {
+        const chNum = extractChapterNumber(hist.chapter);
+        if (chNum > currentChapter) {
+          currentChapter = chNum;
+        }
+      }
+
+      // Resolve chapterId against indexed chapters
+      const chId = hist.chapterId !== undefined ? String(hist.chapterId) : (hist.chapter_id !== undefined ? String(hist.chapter_id) : '');
+      if (chId) {
+        const chObj = chapterByIdMap.get(chId);
+        if (chObj) {
+          const chNum = extractChapterNumber(chObj);
+          if (chNum > currentChapter) {
+            currentChapter = chNum;
+          }
+        } else if (uniqueChapters.length > 0) {
+          const foundIdx = uniqueChapters.findIndex(c => String(c.id) === chId);
+          if (foundIdx !== -1) {
+            const chNum = extractChapterNumber(uniqueChapters[foundIdx]) || (foundIdx + 1);
+            if (chNum > currentChapter) {
+              currentChapter = chNum;
+            }
+          }
+        }
+      }
+
+      // Fallback: direct chapter progress on history entry
+      if (typeof hist.progress === 'number' && hist.progress > currentChapter) {
+        currentChapter = hist.progress;
+      }
+    }
+
+    // C. Calculate progress from Tracker sync records (tracks.json)
+    const tracksListForManga: KotatsuTrack[] = [
+      ...(mIdStr ? (tracksByMangaMap.get(mIdStr) || []) : []),
+      ...(tracksByMangaMap.get(titleKey) || []),
+    ];
+
+    for (const trk of tracksListForManga) {
+      if (!trk) continue;
+      const trkCh = trk.last_chapter_read ?? trk.lastChapterRead ?? trk.chapters_read ?? trk.chaptersRead ?? trk.progress ?? trk.chapter;
+      if (typeof trkCh === 'number' && trkCh > currentChapter) {
+        currentChapter = trkCh;
+      }
+      const trkTotal = trk.total_chapters ?? trk.totalChapters;
+      if (typeof trkTotal === 'number' && trkTotal > totalChapters) {
+        totalChapters = trkTotal;
+      }
+    }
+
+    // D. Calculate progress from Bookmarks
+    const bookmarksListForManga: KotatsuBookmark[] = [
+      ...(mIdStr ? (bookmarksByMangaMap.get(mIdStr) || []) : []),
+      ...(bookmarksByMangaMap.get(titleKey) || []),
+    ];
+
+    for (const bm of bookmarksListForManga) {
+      if (!bm) continue;
+      if (bm.chapter) {
+        const chNum = extractChapterNumber(bm.chapter);
+        if (chNum > currentChapter) currentChapter = chNum;
+      }
+      const bmChId = bm.chapter_id !== undefined ? String(bm.chapter_id) : (bm.chapterId !== undefined ? String(bm.chapterId) : '');
+      if (bmChId) {
+        const chObj = chapterByIdMap.get(bmChId);
+        if (chObj) {
+          const chNum = extractChapterNumber(chObj);
+          if (chNum > currentChapter) currentChapter = chNum;
         }
       }
     }
 
-    // Also check read flags on chapter objects if present
-    if (chapters.length > 0) {
-      const readCount = chapters.filter(c => c.read || (c.last_page_read && c.last_page_read > 0)).length;
-      if (readCount > currentChapter) {
-        currentChapter = readCount;
-      }
+    // E. Calculate progress from Statistics map
+    const stat = (mIdStr ? statisticsMap.get(mIdStr) : null) || statisticsMap.get(titleKey) || (sourceUrl ? statisticsMap.get(sourceUrl) : null);
+    if (stat && typeof stat.chaptersRead === 'number' && stat.chaptersRead > currentChapter) {
+      currentChapter = stat.chaptersRead;
     }
 
-    // Check statistics map for reading chapters and time integration
-    const stat = (mId ? statisticsMap.get(mId) : null) || statisticsMap.get(title.toLowerCase().trim()) || (sourceUrl ? statisticsMap.get(sourceUrl) : null);
-    if (stat) {
-      if (stat.chaptersRead && stat.chaptersRead > currentChapter) {
-        currentChapter = stat.chaptersRead;
-      }
-    }
-
-    // Direct chapter progress fields
-    if (typeof entry.currentChapter === 'number' && entry.currentChapter > currentChapter) {
+    // F. Direct chapter progress fields on entry and manga
+    if (typeof entry?.currentChapter === 'number' && entry.currentChapter > currentChapter) {
       currentChapter = entry.currentChapter;
     }
     if (typeof (m as any).currentChapter === 'number' && (m as any).currentChapter > currentChapter) {
       currentChapter = (m as any).currentChapter;
     }
-    if (typeof entry.progress === 'number' && entry.progress > currentChapter) {
+    if (typeof entry?.progress === 'number' && entry.progress > currentChapter) {
       currentChapter = entry.progress;
     }
     if (typeof (m as any).progress === 'number' && (m as any).progress > currentChapter) {
       currentChapter = (m as any).progress;
     }
-    if (typeof (entry as any).lastChapterRead === 'number' && (entry as any).lastChapterRead > currentChapter) {
+    if (typeof (entry as any)?.lastChapterRead === 'number' && (entry as any).lastChapterRead > currentChapter) {
       currentChapter = (entry as any).lastChapterRead;
     }
+    if (typeof (m as any).lastChapterRead === 'number' && (m as any).lastChapterRead > currentChapter) {
+      currentChapter = (m as any).lastChapterRead;
+    }
 
-    // Favorites & Library inclusion: all items in a Kotatsu backup are user library items
-    const isFavorite = entry.favorite !== false && (entry as any).isFavorite !== false;
+    // Compute maximum chapter numbers for totalChapters
+    const maxChFromList = uniqueChapters.reduce((max, c) => Math.max(max, extractChapterNumber(c)), 0);
+    totalChapters = Math.max(totalChapters, uniqueChapters.length, maxChFromList, m.totalChapters || 0, currentChapter, 1);
+
+    // If reading progress exists and status is plan_to_read, mark as reading
+    if (currentChapter > 0 && status === 'plan_to_read') {
+      status = 'reading';
+    }
+    // If status is completed and currentChapter is 0, complete it at totalChapters
+    if (status === 'completed' && currentChapter === 0 && totalChapters > 0) {
+      currentChapter = totalChapters;
+    }
 
     // Timestamps
-    const createdAtMs = entry.createdAt || entry.created_at || (m as any).createdAt;
+    const createdAtMs = entry?.createdAt || entry?.created_at || (m as any).createdAt || (m as any).created_at;
     const addedAt = createdAtMs ? new Date(Number(createdAtMs)).toISOString() : new Date().toISOString();
-    const updatedAtMs = hist?.updatedAt || hist?.updated_at || hist?.last_read_at || (stat?.lastRead ? Number(stat.lastRead) : null);
+    const updatedAtMs = latestHistoryTimestamp || (stat?.lastRead ? Number(stat.lastRead) : null);
     const lastReadAt = updatedAtMs ? new Date(Number(updatedAtMs)).toISOString() : addedAt;
 
     let notes = 'Imported from Kotatsu backup';
@@ -831,11 +1242,11 @@ export async function parseKotatsuBackup(
       notes = `Imported from Kotatsu backup • ${timeStr} reading time`;
     }
 
+    // ── CATEGORIES RESOLUTION ──────────────────────────────────────────────
     const categories: string[] = [];
     const catIdCandidates: Array<string | number> = [];
 
-    // Check direct category ID / object / string fields on entry
-    const e = entry as any;
+    const e = (entry || {}) as any;
     if (e.categoryId !== undefined && e.categoryId !== null) catIdCandidates.push(e.categoryId);
     if (e.category_id !== undefined && e.category_id !== null) catIdCandidates.push(e.category_id);
     if (e.cat_id !== undefined && e.cat_id !== null) catIdCandidates.push(e.cat_id);
@@ -852,36 +1263,34 @@ export async function parseKotatsuBackup(
     if (e.category_title) categories.push(String(e.category_title).trim());
     if (e.categoryTitle) categories.push(String(e.categoryTitle).trim());
 
-    // Check arrays on entry
     if (Array.isArray(e.category_ids)) catIdCandidates.push(...e.category_ids);
     if (Array.isArray(e.categoryIds)) catIdCandidates.push(...e.categoryIds);
     if (Array.isArray(e.cat_ids)) catIdCandidates.push(...e.cat_ids);
     if (Array.isArray(e.catIds)) catIdCandidates.push(...e.catIds);
 
-    // Check direct category ID / object / string fields on manga (m)
-    if ((m as any).categoryId !== undefined && (m as any).categoryId !== null) catIdCandidates.push((m as any).categoryId);
-    if ((m as any).category_id !== undefined && (m as any).category_id !== null) catIdCandidates.push((m as any).category_id);
-    if ((m as any).cat_id !== undefined && (m as any).cat_id !== null) catIdCandidates.push((m as any).cat_id);
-    if ((m as any).catId !== undefined && (m as any).catId !== null) catIdCandidates.push((m as any).catId);
-    if ((m as any).category !== undefined && (m as any).category !== null) {
-      if (typeof (m as any).category === 'string' || typeof (m as any).category === 'number') catIdCandidates.push((m as any).category);
-      else if (typeof (m as any).category === 'object') {
-        const cName = (m as any).category?.name || (m as any).category?.title;
+    // Direct category fields on manga object
+    const mAny = m as any;
+    if (mAny.categoryId !== undefined && mAny.categoryId !== null) catIdCandidates.push(mAny.categoryId);
+    if (mAny.category_id !== undefined && mAny.category_id !== null) catIdCandidates.push(mAny.category_id);
+    if (mAny.cat_id !== undefined && mAny.cat_id !== null) catIdCandidates.push(mAny.cat_id);
+    if (mAny.catId !== undefined && mAny.catId !== null) catIdCandidates.push(mAny.catId);
+    if (mAny.category !== undefined && mAny.category !== null) {
+      if (typeof mAny.category === 'string' || typeof mAny.category === 'number') catIdCandidates.push(mAny.category);
+      else if (typeof mAny.category === 'object') {
+        const cName = mAny.category?.name || mAny.category?.title;
         if (cName) categories.push(String(cName).trim());
       }
     }
-    if ((m as any).category_name) categories.push(String((m as any).category_name).trim());
-    if ((m as any).categoryName) categories.push(String((m as any).categoryName).trim());
-    if ((m as any).category_title) categories.push(String((m as any).category_title).trim());
-    if ((m as any).categoryTitle) categories.push(String((m as any).categoryTitle).trim());
+    if (mAny.category_name) categories.push(String(mAny.category_name).trim());
+    if (mAny.categoryName) categories.push(String(mAny.categoryName).trim());
+    if (mAny.category_title) categories.push(String(mAny.category_title).trim());
+    if (mAny.categoryTitle) categories.push(String(mAny.categoryTitle).trim());
 
-    if (Array.isArray((m as any).category_ids)) catIdCandidates.push(...(m as any).category_ids);
-    if (Array.isArray((m as any).categoryIds)) catIdCandidates.push(...(m as any).categoryIds);
+    if (Array.isArray(mAny.category_ids)) catIdCandidates.push(...mAny.category_ids);
+    if (Array.isArray(mAny.categoryIds)) catIdCandidates.push(...mAny.categoryIds);
 
-    // Look up from favourites_categories junction map if present
-    const entryId = entry.id !== undefined ? String(entry.id) : '';
-    const mIdStr = m.id !== undefined ? String(m.id) : '';
-    const titleKey = title.toLowerCase().trim();
+    // Junction map lookup
+    const entryId = entry?.id !== undefined ? String(entry.id) : '';
     const junctionCats = (entryId ? favToCategoriesMap.get(entryId) : null) ||
       (mIdStr ? favToCategoriesMap.get(mIdStr) : null) ||
       (sourceUrl ? favToCategoriesMap.get(sourceUrl) : null) ||
@@ -891,7 +1300,6 @@ export async function parseKotatsuBackup(
       catIdCandidates.push(...junctionCats);
     }
 
-    // Resolve category candidates through categoriesMap
     for (const rawCat of catIdCandidates) {
       if (rawCat === undefined || rawCat === null) continue;
       const resolvedName = categoriesMap.get(rawCat) ||
@@ -904,8 +1312,7 @@ export async function parseKotatsuBackup(
       }
     }
 
-    // Check entry.categories array
-    if (Array.isArray(entry.categories)) {
+    if (Array.isArray(entry?.categories)) {
       for (const c of entry.categories) {
         if (!c) continue;
         const cObj = c as any;
@@ -920,9 +1327,8 @@ export async function parseKotatsuBackup(
       }
     }
 
-    // Check m.categories array
-    if (Array.isArray((m as any).categories)) {
-      for (const c of (m as any).categories) {
+    if (Array.isArray(mAny.categories)) {
+      for (const c of mAny.categories) {
         if (!c) continue;
         let cName = typeof c === 'string'
           ? (categoriesMap.get(c) || categoriesMap.get(Number(c)) || c)
@@ -989,7 +1395,8 @@ export function exportToKotatsuBackup(mangaList: MangaItem[]): string {
         : 'ONGOING';
 
       const chapters: KotatsuChapter[] = Array.from({ length: m.totalChapters || 1 }, (_, cIdx) => ({
-        id: cIdx + 1,
+        id: (idx + 1) * 10000 + (cIdx + 1),
+        manga_id: idx + 1,
         name: `Chapter ${cIdx + 1}`,
         number: cIdx + 1,
         url: `${m.sourceUrl || ''}/chapter-${cIdx + 1}`,
@@ -1024,8 +1431,10 @@ export function exportToKotatsuBackup(mangaList: MangaItem[]): string {
       .filter(m => m.currentChapter > 0)
       .map((m, idx) => ({
         mangaId: idx + 1,
+        chapterId: (idx + 1) * 10000 + m.currentChapter,
         chapter: {
-          id: m.currentChapter,
+          id: (idx + 1) * 10000 + m.currentChapter,
+          manga_id: idx + 1,
           name: `Chapter ${m.currentChapter}`,
           number: m.currentChapter,
         },

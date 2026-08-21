@@ -129,6 +129,14 @@ settingsRouter.post("/api/settings/backup/import-kotatsu", async (req, res) => {
     const items = await parseKotatsuBackup(payload, 'usr_admin');
     if (items.length > 0) {
       syncBulkAddOrUpdateManga(items);
+      const userStateBatch = items.map((item) => ({
+        id: item.id,
+        isFavorite: item.isFavorite,
+        currentChapter: item.currentChapter,
+        status: item.status,
+        categoryIds: item.categories,
+      }));
+      SqliteDb.bulkApplyUserImportState('usr_admin', userStateBatch);
     }
     saveDatabaseToDisk();
     res.json({ success: true, count: items.length, totalTracked: SqliteDb.getMangaCount() });
