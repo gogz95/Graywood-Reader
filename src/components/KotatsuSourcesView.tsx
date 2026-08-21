@@ -21,6 +21,7 @@ import {
   Sparkles,
   Power,
   Grid,
+  X,
 } from 'lucide-react';
 import { SourceDefinition, SourceEngineType, MangaItem } from '../types';
 

@@ -58,6 +58,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [flagReason, setFlagReason] = useState(manga.flagReason || '');
   const [showFlagDropdown, setShowFlagDropdown] = useState(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [isSourceFinderOpen, setIsSourceFinderOpen] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>(manga.categories || []);

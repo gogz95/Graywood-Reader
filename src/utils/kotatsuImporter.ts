@@ -49,6 +49,9 @@ export interface KotatsuManga {
   chapters?: KotatsuChapter[];
   favorite?: boolean;
   isFavorite?: boolean;
+  currentChapter?: number;
+  progress?: number;
+  lastChapterRead?: number;
 }
 
 export interface KotatsuFavouriteEntry {
@@ -78,6 +81,9 @@ export interface KotatsuFavouriteEntry {
   favorite?: boolean;
   isFavorite?: boolean;
   order?: number;
+  currentChapter?: number;
+  progress?: number;
+  lastChapterRead?: number;
 }
 
 export interface KotatsuHistoryEntry {
@@ -249,6 +255,7 @@ export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Re
   if (eocdOffset !== -1) {
     const cdCount = view.getUint16(eocdOffset + 10, true);
     const cdOffset = view.getUint32(eocdOffset + 16, true);
+    const entriesToDecompress: Array<{ fileName: string; method: number; slice: Uint8Array }> = [];
 
     let currCd = cdOffset;
     for (let i = 0; i < cdCount && currCd + 46 <= len; i++) {
@@ -276,11 +283,19 @@ export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Re
 
         if (dataOffset + compressedSize <= len) {
           const compressedSlice = uint8.subarray(dataOffset, dataOffset + compressedSize);
+          entriesToDecompress.push({ fileName, method: compressionMethod, slice: compressedSlice });
+        }
+      }
+    }
+
+    if (entriesToDecompress.length > 0) {
+      await Promise.all(
+        entriesToDecompress.map(async ({ fileName, method, slice }) => {
           try {
-            if (compressionMethod === 0) {
-              files[fileName] = new TextDecoder('utf-8').decode(compressedSlice);
-            } else if (compressionMethod === 8) {
-              const decompressed = await decompressDeflateStream(compressedSlice);
+            if (method === 0) {
+              files[fileName] = new TextDecoder('utf-8').decode(slice);
+            } else if (method === 8) {
+              const decompressed = await decompressDeflateStream(slice);
               if (decompressed) {
                 files[fileName] = decompressed;
               }
@@ -288,8 +303,8 @@ export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Re
           } catch (e) {
             console.warn(`[Kotatsu Importer] Failed to decompress ${fileName}:`, e);
           }
-        }
-      }
+        })
+      );
     }
 
     if (Object.keys(files).length > 0) {

@@ -958,6 +958,59 @@ export const SqliteDb = {
     tx();
   },
 
+  /**
+   * High-performance batch user state & category association for backup restorations.
+   * Runs all favorites, chapter progress, and category junction writes within a single SQLite transaction.
+   */
+  bulkApplyUserImportState(
+    userId: string,
+    items: Array<{
+      id: string;
+      isFavorite?: boolean;
+      currentChapter?: number;
+      status?: string;
+      categoryIds?: string[];
+    }>
+  ) {
+    const stmtFav = db.prepare('INSERT OR REPLACE INTO user_favorites (user_id, manga_id, is_favorite, updated_at) VALUES (?, ?, ?, ?)');
+    const stmtState = db.prepare(`
+      INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
+      VALUES (:user_id, :manga_id, :current_chapter, :last_read_at, :status)
+      ON CONFLICT(user_id, manga_id) DO UPDATE SET
+        current_chapter = CASE WHEN excluded.current_chapter > user_library_state.current_chapter THEN excluded.current_chapter ELSE user_library_state.current_chapter END,
+        last_read_at = excluded.last_read_at,
+        status = COALESCE(excluded.status, user_library_state.status)
+    `);
+    const stmtDelCats = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?');
+    const stmtInsCat = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
+
+    const now = new Date().toISOString();
+    const run = db.transaction((list: typeof items) => {
+      for (const item of list) {
+        if (item.isFavorite) {
+          stmtFav.run(userId, item.id, 1, now);
+        }
+        if (item.currentChapter !== undefined || item.status !== undefined) {
+          stmtState.run({
+            user_id: userId,
+            manga_id: item.id,
+            current_chapter: Math.max(0, item.currentChapter || 0),
+            last_read_at: now,
+            status: item.status || null,
+          });
+        }
+        if (Array.isArray(item.categoryIds) && item.categoryIds.length > 0) {
+          stmtDelCats.run(item.id, userId);
+          for (const catId of item.categoryIds) {
+            stmtInsCat.run(item.id, catId, userId);
+          }
+        }
+      }
+    });
+
+    run(items);
+  },
+
   getStickyNotes(mangaId: string, userId?: string): PageStickyNote[] {
     return getStickyNotes(mangaId, userId);
   },

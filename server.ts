@@ -890,15 +890,18 @@ app.post("/api/manga/bulk-import", (req, res) => {
     }
     const colorList = ['#f59e0b', '#f43f5e', '#10b981', '#a855f7', '#0ea5e9', '#6366f1', '#06b6d4', '#ec4899'];
 
+    const userStateBatch: Array<{
+      id: string;
+      isFavorite?: boolean;
+      currentChapter?: number;
+      status?: string;
+      categoryIds?: string[];
+    }> = [];
+
     for (const item of processedItems) {
-      if (item.isFavorite) {
-        SqliteDb.setUserFavorite(uid, item.id, true);
-      }
-      if (item.currentChapter > 0 || item.status) {
-        SqliteDb.setUserLibraryChapter(uid, item.id, item.currentChapter, { status: item.status });
-      }
+      let resolvedIds: string[] | undefined = undefined;
       if (Array.isArray(item.categories) && item.categories.length > 0) {
-        const resolvedIds: string[] = [];
+        resolvedIds = [];
         for (const catNameOrId of item.categories) {
           const trimmed = String(catNameOrId).trim();
           if (!trimmed) continue;
@@ -921,11 +924,18 @@ app.post("/api/manga/bulk-import", (req, res) => {
           }
           resolvedIds.push(catId);
         }
-        if (resolvedIds.length > 0) {
-          SqliteDb.setMangaCategories(item.id, resolvedIds, uid);
-        }
       }
+
+      userStateBatch.push({
+        id: item.id,
+        isFavorite: item.isFavorite,
+        currentChapter: item.currentChapter,
+        status: item.status,
+        categoryIds: resolvedIds,
+      });
     }
+
+    SqliteDb.bulkApplyUserImportState(uid, userStateBatch);
   }
 
   res.status(201).json({
