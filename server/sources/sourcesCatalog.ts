@@ -37,7 +37,6 @@ const DEFAULT_PRIMARY_SOURCES: SourceDefinition[] = [
   { id: 'ravenscans',    name: 'Raven Scans',         baseUrl: 'https://ravenscans.com',     engineType: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'hentai20',      name: 'Hentai20',            baseUrl: 'https://hentai20.com',       engineType: 'mangathemesia', lang: 'en', isNsfw: true  },
   // ── Custom / Special HTML sources ────────────────────────────────────────
-  { id: 'comickfun',     name: 'ComickFun',           baseUrl: 'https://comick.fun',         engineType: 'custom_html',   lang: 'en', isNsfw: false },
   { id: 'hotcomics',     name: 'HotComics',           baseUrl: 'https://hotcomics.net',      engineType: 'custom_html',   lang: 'en', isNsfw: true  },
   { id: 'daycomics',     name: 'DayComics',           baseUrl: 'https://daycomics.com',      engineType: 'custom_html',   lang: 'en', isNsfw: true  },
 ];
@@ -59,7 +58,8 @@ export const INITIAL_DEAD_SOURCES = new Set<string>([
   // DNS-dead / permanently offline as of 2026-08 liveness scan:
   'manhuascan',        // manhuascan.us — ENOTFOUND
   'batoto',            // bato.to      — fetch failed
-  'comick',            // comick.io    — HTTP 403
+  'comick',            // comick.io    — HTTP 403 / decommissioned reader
+  'comickfun',         // comick.fun   — DNS dead
   'readm',             // readm.org    — timeout
   'legacy_scans',      // timeout
   'luxmanga',          // ENOTFOUND

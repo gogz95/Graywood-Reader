@@ -2771,7 +2771,7 @@ export async function searchLiveSourcesForSeries(
     // 2. Check ComicK API
     if (!disabledSourceIds.has('comick') && isSourceAlive('comick')) {
       try {
-        const ckRes = await fetch(`https://api.comick.fun/v1.0/search?q=${encodeURIComponent(q)}`, {
+        const ckRes = await fetch(`https://api.comick.dev/v1.0/search?q=${encodeURIComponent(q)}`, {
           headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'application/json' },
           signal: AbortSignal.timeout(6000),
         });
@@ -3402,7 +3402,7 @@ export async function updateDatabaseWithAllAvailableSeries(): Promise<{
              'harimanga','anisascans','adultwebtoon','mangaread','manhwabuddy','manhuafast',
              'kunmanga','topmanhua','manhwaclan','weebcentral','atsumoe','demonicscans','beehentai',
              'manhuascan','ravenscans','luminous','night','hentai20','hotcomics','daycomics',
-             'batoto','comickfun','comick','mangatx'].includes(s.id) &&
+             'mangatx'].includes(s.id) &&
     s.engine === 'madara' && !disabledSourceIds.has(s.id)
   ).slice(0, 60); // Cap at 60 additional sources per scan to stay within time limits
 
@@ -5317,7 +5317,7 @@ async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapt
 // Derived from Kotatsu-Parsers (MadaraParser, MangaReaderParser, etc.)
 // ============================================================================
 
-type SourceEngine = 'madara' | 'manhwa18' | 'mangareader' | 'manga18' | 'hotcomics' | 'mangafire' | 'batoto' | 'comickfun' | 'custom' | 'foolslide';
+type SourceEngine = 'madara' | 'manhwa18' | 'mangareader' | 'hotcomics' | 'custom' | 'foolslide';
 
 interface EngineSourceConfig {
   id: string; name: string; domain: string; engine: SourceEngine;
@@ -5366,9 +5366,6 @@ const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   // ── Custom API Sources ────────────────────────────────────────────────────
   { id: 'asurascans',  name: 'Asura Scans',        domain: 'asurascans.com',  engine: 'custom', lang: 'en', isNsfw: false },
   { id: 'flamecomics', name: 'Flame Comics',       domain: 'flamecomics.xyz', engine: 'custom', lang: 'en', isNsfw: false },
-  { id: 'batoto',      name: 'Bato.to',            domain: 'bato.to',         engine: 'batoto', lang: 'en', isNsfw: false },
-  { id: 'comickfun',   name: 'ComickFun',          domain: 'comick.fun',      engine: 'comickfun', lang: 'en', isNsfw: false },
-  { id: 'comick',      name: 'ComicK',             domain: 'comick.io',       engine: 'comickfun', lang: 'en', isNsfw: false },
 ];
 
 // ============================================================================

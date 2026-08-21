@@ -150,8 +150,6 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       'manhuaplus',
       'mangaread',
       'kunmanga',
-      'batoto',
-      'comick',
       'ravenscans',
       'demonicscans',
     ]);

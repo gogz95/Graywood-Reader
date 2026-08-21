@@ -19,6 +19,9 @@ describe('Standalone Sources Catalog', () => {
     expect(KOTATSU_SOURCES.length).toBeGreaterThan(50);
     expect(KOTATSU_SOURCES.some((s) => s.id === 'dynasty')).toBe(false);
     expect(KOTATSU_SOURCES.some((s) => s.id === 'reaper')).toBe(false);
+    expect(KOTATSU_SOURCES.some((s) => s.id === 'batoto')).toBe(false);
+    expect(KOTATSU_SOURCES.some((s) => s.id === 'comick')).toBe(false);
+    expect(KOTATSU_SOURCES.some((s) => s.id === 'comickfun')).toBe(false);
     expect(KOTATSU_SOURCES.some((s) => s.id === 'asurascans')).toBe(true);
   });
 
@@ -56,6 +59,9 @@ describe('Standalone Sources Catalog', () => {
 
     expect(isSourceAlive('asurascans', mockSyncConfig)).toBe(true);
     expect(isSourceAlive('dynasty', mockSyncConfig)).toBe(false);
+    expect(isSourceAlive('batoto', mockSyncConfig)).toBe(false);
+    expect(isSourceAlive('comick', mockSyncConfig)).toBe(false);
+    expect(isSourceAlive('comickfun', mockSyncConfig)).toBe(false);
     expect(isSourceAlive('customdeadsource', mockSyncConfig)).toBe(false);
   });
 
