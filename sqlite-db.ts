@@ -76,10 +76,6 @@ try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch (e) { }
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
 
-// Schema extensions for app-state persistence (profiles, logs, KV settings)
-try { db.exec('ALTER TABLE logs ADD COLUMN mangaId TEXT'); } catch (e) { }
-try { db.exec('ALTER TABLE logs ADD COLUMN type TEXT'); } catch (e) { }
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
     id TEXT PRIMARY KEY,
@@ -100,13 +96,15 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS logs (
     id TEXT PRIMARY KEY,
+    mangaId TEXT,
     mangaTitle TEXT,
     sourceName TEXT,
     previousChapter INTEGER,
     newChapter INTEGER,
     timestamp TEXT,
     status TEXT,
-    details TEXT
+    details TEXT,
+    type TEXT
   );
 
   -- Reading progress / position (resume mid-chapter), modeled on Kotatsu's
@@ -172,14 +170,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sticky_notes_manga ON page_sticky_notes(manga_id, chapter_number);
 `);
 
-// Sticky notes gained per-user ownership after the table shipped. Add the
-// column on legacy databases and attribute pre-existing notes to the host
-// admin (they were created on the host before multi-user notes existed).
-// NOTE: the user_id index is created AFTER the ALTER TABLE so legacy
-// databases (whose table predates the column) don't fail the main exec.
 try { db.exec('ALTER TABLE page_sticky_notes ADD COLUMN user_id TEXT'); } catch (e) { }
 try { db.exec(`UPDATE page_sticky_notes SET user_id = 'usr_admin' WHERE user_id IS NULL`); } catch (e) { }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_sticky_notes_user ON page_sticky_notes(user_id)'); } catch (e) { }
+
+// Migration for logs columns on legacy databases
+try { db.exec('ALTER TABLE logs ADD COLUMN mangaId TEXT'); } catch (e) { }
+try { db.exec('ALTER TABLE logs ADD COLUMN type TEXT'); } catch (e) { }
 
 // Prepared Statements for Sub-millisecond Execution
 const stmtGetAllManga = db.prepare('SELECT * FROM manga ORDER BY lastUpdated DESC');
