@@ -20,11 +20,14 @@ describe('Achievements Engine', () => {
       description: '',
       totalChapters: 200,
       lastUpdated: '',
-      rating: 9.5,
+      rating: 9.8,
       autoUpdateEnabled: true,
-      notes: '',
+      notes: 'One of the best manhwa ever.',
       addedAt: '',
-      lastReadAt: '',
+      lastReadAt: '2026-08-21T02:30:00.000Z', // 2:30 AM night owl
+      customTags: ['S-Rank', 'Favorite'],
+      categories: ['Read Again'],
+      syncedFromApi: 'anilist',
     },
     {
       id: 'm2',
@@ -63,6 +66,16 @@ describe('Achievements Engine', () => {
     expect(martialGod?.progress).toBe(100);
   });
 
+  it('calculates achievements score, tiers, and point values', () => {
+    const { trophies, wrapped } = computeReadingAchievements(sampleList);
+
+    expect(trophies.length).toBeGreaterThanOrEqual(40);
+    expect(wrapped.totalScore).toBeGreaterThan(0);
+    expect(wrapped.maxScore).toBeGreaterThan(wrapped.totalScore);
+    expect(wrapped.tierBreakdown.bronze.total).toBeGreaterThan(0);
+    expect(wrapped.tierBreakdown.mythic.total).toBeGreaterThan(0);
+  });
+
   it('computes top genres and format distribution', () => {
     const { wrapped } = computeReadingAchievements(sampleList);
 
@@ -74,11 +87,27 @@ describe('Achievements Engine', () => {
     expect(manhwaType?.count).toBe(1);
   });
 
+  it('correctly detects Night Owl habit from lastReadAt timestamp', () => {
+    const { trophies } = computeReadingAchievements(sampleList);
+    const nightOwl = trophies.find((t) => t.id === 'night_owl');
+    expect(nightOwl).toBeDefined();
+    expect(nightOwl?.isUnlocked).toBe(true);
+  });
+
+  it('detects single series saga marathoner', () => {
+    const { trophies } = computeReadingAchievements(sampleList);
+    const saga = trophies.find((t) => t.id === 'saga_marathoner');
+    expect(saga).toBeDefined();
+    expect(saga?.isUnlocked).toBe(true); // m2 has 350 chapters >= 200
+  });
+
   it('handles empty library without crashing', () => {
     const { trophies, wrapped } = computeReadingAchievements([]);
     expect(wrapped.totalChaptersRead).toBe(0);
     expect(wrapped.totalSeriesTracked).toBe(0);
     expect(wrapped.topGenres.length).toBe(0);
-    expect(trophies.length).toBeGreaterThan(0);
+    expect(wrapped.totalScore).toBe(0);
+    expect(trophies.length).toBeGreaterThanOrEqual(40);
   });
 });
+
