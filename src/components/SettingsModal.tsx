@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../utils/api';
 import {
   AppSettings,
@@ -43,6 +43,7 @@ import {
   KeyRound,
   Fingerprint,
   Volume2,
+  Clock,
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';

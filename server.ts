@@ -1391,7 +1391,7 @@ const handleFlagSourceBroken = (req: express.Request, res: express.Response) => 
   const { reason, sourceId: reqSourceId } = req.body || {};
   const challenges = challengeManager.getActiveChallenges();
   const found = challenges.find((c) => c.id === id || c.sourceId === id || c.sourceId === reqSourceId);
-  const targetSourceId = found?.sourceId || reqSourceId || (id ? id.replace(/^chn_/, '') : '');
+  const targetSourceId = found?.sourceId || reqSourceId || (typeof id === 'string' ? id.replace(/^chn_/, '') : '');
 
   if (!targetSourceId) {
     return res.status(400).json({ error: "Source ID is required" });
@@ -5220,7 +5220,7 @@ function detectBlockedResponse(html: string, statusCode: number): 'cloudflare' |
 interface SourceHealth {
   id: string;
   lastChecked: number;
-  lastStatus: 'ok' | 'degraded' | 'blocked' | 'down';
+  lastStatus: 'ok' | 'degraded' | 'blocked' | 'down' | 'broken';
   consecutiveFailures: number;
   failureReason?: string;
   circuitState?: CircuitState;

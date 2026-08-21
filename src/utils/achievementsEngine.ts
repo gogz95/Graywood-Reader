@@ -44,11 +44,11 @@ export function computeReadingAchievements(mangaList: MangaItem[]): {
   const typeMap = new Map<string, number>();
 
   for (const m of mangaList) {
-    const read = Math.max(0, Number(m.userProgress) || 0);
+    const read = Math.max(0, Number(m.currentChapter) || 0);
     totalChapters += read;
 
-    if (m.readingStatus === 'completed') completedCount++;
-    if (m.readingStatus === 'reading') readingCount++;
+    if (m.status === 'completed') completedCount++;
+    if (m.status === 'reading') readingCount++;
 
     const type = (m.type || 'manga').toLowerCase();
     typeMap.set(type, (typeMap.get(type) || 0) + 1);

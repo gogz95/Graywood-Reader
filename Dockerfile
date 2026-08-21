@@ -10,7 +10,8 @@ COPY package*.json ./
 
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
-RUN apk add --no-cache python3 make g++ && \
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache python3 make g++ && \
     npm ci && \
     apk del python3 make g++
 
@@ -28,7 +29,8 @@ ENV HOST=0.0.0.0
 
 COPY package*.json ./
 
-RUN apk add --no-cache python3 make g++ libstdc++ wget && \
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache python3 make g++ libstdc++ wget && \
     npm ci --omit=dev && \
     apk del python3 make g++
 

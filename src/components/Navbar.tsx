@@ -70,6 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isIncognito,
   onToggleIncognito,
   onOpenAnalytics,
+  onOpenAchievements,
   onOpenChallengesModal,
   activeProfile,
   isHostComputer = true,
