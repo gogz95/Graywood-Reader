@@ -78,8 +78,7 @@ describe('auth tokens (HMAC-signed)', () => {
   it('rejects a tampered signature', () => {
     const token = signAuthToken({ sub: 'usr_admin' });
     const [body, sig] = token.split('.');
-    const flipped = sig.endsWith('a') ? 'b' : 'a';
-    const forged = `${body}.${sig.slice(0, -1)}${flipped}`;
+    const forged = `${body}.${sig.startsWith('a') ? 'b' : 'a'}${sig.slice(1)}`;
     expect(forged).not.toBe(token);
     expect(verifyAuthToken(forged)).toBeNull();
   });
@@ -269,6 +268,54 @@ describe('canModifyManga (row-level authorization)', () => {
     const anonReq: any = { ip: '10.200.0.5', headers: {} };
     expect(canModifyManga(anonReq, user1Manga)).toBe(false);
     expect(canModifyManga(anonReq, sharedManga)).toBe(false);
+  });
+});
+
+describe('isNsfwAccessAllowed (18+ Adult Access Gate)', async () => {
+  const { isNsfwAccessAllowed } = await import('../server/appState');
+
+  it('allows access for authenticated logged-in users', () => {
+    const loggedInReq: any = {
+      ip: '203.0.113.195',
+      headers: {},
+      user: { id: 'usr_user1', role: 'user', username: 'alice' },
+    };
+    expect(isNsfwAccessAllowed(loggedInReq)).toBe(true);
+  });
+
+  it('blocks access for guest users and unauthenticated remote clients', () => {
+    const guestUserReq: any = {
+      ip: '127.0.0.1',
+      headers: {},
+      user: { id: 'usr_guest', role: 'guest', username: 'Guest' },
+    };
+    expect(isNsfwAccessAllowed(guestUserReq)).toBe(false);
+
+    const remoteGuestReq: any = {
+      ip: '203.0.113.195',
+      headers: {},
+      connection: { remoteAddress: '203.0.113.195' },
+      socket: { remoteAddress: '203.0.113.195' },
+    };
+    expect(isNsfwAccessAllowed(remoteGuestReq)).toBe(false);
+
+    const explicitGuestReq: any = {
+      ip: '127.0.0.1',
+      headers: { 'x-guest-mode': '1' },
+      connection: { remoteAddress: '127.0.0.1' },
+      socket: { remoteAddress: '127.0.0.1' },
+    };
+    expect(isNsfwAccessAllowed(explicitGuestReq)).toBe(false);
+  });
+
+  it('allows host computer requests without explicit guest override', () => {
+    const hostReq: any = {
+      ip: '127.0.0.1',
+      headers: {},
+      connection: { remoteAddress: '127.0.0.1' },
+      socket: { remoteAddress: '127.0.0.1' },
+    };
+    expect(isNsfwAccessAllowed(hostReq)).toBe(true);
   });
 });
 

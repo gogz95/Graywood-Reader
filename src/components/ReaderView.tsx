@@ -11,6 +11,7 @@ import {
   ReaderImageFilter,
   ScanGroupOption,
   PageStickyNote,
+  isNsfwManga,
 } from '../types';
 import {
   detectMangaFormat,
@@ -76,6 +77,8 @@ interface ReaderViewProps {
   /** Opens the bug-reporting tool pre-filled for the flagged series. */
   onReport: (category: FlagCategory, manga: MangaItem) => void;
   onSaveSettings?: (settings: ReaderSettings) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
 }
 
 export const ReaderView: React.FC<ReaderViewProps> = ({
@@ -88,6 +91,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onMarkChapterRead,
   onReport,
   onSaveSettings,
+  isGuest = false,
+  onOpenAuthModal,
 }) => {
   const [currentChapterNum, setCurrentChapterNum] = useState<number>(initialChapterNumber || 1);
   const [chapterData, setChapterData] = useState<ChapterData | null>(null);
@@ -703,6 +708,41 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const handleImageMouseLeave = () => {
     if (isLoupeActive) setLoupeData(null);
   };
+
+  if (isGuest && isNsfwManga(manga)) {
+    return (
+      <div className="fixed inset-0 z-50 bg-app/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full bg-surface border border-rose-500/40 rounded-3xl p-8 shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-3xl flex items-center justify-center mx-auto">
+            🔞
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-primary">18+ Adult Content Restricted</h2>
+            <p className="text-xs text-secondary leading-relaxed">
+              This series contains 18+ adult explicit material. Guest users cannot view NSFW content. Please sign in to read this series.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <button
+              onClick={() => {
+                onClose();
+                onOpenAuthModal?.();
+              }}
+              className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Sign In to Read
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 rounded-2xl bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold text-xs transition-colors"
+            >
+              Return to Library
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`fixed inset-0 z-50 flex flex-col ${settings.imageFilter === 'oled' ? 'bg-black text-white' : bgStyleClass} font-sans select-none overflow-hidden`}>

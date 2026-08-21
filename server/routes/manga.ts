@@ -14,6 +14,7 @@ import {
   canWriteCatalog,
   canModifyManga,
   rejectCatalogWrite,
+  isNsfwAccessAllowed,
 } from '../appState';
 import { isHostRequest } from '../security';
 import {
@@ -84,6 +85,11 @@ mangaRouter.get('/', (req, res) => {
   let allManga = SqliteDb.getAllManga();
   allManga = allManga.filter((m) => !isSeriesFromDisabledSource(m));
 
+  // Gate 18+ / NSFW titles: Guests/unauthenticated users cannot view NSFW items
+  if (!isNsfwAccessAllowed(req)) {
+    allManga = allManga.filter((m) => !isNsfwManga(m));
+  }
+
   const overlayUserId = resolveRequestUserId(req);
   if (overlayUserId) {
     allManga = SqliteDb.applyUserOverlay(allManga, overlayUserId);
@@ -102,6 +108,25 @@ mangaRouter.get('/', (req, res) => {
     return res.json(paged);
   }
   res.json(allManga);
+});
+
+// ── GET /api/manga/:id - Get Single Series with User Overlay ──────────────────
+mangaRouter.get('/:id', (req, res) => {
+  const { id } = req.params;
+  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  if (!existing) return res.status(404).json({ error: 'Manga not found' });
+
+  // Gate 18+ / NSFW content for guest users
+  if (isNsfwManga(existing) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({
+      error: 'Authentication required',
+      message: '18+ Adult content is restricted for guest users. Please sign in to access this title.',
+      isNsfwRestricted: true,
+    });
+  }
+
+  const uid = resolveRequestUserId(req);
+  res.json(uid ? SqliteDb.applyUserOverlay([existing], uid)[0] : existing);
 });
 
 // ── POST /api/manga - Create a New Manga Item ─────────────────────────────────

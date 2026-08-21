@@ -55,6 +55,8 @@ interface LibraryViewProps {
   onOpenChapters: (manga: MangaItem) => void;
   onBulkUpdateStatus?: (ids: string[], status: ReadingStatus) => void;
   onBulkDelete?: (ids: string[]) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
 }
 
 /** Memoized Shimmer Placeholder Card for smooth loading */
@@ -288,6 +290,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onOpenChapters,
   onBulkUpdateStatus,
   onBulkDelete,
+  isGuest = false,
+  onOpenAuthModal,
 }) => {
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
@@ -404,7 +408,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     // Origin Type Filter
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
 
-    // 18+ / NSFW Content Filter
+    // 18+ / NSFW Content Filter (Guests never have access to NSFW items)
+    if (isGuest && isNsfwManga(item)) return false;
     if (nsfwFilter === 'safe' && isNsfwManga(item)) return false;
     if (nsfwFilter === '18+' && !isNsfwManga(item)) return false;
 
@@ -874,18 +879,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setNsfwFilter('18+')}
+                onClick={() => {
+                  if (isGuest) {
+                    onOpenAuthModal?.();
+                  } else {
+                    setNsfwFilter('18+');
+                  }
+                }}
                 className={`px-2 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 ${
-                  nsfwFilter === '18+'
+                  !isGuest && nsfwFilter === '18+'
                     ? 'bg-rose-950 text-rose-300 border border-rose-500/50 shadow-xs'
                     : 'text-muted hover:text-rose-400'
                 }`}
-                title="Show only 18+ / Mature series"
+                title={isGuest ? 'Sign in to access 18+ content' : 'Show only 18+ / Mature series'}
               >
                 <span>🔞 18+</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-900/60 text-rose-300">
-                  {mangaList.filter(isNsfwManga).length}
-                </span>
+                {isGuest ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-edge-strong text-muted flex items-center gap-0.5">🔒 Login</span>
+                ) : (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-900/60 text-rose-300">
+                    {mangaList.filter(isNsfwManga).length}
+                  </span>
+                )}
               </button>
             </div>
           </div>

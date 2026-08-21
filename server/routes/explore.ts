@@ -4,12 +4,13 @@
 // ============================================================================
 
 import { Router, Request, Response } from 'express';
-import { MangaItem } from '../../src/types';
+import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
   mangaDatabase,
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
+  isNsfwAccessAllowed,
 } from '../appState';
 import {
   KOTATSU_SOURCES,
@@ -143,20 +144,27 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
 }
 
 // ── GET /api/explore/meta ───────────────────────────────────────────────────
-exploreRouter.get('/api/explore/meta', (_req: Request, res: Response) => {
+exploreRouter.get('/api/explore/meta', (req: Request, res: Response) => {
   const buf = exploreBufferRef.current;
   if (!buf || buf.items.length === 0) {
     return res.json({ genres: [], types: [], sources: [] });
   }
 
+  const isNsfwAllowed = isNsfwAccessAllowed(req);
   const genreCounts = new Map<string, number>();
   const typeSet = new Set<string>();
   const sourceMap = new Map<string, string>();
 
-  for (const it of buf.items) {
+  const rawItems = isNsfwAllowed ? buf.items : buf.items.filter((it) => !isNsfwManga(it));
+
+  for (const it of rawItems) {
     for (const g of (it.genres || [])) {
       if (typeof g === 'string' && g.trim()) {
         const normalized = g.trim();
+        const lower = normalized.toLowerCase();
+        if (!isNsfwAllowed && (lower === '18+' || lower === 'adult' || lower === 'smut' || lower === 'hentai' || lower === 'erotica' || lower === 'nsfw' || lower === 'r18' || lower === 'pornographic')) {
+          continue;
+        }
         genreCounts.set(normalized, (genreCounts.get(normalized) || 0) + 1);
       }
     }
@@ -170,11 +178,16 @@ exploreRouter.get('/api/explore/meta', (_req: Request, res: Response) => {
 
   const types = [...typeSet].sort();
 
-  const allActiveSources = KOTATSU_SOURCES
-    .filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id))
-    .map((s) => ({ id: s.id, name: s.name }));
+  let allActiveSources = KOTATSU_SOURCES
+    .filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id));
 
-  return res.json({ genres, types, sources: allActiveSources, totalItems: buf.items.length, builtAt: buf.builtAt });
+  if (!isNsfwAllowed) {
+    allActiveSources = allActiveSources.filter((s) => !s.isNsfw);
+  }
+
+  const mappedSources = allActiveSources.map((s) => ({ id: s.id, name: s.name }));
+
+  return res.json({ genres, types, sources: mappedSources, totalItems: rawItems.length, builtAt: buf.builtAt });
 });
 
 // ── GET /api/explore ─────────────────────────────────────────────────────────
@@ -206,6 +219,8 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
     limit = Math.min(40, limit);
   }
 
+  const isNsfwAllowed = isNsfwAccessAllowed(req);
+
   const buf = exploreBufferRef.current;
   const bufferReady = !!buf && buf.items.length > 0;
   const bufferFresh = bufferReady && Date.now() < buf!.expiresAt;
@@ -214,6 +229,9 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
   if (sourceInBuffer) {
     if (!bufferFresh) refreshExploreCatalog(false).catch(() => {});
     let list: any[] = buf!.items;
+    if (!isNsfwAllowed) {
+      list = list.filter((it) => !isNsfwManga(it));
+    }
     if (rawSourceId && rawSourceId !== 'all') {
       list = list.filter((it) => it.__sourceId === rawSourceId);
     }
@@ -237,9 +255,10 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
     const found = KOTATSU_SOURCES.find(
       (s) => s.id === rawSourceId && s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
     );
-    if (found) sourcesToBrowse.push(found);
+    if (found && (isNsfwAllowed || !found.isNsfw)) sourcesToBrowse.push(found);
   } else {
-    sourcesToBrowse.push(...defaultExploreSources());
+    const defs = isNsfwAllowed ? defaultExploreSources() : defaultExploreSources().filter((s) => !s.isNsfw);
+    sourcesToBrowse.push(...defs);
   }
 
   if (sourcesToBrowse.length === 0) {
@@ -261,6 +280,9 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
     );
 
     let unique = aggregated;
+    if (!isNsfwAllowed) {
+      unique = unique.filter((it) => !isNsfwManga(it));
+    }
     if (q) {
       const needle = q.toLowerCase();
       unique = unique.filter((it) =>
@@ -284,9 +306,12 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
 });
 
 // ── GET /api/kotatsu/explore/featured ────────────────────────────────────────
-exploreRouter.get('/api/kotatsu/explore/featured', async (_req, res) => {
+exploreRouter.get('/api/kotatsu/explore/featured', async (req, res) => {
   try {
-    const allManga = SqliteDb.getAllManga();
+    let allManga = SqliteDb.getAllManga();
+    if (!isNsfwAccessAllowed(req)) {
+      allManga = allManga.filter((m) => !isNsfwManga(m));
+    }
     const isReadable = (m: any) =>
       (m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl)) ||
       (Array.isArray(m.availableSources) && m.availableSources.some((s: any) => !isMangaDexSourceLink(s.sourceName, s.sourceUrl)));
@@ -327,9 +352,12 @@ exploreRouter.get('/api/kotatsu/explore/featured', async (_req, res) => {
 });
 
 // ── GET /api/kotatsu/updates ─────────────────────────────────────────────────
-exploreRouter.get('/api/kotatsu/updates', async (_req, res) => {
+exploreRouter.get('/api/kotatsu/updates', async (req, res) => {
   try {
-    const allManga = SqliteDb.getAllManga();
+    let allManga = SqliteDb.getAllManga();
+    if (!isNsfwAccessAllowed(req)) {
+      allManga = allManga.filter((m: any) => !isNsfwManga(m));
+    }
     const live = allManga
       .filter((m: any) => m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl))
       .sort((a: any, b: any) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
@@ -370,9 +398,16 @@ exploreRouter.get('/api/kotatsu/latest', async (req, res) => {
   }
   if (!sourceDef) return res.json([]);
 
+  if (sourceDef.isNsfw && !isNsfwAccessAllowed(req)) {
+    return res.json([]);
+  }
+
   try {
     const result = await getSourcePopularSeries(sourceDef, page, limit);
-    const items = Array.isArray(result) ? result : (result?.items || []);
+    let items = Array.isArray(result) ? result : (result?.items || []);
+    if (!isNsfwAccessAllowed(req)) {
+      items = items.filter((m: any) => !isNsfwManga(m));
+    }
     const totalCount = Array.isArray(result) ? items.length : (result?.totalCount ?? items.length);
     const enriched = await enrichWithMangaDexMetadata(items);
     res.setHeader('X-Total-Count', String(totalCount));

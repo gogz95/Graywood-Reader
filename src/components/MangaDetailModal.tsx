@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, ReadingStatus, hasWorkingReaderSource, UserCategory } from '../types';
+import { MangaItem, ReadingStatus, hasWorkingReaderSource, UserCategory, isNsfwManga } from '../types';
 import { renderCategoryIcon } from './ManageCategoriesModal';
 
 import {
@@ -41,6 +41,8 @@ interface MangaDetailModalProps {
   onOpenChapters: (manga: MangaItem) => void;
   /** Opens the bug-reporting tool pre-filled for the flagged series. */
   onReport: (category: FlagCategory, manga: MangaItem) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
 }
 
 export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
@@ -52,6 +54,8 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   onOpenReader,
   onOpenChapters,
   onReport,
+  isGuest = false,
+  onOpenAuthModal,
 }) => {
   const [currentChapter, setCurrentChapter] = useState(manga.currentChapter);
   const [status, setStatus] = useState<ReadingStatus>(manga.status);
@@ -326,6 +330,26 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 ))}
               </div>
 
+              {/* 18+ / NSFW Guest Access Notice */}
+              {isGuest && isNsfwManga(manga) && (
+                <div className="p-3.5 bg-rose-950/80 border border-rose-500/50 rounded-2xl text-xs text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🔞</span>
+                    <div>
+                      <span className="font-bold block text-rose-100">18+ Adult Explicit Title</span>
+                      <span className="text-[11px] text-rose-300">You must be logged in to an account to read adult content.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAuthModal?.()}
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <span>Sign In</span>
+                  </button>
+                </div>
+              )}
+
               {/* Missing Source Notice */}
               {!hasWorkingReaderSource(manga) && (
                 <div className="p-3.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
@@ -352,6 +376,10 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 {hasWorkingReaderSource(manga) && (
                   <button
                     onClick={() => {
+                      if (isGuest && isNsfwManga(manga)) {
+                        onOpenAuthModal?.();
+                        return;
+                      }
                       onClose();
                       onOpenReader(manga, manga.currentChapter + 1);
                     }}
@@ -364,6 +392,10 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
                 <button
                   onClick={() => {
+                    if (isGuest && isNsfwManga(manga)) {
+                      onOpenAuthModal?.();
+                      return;
+                    }
                     onClose();
                     onOpenChapters(manga);
                   }}

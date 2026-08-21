@@ -7,9 +7,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { Router, Request, Response } from 'express';
+import { MangaItem, isNsfwManga } from '../../src/types';
 import {
   syncConfig,
   saveDatabaseToDisk,
+  isNsfwAccessAllowed,
 } from '../appState';
 import { sourceCircuitBreaker } from '../circuitBreaker';
 import { challengeManager } from '../challengeManager';
@@ -106,10 +108,13 @@ export function purgeDisabledSources(): { purgedCount: number; remainingCount: n
 export const sourcesRouter = Router();
 
 // ── GET /api/kotatsu/sources & /api/sources ──────────────────────────────────
-export const handleGetSources = (_req: Request, res: Response) => {
-  const activeSources = KOTATSU_SOURCES.filter(
+export const handleGetSources = (req: Request, res: Response) => {
+  let activeSources = KOTATSU_SOURCES.filter(
     (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id, syncConfig) && isSourceAlive(s.name, syncConfig)
   );
+  if (!isNsfwAccessAllowed(req)) {
+    activeSources = activeSources.filter((s) => !s.isNsfw);
+  }
   const listWithStates = activeSources.map((s) => ({
     ...s,
     isEnabled: true,
@@ -159,8 +164,11 @@ sourcesRouter.post('/api/kotatsu/sources/toggle', handleToggleSource);
 sourcesRouter.post('/api/sources/toggle', handleToggleSource);
 
 // ── GET /api/kotatsu/sources/all ─────────────────────────────────────────────
-export const handleGetAllSources = (_req: Request, res: Response) => {
-  const inventory = buildFullSourceInventory(syncConfig);
+export const handleGetAllSources = (req: Request, res: Response) => {
+  let inventory = buildFullSourceInventory(syncConfig);
+  if (!isNsfwAccessAllowed(req)) {
+    inventory = inventory.filter((s) => !s.isNsfw);
+  }
   const enriched = inventory.map((item) => {
     const h = sourceHealthMap.get(item.id);
     return {
@@ -484,21 +492,34 @@ sourcesRouter.get('/api/kotatsu/search', async (req, res) => {
   }
   if (!sourceDef) return res.json([]);
 
+  // Gate 18+ / NSFW source searches for guest users
+  if (sourceDef.isNsfw && !isNsfwAccessAllowed(req)) {
+    return res.json([]);
+  }
+
+  const filterNsfwIfNeeded = <T extends Record<string, any>>(items: T[]): T[] => {
+    if (isNsfwAccessAllowed(req)) return items;
+    return items.filter((m) => !isNsfwManga(m as any));
+  };
+
   try {
     if (!query) {
       const { items: popular, totalCount } = await getSourcePopularSeries(sourceDef, page, limit);
       const enriched = await enrichWithMangaDexMetadata(popular);
-      res.setHeader('X-Total-Count', String(totalCount));
-      res.setHeader('X-Total-Pages', String(Math.ceil(totalCount / limit)));
-      return res.json(enriched);
+      const safeEnriched = filterNsfwIfNeeded(enriched);
+      res.setHeader('X-Total-Count', String(safeEnriched.length));
+      res.setHeader('X-Total-Pages', String(Math.ceil(safeEnriched.length / limit)));
+      return res.json(safeEnriched);
     }
 
     if (sourceDef.id === 'weebcentral') {
       try {
         const results = await searchWeebCentral(query);
-        res.setHeader('X-Total-Count', String(results.length));
+        const enriched = await enrichWithMangaDexMetadata(results);
+        const safeEnriched = filterNsfwIfNeeded(enriched);
+        res.setHeader('X-Total-Count', String(safeEnriched.length));
         res.setHeader('X-Total-Pages', '1');
-        return res.json(await enrichWithMangaDexMetadata(results));
+        return res.json(safeEnriched);
       } catch (err: any) {
         console.warn('[Kotatsu Search] WeebCentral search error:', err.message);
       }
@@ -530,9 +551,11 @@ sourcesRouter.get('/api/kotatsu/search', async (req, res) => {
               rating: typeof s.rating === 'number' ? Number(s.rating.toFixed(1)) : 9.0,
             };
           });
-          res.setHeader('X-Total-Count', String(results.length));
+          const enriched = await enrichWithMangaDexMetadata(results);
+          const safeEnriched = filterNsfwIfNeeded(enriched);
+          res.setHeader('X-Total-Count', String(safeEnriched.length));
           res.setHeader('X-Total-Pages', '1');
-          return res.json(await enrichWithMangaDexMetadata(results));
+          return res.json(safeEnriched);
         }
       } catch (err: any) {
         console.warn('[Kotatsu Search] Asura search error:', err.message);
@@ -556,9 +579,11 @@ sourcesRouter.get('/api/kotatsu/search', async (req, res) => {
             type: 'manhwa',
             rating: 9.0,
           };
-          res.setHeader('X-Total-Count', '1');
+          const enriched = await enrichWithMangaDexMetadata([item]);
+          const safeEnriched = filterNsfwIfNeeded(enriched);
+          res.setHeader('X-Total-Count', String(safeEnriched.length));
           res.setHeader('X-Total-Pages', '1');
-          return res.json(await enrichWithMangaDexMetadata([item]));
+          return res.json(safeEnriched);
         }
       } catch (err: any) {
         console.warn('[Kotatsu Search] Flame search error:', err.message);
@@ -570,9 +595,11 @@ sourcesRouter.get('/api/kotatsu/search', async (req, res) => {
     const filtered = popular.filter(
       (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
     );
-    res.setHeader('X-Total-Count', String(filtered.length));
-    res.setHeader('X-Total-Pages', String(Math.max(1, Math.ceil(filtered.length / limit))));
-    return res.json(await enrichWithMangaDexMetadata(filtered.slice(0, limit)));
+    const enriched = await enrichWithMangaDexMetadata(filtered.slice(0, limit));
+    const safeEnriched = filterNsfwIfNeeded(enriched);
+    res.setHeader('X-Total-Count', String(safeEnriched.length));
+    res.setHeader('X-Total-Pages', String(Math.max(1, Math.ceil(safeEnriched.length / limit))));
+    return res.json(safeEnriched);
   } catch (err: any) {
     console.error('[Kotatsu Search] Error searching source:', err?.message || err);
     return res.json([]);
@@ -585,9 +612,13 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 30, 100);
   if (!query) return res.json([]);
 
-  const active = KOTATSU_SOURCES.filter(
+  let active = KOTATSU_SOURCES.filter(
     (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
   );
+
+  if (!isNsfwAccessAllowed(req)) {
+    active = active.filter((s) => !s.isNsfw);
+  }
 
   const topSources = active.slice(0, 12);
   const results: any[] = [];
@@ -611,5 +642,9 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
     })
   );
 
-  return res.json(await enrichWithMangaDexMetadata(results.slice(0, limit)));
+  const enriched = await enrichWithMangaDexMetadata(results.slice(0, limit));
+  if (!isNsfwAccessAllowed(req)) {
+    return res.json(enriched.filter((m) => !isNsfwManga(m)));
+  }
+  return res.json(enriched);
 });

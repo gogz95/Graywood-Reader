@@ -366,4 +366,50 @@ describe('Live Source Feeds & Progress Endpoints', () => {
   });
 });
 
+describe('Guest 18+ / NSFW Access Restriction Policy', () => {
+  it('GET /api/manga filters out 18+ titles for guest users and gates endpoints with 403', async () => {
+    // 1. Create a safe manga and an 18+ manga
+    const safeRes = await request(app)
+      .post('/api/manga')
+      .send({ title: 'Safe Adventure Story', genres: ['Action', 'Adventure'], isNsfw: false });
+    expect(safeRes.status).toBe(201);
+
+    const nsfwRes = await request(app)
+      .post('/api/manga')
+      .send({ title: 'Adult Smut Explicit Story', genres: ['Romance', 'Smut', '18+'], isNsfw: true });
+    expect(nsfwRes.status).toBe(201);
+
+    // 2. Fetch as guest (x-guest-mode: '1')
+    const guestGet = await request(app)
+      .get('/api/manga')
+      .set('x-guest-mode', '1');
+    expect(guestGet.status).toBe(200);
+    const guestTitles = guestGet.body.map((m: any) => m.title);
+    expect(guestTitles).toContain('Safe Adventure Story');
+    expect(guestTitles).not.toContain('Adult Smut Explicit Story');
+
+    // 3. Directly fetching the 18+ manga ID returns 403 Forbidden for guest
+    const guestDetail = await request(app)
+      .get(`/api/manga/${nsfwRes.body.id}`)
+      .set('x-guest-mode', '1');
+    expect(guestDetail.status).toBe(403);
+    expect(guestDetail.body.error).toBe('Authentication required');
+    expect(guestDetail.body.isNsfwRestricted).toBe(true);
+
+    // 4. Fetching chapters for 18+ manga returns 403 for guest
+    const guestChapters = await request(app)
+      .get(`/api/reader/chapters/${nsfwRes.body.id}`)
+      .set('x-guest-mode', '1');
+    expect(guestChapters.status).toBe(403);
+
+    // 5. Fetching sources list filters out 18+ sources for guests
+    const guestSources = await request(app)
+      .get('/api/kotatsu/sources')
+      .set('x-guest-mode', '1');
+    expect(guestSources.status).toBe(200);
+    const nsfwSources = guestSources.body.filter((s: any) => s.isNsfw === true);
+    expect(nsfwSources).toHaveLength(0);
+  });
+});
+
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, hasWorkingReaderSource } from '../types';
+import { MangaItem, hasWorkingReaderSource, isNsfwManga } from '../types';
 
 
 import {
@@ -58,6 +58,8 @@ interface BrowseViewProps {
   onOpenChapters?: (manga: MangaItem) => void;
   onToggleFavorite?: (manga: MangaItem) => void;
   onTrack: (item: Partial<MangaItem>) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
 }
 
 /** Compute an appropriate per-page limit based on the client's screen width. */
@@ -75,6 +77,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   onSelectManga,
   onOpenReader,
   onTrack,
+  isGuest = false,
+  onOpenAuthModal,
 }) => {
   const [results, setResults] = useState<ExploreItem[]>([]);
   const [meta, setMeta] = useState<CatalogMeta>({ genres: [], types: [], sources: [] });
@@ -127,7 +131,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       const res = await apiFetch(`/api/explore?${params.toString()}`);
       if (!res.ok) throw new Error(`Browse feed returned ${res.status}`);
       const data = await res.json();
-      setResults(Array.isArray(data.items) ? data.items : []);
+      const rawItems = Array.isArray(data.items) ? data.items : [];
+      const safeItems = isGuest ? rawItems.filter((it: any) => !isNsfwManga(it)) : rawItems;
+      setResults(safeItems);
       setTotalPages(Number(data.totalPages) || 0);
       setTotalCount(Number(data.totalCount) || 0);
     } catch (e: any) {
@@ -139,7 +145,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [selectedSource, query, page, limit]);
+  }, [selectedSource, query, page, limit, isGuest]);
 
   useEffect(() => {
     setPage(1);
@@ -149,6 +155,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   useEffect(() => { fetchBrowse(); }, [fetchBrowse]);
 
   const handleTrack = (item: ExploreItem) => {
+    if (isGuest && isNsfwManga(item as any)) {
+      onOpenAuthModal?.();
+      return;
+    }
     onTrack({
       title: item.title,
       altTitles: [],

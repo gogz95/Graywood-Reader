@@ -34,6 +34,7 @@ import {
   OpenApiManga,
   AppSettings,
   ReadingStatus,
+  isNsfwManga,
 } from './types';
 import { apiFetch } from './utils/api';
 import { useAuth, GUEST_PROFILE, getDeviceId } from './hooks/useAuth';
@@ -146,9 +147,13 @@ export default function App() {
     onOpenReaderFromUrl: (manga, chapterNumber) => setReaderTarget({ manga, chapterNumber }),
   });
 
+  const isGuestClient = activeProfile.id === 'usr_guest';
+
   // Per-User Privacy Isolation Filter
   // Admin sees ALL series across the server; Standard User sees only their own private library!
+  // Guest users NEVER have access to 18+ / NSFW titles without logging in!
   const displayMangaList = mangaList.filter((item) => {
+    if (isGuestClient && isNsfwManga(item)) return false;
     if (activeProfile.role === 'admin') return true;
     return !item.userId || item.userId === activeProfile.id;
   });
@@ -668,6 +673,13 @@ export default function App() {
     const isHostAdmin = activeProfile.role === 'admin';
     const isGuestClient = activeProfile.id === 'usr_guest';
 
+    // Gate 18+ / NSFW titles: Guest users must log in to read adult content
+    if (isGuestClient && isNsfwManga(manga)) {
+      setAuthModalMode('login');
+      setAuthModalOpen(true);
+      return;
+    }
+
     let ch: number | undefined;
     if (chapterId && chapterNumber !== undefined && chapterNumber > 0) {
       ch = chapterNumber;
@@ -923,6 +935,11 @@ export default function App() {
             <LibraryView
               mangaList={myLibraryList}
               searchQuery={searchQuery}
+              isGuest={isGuestClient}
+              onOpenAuthModal={() => {
+                setAuthModalMode('login');
+                setAuthModalOpen(true);
+              }}
               onIncrementChapter={handleIncrementChapter}
               onSelectManga={handleSelectMangaDetail}
               onQuickEdit={(manga) => {
@@ -944,6 +961,11 @@ export default function App() {
           {activeTab === 'browse' && (
             <BrowseView
               searchQuery={searchQuery}
+              isGuest={isGuestClient}
+              onOpenAuthModal={() => {
+                setAuthModalMode('login');
+                setAuthModalOpen(true);
+              }}
               onSelectManga={handleSelectMangaDetail}
               onOpenReader={handleOpenReader}
               onTrack={handleSaveManga}
@@ -952,6 +974,11 @@ export default function App() {
 
           {activeTab === 'sources' && (
             <KotatsuSourcesView
+              isGuest={isGuestClient}
+              onOpenAuthModal={() => {
+                setAuthModalMode('login');
+                setAuthModalOpen(true);
+              }}
               onAddToTracker={handleSaveManga}
               onOpenReader={handleOpenReader}
               onSelectManga={handleSelectMangaDetail}
@@ -994,6 +1021,11 @@ export default function App() {
       {selectedMangaDetail && (
         <MangaDetailModal
           manga={selectedMangaDetail}
+          isGuest={isGuestClient}
+          onOpenAuthModal={() => {
+            setAuthModalMode('login');
+            setAuthModalOpen(true);
+          }}
           onClose={() => handleSelectMangaDetail(null)}
           onUpdateManga={(updated) => {
             handleSaveManga(updated);
@@ -1027,6 +1059,11 @@ export default function App() {
         <Suspense fallback={null}>
           <ReaderView
             manga={readerTarget.manga}
+            isGuest={isGuestClient}
+            onOpenAuthModal={() => {
+              setAuthModalMode('login');
+              setAuthModalOpen(true);
+            }}
             initialChapterNumber={readerTarget.chapterNumber}
             initialChapterId={readerTarget.chapterId}
             defaultSettings={appSettings.readerDefaults}

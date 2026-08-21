@@ -79,6 +79,31 @@ export function rejectCatalogWrite(res: express.Response): void {
   });
 }
 
+/**
+ * Check if the request is permitted to access 18+ / NSFW adult content.
+ * Guests (unauthenticated remote clients, or sessions with role='guest' / id='usr_guest')
+ * are NOT allowed to access 18+ content without logging in.
+ */
+export function isNsfwAccessAllowed(req: express.Request): boolean {
+  if (req.headers['x-guest-mode'] === '1' || req.headers['x-user-id'] === 'usr_guest') {
+    return false;
+  }
+
+  const user = (req as any).user || resolveAuthUser(req);
+  if (user) {
+    if (user.id === 'usr_guest' || user.role === 'guest') {
+      return false;
+    }
+    return true;
+  }
+
+  if (isHostRequest(req)) {
+    return true;
+  }
+
+  return false;
+}
+
 // Resolve the authenticated user (if any) from an Authorization header only.
 // Query-string tokens are rejected — they leak via logs, Referer, and history.
 export function resolveAuthUser(req: express.Request): UserProfile | null {

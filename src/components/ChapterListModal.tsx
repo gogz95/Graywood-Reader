@@ -35,6 +35,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
 }) => {
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<boolean>(false);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [isDownloadingAll, setIsDownloadingAll] = useState<boolean>(false);
@@ -68,10 +69,9 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
       setDownloadSummary(
         result.downloaded > 0
           ? `Saved ${result.downloaded}/${chapters.length} chapters offline.${result.failed ? ` ${result.failed} failed.` : ''}`
-          : 'No chapters could be downloaded.'
+          : 'Bulk download failed.'
       );
-    } catch (err) {
-      console.error('[ChapterListModal] Bulk download error:', err);
+    } catch (e) {
       setDownloadSummary('Bulk download failed.');
     } finally {
       setIsDownloadingAll(false);
@@ -85,11 +85,14 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
 
   const fetchChapters = async () => {
     setLoading(true);
+    setAuthError(false);
     try {
       const res = await apiFetch(`/api/reader/chapters/${encodeURIComponent(manga.id)}?order=${sortOrder}${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setChapters(data);
+      } else if (res.status === 403) {
+        setAuthError(true);
       }
     } catch (err) {
       console.error("Fetch chapters error:", err);
@@ -228,7 +231,17 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
 
         {/* Chapter List Items */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {loading ? (
+          {authError ? (
+            <div className="py-12 text-center text-secondary space-y-3 px-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-2xl flex items-center justify-center mx-auto">
+                🔞
+              </div>
+              <p className="text-sm font-bold text-rose-300">18+ Adult Content Restricted</p>
+              <p className="text-xs text-secondary max-w-sm mx-auto">
+                Guest users cannot access 18+ chapters. Please sign in to an account to view and read chapters for this series.
+              </p>
+            </div>
+          ) : loading ? (
             <div className="py-12 text-center text-secondary space-y-2">
               <RefreshCw className="w-6 h-6 animate-spin text-accent mx-auto" />
               <p className="text-xs font-semibold">Loading scanlation feeds & chapters...</p>

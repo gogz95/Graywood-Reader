@@ -4,12 +4,13 @@
 // ============================================================================
 
 import { Router, Request, Response } from 'express';
-import { MangaItem } from '../../src/types';
+import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
   mangaDatabase,
   resolveRequestUserId,
   syncAddOrUpdateManga,
+  isNsfwAccessAllowed,
 } from '../appState';
 import {
   fetchWithSsrfGuard,
@@ -198,6 +199,19 @@ readerRouter.get('/api/reader/chapters/:mangaId', async (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
+  // Gate 18+ / NSFW titles for guest users
+  const isChaptersNsfw = Boolean(
+    (manga && isNsfwManga(manga)) ||
+    (liveSourceUrl && /manhwa18|adultwebtoon|hentai|nsfw|porn|doujin/i.test(liveSourceUrl))
+  );
+  if (isChaptersNsfw && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({
+      error: "Authentication required",
+      message: "18+ Adult content is restricted for guest users. Please sign in to access chapters.",
+      isNsfwRestricted: true,
+    });
+  }
+
   if (manga && liveSourceUrl && liveSourceUrl.toLowerCase().includes('mangadex.org') && manga.availableSources?.length) {
     const alt = manga.availableSources.find(
       (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
@@ -371,6 +385,19 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     if (autoSource) {
       targetUrl = autoSource.sourceUrl;
     }
+  }
+
+  // Gate 18+ / NSFW titles for guest users
+  const isPagesNsfw = Boolean(
+    (manga && isNsfwManga(manga)) ||
+    (targetUrl && /manhwa18|adultwebtoon|hentai|nsfw|porn|doujin/i.test(targetUrl))
+  );
+  if (isPagesNsfw && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({
+      error: "Authentication required",
+      message: "18+ Adult content is restricted for guest users. Please sign in to read this series.",
+      isNsfwRestricted: true,
+    });
   }
 
   if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.toLowerCase().includes('mangadex.org')) {

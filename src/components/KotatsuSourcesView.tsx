@@ -44,6 +44,8 @@ interface KotatsuSourcesViewProps {
   onAddToTracker: (item: Partial<MangaItem>) => void;
   onOpenReader?: (manga: MangaItem, chapterNumber?: number) => void;
   onSelectManga?: (manga: MangaItem) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
 }
 
 const ENGINE_META: Record<SourceEngineType, { label: string; color: string; icon: string }> = {
@@ -63,6 +65,8 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   onAddToTracker,
   onOpenReader,
   onSelectManga,
+  isGuest = false,
+  onOpenAuthModal,
 }) => {
   const [sources, setSources] = useState<SourceDefinition[]>([]);
   const [selectedSource, setSelectedSource] = useState<SourceDefinition | null>(null);
@@ -433,7 +437,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
   // SORTING FUNCTIONALITY: Enabled sources stay on top, disabled move down to bottom
   const filteredSources = sources.filter(s => {
-    if (!nsfwVisible && s.isNsfw) return false;
+    if ((isGuest || !nsfwVisible) && s.isNsfw) return false;
     if (engineFilter !== 'all' && s.engineType !== engineFilter) return false;
     if (selectedLangFilter !== 'all' && (s.lang || 'en').toLowerCase() !== selectedLangFilter) return false;
 
@@ -652,12 +656,20 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               Sources ({filteredSources.length})
             </span>
             <button
-              onClick={() => setNsfwVisible(!nsfwVisible)}
+              onClick={() => {
+                if (isGuest) {
+                  showToast('🔒 Login required to view 18+ sources');
+                  onOpenAuthModal?.();
+                } else {
+                  setNsfwVisible(!nsfwVisible);
+                }
+              }}
               className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
-                nsfwVisible ? 'bg-danger/20 text-danger border-danger/30 font-bold' : 'bg-elevated text-secondary border-edge-strong'
+                !isGuest && nsfwVisible ? 'bg-danger/20 text-danger border-danger/30 font-bold' : 'bg-elevated text-secondary border-edge-strong'
               }`}
+              title={isGuest ? 'Login required to access 18+ sources' : undefined}
             >
-              {nsfwVisible ? '18+ Shown' : '18+ Hidden'}
+              {isGuest ? '🔒 18+ (Login)' : nsfwVisible ? '18+ Shown' : '18+ Hidden'}
             </button>
           </div>
 
