@@ -90,7 +90,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   React.useEffect(() => {
     fetchCategories();
-  }, [fetchCategories]);
+
+    const handleRefresh = () => {
+      fetchCategories();
+    };
+    window.addEventListener('refresh-categories', handleRefresh);
+    return () => window.removeEventListener('refresh-categories', handleRefresh);
+  }, [fetchCategories, mangaList]);
 
   // Multi-Select States
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);

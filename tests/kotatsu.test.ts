@@ -311,6 +311,57 @@ describe('Kotatsu ZIP archive backup import', () => {
     expect(items[0].categories).toContain('Favorite Webtoons');
     expect(items[0].categories).toContain('Must Read');
   });
+
+  it('correctly resolves categories from object-map categories.json and tuple junction entries', async () => {
+    const zip = new AdmZip();
+    zip.addFile('categories.json', Buffer.from(JSON.stringify({
+      '1': 'Solo Leveling Tier',
+      '2': 'Top Action'
+    })));
+    zip.addFile('favourites_categories.json', Buffer.from(JSON.stringify([
+      [100, 1],
+      [100, 2]
+    ])));
+    zip.addFile('favourites.json', Buffer.from(JSON.stringify([
+      {
+        id: 100,
+        manga: {
+          id: 999,
+          title: 'Solo Leveling',
+          source: 'ASURASCANS',
+          publicUrl: 'https://asurascans.com/comics/solo-leveling',
+          genres: ['Action', 'Manhwa']
+        }
+      }
+    ])));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].categories).toContain('Solo Leveling Tier');
+    expect(items[0].categories).toContain('Top Action');
+  });
+
+  it('correctly resolves direct category strings and category_name fields', async () => {
+    const backup = {
+      favourites: [
+        {
+          category: 'Super Secret Shelf',
+          category_name: 'Secondary Shelf',
+          manga: {
+            title: 'Nanomachine',
+            source: 'ASURASCANS',
+            publicUrl: 'https://asurascans.com/comics/nanomachine',
+            genres: ['Action', 'Manhwa']
+          }
+        }
+      ]
+    };
+
+    const items = await parseKotatsuBackup(JSON.stringify(backup), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].categories).toContain('Super Secret Shelf');
+    expect(items[0].categories).toContain('Secondary Shelf');
+  });
 });
 
 describe('Kotatsu export', () => {

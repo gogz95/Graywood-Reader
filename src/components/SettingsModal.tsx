@@ -239,7 +239,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   const executeRestorationPipeline = async (
     sourceType: 'Kotatsu' | 'Tachiyomi' | 'Graywood Snapshot',
     file: File,
-    parseFn: () => Promise<MangaItem[]> | MangaItem[]
+    parseFn: (onProgress: (status: string, percent: number) => void) => Promise<MangaItem[]> | MangaItem[]
   ) => {
     setRestoreProgress({
       isActive: true,
@@ -258,11 +258,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
       setRestoreProgress((prev) => ({
         ...prev,
         stage: 'parsing',
-        percent: 15,
+        percent: 12,
         statusMessage: `Decompressing and analyzing ${sourceType} backup data...`,
       }));
 
-      const imported = await parseFn();
+      const imported = await parseFn((status, pct) => {
+        setRestoreProgress((prev) => ({
+          ...prev,
+          stage: 'parsing',
+          percent: pct,
+          statusMessage: status,
+        }));
+      });
 
       if (!imported || imported.length === 0) {
         throw new Error(`No manga series found in this ${sourceType} backup file.`);
@@ -312,6 +319,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
       }));
 
       await onRefreshData();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('refresh-categories'));
+      }
 
       setRestoreProgress((prev) => ({
         ...prev,
@@ -1450,9 +1460,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        executeRestorationPipeline('Kotatsu', file, async () => {
+                        executeRestorationPipeline('Kotatsu', file, async (onProgress) => {
                           const arrayBuffer = await file.arrayBuffer();
-                          return parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
+                          return parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin', onProgress);
                         });
                         e.target.value = '';
                       }}

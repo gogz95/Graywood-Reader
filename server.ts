@@ -854,7 +854,7 @@ app.post("/api/manga/bulk-import", (req, res) => {
 
   const reqUser = (req as any).user;
   const userId = reqUser ? reqUser.id : null;
-  const uid = resolveRequestUserId(req) || userId;
+  const uid = resolveRequestUserId(req) || userId || (isHostRequest(req) ? 'usr_admin' : 'usr_guest');
 
   const processedItems: MangaItem[] = rawList.map((body: any) => ({
     id: String(body.id || `m_${crypto.randomUUID()}`),
@@ -880,7 +880,7 @@ app.post("/api/manga/bulk-import", (req, res) => {
     apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
     isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
     categories: Array.isArray(body.categories) ? body.categories : [],
-    userId,
+    userId: uid || 'usr_admin',
   }));
 
   syncBulkAddOrUpdateManga(processedItems);

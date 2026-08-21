@@ -199,21 +199,11 @@ export function detectKotatsuFormat(genres: string[], title: string): MangaType 
 async function decompressDeflateStream(slice: Uint8Array): Promise<string> {
   const cleanSlice = new Uint8Array(slice);
   if (typeof DecompressionStream !== 'undefined') {
-    try {
-      const ds = new DecompressionStream('deflate-raw');
-      const writer = ds.writable.getWriter();
-      await writer.write(cleanSlice);
-      await writer.close();
-      const response = new Response(ds.readable);
-      return await response.text();
-    } catch {
+    for (const format of ['deflate-raw', 'deflate', 'gzip'] as const) {
       try {
-        const ds = new DecompressionStream('deflate');
-        const writer = ds.writable.getWriter();
-        await writer.write(cleanSlice);
-        await writer.close();
-        const response = new Response(ds.readable);
-        return await response.text();
+        const stream = new Response(cleanSlice).body!.pipeThrough(new DecompressionStream(format));
+        const text = await new Response(stream).text();
+        if (text) return text;
       } catch {}
     }
   }
@@ -376,8 +366,10 @@ export function isZipBuffer(input: ArrayBuffer | Uint8Array): boolean {
  */
 export async function parseKotatsuBackup(
   input: string | ArrayBuffer | Uint8Array,
-  userId: string = 'usr_admin'
+  userId: string = 'usr_admin',
+  onProgress?: (status: string, percent: number) => void
 ): Promise<MangaItem[]> {
+  onProgress?.('Extracting archive structure...', 8);
   let favouritesList: KotatsuFavouriteEntry[] = [];
   let historyList: KotatsuHistoryEntry[] = [];
   const categoriesMap: Map<string | number, string> = new Map();
@@ -414,22 +406,60 @@ export async function parseKotatsuBackup(
         if (base === 'categories' || base === 'categories.json' || (base.includes('categor') && !base.includes('favourit') && !base.includes('favorit'))) {
           try {
             const parsedCats = JSON.parse(content);
-            const list: KotatsuCategory[] = Array.isArray(parsedCats) ? parsedCats : parsedCats.categories || [];
+            const list: any[] = Array.isArray(parsedCats)
+              ? parsedCats
+              : Array.isArray(parsedCats?.categories)
+              ? parsedCats.categories
+              : Array.isArray(parsedCats?.items)
+              ? parsedCats.items
+              : typeof parsedCats === 'object' && parsedCats !== null
+              ? Object.entries(parsedCats).map(([k, v]) => (typeof v === 'string' ? { id: k, name: v } : { id: (v as any)?.id || k, name: (v as any)?.name || (v as any)?.title || String(v) }))
+              : [];
             for (const cat of list) {
-              if (cat && cat.id !== undefined && cat.name) {
-                categoriesMap.set(cat.id, cat.name);
-                categoriesMap.set(String(cat.id), cat.name);
+              if (!cat) continue;
+              const catId = cat.id !== undefined ? cat.id : cat.category_id !== undefined ? cat.category_id : cat.categoryId;
+              const catName = cat.name || cat.title || cat.category_name || cat.categoryName || (typeof cat === 'string' ? cat : undefined);
+              if (catId !== undefined && catName) {
+                categoriesMap.set(catId, String(catName).trim());
+                categoriesMap.set(String(catId), String(catName).trim());
+                if (!isNaN(Number(catId))) categoriesMap.set(Number(catId), String(catName).trim());
               }
             }
           } catch {}
-        } else if (base === 'favourites_categories' || base === 'favourites_categories.json' || base === 'favorites_categories' || base === 'favorites_categories.json') {
+        } else if (base === 'favourites_categories' || base === 'favourites_categories.json' || base === 'favorites_categories' || base === 'favorites_categories.json' || base.includes('favourite_categor') || base.includes('favorite_categor') || base.includes('favourites_cat') || base.includes('favorites_cat')) {
           try {
             const parsedJunction = JSON.parse(content);
-            const list = Array.isArray(parsedJunction) ? parsedJunction : parsedJunction.favourites_categories || parsedJunction.favorites_categories || [];
+            const list: any[] = Array.isArray(parsedJunction)
+              ? parsedJunction
+              : Array.isArray(parsedJunction?.favourites_categories)
+              ? parsedJunction.favourites_categories
+              : Array.isArray(parsedJunction?.favorites_categories)
+              ? parsedJunction.favorites_categories
+              : typeof parsedJunction === 'object' && parsedJunction !== null
+              ? Object.values(parsedJunction)
+              : [];
             for (const j of list) {
               if (!j) continue;
-              const favId = j.favourite_id !== undefined ? String(j.favourite_id) : j.favouriteId !== undefined ? String(j.favouriteId) : j.manga_id !== undefined ? String(j.manga_id) : j.mangaId !== undefined ? String(j.mangaId) : '';
-              const catId = j.category_id !== undefined ? j.category_id : j.categoryId !== undefined ? j.categoryId : j.id;
+              if (Array.isArray(j) && j.length >= 2) {
+                const favId = String(j[0]);
+                const catId = j[1];
+                const arr = favToCategoriesMap.get(favId) || [];
+                arr.push(catId);
+                favToCategoriesMap.set(favId, arr);
+                continue;
+              }
+              const favId = j.favourite_id !== undefined ? String(j.favourite_id)
+                : j.favouriteId !== undefined ? String(j.favouriteId)
+                : j.manga_id !== undefined ? String(j.manga_id)
+                : j.mangaId !== undefined ? String(j.mangaId)
+                : j.fav_id !== undefined ? String(j.fav_id)
+                : j.id !== undefined ? String(j.id)
+                : '';
+              const catId = j.category_id !== undefined ? j.category_id
+                : j.categoryId !== undefined ? j.categoryId
+                : j.cat_id !== undefined ? j.cat_id
+                : j.category !== undefined ? j.category
+                : j.id;
               if (favId && catId !== undefined) {
                 const arr = favToCategoriesMap.get(favId) || [];
                 arr.push(catId);
@@ -564,11 +594,10 @@ export async function parseKotatsuBackup(
         // Check if GZIP format (0x1F, 0x8B)
         if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
           if (typeof DecompressionStream !== 'undefined') {
-            const ds = new DecompressionStream('gzip');
-            const writer = ds.writable.getWriter();
-            await writer.write(new Uint8Array(u8));
-            await writer.close();
-            jsonString = await new Response(ds.readable).text();
+            try {
+              const stream = new Response(new Uint8Array(u8)).body!.pipeThrough(new DecompressionStream('gzip'));
+              jsonString = await new Response(stream).text();
+            } catch {}
           } else if (typeof process !== 'undefined' && (process as any).versions?.node) {
             const zlib = await import('zlib');
             jsonString = zlib.gunzipSync(Buffer.from(u8)).toString('utf-8');
@@ -596,10 +625,42 @@ export async function parseKotatsuBackup(
         if (Array.isArray(parsed.history)) {
           historyList = parsed.history;
         }
-        if (Array.isArray(parsed.categories)) {
-          for (const cat of parsed.categories) {
-            if (cat && cat.id !== undefined && cat.name) {
-              categoriesMap.set(cat.id, cat.name);
+        const rawCats = parsed.categories || parsed.items || [];
+        if (Array.isArray(rawCats)) {
+          for (const cat of rawCats) {
+            if (!cat) continue;
+            const catId = cat.id !== undefined ? cat.id : cat.category_id !== undefined ? cat.category_id : cat.categoryId;
+            const catName = cat.name || cat.title || cat.category_name || (typeof cat === 'string' ? cat : undefined);
+            if (catId !== undefined && catName) {
+              categoriesMap.set(catId, String(catName).trim());
+              categoriesMap.set(String(catId), String(catName).trim());
+              if (!isNaN(Number(catId))) categoriesMap.set(Number(catId), String(catName).trim());
+            }
+          }
+        } else if (typeof rawCats === 'object' && rawCats !== null) {
+          for (const [k, v] of Object.entries(rawCats)) {
+            if (typeof v === 'string') {
+              categoriesMap.set(k, v.trim());
+              if (!isNaN(Number(k))) categoriesMap.set(Number(k), v.trim());
+            } else if (v && typeof v === 'object') {
+              const name = (v as any).name || (v as any).title;
+              if (name) {
+                categoriesMap.set(k, String(name).trim());
+                if (!isNaN(Number(k))) categoriesMap.set(Number(k), String(name).trim());
+              }
+            }
+          }
+        }
+        const rawJunction = parsed.favourites_categories || parsed.favorites_categories || [];
+        if (Array.isArray(rawJunction)) {
+          for (const j of rawJunction) {
+            if (!j) continue;
+            const favId = j.favourite_id !== undefined ? String(j.favourite_id) : j.favouriteId !== undefined ? String(j.favouriteId) : j.manga_id !== undefined ? String(j.manga_id) : j.mangaId !== undefined ? String(j.mangaId) : '';
+            const catId = j.category_id !== undefined ? j.category_id : j.categoryId !== undefined ? j.categoryId : j.id;
+            if (favId && catId !== undefined) {
+              const arr = favToCategoriesMap.get(favId) || [];
+              arr.push(catId);
+              favToCategoriesMap.set(favId, arr);
             }
           }
         }
@@ -636,6 +697,8 @@ export async function parseKotatsuBackup(
   if (favouritesList.length === 0) {
     throw new Error('No manga entries found in the Kotatsu backup.');
   }
+
+  onProgress?.(`Parsed ${favouritesList.length} series metadata entries. Resolving reading history & categories...`, 20);
 
   // 3. Index history by manga identifier / url / title for reading progress
   const historyMap = new Map<string, KotatsuHistoryEntry>();
@@ -771,31 +834,104 @@ export async function parseKotatsuBackup(
     const categories: string[] = [];
     const catIdCandidates: Array<string | number> = [];
 
-    if (entry.categoryId !== undefined && entry.categoryId !== null) catIdCandidates.push(entry.categoryId);
-    if (entry.category_id !== undefined && entry.category_id !== null) catIdCandidates.push(entry.category_id);
+    // Check direct category ID / object / string fields on entry
+    const e = entry as any;
+    if (e.categoryId !== undefined && e.categoryId !== null) catIdCandidates.push(e.categoryId);
+    if (e.category_id !== undefined && e.category_id !== null) catIdCandidates.push(e.category_id);
+    if (e.cat_id !== undefined && e.cat_id !== null) catIdCandidates.push(e.cat_id);
+    if (e.catId !== undefined && e.catId !== null) catIdCandidates.push(e.catId);
+    if (e.category !== undefined && e.category !== null) {
+      if (typeof e.category === 'string' || typeof e.category === 'number') catIdCandidates.push(e.category);
+      else if (typeof e.category === 'object') {
+        const cName = e.category?.name || e.category?.title;
+        if (cName) categories.push(String(cName).trim());
+      }
+    }
+    if (e.category_name) categories.push(String(e.category_name).trim());
+    if (e.categoryName) categories.push(String(e.categoryName).trim());
+    if (e.category_title) categories.push(String(e.category_title).trim());
+    if (e.categoryTitle) categories.push(String(e.categoryTitle).trim());
+
+    // Check arrays on entry
+    if (Array.isArray(e.category_ids)) catIdCandidates.push(...e.category_ids);
+    if (Array.isArray(e.categoryIds)) catIdCandidates.push(...e.categoryIds);
+    if (Array.isArray(e.cat_ids)) catIdCandidates.push(...e.cat_ids);
+    if (Array.isArray(e.catIds)) catIdCandidates.push(...e.catIds);
+
+    // Check direct category ID / object / string fields on manga (m)
     if ((m as any).categoryId !== undefined && (m as any).categoryId !== null) catIdCandidates.push((m as any).categoryId);
     if ((m as any).category_id !== undefined && (m as any).category_id !== null) catIdCandidates.push((m as any).category_id);
+    if ((m as any).cat_id !== undefined && (m as any).cat_id !== null) catIdCandidates.push((m as any).cat_id);
+    if ((m as any).catId !== undefined && (m as any).catId !== null) catIdCandidates.push((m as any).catId);
+    if ((m as any).category !== undefined && (m as any).category !== null) {
+      if (typeof (m as any).category === 'string' || typeof (m as any).category === 'number') catIdCandidates.push((m as any).category);
+      else if (typeof (m as any).category === 'object') {
+        const cName = (m as any).category?.name || (m as any).category?.title;
+        if (cName) categories.push(String(cName).trim());
+      }
+    }
+    if ((m as any).category_name) categories.push(String((m as any).category_name).trim());
+    if ((m as any).categoryName) categories.push(String((m as any).categoryName).trim());
+    if ((m as any).category_title) categories.push(String((m as any).category_title).trim());
+    if ((m as any).categoryTitle) categories.push(String((m as any).categoryTitle).trim());
+
+    if (Array.isArray((m as any).category_ids)) catIdCandidates.push(...(m as any).category_ids);
+    if (Array.isArray((m as any).categoryIds)) catIdCandidates.push(...(m as any).categoryIds);
 
     // Look up from favourites_categories junction map if present
     const entryId = entry.id !== undefined ? String(entry.id) : '';
     const mIdStr = m.id !== undefined ? String(m.id) : '';
-    const junctionCats = (entryId ? favToCategoriesMap.get(entryId) : null) || (mIdStr ? favToCategoriesMap.get(mIdStr) : null);
+    const titleKey = title.toLowerCase().trim();
+    const junctionCats = (entryId ? favToCategoriesMap.get(entryId) : null) ||
+      (mIdStr ? favToCategoriesMap.get(mIdStr) : null) ||
+      (sourceUrl ? favToCategoriesMap.get(sourceUrl) : null) ||
+      favToCategoriesMap.get(titleKey);
+
     if (junctionCats && junctionCats.length > 0) {
       catIdCandidates.push(...junctionCats);
     }
 
     // Resolve category candidates through categoriesMap
     for (const rawCat of catIdCandidates) {
-      const resolvedName = categoriesMap.get(rawCat) || categoriesMap.get(Number(rawCat)) || (typeof rawCat === 'string' && isNaN(Number(rawCat)) ? rawCat : null);
-      if (resolvedName && !categories.includes(resolvedName)) {
-        categories.push(resolvedName);
+      if (rawCat === undefined || rawCat === null) continue;
+      const resolvedName = categoriesMap.get(rawCat) ||
+        categoriesMap.get(String(rawCat)) ||
+        (!isNaN(Number(rawCat)) ? categoriesMap.get(Number(rawCat)) : null) ||
+        (typeof rawCat === 'string' && isNaN(Number(rawCat)) ? rawCat.trim() : null);
+
+      if (resolvedName && resolvedName.trim() && !categories.includes(resolvedName.trim())) {
+        categories.push(resolvedName.trim());
       }
     }
 
+    // Check entry.categories array
     if (Array.isArray(entry.categories)) {
       for (const c of entry.categories) {
-        const raw = typeof c === 'string' ? c : (c.name || (c.id !== undefined ? categoriesMap.get(c.id) || categoriesMap.get(Number(c.id)) : ''));
-        if (raw && !categories.includes(raw)) categories.push(raw);
+        if (!c) continue;
+        const cObj = c as any;
+        let cName = typeof c === 'string'
+          ? (categoriesMap.get(c) || categoriesMap.get(Number(c)) || c)
+          : typeof c === 'number'
+          ? categoriesMap.get(c) || categoriesMap.get(String(c))
+          : (cObj.name || cObj.title || (cObj.id !== undefined ? categoriesMap.get(cObj.id) || categoriesMap.get(Number(cObj.id)) : ''));
+        if (cName && typeof cName === 'string' && cName.trim() && !categories.includes(cName.trim())) {
+          categories.push(cName.trim());
+        }
+      }
+    }
+
+    // Check m.categories array
+    if (Array.isArray((m as any).categories)) {
+      for (const c of (m as any).categories) {
+        if (!c) continue;
+        let cName = typeof c === 'string'
+          ? (categoriesMap.get(c) || categoriesMap.get(Number(c)) || c)
+          : typeof c === 'number'
+          ? categoriesMap.get(c) || categoriesMap.get(String(c))
+          : (c.name || c.title || (c.id !== undefined ? categoriesMap.get(c.id) || categoriesMap.get(Number(c.id)) : ''));
+        if (cName && typeof cName === 'string' && cName.trim() && !categories.includes(cName.trim())) {
+          categories.push(cName.trim());
+        }
       }
     }
 
