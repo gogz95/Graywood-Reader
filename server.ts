@@ -968,10 +968,35 @@ app.post("/api/manga/:id/refresh-metadata", async (req, res) => {
   }
 });
 
+/**
+ * Test whether an anchor href looks like a real manga/series content path across
+ * diverse engine URL schemes (standard EN words, localized words, and clean slugs).
+ */
+export function isContentPath(href: string): boolean {
+  if (!href || typeof href !== 'string') return false;
+  const h = href.trim();
+  if (/^(#|javascript:|mailto:|tel:)/i.test(h)) return false;
+  // Explicit directory path keywords (EN, VN, ES, FR, RU, etc.)
+  if (/\/(manga|series|title|titles|manhwa|manhua|comic|comics|webtoon|webtoons|read|reader|view|book|truyen|truyen-tranh|story|detail|project|online|comic-online|bd|mangas|g|comic|manga-detail)\//i.test(h)) {
+    return true;
+  }
+  // Clean single-segment series path e.g. "/solo-leveling" or "/solo-leveling/"
+  // (must have at least 3 chars, letters/numbers/dashes, and not be a system/nav path)
+  if (/^\/[a-z0-9-_]{3,80}\/?$/i.test(h)) {
+    return !/^\/(home|login|register|signup|search|browse|explore|filter|categories|category|genres|genre|tags|tag|latest|popular|history|bookmarks|bookmark|settings|privacy|terms|about|dmca|contact|faq|api|admin|wp-admin|wp-content|wp-includes|feed|rss|install_app|user|profile|author|publisher|group)\/?$/i.test(h);
+  }
+  return false;
+}
+
+export function isNavText(t: string): boolean {
+  return /^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor|terms|disclaimer|faq|support|donate|patreon|discord)/i.test((t || '').trim());
+}
+
 // Search Alternative Sources for Manga Endpoint
 app.get("/api/manga/:id/find-sources", async (req, res) => {
   const { id } = req.params;
   const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+
   if (!manga) {
     return res.status(404).json({ error: "Manga not found" });
   }
@@ -1032,8 +1057,6 @@ app.get("/api/manga/:id/find-sources", async (req, res) => {
               const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
               return src.startsWith('http') ? src : (src ? `${origin}${src}` : '');
             };
-            const isContentPath = (href: string) => /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href);
-            const isNavText = (t: string) => /^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(t);
 
             $('.listupd .bsx, .listupd .bs, .page-item-detail, .c-tabs-item__content').each((_i, el) => {
               const a = $(el).find('a').first();
@@ -4162,16 +4185,28 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
   //    with DOM-proximity cover matching (RC-3 fix: cover extracted from same container
   //    as the title, not by positional index across the whole page).
   try {
-    let catalogUrl: string;
+    const catalogCandidates: string[] = [];
     if (sourceDef.engineType === 'madara') {
-      catalogUrl = page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`;
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/page/${page}/`);
     } else if (sourceDef.engineType === 'mangathemesia') {
-      // MangaThemesia catalog is at /manga/?page=N&order=popular (NOT /manga/page/N)
-      catalogUrl = `${sourceDef.baseUrl}/manga/?page=${page}&order=popular`;
+      catalogCandidates.push(`${sourceDef.baseUrl}/manga/?page=${page}&order=popular`);
+      catalogCandidates.push(`${sourceDef.baseUrl}/manga/?page=${page}`);
+      catalogCandidates.push(`${sourceDef.baseUrl}/series/?page=${page}`);
     } else if (sourceDef.engineType === 'wpcomics') {
-      catalogUrl = page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/page/${page}`;
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/?page=${page}`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga-list` : `${sourceDef.baseUrl}/manga-list?page=${page}`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`);
+    } else if (sourceDef.engineType === 'foolslide') {
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/directory/` : `${sourceDef.baseUrl}/directory/${page}/`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/series/` : `${sourceDef.baseUrl}/series/${page}/`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/list/` : `${sourceDef.baseUrl}/list/${page}/`);
+      catalogCandidates.push(`${sourceDef.baseUrl}/`);
     } else {
-      catalogUrl = page === 1 ? `${sourceDef.baseUrl}/series` : `${sourceDef.baseUrl}/series?page=${page}`;
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/browse` : `${sourceDef.baseUrl}/browse?page=${page}`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/series` : `${sourceDef.baseUrl}/series?page=${page}`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga` : `${sourceDef.baseUrl}/manga?page=${page}`);
+      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/?page=${page}`);
     }
 
     // Fast-fail if source is already marked down/blocked (circuit breaker OPEN)
@@ -4180,43 +4215,40 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
       return { items: [], totalCount: 0 };
     }
 
-    // Retry with exponential backoff (max 3 attempts: 4s, 8s, 12s timeout)
+    // Try candidate catalog URLs with exponential backoff
     let html: string | null = null;
-    for (let attempt = 0; attempt < 3 && !html; attempt++) {
-      try {
-        const timeout = [4000, 8000, 12000][attempt] || 4000;
-        const liveRes = await fetchWithChallengeBypass(catalogUrl, {
-          headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml' },
-          enableCloudflareBypass: appSettings.enableCloudflareBypass,
-          flareSolverrUrl: appSettings.flareSolverrUrl,
-          captchaSolverEnabled: appSettings.captchaSolverEnabled,
-          captchaApiKey: appSettings.captchaApiKey,
-          timeoutMs: timeout,
-          sourceId: sourceDef.id,
-          onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
-        });
-        if (liveRes.ok && liveRes.html) {
-          html = liveRes.html;
-          if (liveRes.bypassed) console.log(`[Catalog Scraper] ${sourceDef.name}: bypassed via ${liveRes.methodUsed}`);
-          updateSourceHealth(sourceDef.id, liveRes.html, liveRes.status);
-        } else {
-          updateSourceHealth(sourceDef.id, null, liveRes.status || 500);
-          if (liveRes.status === 404 || liveRes.status === 410) {
-            break; // Fast-fail non-transient HTTP errors
+    for (const catalogUrl of catalogCandidates) {
+      for (let attempt = 0; attempt < 2 && !html; attempt++) {
+        try {
+          const timeout = [4000, 8000][attempt] || 4000;
+          const liveRes = await fetchWithChallengeBypass(catalogUrl, {
+            headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+            enableCloudflareBypass: appSettings.enableCloudflareBypass,
+            flareSolverrUrl: appSettings.flareSolverrUrl,
+            captchaSolverEnabled: appSettings.captchaSolverEnabled,
+            captchaApiKey: appSettings.captchaApiKey,
+            timeoutMs: timeout,
+            sourceId: sourceDef.id,
+            onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
+          });
+          if (liveRes.ok && liveRes.html) {
+            html = liveRes.html;
+            if (liveRes.bypassed) console.log(`[Catalog Scraper] ${sourceDef.name}: bypassed via ${liveRes.methodUsed}`);
+            updateSourceHealth(sourceDef.id, liveRes.html, liveRes.status);
+            break;
+          } else {
+            updateSourceHealth(sourceDef.id, null, liveRes.status || 500);
+            if (liveRes.status === 404 || liveRes.status === 410) {
+              break; // Fast-fail non-transient HTTP errors for this URL candidate
+            }
           }
-          if (attempt < 2) {
-            console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} failed. Retrying...`);
-            await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
-          }
-        }
-      } catch (fetchErr: any) {
-        updateSourceHealth(sourceDef.id, null, 0, fetchErr?.message);
-        if (attempt < 2) {
-          console.warn(`[Catalog Scraper] ${sourceDef.name} attempt ${attempt+1} errored. Retrying...`);
-          await new Promise(r => setTimeout(r, [1000, 2500][attempt]));
+        } catch (fetchErr: any) {
+          updateSourceHealth(sourceDef.id, null, 0, fetchErr?.message);
         }
       }
+      if (html) break;
     }
+
     if (html) {
       const $ = cheerio.load(html);
       const baseOrigin = sourceDef.baseUrl.replace(/\/$/, '');
@@ -4224,7 +4256,7 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
 
       /** Resolve a cover src (src / data-src / data-lazy-src) — stays relative if needed. */
       const extractCover = (el: any): string => {
-        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-original') || '';
         if (!src || !/\.(jpg|jpeg|png|webp)/i.test(src) || /logo|avatar|banner|icon|placeholder/i.test(src)) return '';
         if (isAdImageSrc(src, baseOrigin)) return '';
         return src.startsWith('http') ? src : `${baseOrigin}${src}`;
@@ -4234,8 +4266,8 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
       const pushItem = (href: string, title: string, cover: string) => {
         const normTitle = title.toLowerCase();
         if (!href || title.length < 2 || seenTitles.has(normTitle)) return;
-        if (/^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(title)) return;
-        if (!/\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)) return;
+        if (isNavText(title)) return;
+        if (!isContentPath(href)) return;
         seenTitles.add(normTitle);
         scrapedItems.push({
           id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
@@ -4273,13 +4305,13 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
           });
         }
       }
-      // ── Madara: .page-item-detail cards — cover IS inside the card ────────
+      // ── Madara / WP-Comics: .page-item-detail cards — cover IS inside the card ──
       else if (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics') {
         let found = false;
-        $('.page-item-detail, .c-tabs-item__content').each((_i, el) => {
-          const a = $(el).find('.post-title a, h3 a, h4 a').first();
+        $('.page-item-detail, .c-tabs-item__content, .item-thumb, .manga-item').each((_i, el) => {
+          const a = $(el).find('.post-title a, h3 a, h4 a, .title a, a').first();
           const href = a.attr('href') || '';
-          const title = a.text().trim();
+          const title = a.text().trim() || a.attr('title') || '';
           const cover = extractCover($(el).find('img').first());
           if (href && title) { pushItem(href, title, cover); found = true; }
         });
@@ -4294,14 +4326,14 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
           });
         }
       }
-      // ── Generic fallback for custom_html, foolslide, wpcomics ────────────
+      // ── Generic fallback for custom_html, foolslide, and other themes ────
       else {
-        $('a[href]').each((_i, el) => {
+        $('article, .item, .card, .thumb-item, .series-card, .comic-item, li, a[href]').each((_i, el) => {
           if (scrapedItems.length >= limit * 2) return false;
-          const a = $(el);
+          const a = ($(el).is('a') ? $(el) : $(el).find('a').first());
           const href = a.attr('href') || '';
-          const title = a.text().trim();
-          const cover = extractCover(a.find('img').first().length ? a.find('img').first() : $(el).closest('li, article, div.item').find('img').first());
+          const title = a.text().trim() || a.attr('title') || $(el).find('h2, h3, h4, .title').first().text().trim();
+          const cover = extractCover(a.find('img').first().length ? a.find('img').first() : $(el).find('img').first());
           if (href && title) pushItem(href, title, cover);
         });
       }
@@ -4729,14 +4761,9 @@ app.get("/api/kotatsu/search", async (req, res) => {
 
       /** Resolve a cover src (src / data-src / data-lazy-src). */
       const resolveCover = (el: any): string => {
-        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-original') || '';
         return src.startsWith('http') ? src : (src ? `${origin}${src}` : '');
       };
-
-      const isContentPath = (href: string) =>
-        /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href);
-      const isNavText = (t: string) =>
-        /^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(t);
 
       // ── Priority 1: MangaThemesia — .listupd .bsx grid items ──────────────
       // Cover and title live together inside .bsx, so there is no index mismatch.
@@ -5288,23 +5315,34 @@ async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapt
     });
     if (!bypassRes.ok || !bypassRes.html) return [];
     const sHtml = bypassRes.html;
-    const chLinkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const $ = cheerio.load(sHtml);
     const out: ResolvedChapter[] = [];
     const seen = new Set<string>();
-    let m: RegExpExecArray | null;
-    while ((m = chLinkRx.exec(sHtml)) !== null) {
-      const href = m[1];
-      const text = m[2].replace(/<[^>]+>/g, '').trim();
+
+    // 1. Check anchor tags and <option> tags in document order across typical chapter wrappers
+    const candidateNodes = $('a[href], select option[value], ul.chapter-list li a, .chapters-list li a, #chapterlist li a, div.eplister li a').toArray();
+
+    const chapterRegex = /(?:chapter|chapitre|capitulo|capítulo|cap|chap|ch|episode|ep|глава|tập|tap|vol|volume|#)[^\d]*(\d+(?:\.\d+)?)/i;
+    const pathNumberRegex = /\/(?:chapter|chap|ch|episode|ep)[-_]?(\d+(?:\.\d+)?)/i;
+
+    let autoNum = 1;
+    for (const node of candidateNodes) {
+      const tag = (node as any).tagName?.toLowerCase();
+      const href = tag === 'option' ? ($(node).attr('value') || '') : ($(node).attr('href') || '');
       if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
-      if (!/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) continue;
-      const numM = (href + ' ' + text).match(/(?:chapter|chap|ch)[^\d]*(\d+(?:\.\d+)?)/i);
-      if (!numM) continue;
-      const num = parseFloat(numM[1]);
+      const text = $(node).text().trim() || $(node).attr('title') || '';
+      
+      const numMatch = (href + ' ' + text).match(chapterRegex) || href.match(pathNumberRegex);
+      if (!numMatch && !/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) {
+        continue;
+      }
+      const num = numMatch ? parseFloat(numMatch[1]) : autoNum++;
       if (!Number.isFinite(num) || num <= 0) continue;
+
       const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
       if (seen.has(abs)) continue;
       seen.add(abs);
-      out.push({ number: num, id: abs, slug: abs, title: `Chapter ${num}`, url: abs, pageCount: 0 });
+      out.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
     }
     return out;
   } catch (e) {
@@ -5329,12 +5367,16 @@ interface EngineSourceConfig {
   madaraSelectChapter?: string;     // chapter row selector (default li.wp-manga-chapter)
   madaraSelectBodyPage?: string;    // page container selector (default div.reading-content)
   madaraPostReq?: boolean;          // use admin-ajax manga_get_chapters (default true)
+  // Per-source selector / path overrides
+  chapterListSelector?: string;     // custom chapter list row selector
+  chapterPageSelector?: string;     // custom chapter pages selector
+  catalogPath?: string;             // custom catalog listing URL path
 }
 
 /** Statically curated sources with hand-tuned per-site overrides.
  *  These take priority over auto-generated entries from catalog.json. */
 const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
-  // ── Madara Engine (WP-Manga theme) — covers 50+ sources ──────────────────
+  // ── Madara Engine (WP-Manga theme) — covers 50+ top scanlation sources ──
   { id: 'manhwa18',    name: 'Manhwa18',          domain: 'manhwa18.com',    engine: 'manhwa18', lang: 'en', isNsfw: true },
   { id: 'manhwa18cc',  name: 'Manhwa18.cc',        domain: 'manhwa18.cc',     engine: 'madara', lang: 'en', isNsfw: true,
     madaraSelectTestAsync: 'ul.row-content-chapter', madaraSelectChapter: 'li.a-h', madaraSelectBodyPage: 'div.read-content' },
@@ -5354,18 +5396,52 @@ const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'atsumoe',     name: 'Atsu Moe',           domain: 'atsu.moe',        engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'demonicscans', name: 'Demonic Scans',     domain: 'demonicscans.org', engine: 'custom', lang: 'en', isNsfw: false },
   { id: 'beehentai',   name: 'BeeHentai',          domain: 'beehentai.com',   engine: 'madara', lang: 'en', isNsfw: true },
-  // ── MangaReader Engine ────────────────────────────────────────────────────
+  { id: 'mangatx',     name: 'Manga TX',           domain: 'mangatx.com',     engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'allporn_comic', name: 'AllPornComic',     domain: 'allporncomic.com', engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'bestmanhuacom', name: 'BestManhua',       domain: 'bestmanhua.com',  engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'bibimanga',   name: 'BibiManga',          domain: 'bibimanga.com',   engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'bookmanga',   name: 'BookManga',          domain: 'bookmanga.com',   engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'anshscans',   name: 'AnshScans',          domain: 'anshscans.org',   engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'arcanescans', name: 'ArcaneScans',        domain: 'arcanescans.com', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'aryascans',   name: 'AryaScans',          domain: 'aryascans.com',   engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'bananamanga', name: 'BananaManga',        domain: 'bananamanga.net', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'zinmanga',    name: 'ZinManga',           domain: 'zinmanga.com',    engine: 'madara', lang: 'en', isNsfw: false },
+  { id: '1stkissmanga', name: '1stKissManga',      domain: '1stkissmanga.me', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'mangaclash',  name: 'MangaClash',         domain: 'mangaclash.com',  engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'manga68',     name: 'Manga68',            domain: 'manga68.com',     engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'kissmanga',   name: 'KissManga',          domain: 'kissmanga.in',    engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'webtoonxyz',  name: 'WebtoonXYZ',         domain: 'webtoon.xyz',     engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'hiperdex',    name: 'Hiperdex',           domain: 'hiperdex.com',    engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'manhuaga',    name: 'ManhuaGa',           domain: 'manhuaga.com',    engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'manga18h',    name: 'Manga18h',           domain: 'manga18h.com',    engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'manhwa18org', name: 'Manhwa18.org',       domain: 'manhwa18.org',    engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'toongod',     name: 'ToonGod',            domain: 'toongod.org',     engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'manhwahentaime', name: 'ManhwaHentai.me', domain: 'manhwahentai.me', engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'coffeemanga', name: 'CoffeeManga',        domain: 'coffeemanga.io',  engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'setsuscans',  name: 'SetsuScans',         domain: 'setsuscans.com',  engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'resetscans',  name: 'ResetScans',         domain: 'reset-scans.com', engine: 'madara', lang: 'en', isNsfw: false },
+
+  // ── MangaThemesia / MangaReader Engine ────────────────────────────────────
   { id: 'manhuascan',  name: 'ManhuaScan',         domain: 'manhuascan.us',   engine: 'mangareader', lang: 'en', isNsfw: true },
   { id: 'ravenscans',  name: 'Raven Scans',        domain: 'ravenscans.com',  engine: 'mangareader', lang: 'en', isNsfw: false },
   { id: 'luminous',    name: 'Luminous Scans',     domain: 'luminousscans.com', engine: 'mangareader', lang: 'en', isNsfw: false },
   { id: 'night',       name: 'Night Scans',        domain: 'nightscans.com',  engine: 'mangareader', lang: 'en', isNsfw: false },
   { id: 'hentai20',    name: 'Hentai20',           domain: 'hentai20.com',    engine: 'mangareader', lang: 'en', isNsfw: true },
+  { id: 'astrascans',  name: 'AstraScans',         domain: 'astrascans.org',  engine: 'mangareader', lang: 'en', isNsfw: false },
+  { id: 'ascalonscans', name: 'AscalonScans',      domain: 'ascalonscans.com', engine: 'mangareader', lang: 'en', isNsfw: false },
+  { id: 'anigliscans', name: 'AnigliScans',        domain: 'anigliscans.xyz', engine: 'mangareader', lang: 'en', isNsfw: false },
+  { id: 'altayscans',  name: 'AltayScans',         domain: 'altayscans.com',  engine: 'mangareader', lang: 'en', isNsfw: false },
+  { id: 'birdmanga',   name: 'BirdManga',          domain: 'birdmanga.com',   engine: 'mangareader', lang: 'en', isNsfw: false },
+
   // ── HotComics Engine ──────────────────────────────────────────────────────
   { id: 'hotcomics',   name: 'HotComics',          domain: 'hotcomics.net',   engine: 'hotcomics', lang: 'en', isNsfw: true },
   { id: 'daycomics',   name: 'DayComics',          domain: 'daycomics.com',   engine: 'hotcomics', lang: 'en', isNsfw: true },
+
   // ── Custom API Sources ────────────────────────────────────────────────────
   { id: 'asurascans',  name: 'Asura Scans',        domain: 'asurascans.com',  engine: 'custom', lang: 'en', isNsfw: false },
   { id: 'flamecomics', name: 'Flame Comics',       domain: 'flamecomics.xyz', engine: 'custom', lang: 'en', isNsfw: false },
+  { id: 'reaperscans', name: 'Reaper Scans',       domain: 'reaperscans.com', engine: 'custom', lang: 'en', isNsfw: false },
+  { id: 'dynasty',     name: 'Dynasty Scans',      domain: 'dynasty-scans.com', engine: 'custom', lang: 'en', isNsfw: false },
 ];
 
 // ============================================================================
@@ -6087,35 +6163,168 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
   }
 }
 
-// Extract real panel image URLs from chapter HTML (multi-attribute, filters metadata).
-export function extractPanelImages(htmlText: string, origin: string): string[] {
-  const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-cfsrc|data-full-url|data-original|data-srcset|srcset|src)=["']([^"']+)["'][^>]*>/gi;
-  const pages: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = imgRegex.exec(htmlText)) !== null) {
-    const src = match[1]?.trim();
-    if (!src) continue;
-    if (
-      src &&
-      (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp') || src.includes('imgur.com')) &&
-      !src.includes('/covers/') &&
-      !src.includes('/profiles/') &&
-      !src.includes('logo') &&
-      !src.includes('banner') &&
-      !src.includes('avatar') &&
-      !src.includes('icon') &&
-      !src.includes('default-pp') &&
-      !src.includes('announcement') &&
-      !src.includes('manhwa18.png') &&
-      !src.includes('manhwa18.cc/manga/')
-      // NOTE: intentionally NOT excluding cdn.manhwa18.com — that domain hosts real chapter images.
-    ) {
-      pages.push(src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`);
-    }
+/**
+ * Helper to clean and validate a candidate panel image URL extracted from HTML or embedded scripts.
+ */
+export function isValidPanelImageUrl(src: string): boolean {
+  if (!src || typeof src !== 'string') return false;
+  const s = src.trim().toLowerCase();
+  if (!s || s.startsWith('data:image/svg') || s.startsWith('javascript:')) return false;
+
+  // Must look like an image or CDN image path
+  const hasImgExt = /\.(jpe?g|png|webp|avif|gif)(\?|$)/i.test(s);
+  const isCdnPath = /(imgur\.com|cdn|uploads?|images?|content|chapters?|wp-content|storage|photos?|pictures?|media)/i.test(s);
+  if (!hasImgExt && !isCdnPath) return false;
+
+  // Noise / advertisement / non-chapter image filters
+  if (
+    s.includes('/covers/') ||
+    s.includes('/cover/') ||
+    s.includes('cover.') ||
+    s.includes('/profiles/') ||
+    s.includes('/avatars/') ||
+    s.includes('avatar') ||
+    s.includes('logo') ||
+    s.includes('banner') ||
+    s.includes('favicon') ||
+    s.includes('icon') ||
+    s.includes('default-pp') ||
+    s.includes('announcement') ||
+    s.includes('placeholder') ||
+    s.includes('discord') ||
+    s.includes('patreon') ||
+    s.includes('donate') ||
+    s.includes('doubleclick') ||
+    s.includes('pixel.gif') ||
+    s.includes('spacer.gif') ||
+    s.includes('manhwa18.png') ||
+    s.includes('manhwa18.cc/manga/')
+  ) {
+    return false;
   }
-  return Array.from(new Set(pages));
+  return true;
 }
 
+/**
+ * Extract candidate URL from srcset string (e.g. "url1 1x, url2 2x" -> best URL).
+ */
+export function parseSrcsetCandidate(srcsetString: string): string {
+  if (!srcsetString || !srcsetString.includes(' ')) return srcsetString;
+  const parts = srcsetString.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  // Pick the last candidate (usually highest resolution like 2x or highest width) or first
+  const candidate = parts[parts.length - 1] || parts[0];
+  return candidate.split(/\s+/)[0] || '';
+}
+
+// Extract real panel image URLs from chapter HTML (multi-attribute, scripts, srcset, filters metadata).
+export function extractPanelImages(htmlText: string, origin: string): string[] {
+  if (!htmlText) return [];
+  const pages: string[] = [];
+  const seen = new Set<string>();
+
+  const addPage = (raw: string) => {
+    if (!raw) return;
+    let src = raw.trim();
+    if (src.includes(' ') && (src.includes('w,') || src.includes('x,') || src.includes('w ') || src.includes('x '))) {
+      src = parseSrcsetCandidate(src);
+    }
+    src = src.replace(/^["']|["']$/g, '');
+    if (!isValidPanelImageUrl(src)) return;
+    const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
+    if (!seen.has(abs)) {
+      seen.add(abs);
+      pages.push(abs);
+    }
+  };
+
+  // 1. Extract from <img> tags using Cheerio for robust attribute priority
+  try {
+    const $ = cheerio.load(htmlText);
+    $('img').each((_i, el) => {
+      const candidate =
+        $(el).attr('data-src') ||
+        $(el).attr('data-lazy-src') ||
+        $(el).attr('data-cfsrc') ||
+        $(el).attr('data-full-url') ||
+        $(el).attr('data-original') ||
+        $(el).attr('data-url') ||
+        $(el).attr('data-img') ||
+        $(el).attr('data-image') ||
+        $(el).attr('data-page-url') ||
+        $(el).attr('data-srcset') ||
+        $(el).attr('srcset') ||
+        $(el).attr('src') ||
+        '';
+      if (candidate) addPage(candidate);
+    });
+  } catch (_) {
+    // Regex fallback if cheerio encounters an error
+    const imgTagRegex = /<img\b([^>]*)>/gi;
+    let tagMatch: RegExpExecArray | null;
+    while ((tagMatch = imgTagRegex.exec(htmlText)) !== null) {
+      const attrs = tagMatch[1];
+      const attrMatch = attrs.match(/(?:data-src|data-lazy-src|data-cfsrc|data-full-url|data-original|data-url|data-img|data-image|data-page-url|data-srcset|srcset|src)=["']([^"']+)["']/i);
+      if (attrMatch && attrMatch[1]) addPage(attrMatch[1]);
+    }
+  }
+
+  // 2. Extract from embedded scripts (JSON-in-script / JS variables) if <img> gave nothing or few images
+  if (pages.length < 2) {
+    // A. ts_reader.run({ ... sources: [ { images: [...] } ] ... })
+    const tsMatch = htmlText.match(/ts_reader\.run\s*\(\s*(\{[\s\S]*?\})\s*\)/);
+    if (tsMatch) {
+      try {
+        const obj = JSON.parse(tsMatch[1]);
+        const imgs = obj?.sources?.[0]?.images;
+        if (Array.isArray(imgs)) {
+          for (const img of imgs) {
+            if (typeof img === 'string') addPage(img);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // B. var/let/const pages = [...] or images = [...] or chapter_data = [...]
+    const scriptArrayRegex = /(?:var|let|const|window\.)\s*(?:pages|images|chapter_images|chapter_data|img_list)\s*=\s*(\[[\s\S]*?\]|{[\s\S]*?})/gi;
+    let arrayMatch: RegExpExecArray | null;
+    while ((arrayMatch = scriptArrayRegex.exec(htmlText)) !== null) {
+      try {
+        const rawJson = arrayMatch[1];
+        const parsed = JSON.parse(rawJson);
+        const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.images) ? parsed.images : (Array.isArray(parsed?.pages) ? parsed.pages : []));
+        for (const item of list) {
+          if (typeof item === 'string') addPage(item);
+          else if (typeof item === 'object' && item !== null) {
+            const url = item.url || item.src || item.path || item.image || item.page;
+            if (typeof url === 'string') addPage(url);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // C. Script tags with embedded Next.js (__NEXT_DATA__) or JSON-LD
+    const scriptJsonRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+    let sMatch: RegExpExecArray | null;
+    while ((sMatch = scriptJsonRegex.exec(htmlText)) !== null) {
+      const code = sMatch[1]?.trim() || '';
+      if (code.includes('"images"') || code.includes('"pages"') || code.includes('__NEXT_DATA__')) {
+        try {
+          const parsed = JSON.parse(code);
+          const chImgs = parsed?.chapter?.images || parsed?.props?.pageProps?.chapter?.images || parsed?.pageProps?.chapter?.images;
+          if (Array.isArray(chImgs)) {
+            for (const it of chImgs) {
+              if (typeof it === 'string') addPage(it);
+              else if (typeof it === 'object' && it !== null && it.url) addPage(it.url);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+  }
+
+  return pages;
+}
 
 async function extractLiveDomainChapterPages(
   rawTargetUrl: string,
@@ -6138,19 +6347,12 @@ async function extractLiveDomainChapterPages(
         const { chapters, matchedSlug } = await fetchAsuraChapterList(targetUrl);
 
         if (chapters.length === 0) {
-          // The API resolved nothing for this slug — the series is either not
-          // hosted on Asura anymore (common: Asura drops licensed/old titles) or
-          // the slug is stale. Surface it clearly instead of silently falling
-          // through to a placeholder that looks like a fetch failure.
           console.warn(`[Asura API Engine] No chapters returned for "${targetUrl}" — the series may no longer be hosted on Asura Scans.`);
         }
 
         if (chapters.length > 0 && matchedSlug) {
           const targetChapter = matchResolvedChapter(chapters, chapterNumber);
 
-          // Never silently substitute a WRONG chapter (e.g. the last one in the list) when the
-          // requested chapter number does not exist on the source. Return null so the caller
-          // falls back to a correct-title placeholder instead of loading the wrong series chapter.
           if (targetChapter && targetChapter.slug) {
             const pagesRes = await fetch(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
               headers: ASURA_API_HEADERS,
@@ -6207,7 +6409,6 @@ async function extractLiveDomainChapterPages(
             const imageKeys = Object.keys(imagesObj);
             if (imageKeys.length > 0) {
               console.log(`[Flame Comics API Engine] Successfully extracted ${imageKeys.length} live pages for seriesId ${ctx.seriesId} token ${token}`);
-              // Fix #12: Direct CDN URLs bypass Next.js image optimizer
               const cdnBase = `https://cdn.flamecomics.xyz/uploads/images/series/${ctx.seriesId}/${token}`;
               return imageKeys.map((k) => {
                 const imgName = typeof imagesObj[k] === 'object' ? (imagesObj[k].name || imagesObj[k]) : imagesObj[k];
@@ -6221,7 +6422,7 @@ async function extractLiveDomainChapterPages(
       }
     }
 
-    // 3. Dedicated Engine Extractors: Manhwa18 / HotComics / MangaReader
+    // 3. Dedicated Engine Extractors: Manhwa18 / HotComics / MangaReader / FoolSlide / Madara
     const engCfg = getEngineConfig(domainId);
     if (engCfg && engCfg.engine === 'manhwa18') {
       const mhChapters = await fetchManhwa18ChapterList(targetUrl, engCfg.domain);
@@ -6254,9 +6455,6 @@ async function extractLiveDomainChapterPages(
       if (mrPages && mrPages.length > 0) return mrPages;
     }
     if (engCfg && engCfg.engine === 'foolslide') {
-      // FoolSlide JS-only themes may return [] for the chapter list — in that
-      // case fall through to the generic resolver instead of substituting a
-      // wrong chapter or nulling the read.
       const fsChapters = await fetchFoolSlideChapterList(targetUrl, domainId);
       const fsTarget = matchResolvedChapter(fsChapters, chapterNumber);
       if (fsTarget) {
@@ -6264,26 +6462,16 @@ async function extractLiveDomainChapterPages(
         if (fsPages && fsPages.length > 0) return fsPages;
       }
     }
-
-    // 4. Madara Engine (WP-Manga theme) — dedicated AJAX chapter extractor
-    const engineConfig = getEngineConfig(domainId);
-    if (engineConfig && engineConfig.engine === 'madara') {
-      const madaraPages = await fetchMadaraChapterPages(targetUrl, chapterNumber, engineConfig);
+    if (engCfg && engCfg.engine === 'madara') {
+      const madaraPages = await fetchMadaraChapterPages(targetUrl, chapterNumber, engCfg);
       if (madaraPages && madaraPages.length > 0) return madaraPages;
     }
-
-    // 4. MangaDex API — DISABLED (MangaDex is metadata-only, not a reading source).
-    // The At-Home chapter resolution was previously here but has been removed.
-    // MangaDex chapter page extraction is permanently disabled.
 
     // 4. Dynasty Scans Series & Chapter Resolution
     if (domainId === 'dynasty' || targetUrl.includes('dynasty-scans.com')) {
       try {
         const chapters = await fetchDynastyChapterList(targetUrl);
-        if (chapters.length === 0) {
-          // Could not enumerate from the series page (possibly a direct chapter URL).
-          // Fall through to the universal resolver below.
-        } else {
+        if (chapters.length > 0) {
           const target = matchResolvedChapter(chapters, chapterNumber);
           if (!target) {
             console.warn(`[Dynasty Scans Extractor] Chapter ${chapterNumber} not found — not substituting a wrong chapter.`);
@@ -6330,8 +6518,8 @@ async function extractLiveDomainChapterPages(
       onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
     };
 
-    // If the URL is a direct chapter page, fetch it directly with challenge bypass.
-    const isDirectChapterUrl = /\/(chapter|chap|ch)[-\/_.]?\d+/i.test(targetUrl);
+    // If the URL is already a direct chapter page, fetch it directly with challenge bypass.
+    const isDirectChapterUrl = /\/(chapter|chap|ch|read|reader|view|ep|episode)[-/_.]?\d+/i.test(targetUrl);
     if (isDirectChapterUrl) {
       const directBypass = await fetchWithChallengeBypass(targetUrl, solverOpts);
       if (directBypass.ok && directBypass.html) {
@@ -6351,6 +6539,23 @@ async function extractLiveDomainChapterPages(
         if (images.length > 0) return images;
       }
     } else {
+      // Fallback attempt: Try direct candidate chapter URLs if chapter list parsing yielded nothing (SPA / JS themes)
+      const baseClean = targetUrl.replace(/\/$/, '');
+      const candidates = [
+        `${baseClean}/chapter-${chapterNumber}`,
+        `${baseClean}/chap-${chapterNumber}`,
+        `${baseClean}/ch-${chapterNumber}`,
+        `${baseClean}/${chapterNumber}`,
+      ];
+      for (const candidateUrl of candidates) {
+        try {
+          const candidateBypass = await fetchWithChallengeBypass(candidateUrl, solverOpts);
+          if (candidateBypass.ok && candidateBypass.html) {
+            const images = extractPanelImages(candidateBypass.html, origin);
+            if (images.length > 0) return images;
+          }
+        } catch (_) {}
+      }
       console.warn(`[Live Source Extractor] Chapter ${chapterNumber} not found for ${domainId} — not substituting a wrong chapter.`);
     }
 
