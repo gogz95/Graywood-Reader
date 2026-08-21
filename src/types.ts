@@ -214,13 +214,14 @@ export interface MangaItem {
   chapters?: any[];
   /**
    * Names of metadata fields the user manually customized (e.g. 'title',
-   * 'description', 'coverImage', 'rating', 'genres', 'altTitles').
+   * 'description', 'coverImage', 'rating', 'genres', 'altTitles', 'isNsfw').
    * Live metadata refreshes preserve these values so manual edits don't
    * get overwritten. Chapter counters (latestChapter) are always refreshed.
    */
   metadataOverrides?: string[];
   customTags?: string[];
   categories?: string[];
+  isNsfw?: boolean;
 }
 
 export interface UserCategory {
@@ -366,8 +367,10 @@ export function isNsfwManga(manga?: {
   altTitles?: string[];
   notes?: string;
   description?: string;
+  isNsfw?: boolean;
 }): boolean {
   if (!manga) return false;
+  if (manga.isNsfw === true) return true;
   const genres = Array.isArray(manga.genres) ? manga.genres : [];
   for (const g of genres) {
     const glc = g.toLowerCase().trim();

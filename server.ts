@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
 import { SqliteDb } from "./sqlite-db";
-import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
+import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink, isNsfwManga } from "./src/types";
 import {
   resolveEncryptionSecret,
   ENCRYPTION_SECRET,
@@ -791,6 +791,7 @@ const MANGA_CREATE_FIELDS = {
   syncedFromApi: (v: any) => v || null,
   apiId: (v: any) => v || null,
   isFavorite: (v: any) => Boolean(v),
+  isNsfw: (v: any, all: any) => v !== undefined ? Boolean(v) : isNsfwManga(all),
 };
 
 app.post("/api/manga", (req, res) => {
@@ -819,6 +820,8 @@ app.post("/api/manga", (req, res) => {
     syncedFromApi: MANGA_CREATE_FIELDS.syncedFromApi(body.syncedFromApi),
     apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
     isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
+    isNsfw: MANGA_CREATE_FIELDS.isNsfw(body.isNsfw, body),
+    metadataOverrides: Array.isArray(body.metadataOverrides) ? body.metadataOverrides : [],
     // userId is intentionally NEVER taken from the client body; it is derived
     // only from the authenticated user (or null for host/anonymous creates).
     userId: (req as any).user ? (req as any).user.id : null,
@@ -1409,6 +1412,7 @@ app.post("/api/manga/:id/custom-metadata-update", (req, res) => {
     rating,
     genres,
     altTitles,
+    isNsfw,
     metadataOverrides,
   } = req.body || {};
 
@@ -1418,6 +1422,7 @@ app.post("/api/manga/:id/custom-metadata-update", (req, res) => {
   if (typeof description === 'string') updated.description = description.trim();
   if (typeof coverImage === 'string' && coverImage.trim()) updated.coverImage = coverImage.trim();
   if (typeof rating === 'number' && !isNaN(rating)) updated.rating = rating;
+  if (typeof isNsfw === 'boolean') updated.isNsfw = isNsfw;
   if (Array.isArray(genres)) updated.genres = Array.from(new Set(genres.map(String).filter(Boolean)));
   if (Array.isArray(altTitles)) updated.altTitles = Array.from(new Set(altTitles.map(String).filter(Boolean)));
   if (Array.isArray(metadataOverrides)) {
@@ -1950,6 +1955,8 @@ app.put("/api/manga/:id", (req, res) => {
     isFavorite: body.isFavorite !== undefined ? Boolean(body.isFavorite) : existing.isFavorite,
     isFlagged: body.isFlagged !== undefined ? Boolean(body.isFlagged) : existing.isFlagged,
     flagReason: body.flagReason !== undefined ? String(body.flagReason) : existing.flagReason,
+    isNsfw: body.isNsfw !== undefined ? Boolean(body.isNsfw) : (body.genres ? isNsfwManga(body) : existing.isNsfw),
+    metadataOverrides: body.metadataOverrides !== undefined ? (Array.isArray(body.metadataOverrides) ? body.metadataOverrides : existing.metadataOverrides) : existing.metadataOverrides,
     categories: existing.categories,
     lastUpdated: new Date().toISOString(),
   };

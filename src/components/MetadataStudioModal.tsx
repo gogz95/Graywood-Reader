@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem } from '../types';
+import { MangaItem, isNsfwManga } from '../types';
 import {
   X,
   Image as ImageIcon,
@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   ZoomIn,
   Search,
+  Flame,
 } from 'lucide-react';
 
 interface SourceOption {
@@ -66,6 +67,9 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
   const [currentRating, setCurrentRating] = useState(manga.rating || 8.0);
   const [currentGenres, setCurrentGenres] = useState<string[]>(manga.genres || []);
   const [currentAltTitles, setCurrentAltTitles] = useState<string[]>(manga.altTitles || []);
+  const [currentIsNsfw, setCurrentIsNsfw] = useState<boolean>(
+    manga.isNsfw !== undefined ? Boolean(manga.isNsfw) : isNsfwManga(manga)
+  );
   const [locks, setLocks] = useState<Set<string>>(new Set(manga.metadataOverrides || []));
   const [coverSearchQuery, setCoverSearchQuery] = useState(manga.title || '');
   const [coverCategory, setCoverCategory] = useState<string>('all');
@@ -97,6 +101,7 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
       setCurrentRating(manga.rating || 8.0);
       setCurrentGenres(manga.genres || []);
       setCurrentAltTitles(manga.altTitles || []);
+      setCurrentIsNsfw(manga.isNsfw !== undefined ? Boolean(manga.isNsfw) : isNsfwManga(manga));
       setLocks(new Set(manga.metadataOverrides || []));
       fetchOptions();
     }
@@ -207,6 +212,7 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
           rating: Number(currentRating),
           genres: currentGenres,
           altTitles: currentAltTitles,
+          isNsfw: currentIsNsfw,
           metadataOverrides: Array.from(locks),
         }),
       });
@@ -779,6 +785,75 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
                         {g}
                       </span>
                     ))}
+                  </div>
+                </div>
+
+                {/* Age Rating & 18+ NSFW Content */}
+                <div className={`p-4 rounded-xl border transition-all space-y-3 ${
+                  currentIsNsfw
+                    ? 'bg-rose-500/10 border-rose-500/30'
+                    : 'bg-app border-edge'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-primary flex items-center gap-2">
+                      <Flame className={`w-4 h-4 ${currentIsNsfw ? 'text-rose-400' : 'text-secondary'}`} />
+                      <span>Age Rating & 18+ Content (NSFW)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => toggleLock('isNsfw')}
+                      className={`p-1 rounded ${locks.has('isNsfw') ? 'text-accent' : 'text-secondary'}`}
+                    >
+                      {locks.has('isNsfw') ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 bg-surface p-3 rounded-xl border border-edge">
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-xs text-primary flex items-center gap-1.5">
+                        <span>{currentIsNsfw ? 'Marked as 18+ / Adult Explicit' : 'Safe / All Ages'}</span>
+                        {currentIsNsfw && (
+                          <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[9px] font-extrabold uppercase">
+                            18+
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted">
+                        {currentIsNsfw
+                          ? 'This series will be hidden when the library filter is set to Safe.'
+                          : 'Standard safe content. Toggle ON to mark as 18+ and synchronize with metadata.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextNsfw = !currentIsNsfw;
+                        setCurrentIsNsfw(nextNsfw);
+                        const nextLocks = new Set(locks);
+                        nextLocks.add('isNsfw');
+                        setLocks(nextLocks);
+                        if (nextNsfw) {
+                          if (!currentGenres.some((g) => g.toLowerCase() === '18+' || g.toLowerCase() === 'adult')) {
+                            setCurrentGenres([...currentGenres, '18+']);
+                          }
+                        } else {
+                          setCurrentGenres(currentGenres.filter((g) => {
+                            const glc = g.toLowerCase();
+                            return glc !== '18+' && glc !== 'adult' && glc !== 'smut' && glc !== 'hentai' && glc !== 'erotica' && glc !== 'nsfw' && glc !== 'r18';
+                          }));
+                        }
+                      }}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        currentIsNsfw ? 'bg-rose-500' : 'bg-edge-strong'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          currentIsNsfw ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
               </div>

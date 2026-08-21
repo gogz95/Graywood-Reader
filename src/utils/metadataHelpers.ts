@@ -30,6 +30,7 @@ export const ATOMIC_METADATA_FIELDS = [
   'description',
   'coverImage',
   'rating',
+  'isNsfw',
 ] as const;
 
 export type AtomicMetadataField = (typeof ATOMIC_METADATA_FIELDS)[number];

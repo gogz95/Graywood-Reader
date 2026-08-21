@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, MangaType, ReadingStatus } from '../types';
+import { MangaItem, MangaType, ReadingStatus, isNsfwManga } from '../types';
 import {
   X,
   Sparkles,
@@ -12,6 +12,8 @@ import {
   Image as ImageIcon,
   Palette,
   Eye,
+  Flame,
+  ShieldAlert,
 } from 'lucide-react';
 import { CoverArtPickerModal } from './CoverArtPickerModal';
 
@@ -22,7 +24,7 @@ interface AddEditModalProps {
 }
 
 // Descriptive metadata fields that could be overwritten by a later metadata refresh.
-const OVERRIDEABLE_METADATA = ['title', 'description', 'coverImage', 'genres', 'altTitles', 'rating'] as const;
+const OVERRIDEABLE_METADATA = ['title', 'description', 'coverImage', 'genres', 'altTitles', 'rating', 'isNsfw'] as const;
 
 // Return the set of metadata fields that differ from the previous saved values.
 // These get recorded in `metadataOverrides` so refreshes preserve manual edits.
@@ -35,6 +37,7 @@ function computeMetadataOverrides(
     coverImage: string;
     genres: string[];
     rating: number;
+    isNsfw: boolean;
   }
 ): string[] {
   if (!prev) return [];
@@ -46,6 +49,10 @@ function computeMetadataOverrides(
   if (prev.coverImage !== next.coverImage) overridden.add('coverImage');
   if (prev.genres.join('|') !== next.genres.join('|')) overridden.add('genres');
   if (Number(prev.rating) !== Number(next.rating)) overridden.add('rating');
+  if (Boolean(prev.isNsfw !== undefined ? prev.isNsfw : isNsfwManga(prev)) !== Boolean(next.isNsfw)) {
+    overridden.add('isNsfw');
+    overridden.add('genres');
+  }
 
   return OVERRIDEABLE_METADATA.filter((field) => overridden.has(field));
 }
@@ -65,6 +72,9 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
   const [currentChapter, setCurrentChapter] = useState(initialManga?.currentChapter || 0);
   const [latestChapter, setLatestChapter] = useState(initialManga?.latestChapter || 1);
   const [rating, setRating] = useState(initialManga?.rating || 9.0);
+  const [isNsfw, setIsNsfw] = useState<boolean>(
+    initialManga?.isNsfw !== undefined ? Boolean(initialManga.isNsfw) : Boolean(initialManga && isNsfwManga(initialManga))
+  );
   const [sourceUrl, setSourceUrl] = useState(initialManga?.sourceUrl || '');
   const [sourceName, setSourceName] = useState(initialManga?.sourceName || 'MangaDex');
   const [notes, setNotes] = useState(initialManga?.notes || '');
@@ -92,6 +102,11 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
         if (Array.isArray(data.genres)) setGenresStr(data.genres.join(', '));
         if (data.latestChapter) setLatestChapter(data.latestChapter);
         if (data.rating) setRating(data.rating);
+        if (typeof data.isNsfw === 'boolean') {
+          setIsNsfw(data.isNsfw);
+        } else if (Array.isArray(data.genres) && data.genres.some((g: string) => typeof g === 'string' && (g.toLowerCase().includes('18+') || g.toLowerCase().includes('adult') || g.toLowerCase().includes('hentai')))) {
+          setIsNsfw(true);
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.error || `AI enrichment failed (HTTP ${res.status}).`);
@@ -103,20 +118,49 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
     }
   };
 
+  const handleToggleNsfw = () => {
+    const nextNsfw = !isNsfw;
+    setIsNsfw(nextNsfw);
+    const parts = genresStr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (nextNsfw) {
+      if (!parts.some((g) => g.toLowerCase() === '18+' || g.toLowerCase() === 'adult' || g.toLowerCase() === 'mature')) {
+        setGenresStr([...parts, '18+'].join(', '));
+      }
+    } else {
+      const filtered = parts.filter((g) => {
+        const glc = g.toLowerCase();
+        return glc !== '18+' && glc !== 'adult' && glc !== 'smut' && glc !== 'hentai' && glc !== 'erotica' && glc !== 'nsfw' && glc !== 'r18';
+      });
+      setGenresStr(filtered.length ? filtered.join(', ') : 'Action');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     const altTitles = altTitlesStr.split(',').map((s) => s.trim()).filter(Boolean);
-    const genres = genresStr.split(',').map((s) => s.trim()).filter(Boolean);
+    let genres = genresStr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (genres.length === 0) genres = ['Action'];
+
+    if (isNsfw && !genres.some((g) => g.toLowerCase() === '18+' || g.toLowerCase() === 'adult' || g.toLowerCase() === 'mature')) {
+      genres = [...genres, '18+'];
+    } else if (!isNsfw) {
+      genres = genres.filter((g) => {
+        const glc = g.toLowerCase();
+        return glc !== '18+' && glc !== 'adult' && glc !== 'smut' && glc !== 'hentai' && glc !== 'erotica' && glc !== 'nsfw' && glc !== 'r18';
+      });
+      if (genres.length === 0) genres = ['Action'];
+    }
 
     const nextMetadata = {
       title: title.trim(),
       altTitles,
       description: description.trim(),
       coverImage: coverImage.trim(),
-      genres: genres.length ? genres : ['Action'],
+      genres,
       rating: Number(rating) || 8.0,
+      isNsfw,
     };
 
     onSave({
@@ -130,6 +174,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
       coverImage: nextMetadata.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
       description: nextMetadata.description,
       genres: nextMetadata.genres,
+      isNsfw,
       status,
       currentChapter: Number(currentChapter) || 0,
       latestChapter: Number(latestChapter) || Number(currentChapter) || 1,
@@ -340,6 +385,57 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
                 className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
               />
             </div>
+          </div>
+
+          {/* 18+ Adult Content (NSFW) Marking */}
+          <div className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+            isNsfw
+              ? 'bg-rose-500/10 border-rose-500/30'
+              : 'bg-app border-edge hover:border-edge-strong'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-xs transition-colors shrink-0 ${
+                isNsfw
+                  ? 'bg-rose-500/25 text-rose-400 border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                  : 'bg-surface text-muted border border-edge'
+              }`}>
+                {isNsfw ? <Flame className="w-4 h-4 text-rose-400" /> : '18+'}
+              </div>
+              <div className="space-y-0.5">
+                <div className="font-bold text-primary flex items-center gap-2">
+                  <span>18+ Adult Content / NSFW</span>
+                  {isNsfw ? (
+                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold tracking-wide uppercase">
+                      Marked 18+
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-surface text-muted border border-edge text-[10px] font-medium">
+                      Safe / General
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-secondary">
+                  {isNsfw
+                    ? 'Synchronized with metadata database. Filtered when library is in Safe mode.'
+                    : 'Toggle to mark this series as 18+ / NSFW and synchronize with metadata database.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleToggleNsfw}
+              aria-label="Toggle 18+ NSFW Content"
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500/40 ${
+                isNsfw ? 'bg-rose-500' : 'bg-edge-strong'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  isNsfw ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
 
           {/* Description */}

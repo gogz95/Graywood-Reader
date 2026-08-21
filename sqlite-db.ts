@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote, UserCategory } from './src/types';
+import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote, UserCategory, isNsfwManga } from './src/types';
 
 // Ensure data directory exists (cwd-relative so bundled/Docker entrypoints share ./data)
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -75,8 +75,10 @@ try { db.exec('ALTER TABLE manga ADD COLUMN flaggedAt TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN metadataOverrides TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN categories TEXT'); } catch (e) { }
+try { db.exec('ALTER TABLE manga ADD COLUMN isNsfw INTEGER DEFAULT 0'); } catch (e) { }
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_isNsfw ON manga(isNsfw)'); } catch (e) { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS categories (
@@ -242,12 +244,12 @@ const stmtUpsertManga = db.prepare(`
     id, title, altTitles, type, coverImage, description, genres, status,
     currentChapter, totalChapters, latestChapter, lastUpdated, rating,
     sourceUrl, sourceName, availableSources, autoUpdateEnabled, notes, addedAt, lastReadAt,
-    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides, customTags, categories
+    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides, customTags, categories, isNsfw
   ) VALUES (
     @id, @title, @altTitles, @type, @coverImage, @description, @genres, @status,
     @currentChapter, @totalChapters, @latestChapter, @lastUpdated, @rating,
     @sourceUrl, @sourceName, @availableSources, @autoUpdateEnabled, @notes, @addedAt, @lastReadAt,
-    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides, @customTags, @categories
+    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides, @customTags, @categories, @isNsfw
   ) ON CONFLICT(id) DO UPDATE SET
     title=excluded.title,
     altTitles=excluded.altTitles,
@@ -274,7 +276,8 @@ const stmtUpsertManga = db.prepare(`
     flagReason=excluded.flagReason,
     flaggedAt=excluded.flaggedAt,
     metadataOverrides=excluded.metadataOverrides,
-    customTags=excluded.customTags
+    customTags=excluded.customTags,
+    isNsfw=excluded.isNsfw
 `);
 
 const stmtUpdateProgress = db.prepare(`
@@ -438,6 +441,7 @@ function mapRowToMangaItem(row: any): MangaItem {
     metadataOverrides: row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [],
     customTags: row.customTags ? JSON.parse(row.customTags) : [],
     categories: row.categories ? JSON.parse(row.categories) : [],
+    isNsfw: row.isNsfw !== undefined && row.isNsfw !== null ? Boolean(row.isNsfw) : isNsfwManga(row),
     currentChapter: Number(row.currentChapter) || 0,
     latestChapter: Number(row.latestChapter) || 1,
     totalChapters: row.totalChapters ? Number(row.totalChapters) : null,
@@ -486,6 +490,7 @@ function mapMangaItemToRow(item: MangaItem) {
     metadataOverrides: JSON.stringify(item.metadataOverrides || []),
     customTags: JSON.stringify(item.customTags || []),
     categories: '[]',
+    isNsfw: item.isNsfw !== undefined ? (item.isNsfw ? 1 : 0) : (isNsfwManga(item) ? 1 : 0),
   };
 }
 

@@ -356,6 +356,7 @@ describe('User-Defined Categories & Custom Shelves', () => {
     const { isNsfwManga } = await import('../src/types');
 
     expect(isNsfwManga({ genres: ['Action', 'Fantasy'] })).toBe(false);
+    expect(isNsfwManga({ isNsfw: true, genres: ['Action'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Action', '18+', 'Drama'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Smut', 'Romance'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Adult', 'Psychological'] })).toBe(true);
@@ -363,5 +364,76 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(isNsfwManga({ genres: ['Hentai'] })).toBe(true);
     expect(isNsfwManga({ title: 'Secret Class [18+]' })).toBe(true);
     expect(isNsfwManga({ title: 'Regular Title', notes: 'Imported uncensored [nsfw]' })).toBe(true);
+  });
+
+  it('persists isNsfw flag and protects it via metadataOverrides across DB and refresh cycles', async () => {
+    const { SqliteDb } = await import('../sqlite-db');
+    const { snapshotMetadataOverrides, restoreMetadataOverrides } = await import('../src/utils/metadataHelpers');
+    const { isNsfwManga } = await import('../src/types');
+
+    const testMangaId = `m_nsfw_test_${Date.now()}`;
+    const initialItem = {
+      id: testMangaId,
+      title: 'Action Fantasy Non-Explicit',
+      altTitles: ['AFNE'],
+      type: 'manhwa' as const,
+      coverImage: 'https://example.com/cover.jpg',
+      description: 'A clean action manhwa.',
+      genres: ['Action', 'Fantasy'],
+      status: 'reading' as const,
+      currentChapter: 10,
+      totalChapters: 50,
+      latestChapter: 50,
+      lastUpdated: new Date().toISOString(),
+      rating: 9.0,
+      sourceUrl: 'https://asurascans.com/manga/afne',
+      sourceName: 'Asura Scans',
+      autoUpdateEnabled: true,
+      notes: '',
+      addedAt: new Date().toISOString(),
+      lastReadAt: new Date().toISOString(),
+      isNsfw: false,
+      metadataOverrides: [],
+    };
+
+    SqliteDb.upsertManga(initialItem);
+    const saved = SqliteDb.getMangaById(testMangaId);
+    expect(saved).toBeDefined();
+    expect(saved?.isNsfw).toBe(false);
+    expect(isNsfwManga(saved!)).toBe(false);
+
+    // User edits series to mark as 18+ and locks isNsfw in metadataOverrides
+    const userEdited = {
+      ...saved!,
+      isNsfw: true,
+      genres: ['Action', 'Fantasy', '18+'],
+      metadataOverrides: ['isNsfw', 'genres'],
+    };
+    SqliteDb.upsertManga(userEdited);
+
+    const reloaded = SqliteDb.getMangaById(testMangaId);
+    expect(reloaded).toBeDefined();
+    expect(reloaded?.isNsfw).toBe(true);
+    expect(isNsfwManga(reloaded!)).toBe(true);
+    expect(reloaded?.metadataOverrides).toContain('isNsfw');
+
+    // Simulate remote metadata refresh: snapshot user overrides, apply remote update without 18+, restore overrides
+    const snap = snapshotMetadataOverrides(reloaded!);
+    expect(snap.isNsfw).toBe(true);
+    expect(snap.genres).toContain('18+');
+
+    // Remote source tries to overwrite with clean metadata
+    const remoteData = {
+      ...reloaded!,
+      isNsfw: false,
+      genres: ['Action', 'Fantasy', 'Adventure'],
+    };
+    restoreMetadataOverrides(remoteData, snap);
+
+    expect(remoteData.isNsfw).toBe(true);
+    expect(remoteData.genres).toContain('18+');
+
+    // Clean up
+    SqliteDb.deleteManga(testMangaId);
   });
 });
