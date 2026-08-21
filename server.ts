@@ -2474,7 +2474,20 @@ app.post("/api/sources/toggle", handleToggleSource);
 
 // Full source inventory for the management UI (active + disabled + removed).
 const handleGetAllSources = (_req: express.Request, res: express.Response) => {
-  res.json(buildFullSourceInventory(syncConfig));
+  const inventory = buildFullSourceInventory(syncConfig);
+  // Phase 4: Enrich with live health badges from sourceHealthMap
+  const enriched = inventory.map((item) => {
+    const h = sourceHealthMap.get(item.id);
+    return {
+      ...item,
+      healthStatus: h ? h.lastStatus : 'unknown',
+      circuitState: h ? (h.circuitState || 'CLOSED') : 'CLOSED',
+      consecutiveFailures: h ? (h.consecutiveFailures || 0) : 0,
+      lastHealthCheck: h ? h.lastChecked : null,
+      failureReason: h ? (h.failureReason || null) : null,
+    };
+  });
+  res.json(enriched);
 };
 
 app.get("/api/kotatsu/sources/all", handleGetAllSources);
@@ -3486,13 +3499,15 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
   const scrapedItems: any[] = [];
 
   // 3. Generic live catalog scraper (Kotatsu parser URL conventions by engine type)
-  //    Now uses fetchWithChallengeBypass for Cloudflare resilience + cheerio DOM parsing
-  //    instead of regex, with exponential backoff retry (max 3 attempts).
+  //    Uses fetchWithChallengeBypass for Cloudflare resilience + cheerio DOM parsing
+  //    with DOM-proximity cover matching (RC-3 fix: cover extracted from same container
+  //    as the title, not by positional index across the whole page).
   try {
     let catalogUrl: string;
     if (sourceDef.engineType === 'madara') {
       catalogUrl = page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`;
     } else if (sourceDef.engineType === 'mangathemesia') {
+      // MangaThemesia catalog is at /manga/?page=N&order=popular (NOT /manga/page/N)
       catalogUrl = `${sourceDef.baseUrl}/manga/?page=${page}&order=popular`;
     } else if (sourceDef.engineType === 'wpcomics') {
       catalogUrl = page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/page/${page}`;
@@ -3545,26 +3560,29 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
     }
     if (html) {
       const $ = cheerio.load(html);
-      const allImgs: string[] = [];
-      $('img').each((_i, el) => {
-        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
-        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/logo|avatar|banner|icon|placeholder/i.test(src) && !isAdImageSrc(src, origin)) {
-          allImgs.push(src.startsWith('http') ? src : `${sourceDef.baseUrl.replace(/\/$/, '')}${src}`);
-        }
-      });
-
+      const baseOrigin = sourceDef.baseUrl.replace(/\/$/, '');
       const seenTitles = new Set<string>();
-      const pushItem = (href: string, title: string) => {
+
+      /** Resolve a cover src (src / data-src / data-lazy-src) — stays relative if needed. */
+      const extractCover = (el: any): string => {
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+        if (!src || !/\.(jpg|jpeg|png|webp)/i.test(src) || /logo|avatar|banner|icon|placeholder/i.test(src)) return '';
+        if (isAdImageSrc(src, baseOrigin)) return '';
+        return src.startsWith('http') ? src : `${baseOrigin}${src}`;
+      };
+
+      /** Push one catalog item if the href and title pass basic sanity checks. */
+      const pushItem = (href: string, title: string, cover: string) => {
         const normTitle = title.toLowerCase();
         if (!href || title.length < 2 || seenTitles.has(normTitle)) return;
-        if (/nav|menu|home|login|register|sign|account|cookie|privacy|about|dmca|contact/i.test(title)) return;
+        if (/^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(title)) return;
         if (!/\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)) return;
         seenTitles.add(normTitle);
         scrapedItems.push({
           id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
           title,
-          sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl.replace(/\/$/, '')}${href}`,
-          coverImage: allImgs[scrapedItems.length] || '',
+          sourceUrl: href.startsWith('http') ? href : `${baseOrigin}${href}`,
+          coverImage: cover,
           sourceName: sourceDef.name,
           description: `Live directory entry from ${sourceDef.name}`,
           genres: ['Action', 'Fantasy'],
@@ -3573,23 +3591,59 @@ async function getSourcePopularSeries(sourceDef: SourceDefinition, page: number 
         });
       };
 
-      // ── Structured selectors for Madara & MangaThemesia themes ──
-      const madaraSels = ['.manga-title-badges', '.page-item-detail .h5 a', 'h3.h5 a', 'h3 a',
-        '.post-title a', '.entry-title a', '.listupd .bsx .tt a', '.utao .uta .luf a',
-        '.series-title a', '.manga-title a'];
-      let found = false;
-      for (const sel of madaraSels) {
-        const links = $(sel).toArray();
-        if (links.length > 0) {
-          found = true;
-          links.forEach(el => { const a = $(el); pushItem(a.attr('href') || '', a.text().trim()); });
-          break;
+      // ── MangaThemesia: .listupd .bsx grid — cover IS inside .bsx ─────────
+      // Each .bsx contains both the cover img and the title link, so we can
+      // pair them correctly without positional indexing.
+      if (sourceDef.engineType === 'mangathemesia') {
+        let found = false;
+        $('.listupd .bsx, .listupd .bs').each((_i, el) => {
+          const a = $(el).find('a').first();
+          const href = a.attr('href') || '';
+          const title = ($(el).find('.tt, .bigor .tt, h3, .series-title').text() || a.attr('title') || '').trim();
+          const cover = extractCover($(el).find('img').first());
+          if (href && title) { pushItem(href, title, cover); found = true; }
+        });
+        // Fallback: older MangaThemesia layout uses .utao .uta
+        if (!found) {
+          $('.utao .uta').each((_i, el) => {
+            const a = $(el).find('.luf a, a').first();
+            const href = a.attr('href') || '';
+            const title = ($(el).find('.luf h4, h4, .tt').text() || a.text()).trim();
+            const cover = extractCover($(el).find('img').first());
+            if (href && title) pushItem(href, title, cover);
+          });
         }
       }
-      // ── Fallback: generic <a> extraction ──
-      if (!found) {
-        $('a').each((_i, el) => {
-          const a = $(el); pushItem(a.attr('href') || '', a.text().trim());
+      // ── Madara: .page-item-detail cards — cover IS inside the card ────────
+      else if (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics') {
+        let found = false;
+        $('.page-item-detail, .c-tabs-item__content').each((_i, el) => {
+          const a = $(el).find('.post-title a, h3 a, h4 a').first();
+          const href = a.attr('href') || '';
+          const title = a.text().trim();
+          const cover = extractCover($(el).find('img').first());
+          if (href && title) { pushItem(href, title, cover); found = true; }
+        });
+        if (!found) {
+          // Some Madara installs use a simpler grid without .page-item-detail
+          $('h3.h5 a, .post-title a, .entry-title a').each((_i, el) => {
+            const a = $(el);
+            const href = a.attr('href') || '';
+            const title = a.text().trim();
+            const cover = extractCover($(el).closest('article, .item, li').find('img').first());
+            if (href && title) pushItem(href, title, cover);
+          });
+        }
+      }
+      // ── Generic fallback for custom_html, foolslide, wpcomics ────────────
+      else {
+        $('a[href]').each((_i, el) => {
+          if (scrapedItems.length >= limit * 2) return false;
+          const a = $(el);
+          const href = a.attr('href') || '';
+          const title = a.text().trim();
+          const cover = extractCover(a.find('img').first().length ? a.find('img').first() : $(el).closest('li, article, div.item').find('img').first());
+          if (href && title) pushItem(href, title, cover);
         });
       }
     }
@@ -3770,15 +3824,18 @@ export async function probeSourceSeriesCount(sourceDef: SourceDefinition): Promi
 }
 
 // Audit every source (optionally a subset) and disable those that serve zero series.
+// RC-5 FIX: Now bidirectional — sources that recover are auto-revived without restart.
 export async function auditAndDisableEmptySources(
   concurrency = 8,
   sourceList: SourceDefinition[] = KOTATSU_SOURCES
-): Promise<{ disabled: string[]; keptCount: number; total: number; alreadyRunning: boolean }> {
-  if (sourceAuditRunning) return { disabled: [], keptCount: 0, total: sourceList.length, alreadyRunning: true };
+): Promise<{ disabled: string[]; revived: string[]; keptCount: number; total: number; alreadyRunning: boolean }> {
+  if (sourceAuditRunning) return { disabled: [], revived: [], keptCount: 0, total: sourceList.length, alreadyRunning: true };
   sourceAuditRunning = true;
 
-  const pending = sourceList.filter((s) => !disabledSourceIds.has(s.id));
+  // Audit ALL sources, including currently-disabled ones (so we can revive them)
+  const pending = [...sourceList];
   const disabled: string[] = [];
+  const revived: string[] = [];
   let checkedCount = 0;
 
   const worker = async () => {
@@ -3787,9 +3844,31 @@ export async function auditAndDisableEmptySources(
       const count = await probeSourceSeriesCount(src);
       checkedCount++;
       sourceAuditStatus.set(src.id, { seriesCount: count, checkedAt: new Date().toISOString() });
+
       if (count === 0) {
-        disabledSourceIds.add(src.id);
-        disabled.push(src.id);
+        // Source returned nothing — disable it
+        if (!disabledSourceIds.has(src.id)) {
+          disabledSourceIds.add(src.id);
+          disabled.push(src.id);
+          console.log(`[Source Audit] Disabled "${src.id}" — returned 0 series.`);
+        }
+      } else {
+        // Source is returning content — revive it if it was previously disabled
+        if (disabledSourceIds.has(src.id)) {
+          disabledSourceIds.delete(src.id);
+          revived.push(src.id);
+          // Add to reactivatedSources so isSourceAlive() returns true immediately
+          if (!Array.isArray(syncConfig.reactivatedSources)) syncConfig.reactivatedSources = [];
+          if (!syncConfig.reactivatedSources.includes(src.id)) {
+            syncConfig.reactivatedSources.push(src.id);
+          }
+          // Remove from the persistent removedSources list if it was there
+          if (Array.isArray(syncConfig.removedSources)) {
+            syncConfig.removedSources = syncConfig.removedSources.filter((r: string) => r !== src!.id);
+          }
+          sourceCircuitBreaker.reset(src.id);
+          console.log(`[Source Audit] Revived "${src.id}" — now returning ${count} series.`);
+        }
       }
     }
   };
@@ -3800,8 +3879,8 @@ export async function auditAndDisableEmptySources(
   syncConfig.disabledSources = Array.from(disabledSourceIds);
   saveDatabaseToDisk();
   sourceAuditRunning = false;
-  console.log(`[Source Audit] Checked ${checkedCount} sources — disabled ${disabled.length} with zero series.`);
-  return { disabled, keptCount: checkedCount - disabled.length, total: checkedCount, alreadyRunning: false };
+  console.log(`[Source Audit] Checked ${checkedCount} sources — disabled ${disabled.length}, revived ${revived.length}.`);
+  return { disabled, revived, keptCount: checkedCount - disabled.length, total: checkedCount, alreadyRunning: false };
 }
 
 // POST /api/scrape/audit-sources — run the audit and disable empty sources
@@ -3817,10 +3896,58 @@ app.post("/api/scrape/audit-sources", async (_req, res) => {
 
 // GET /api/scrape/audit-status — streaming progress of the audit + last results
 app.get("/api/scrape/audit-status", (_req, res) => {
+  const healthSummary: Record<string, number> = {};
+  for (const [, h] of sourceHealthMap) {
+    healthSummary[h.lastStatus] = (healthSummary[h.lastStatus] || 0) + 1;
+  }
   res.json({
     running: sourceAuditRunning,
     disabledCount: disabledSourceIds.size,
+    activeCount: KOTATSU_SOURCES.filter(s => !disabledSourceIds.has(s.id) && s.id !== 'mangadex').length,
+    totalSources: KOTATSU_SOURCES.length,
+    healthSummary,
     status: Array.from(sourceAuditStatus.entries()).map(([id, s]) => ({ id, ...s })),
+  });
+});
+
+// GET /api/scrape/source-health — return results from last catalog-liveness.mjs run
+app.get("/api/scrape/source-health", (_req, res) => {
+  const healthPath = path.join(process.cwd(), 'data', 'source-health.json');
+  try {
+    if (!fs.existsSync(healthPath)) {
+      return res.json({ error: 'No liveness scan results found. Run POST /api/scrape/run-liveness first.', scannedAt: null, sources: [] });
+    }
+    const data = JSON.parse(fs.readFileSync(healthPath, 'utf-8'));
+    return res.json(data);
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Failed to read source-health.json', details: e.message });
+  }
+});
+
+// POST /api/scrape/run-liveness — spawn the catalog-liveness.mjs scanner in background
+app.post("/api/scrape/run-liveness", (req, res) => {
+  const { sample, concurrency, patch } = req.body || {};
+  const scriptPath = path.join(process.cwd(), 'scripts', 'catalog-liveness.mjs');
+  if (!fs.existsSync(scriptPath)) {
+    return res.status(404).json({ error: 'catalog-liveness.mjs not found in scripts/' });
+  }
+  const args: string[] = [];
+  if (sample) args.push('--sample', String(Number(sample) || 50));
+  if (concurrency) args.push('--concurrency', String(Number(concurrency) || 20));
+  if (patch) args.push('--patch');
+
+  const { spawn } = require('child_process') as typeof import('child_process');
+  const child = spawn(process.execPath, [scriptPath, ...args], {
+    detached: true,
+    stdio: 'ignore',
+    cwd: process.cwd(),
+  });
+  child.unref();
+  return res.json({
+    status: 'started',
+    pid: child.pid,
+    message: `Liveness scan started in background (pid ${child.pid}). Results will be written to data/source-health.json. Poll GET /api/scrape/source-health for results.`,
+    args,
   });
 });
 
@@ -3853,58 +3980,126 @@ app.get("/api/kotatsu/search", async (req, res) => {
       return res.json(enriched);
     }
 
-    // ── 3. Live HTML scraping for Madara/MangaThemesia/FoolSlide/WPComics ──
+    // ── 3. Live HTML scraping via fetchWithChallengeBypass (RC-6 fix: parity
+    //    with the chapter-read path so CF-protected sites work in search too)
+    //    Uses cheerio DOM-proximity parsing (RC-3 fix: pairs cover+title from
+    //    the SAME DOM container, eliminating the positional-index mismatch bug).
     let searchUrl: string;
     if (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics') {
       searchUrl = `${sourceDef.baseUrl}/?s=${encodeURIComponent(query)}&post_type=wp-manga`;
     } else if (sourceDef.engineType === 'foolslide') {
       searchUrl = `${sourceDef.baseUrl}/search?search=${encodeURIComponent(query)}`;
     } else {
+      // mangathemesia and custom_html use the standard WordPress search parameter
       searchUrl = `${sourceDef.baseUrl}/?s=${encodeURIComponent(query)}`;
     }
 
-    const pageRes = await fetch(searchUrl, {
-      signal: AbortSignal.timeout(10000),
+    // Use the full challenge-bypass fetcher so CF-protected sources (manhuafast,
+    // etc.) resolve in search — previously only the chapter-read path used this.
+    const searchBypassRes = await fetchWithChallengeBypass(searchUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': SCRAPER_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 12000,
+      sourceId: sourceDef.id,
+      onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
     });
 
-    if (pageRes.ok) {
-      const htmlText = await pageRes.text();
+    if (searchBypassRes.ok && searchBypassRes.html) {
+      updateSourceHealth(sourceDef.id, searchBypassRes.html, searchBypassRes.status);
+      const htmlText = searchBypassRes.html;
       const results: any[] = [];
-      const allImgs: string[] = [];
-      const imgRx = /<img[^>]+src=["']([^"']+)["'][^>]*/gi;
-      let imgM;
-      while ((imgM = imgRx.exec(htmlText)) !== null) {
-        const src = imgM[1];
-        if (src && /\.(jpg|png|webp)/i.test(src) && !/logo|avatar|banner|icon/i.test(src)) {
-          allImgs.push(src.startsWith('http') ? src : `${sourceDef.baseUrl}${src}`);
-        }
+      const $ = cheerio.load(htmlText);
+      const origin = sourceDef.baseUrl.replace(/\/$/, '');
+
+      /** Resolve a relative URL against the source's origin. */
+      const resolveHref = (href: string): string =>
+        href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+
+      /** Resolve a cover src (src / data-src / data-lazy-src). */
+      const resolveCover = (el: any): string => {
+        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || '';
+        return src.startsWith('http') ? src : (src ? `${origin}${src}` : '');
+      };
+
+      const isContentPath = (href: string) =>
+        /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href);
+      const isNavText = (t: string) =>
+        /^(nav|menu|home|login|register|sign.?up|account|cookie|privacy|about|dmca|contact|tag|categor)/i.test(t);
+
+      // ── Priority 1: MangaThemesia — .listupd .bsx grid items ──────────────
+      // Cover and title live together inside .bsx, so there is no index mismatch.
+      if (sourceDef.engineType === 'mangathemesia') {
+        $('.listupd .bsx, .listupd .bs').each((_i, el) => {
+          const a = $(el).find('a').first();
+          const href = a.attr('href') || '';
+          const title = ($(el).find('.tt, .bigor .tt, h3').text() || a.attr('title') || '').trim();
+          const cover = resolveCover($(el).find('img').first());
+          if (href && title && isContentPath(href) && !isNavText(title)) {
+            results.push({
+              id: generateSourceScrapeId(`kotatsu_${sourceDef.id}`, href),
+              title,
+              sourceUrl: resolveHref(href),
+              coverImage: cover || '',
+              sourceName: sourceDef.name,
+              genres: ['Action'],
+            });
+          }
+        });
       }
-      const linkRx = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]{3,120})<\/a>/gi;
-      let lm;
-      while ((lm = linkRx.exec(htmlText)) !== null && results.length < 18) {
-        const href = lm[1];
-        const title = lm[2].trim();
-        if (
-          href && title &&
-          !/nav|menu|home|login|register|sign|account|cookie|privacy|about/i.test(title) &&
-          /\/(manga|series|title|manhwa|manhua|comic|webtoon)\//i.test(href)
-        ) {
+
+      // ── Priority 2: Madara — .page-item-detail blocks ─────────────────────
+      if (results.length === 0 && (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics')) {
+        $('.page-item-detail, .c-tabs-item__content').each((_i, el) => {
+          const a = $(el).find('.post-title a, h3 a, h4 a').first();
+          const href = a.attr('href') || '';
+          const title = a.text().trim();
+          // Cover is a sibling img in the same card; use find() to stay within the container
+          const cover = resolveCover($(el).find('img').first());
+          if (href && title && isContentPath(href) && !isNavText(title)) {
+            results.push({
+              id: generateSourceScrapeId(`kotatsu_${sourceDef.id}`, href),
+              title,
+              sourceUrl: resolveHref(href),
+              coverImage: cover || '',
+              sourceName: sourceDef.name,
+              genres: ['Action'],
+            });
+          }
+        });
+      }
+
+      // ── Priority 3: Generic link+nearest-img fallback ─────────────────────
+      if (results.length === 0) {
+        $('a[href]').each((_i, el) => {
+          if (results.length >= 18) return false;
+          const href = $(el).attr('href') || '';
+          const title = $(el).text().trim();
+          if (!href || !title || title.length < 2 || !isContentPath(href) || isNavText(title)) return;
+          // Use closest cover: check inside el, then look for the nearest preceding img sibling
+          const cover = resolveCover(
+            $(el).find('img').first().length ? $(el).find('img').first() : $(el).closest('li, div').find('img').first()
+          );
           results.push({
             id: generateSourceScrapeId(`kotatsu_${sourceDef.id}`, href),
             title,
-            sourceUrl: href.startsWith('http') ? href : `${sourceDef.baseUrl}${href}`,
-            coverImage: allImgs[results.length] ||
-              'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=400&auto=format&fit=crop&q=80',
+            sourceUrl: resolveHref(href),
+            coverImage: cover || '',
             sourceName: sourceDef.name,
             genres: ['Action'],
           });
-        }
+        });
       }
+
       if (results.length > 0) return res.json(await enrichWithMangaDexMetadata(results));
+    } else if (searchBypassRes.status >= 400) {
+      updateSourceHealth(sourceDef.id, null, searchBypassRes.status);
     }
 
     // ── 4. Fallback: query local database strictly for items belonging to this source ──
@@ -4072,6 +4267,36 @@ function updateSourceHealth(sourceId: string, html: string | null, statusCode: n
     sourceCircuitBreaker.recordSuccess(sourceId);
   }
   e.circuitState = sourceCircuitBreaker.getState(sourceId).state;
+
+  // RC-5 FIX: Debounced persistence so health state survives server restarts.
+  // Writes are batched (max once per 500ms) to avoid a SQLite write per request.
+  scheduleSourceHealthPersist();
+}
+
+let _sourceHealthPersistTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSourceHealthPersist() {
+  if (_sourceHealthPersistTimer) return; // already scheduled
+  _sourceHealthPersistTimer = setTimeout(() => {
+    _sourceHealthPersistTimer = null;
+    try {
+      const obj: Record<string, any> = {};
+      for (const [id, h] of sourceHealthMap) obj[id] = h;
+      SqliteDb.setSourceHealthMap(obj);
+    } catch { /* non-critical — health state is best-effort */ }
+  }, 500);
+}
+
+/** Load persisted health state from SQLite on startup (RC-5). */
+function loadSourceHealthMap() {
+  try {
+    const saved = SqliteDb.getSourceHealthMap();
+    for (const [id, h] of Object.entries(saved)) {
+      if (h && typeof h === 'object') sourceHealthMap.set(id, h as SourceHealth);
+    }
+    if (Object.keys(saved).length > 0) {
+      console.log(`[Source Health] Loaded persisted health state for ${Object.keys(saved).length} sources.`);
+    }
+  } catch { /* non-critical */ }
 }
 
 // Fix #5: Per-Source Cookie Jar for session persistence
@@ -4370,12 +4595,24 @@ function domainFromBaseUrl(baseUrl: string): string {
 }
 
 /** One-time sync: append auto-generated engine configs for every catalog source
- *  whose engineType is madara or mangathemesia and that isn't already curated. */
+ *  whose engineType is madara or mangathemesia and that isn't already curated.
+ *
+ *  KEY FIX (RC-2): MangaThemesia and Madara use COMPLETELY different DOM structures:
+ *   - Madara chapters:        ul.row-content-chapter > li.wp-manga-chapter
+ *   - MangaThemesia chapters: div.eplister > ul > li
+ *   - MangaThemesia catalog:  div.listupd > div.bsx  (NOT .page-item-detail)
+ *  Mixing these up means chapter lists / browse return NOTHING for 262 sources.
+ *
+ *  Sources with dedicated API scrapers (asurascans, flamecomics) are excluded
+ *  from generic registration — their routes are handled in getSourcePopularSeries. */
 function syncEngineRegistryFromCatalog(): void {
   const catalog = ALL_SOURCES_CATALOG;
+  // Sources that have their own scrapers — skip generic engine registration.
+  const SCRAPER_ONLY_IDS = new Set(['asurascans', 'flamecomics', 'mangadex']);
   let added = 0;
   for (const src of catalog) {
     if (curatedEngineIds.has(src.id)) continue;
+    if (SCRAPER_ONLY_IDS.has(src.id)) continue;
     const domain = domainFromBaseUrl(src.baseUrl);
     if (!domain) continue;
     if (src.engineType === 'madara') {
@@ -4385,11 +4622,16 @@ function syncEngineRegistryFromCatalog(): void {
       });
       added++;
     } else if (src.engineType === 'mangathemesia') {
+      // CORRECT MangaThemesia selectors (ported from Keiyoushi lib-multisrc/MangaThemesia):
+      //   Chapter list:  div.eplister > ul > li  (NOT ul.row-content-chapter)
+      //   Catalog grid:  div.listupd > div.bsx   (NOT .page-item-detail)
+      //   Reader pages:  div#readerarea img       (NOT div.reading-content)
       ENGINE_SOURCE_REGISTRY.push({
-        id: src.id, name: src.name, domain, engine: 'madara',
+        id: src.id, name: src.name, domain, engine: 'mangareader',
         lang: src.lang, isNsfw: src.isNsfw,
-        madaraSelectTestAsync: 'ul.row-content-chapter',
-        madaraSelectChapter: 'li',
+        madaraSelectTestAsync: 'div.eplister',
+        madaraSelectChapter: 'div.eplister ul li',
+        madaraSelectBodyPage: 'div#readerarea',
       });
       added++;
     }
@@ -5749,10 +5991,14 @@ async function startServer() {
   // 1. Fast load persistent database from SQLite
   loadDatabaseFromDisk();
 
+  // 1a. Restore persisted source health map (RC-5 fix: circuit states survive restarts)
+  loadSourceHealthMap();
+
   // 1b. Rewrite stale live-source URLs (asuracomic.net → asurascans.com, /manhwa/ → /manga/, …)
   try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
     console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
   }
+
 
   // 1c. Purge any residual Reaper Scans items from memory & SQLite
   purgeReaperScansFromAllStorage();

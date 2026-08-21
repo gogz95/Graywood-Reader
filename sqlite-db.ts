@@ -597,6 +597,27 @@ export const SqliteDb = {
     }
   },
 
+  // ── Source Health Map Persistence (RC-5 fix) ───────────────────────────────
+  // Persists the in-memory sourceHealthMap so circuit states and health stats
+  // survive server restarts. A missing/corrupt row simply returns an empty object.
+  getSourceHealthMap(): Record<string, any> {
+    try {
+      const raw = stmtGetSetting.get('source_health_map') as { value: string } | undefined;
+      if (!raw || !raw.value) return {};
+      return JSON.parse(raw.value) || {};
+    } catch {
+      return {};
+    }
+  },
+
+  setSourceHealthMap(map: Record<string, any>) {
+    try {
+      stmtSetSetting.run({ key: 'source_health_map', value: JSON.stringify(map) });
+    } catch (err) {
+      console.error('[SQLite Engine] Error persisting source health map:', err);
+    }
+  },
+
   // ── Profiles ───────────────────────────────────────────────────────────────
   getAllProfiles(): any[] {
     return stmtGetAllProfiles.all();

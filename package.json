@@ -23,7 +23,11 @@
         "lint": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
-        "reader:smoke": "node scripts/reader-smoke.mjs"
+        "reader:smoke": "node scripts/reader-smoke.mjs",
+        "reader:smoke:source": "node scripts/reader-smoke.mjs --source",
+        "liveness:scan": "node scripts/catalog-liveness.mjs",
+        "liveness:sample": "node scripts/catalog-liveness.mjs --sample 50",
+        "liveness:patch": "node scripts/catalog-liveness.mjs --sample 200 --patch"
     },
     "dependencies": {
         "@google/genai": "^2.4.0",

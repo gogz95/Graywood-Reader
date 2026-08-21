@@ -2,44 +2,48 @@ import fs from 'fs';
 import path from 'path';
 import { SourceDefinition, SourceEngineType, DatabaseSyncConfig, isMangaDexSourceLink } from '../../src/types';
 
-// Curated active fallback sources in case catalog.json is unavailable
+// Curated active fallback sources in case catalog.json is unavailable.
+// IMPORTANT — engine labels:
+//   asurascans  → 'custom_html' (uses api.asurascans.com — NOT the mangathemesia HTML theme)
+//   flamecomics  → 'custom_html' (uses _next/data buildId pipeline — NOT the mangathemesia HTML theme)
+//   batoto / comick / readm REMOVED (dead / 403 / timeout as of 2026-08 diagnostic)
 const DEFAULT_PRIMARY_SOURCES: SourceDefinition[] = [
-  { id: 'mangadex', name: 'MangaDex API v5', baseUrl: 'https://mangadex.org', engineType: 'mangadex', lang: 'en', isNsfw: false },
-  { id: 'asurascans', name: 'Asura Scans', baseUrl: 'https://asurascans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'flamecomics', name: 'Flame Comics', baseUrl: 'https://flamecomics.xyz', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'batoto', name: 'Bato.to', baseUrl: 'https://bato.to', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'comickfun', name: 'ComickFun', baseUrl: 'https://comick.fun', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'comick', name: 'ComicK', baseUrl: 'https://comick.io', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'readm', name: 'ReadM', baseUrl: 'https://readm.org', engineType: 'custom_html', lang: 'en', isNsfw: false },
-  { id: 'manhwa18', name: 'Manhwa18', baseUrl: 'https://manhwa18.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'manhwa18cc', name: 'Manhwa18.cc', baseUrl: 'https://manhwa18.cc', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'aquamanga', name: 'Aqua Manga', baseUrl: 'https://aquareader.net', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplus', name: 'Manhua Plus', baseUrl: 'https://manhuaplus.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', baseUrl: 'https://manhuaplus.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'harimanga', name: 'Hari Manga', baseUrl: 'https://harimanga.me', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'anisascans', name: 'Anisa Scans', baseUrl: 'https://anisascans.in', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'adultwebtoon', name: 'Adult Webtoon', baseUrl: 'https://adultwebtoon.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'mangaread', name: 'MangaRead', baseUrl: 'https://www.mangaread.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhwabuddy', name: 'Manhwa Buddy', baseUrl: 'https://manhwabuddy.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuafast', name: 'Manhua Fast', baseUrl: 'https://manhuafast.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'kunmanga', name: 'Kun Manga', baseUrl: 'https://kunmanga.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'topmanhua', name: 'Top Manhua', baseUrl: 'https://topmanhua.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhwaclan', name: 'Manhwa Clan', baseUrl: 'https://manhwaclan.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'weebcentral', name: 'Weeb Central', baseUrl: 'https://weebcentral.com', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'atsumoe', name: 'Atsu Moe', baseUrl: 'https://atsu.moe', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'demonicscans', name: 'Demonic Scans', baseUrl: 'https://demonicscans.org', engineType: 'madara', lang: 'en', isNsfw: false },
-  { id: 'beehentai', name: 'BeeHentai', baseUrl: 'https://beehentai.com', engineType: 'madara', lang: 'en', isNsfw: true },
-  { id: 'manhuascan', name: 'ManhuaScan', baseUrl: 'https://manhuascan.us', engineType: 'mangathemesia', lang: 'en', isNsfw: true },
-  { id: 'ravenscans', name: 'Raven Scans', baseUrl: 'https://ravenscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'luminous', name: 'Luminous Scans', baseUrl: 'https://luminousscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'night', name: 'Night Scans', baseUrl: 'https://nightscans.com', engineType: 'mangathemesia', lang: 'en', isNsfw: false },
-  { id: 'hentai20', name: 'Hentai20', baseUrl: 'https://hentai20.com', engineType: 'mangathemesia', lang: 'en', isNsfw: true },
-  { id: 'hotcomics', name: 'HotComics', baseUrl: 'https://hotcomics.net', engineType: 'custom_html', lang: 'en', isNsfw: true },
-  { id: 'daycomics', name: 'DayComics', baseUrl: 'https://daycomics.com', engineType: 'custom_html', lang: 'en', isNsfw: true },
-  { id: 'mangatx', name: 'Manga TX', baseUrl: 'https://mangatx.com', engineType: 'madara', lang: 'en', isNsfw: false },
+  // ── Metadata API (background only) ───────────────────────────────────────
+  { id: 'mangadex',      name: 'MangaDex API v5',    baseUrl: 'https://mangadex.org',       engineType: 'mangadex',      lang: 'en', isNsfw: false },
+  // ── Dedicated API scrapers (have their own modules in server/scrapers/) ──
+  { id: 'asurascans',    name: 'Asura Scans',         baseUrl: 'https://asurascans.com',     engineType: 'custom_html',   lang: 'en', isNsfw: false },
+  { id: 'flamecomics',   name: 'Flame Comics',        baseUrl: 'https://flamecomics.xyz',    engineType: 'custom_html',   lang: 'en', isNsfw: false },
+  // ── Verified working Madara sources (diagnostic 2026-08) ─────────────────
+  { id: 'manhwa18',      name: 'Manhwa18',            baseUrl: 'https://manhwa18.com',       engineType: 'madara',        lang: 'en', isNsfw: true  },
+  { id: 'manhwa18cc',    name: 'Manhwa18.cc',         baseUrl: 'https://manhwa18.cc',        engineType: 'madara',        lang: 'en', isNsfw: true  },
+  { id: 'aquamanga',     name: 'Aqua Manga',          baseUrl: 'https://aquareader.net',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhuaplus',    name: 'Manhua Plus',         baseUrl: 'https://manhuaplus.com',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhuaplusorg', name: 'ManhuaPlus.org',      baseUrl: 'https://manhuaplus.org',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'harimanga',     name: 'Hari Manga',          baseUrl: 'https://harimanga.me',       engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'anisascans',    name: 'Anisa Scans',         baseUrl: 'https://anisascans.in',      engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'adultwebtoon',  name: 'Adult Webtoon',       baseUrl: 'https://adultwebtoon.com',   engineType: 'madara',        lang: 'en', isNsfw: true  },
+  { id: 'mangaread',     name: 'MangaRead',           baseUrl: 'https://www.mangaread.org',  engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhwabuddy',   name: 'Manhwa Buddy',        baseUrl: 'https://manhwabuddy.com',    engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhuafast',    name: 'Manhua Fast',         baseUrl: 'https://manhuafast.com',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'kunmanga',      name: 'Kun Manga',           baseUrl: 'https://kunmanga.com',       engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'topmanhua',     name: 'Top Manhua',          baseUrl: 'https://topmanhua.com',      engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhwaclan',    name: 'Manhwa Clan',         baseUrl: 'https://manhwaclan.com',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'weebcentral',   name: 'Weeb Central',        baseUrl: 'https://weebcentral.com',    engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'atsumoe',       name: 'Atsu Moe',            baseUrl: 'https://atsu.moe',           engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'demonicscans',  name: 'Demonic Scans',       baseUrl: 'https://demonicscans.org',   engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'beehentai',     name: 'BeeHentai',           baseUrl: 'https://beehentai.com',      engineType: 'madara',        lang: 'en', isNsfw: true  },
+  { id: 'mangatx',       name: 'Manga TX',            baseUrl: 'https://mangatx.com',        engineType: 'madara',        lang: 'en', isNsfw: false },
+  // ── Verified working MangaThemesia sources ───────────────────────────────
+  { id: 'ravenscans',    name: 'Raven Scans',         baseUrl: 'https://ravenscans.com',     engineType: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'hentai20',      name: 'Hentai20',            baseUrl: 'https://hentai20.com',       engineType: 'mangathemesia', lang: 'en', isNsfw: true  },
+  // ── Custom / Special HTML sources ────────────────────────────────────────
+  { id: 'comickfun',     name: 'ComickFun',           baseUrl: 'https://comick.fun',         engineType: 'custom_html',   lang: 'en', isNsfw: false },
+  { id: 'hotcomics',     name: 'HotComics',           baseUrl: 'https://hotcomics.net',      engineType: 'custom_html',   lang: 'en', isNsfw: true  },
+  { id: 'daycomics',     name: 'DayComics',           baseUrl: 'https://daycomics.com',      engineType: 'custom_html',   lang: 'en', isNsfw: true  },
 ];
 
 export const INITIAL_DEAD_SOURCES = new Set<string>([
+  // ── Confirmed dead by diagnostic probes (2026-08) ────────────────────────
   'dynasty',
   'dynastyscans',
   'immortal',
@@ -52,6 +56,14 @@ export const INITIAL_DEAD_SOURCES = new Set<string>([
   'radiantscans',
   'reaper',
   'reaperscans',
+  // DNS-dead / permanently offline as of 2026-08 liveness scan:
+  'manhuascan',        // manhuascan.us — ENOTFOUND
+  'batoto',            // bato.to      — fetch failed
+  'comick',            // comick.io    — HTTP 403
+  'readm',             // readm.org    — timeout
+  'legacy_scans',      // timeout
+  'luxmanga',          // ENOTFOUND
+  'scanmangavf_ws',    // timeout
 ]);
 
 export const DYNAMIC_DEAD_SOURCES = new Set<string>();

@@ -1,12 +1,21 @@
 /**
  * Live reader smoke checks (requires network + running extraction code via direct import is heavy).
  * This script hits public APIs the server uses and validates Manhwa18 series-page filtering.
+ *
+ * Phase 4 extension: --source <id> flag for per-source smoke testing:
+ *   node scripts/reader-smoke.mjs --source ravenscans
+ *   node scripts/reader-smoke.mjs --source manhuaplus
  */
 const ASURA_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   Accept: 'application/json',
   Origin: 'https://asurascans.com',
   Referer: 'https://asurascans.com/',
+};
+
+const HTML_UA = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
 function assert(cond, msg) {
@@ -88,23 +97,78 @@ async function checkLocalServer() {
   }
 }
 
+/**
+ * Phase 4: --source <id> — smoke test a specific source via the local server.
+ * Verifies: browse returns items, each item has a title + sourceUrl, first item
+ * details resolves (HEAD the sourceUrl).
+ */
+async function checkSource(sourceId) {
+  const base = process.env.SMOKE_BASE || 'http://127.0.0.1:3000';
+  console.log(`[Source Smoke] Testing source: ${sourceId}`);
+
+  // 1. Browse (popular series page 1)
+  const browseRes = await fetch(`${base}/api/kotatsu/search?sourceId=${sourceId}&page=1&limit=10`, {
+    signal: AbortSignal.timeout(30000),
+  });
+  assert(browseRes.ok, `Browse HTTP ${browseRes.status}`);
+  const items = await browseRes.json();
+  assert(Array.isArray(items) && items.length > 0, `Browse returned ${items.length} items — expected ≥ 1`);
+  console.log(`[OK] ${sourceId} browse: ${items.length} items`);
+
+  // 2. Each item has required fields
+  const first = items[0];
+  assert(first.title && first.title.length > 1, `First item missing title: ${JSON.stringify(first)}`);
+  assert(first.sourceUrl && first.sourceUrl.startsWith('http'), `First item missing sourceUrl`);
+  console.log(`[OK] ${sourceId} first item: "${first.title}" → ${first.sourceUrl}`);
+
+  // 3. HEAD the sourceUrl (proves the URL is reachable, not just parsed)
+  const headRes = await fetch(first.sourceUrl, {
+    method: 'HEAD',
+    headers: HTML_UA,
+    signal: AbortSignal.timeout(10000),
+    redirect: 'follow',
+  });
+  assert(headRes.status < 500, `sourceUrl HEAD returned HTTP ${headRes.status}`);
+  console.log(`[OK] ${sourceId} sourceUrl HEAD: HTTP ${headRes.status}`);
+}
+
+// ── Parse --source flag ───────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const sourceFlag = args.findIndex(a => a === '--source');
+const targetSource = sourceFlag !== -1 ? args[sourceFlag + 1] : null;
+
 (async () => {
   const failures = [];
-  for (const [name, fn] of [
-    ['asura', checkAsura],
-    ['manhwa18', checkManhwa18Catalog],
-    ['local', checkLocalServer],
-  ]) {
+
+  if (targetSource) {
+    // Per-source mode: only run the source-specific test
     try {
-      await fn();
+      await checkSource(targetSource);
     } catch (e) {
-      failures.push(name + ': ' + e.message);
-      console.error('[FAIL]', name, e.message);
+      failures.push(targetSource + ': ' + e.message);
+      console.error('[FAIL]', targetSource, e.message);
+    }
+  } else {
+    // Default suite
+    for (const [name, fn] of [
+      ['asura', checkAsura],
+      ['manhwa18', checkManhwa18Catalog],
+      ['local', checkLocalServer],
+    ]) {
+      try {
+        await fn();
+      } catch (e) {
+        failures.push(name + ': ' + e.message);
+        console.error('[FAIL]', name, e.message);
+      }
     }
   }
+
   if (failures.length) {
     console.error('\nSmoke failed:\n' + failures.map((f) => ' - ' + f).join('\n'));
     process.exit(1);
   }
   console.log('\nAll smoke checks passed.');
 })();
+
+
