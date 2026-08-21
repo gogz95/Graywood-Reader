@@ -376,6 +376,9 @@ export async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
  * Undici Agent enforcing socket-level IP validation to prevent DNS rebinding TOCTOU attacks.
  */
 export const ssrfSafeAgent = new Agent({
+  keepAliveTimeout: 30000,
+  keepAliveMaxTimeout: 60000,
+  pipelining: 1,
   connect: {
     lookup: (hostname: string, opts: any, callback: (err: NodeJS.ErrnoException | null, address: any, family?: number) => void) => {
       dns.lookup(hostname, opts, (err, address, family) => {

@@ -300,4 +300,20 @@ img[loading="lazy"] {
   contain-intrinsic-size: auto 300px;
 }
 
+/* ── Hardware Acceleration & Compositing ──────────────────────────────────── */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Reader image container containment for ultra-smooth webtoon/long-strip scrolling */
+.reader-page-panel {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1200px;
+  transform: translateZ(0);
+}
+
+
 

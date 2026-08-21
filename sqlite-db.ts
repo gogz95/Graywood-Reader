@@ -66,6 +66,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_manga_rating ON manga(rating DESC);
   CREATE INDEX IF NOT EXISTS idx_manga_lastRead ON manga(lastReadAt DESC);
   CREATE INDEX IF NOT EXISTS idx_manga_status ON manga(status);
+  CREATE INDEX IF NOT EXISTS idx_manga_user_updated ON manga(userId, lastUpdated DESC);
+  CREATE INDEX IF NOT EXISTS idx_manga_user_favorite ON manga(userId, isFavorite);
+  CREATE INDEX IF NOT EXISTS idx_manga_user_lastRead ON manga(userId, lastReadAt DESC);
 `);
 
 try { db.exec('ALTER TABLE manga ADD COLUMN availableSources TEXT'); } catch (e) { }
@@ -79,6 +82,9 @@ try { db.exec('ALTER TABLE manga ADD COLUMN isNsfw INTEGER DEFAULT 0'); } catch 
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_isNsfw ON manga(isNsfw)'); } catch (e) { }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_user_updated ON manga(userId, lastUpdated DESC)'); } catch (e) { }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_user_favorite ON manga(userId, isFavorite)'); } catch (e) { }
+try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_user_lastRead ON manga(userId, lastReadAt DESC)'); } catch (e) { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS categories (
@@ -92,6 +98,8 @@ db.exec(`
     created_at TEXT
   );
 
+  CREATE INDEX IF NOT EXISTS idx_categories_user_sort ON categories(user_id, sort_order);
+
   CREATE TABLE IF NOT EXISTS manga_categories (
     manga_id TEXT NOT NULL,
     category_id TEXT NOT NULL,
@@ -102,6 +110,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_manga_categories_user ON manga_categories(user_id);
   CREATE INDEX IF NOT EXISTS idx_manga_categories_manga ON manga_categories(manga_id);
   CREATE INDEX IF NOT EXISTS idx_manga_categories_cat ON manga_categories(category_id);
+  CREATE INDEX IF NOT EXISTS idx_manga_categories_composite ON manga_categories(user_id, category_id, manga_id);
 `);
 
 try {
@@ -1244,6 +1253,16 @@ export function deleteStickyNote(id: string, userId?: string): boolean {
   }
 }
 
+export function optimizeDatabase(): void {
+  try {
+    db.pragma('optimize');
+  } catch (err) {
+    console.warn('[SQLite Engine] PRAGMA optimize notice:', err);
+  }
+}
+
 // Execute migration check on startup
 migrateJsonToSqlite();
 migrateGlobalLibraryToUserTables();
+optimizeDatabase();
+

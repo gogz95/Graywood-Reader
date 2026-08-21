@@ -947,7 +947,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 return (
                   <div
                     key={idx}
-                    className={`w-full relative flex items-center justify-center overflow-hidden transition-all ${
+                    className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel ${
                       isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
                     }`}
                   >
@@ -958,6 +958,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       style={imageFilterStyle}
                       onMouseMove={handleImageMouseMove}
                       onMouseLeave={handleImageMouseLeave}
+                      decoding="async"
                       className={`w-full h-auto block object-contain transition-opacity duration-300 ${
                         isSeamless ? 'm-0 p-0 border-0' : ''
                       } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
@@ -1064,6 +1065,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                             style={imageFilterStyle}
                             onMouseMove={handleImageMouseMove}
                             onMouseLeave={handleImageMouseLeave}
+                            decoding="async"
                             className={`max-h-[82vh] w-auto object-contain shadow-2xl ${rightIndex === null ? 'rounded-xl' : 'rounded-l-xl border-r border-edge/30'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                           />
                         </div>
@@ -1076,6 +1078,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                             style={imageFilterStyle}
                             onMouseMove={handleImageMouseMove}
                             onMouseLeave={handleImageMouseLeave}
+                            decoding="async"
                             className={`max-h-[82vh] w-auto object-contain rounded-r-xl shadow-2xl ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                           />
                         </div>
@@ -1099,6 +1102,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         style={imageFilterStyle}
                         onMouseMove={handleImageMouseMove}
                         onMouseLeave={handleImageMouseLeave}
+                        decoding="async"
                         className={`w-full rounded-xl shadow-2xl transition-all ${
                           settings.mangaFitMode === 'fit-height'
                             ? 'max-h-[82vh] w-auto object-contain'

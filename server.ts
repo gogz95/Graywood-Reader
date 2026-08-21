@@ -69,6 +69,7 @@ import { bugsRouter } from "./server/routes/bugs";
 import { webhooksRouter } from "./server/routes/webhooks";
 import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
 import { startAutoBackupScheduler } from "./server/services/autoBackupService";
+import { imageCacheService } from "./server/services/imageCache";
 import { isAdImageSrc } from "./server/adFilter";
 import {
   APP_VERSION,
@@ -2230,45 +2231,63 @@ const handleImageProxyRequest = async (req: express.Request, res: express.Respon
     return res.status(403).json({ error: 'Blocked proxy target', message: String(err?.message || err) });
   }
 
-  try {
-    // Fix #3: Page-level referer matching Kotatsu's OkHttp interceptor pattern
-    let referer: string;
-    if (pageUrl) {
-      referer = pageUrl;
-    } else if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
-      referer = 'https://manhwa18.com/';
-    } else if (sourceUrl) {
-      try { referer = new URL(sourceUrl).origin + '/'; } catch (e) { referer = 'https://mangadex.org'; }
-    } else {
-      try { referer = new URL(targetUrl).origin + '/'; } catch (e) { referer = 'https://mangadex.org'; }
-    }
+  // Fast ETag check before touching network or disk
+  if (imageCacheService.matchesEtag(targetUrl, req.headers['if-none-match'] as string)) {
+    return res.status(304).end();
+  }
 
-    const response = await fetchWithSsrfGuard(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-        'Referer': referer,
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-      signal: AbortSignal.timeout(20000),
+  try {
+    const cached = await imageCacheService.fetchCoalesced(targetUrl, async () => {
+      // Page-level referer matching Kotatsu's OkHttp interceptor pattern
+      let referer: string;
+      if (pageUrl) {
+        referer = pageUrl;
+      } else if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
+        referer = 'https://manhwa18.com/';
+      } else if (sourceUrl) {
+        try { referer = new URL(sourceUrl).origin + '/'; } catch (e) { referer = 'https://mangadex.org'; }
+      } else {
+        try { referer = new URL(targetUrl).origin + '/'; } catch (e) { referer = 'https://mangadex.org'; }
+      }
+
+      const response = await fetchWithSsrfGuard(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+          'Referer': referer,
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+
+      if (!response.ok) {
+        console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
+        return null;
+      }
+
+      const arrayBuf = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuf);
+      if (buffer.length > MAX_PROXY_IMAGE_BYTES) {
+        throw new Error('Proxied image exceeds size cap');
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      return { buffer, contentType };
     });
 
-    if (!response.ok) {
-      console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
+    if (!cached) {
       return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
     }
 
-    const etag = `"${crypto.createHash('md5').update(targetUrl).digest('hex')}"`;
-    if (req.headers['if-none-match'] === etag) {
+    if (req.headers['if-none-match'] === cached.etag) {
       return res.status(304).end();
     }
 
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('ETag', etag);
+    res.setHeader('Content-Type', cached.contentType);
+    res.setHeader('ETag', cached.etag);
     // Same-origin serving: 7-day immutable caching with ETag for instant re-reads
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('Content-Disposition', 'inline');
-    await streamProxiedImage(response, res, req);
+    res.end(cached.buffer);
   } catch (err: any) {
     console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {

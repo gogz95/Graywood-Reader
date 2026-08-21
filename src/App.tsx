@@ -15,15 +15,15 @@ const ReaderView = lazy(() => import('./components/ReaderView').then(m => ({ def
 const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const BrowseView = lazy(() => import('./components/BrowseView').then(m => ({ default: m.BrowseView })));
 const KotatsuSourcesView = lazy(() => import('./components/KotatsuSourcesView').then(m => ({ default: m.KotatsuSourcesView })));
+const AnalyticsModal = lazy(() => import('./components/AnalyticsModal').then(m => ({ default: m.AnalyticsModal })));
+const AchievementsModal = lazy(() => import('./components/AchievementsModal').then(m => ({ default: m.AchievementsModal })));
+const AdminPanelModal = lazy(() => import('./components/AdminPanelModal').then(m => ({ default: m.AdminPanelModal })));
+const ChallengeNotificationModal = lazy(() => import('./components/ChallengeNotificationModal').then(m => ({ default: m.ChallengeNotificationModal })));
 
 // Lightweight modals remain eager (tiny bundles)
-import { AnalyticsModal } from './components/AnalyticsModal';
-import { AchievementsModal } from './components/AchievementsModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
-import { AdminPanelModal } from './components/AdminPanelModal';
 import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
-import { ChallengeNotificationModal } from './components/ChallengeNotificationModal';
 import { AppLockOverlay } from './components/AppLockOverlay';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
@@ -1118,18 +1118,20 @@ export default function App() {
 
       {/* Host / Administrator Command Panel */}
       {adminPanelOpen && activeProfile.role === 'admin' && isHostComputer && (
-        <AdminPanelModal
-          currentUser={activeProfile}
-          allUsers={profiles}
-          mangaList={mangaList}
-          onPromoteUser={handlePromoteUser}
-          onDeleteUser={handleDeleteProfile}
-          onSwitchUserView={(u) => {
-            setActiveProfileId(u.id);
-            setAdminPanelOpen(false);
-          }}
-          onClose={() => setAdminPanelOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <AdminPanelModal
+            currentUser={activeProfile}
+            allUsers={profiles}
+            mangaList={mangaList}
+            onPromoteUser={handlePromoteUser}
+            onDeleteUser={handleDeleteProfile}
+            onSwitchUserView={(u) => {
+              setActiveProfileId(u.id);
+              setAdminPanelOpen(false);
+            }}
+            onClose={() => setAdminPanelOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Submit Bug Tracker Modal */}
@@ -1143,27 +1145,33 @@ export default function App() {
 
       {/* Analytics Modal */}
       {analyticsOpen && (
-        <AnalyticsModal
-          mangaList={displayMangaList}
-          onClose={() => setAnalyticsOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <AnalyticsModal
+            mangaList={displayMangaList}
+            onClose={() => setAnalyticsOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Reading Achievements & Manga Wrapped Modal */}
       {achievementsOpen && (
-        <AchievementsModal
-          isOpen={achievementsOpen}
-          onClose={() => setAchievementsOpen(false)}
-          mangaList={displayMangaList}
-        />
+        <Suspense fallback={null}>
+          <AchievementsModal
+            isOpen={achievementsOpen}
+            onClose={() => setAchievementsOpen(false)}
+            mangaList={displayMangaList}
+          />
+        </Suspense>
       )}
 
       {/* Manual Challenge & Captcha Solver Notification Modal */}
-      <ChallengeNotificationModal
-        isOpen={challengeModalOpen}
-        onClose={() => setChallengeModalOpen(false)}
-        onChallengesCountChange={(cnt) => setPendingChallengesCount(cnt)}
-      />
+      <Suspense fallback={null}>
+        <ChallengeNotificationModal
+          isOpen={challengeModalOpen}
+          onClose={() => setChallengeModalOpen(false)}
+          onChallengesCountChange={(cnt) => setPendingChallengesCount(cnt)}
+        />
+      </Suspense>
 
       {/* Reusable Non-blocking Confirmation Modal */}
       <ConfirmModal

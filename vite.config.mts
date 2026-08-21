@@ -44,6 +44,15 @@ export default defineConfig(() => {
             if (id.includes('src/components/SettingsModal')) {
               return 'settings-modal';
             }
+            if (id.includes('src/components/MetadataStudioModal')) {
+              return 'metadata-studio';
+            }
+            if (id.includes('src/components/AchievementsModal')) {
+              return 'achievements-modal';
+            }
+            if (id.includes('src/components/AdminPanelModal')) {
+              return 'admin-panel-modal';
+            }
           },
         },
       },

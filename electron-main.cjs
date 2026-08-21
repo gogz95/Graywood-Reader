@@ -14,6 +14,44 @@ function writeLog(msg) {
   logStream.write(line);
 }
 
+// -------------------------------------------------------------
+// Multi-Environment Hardware Acceleration & GPU Resilience Setup
+// -------------------------------------------------------------
+const isGpuDisabled =
+  process.env.DISABLE_GPU === '1' ||
+  process.env.LIBGL_ALWAYS_SOFTWARE === '1' ||
+  process.argv.includes('--disable-gpu') ||
+  process.argv.includes('--no-sandbox');
+
+if (isGpuDisabled) {
+  writeLog('[Hardware Acceleration] GPU disabled by environment configuration or CLI switch. Running in software rendering mode.');
+  try {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
+  } catch (err) {
+    writeLog(`[Hardware Acceleration] Warning disabling GPU: ${err.message}`);
+  }
+} else {
+  try {
+    // Enable high-performance GPU rasterization & zero-copy memory pipelines
+    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    app.commandLine.appendSwitch('enable-zero-copy');
+    app.commandLine.appendSwitch('ignore-gpu-blocklist');
+    app.commandLine.appendSwitch('enable-features', 'CanvasOopRasterization,VaapiVideoDecoder,UseSkiaRenderer');
+    writeLog('[Hardware Acceleration] Enabled GPU rasterization, zero-copy, and Skia acceleration flags.');
+  } catch (err) {
+    writeLog(`[Hardware Acceleration] Switch initialization notice: ${err.message}`);
+  }
+}
+
+// Graceful fallback if the host GPU drivers crash or are unsupported in a VM/container
+app.on('gpu-process-crashed', (_event, killed) => {
+  writeLog(`[Hardware Acceleration] GPU process crashed (killed: ${killed}). Falling back to software rendering.`);
+  try {
+    app.disableHardwareAcceleration();
+  } catch (_) {}
+});
+
 // Discord RPC State
 let discordClient = null;
 const DISCORD_CLIENT_ID = '123456789012345678'; // Graywood Reader Rich Presence App ID
@@ -86,7 +124,12 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1360, height: 900, minWidth: 800, minHeight: 600,
     title: 'Graywood Reader', backgroundColor: '#020617', autoHideMenuBar: true,
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      spellcheck: false,
+      backgroundThrottling: true,
+    },
   });
   waitForServer()
     .then(() => { writeLog(`Loading desktop app at ${SERVER_URL}`); return mainWindow.loadURL(SERVER_URL); })
