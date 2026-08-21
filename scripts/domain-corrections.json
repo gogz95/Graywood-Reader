@@ -1,0 +1,100 @@
+[
+  {
+    "id": "asurascans",
+    "baseUrl": "https://asurascans.com",
+    "engineType": "custom_html",
+    "name": "Asura Scans",
+    "reason": "Canonical domain (asuracomic.net/asurascans.org are stale mirrors per DOMAIN_MIRRORS in server.ts)."
+  },
+  {
+    "id": "manhwa18",
+    "baseUrl": "https://manhwa18.com",
+    "engineType": "madara",
+    "name": "Manhwa18",
+    "reason": "Canonical domain (manhwa18.net -> manhwa18.com per DOMAIN_MIRRORS). Catalog entry was custom_html/manhwa18.net which shadowed the curated madara default."
+  },
+  {
+    "id": "manhwa18cc",
+    "baseUrl": "https://manhwa18.cc",
+    "engineType": "madara",
+    "name": "Manhwa18.cc",
+    "reason": "Separate Madara site (must NOT be rewritten to manhwa18.com)."
+  },
+  {
+    "id": "flamecomics",
+    "baseUrl": "https://flamecomics.xyz",
+    "engineType": "custom_html",
+    "name": "Flame Comics",
+    "reason": "Canonical domain (flamescans.org/.com -> flamecomics.xyz per DOMAIN_MIRRORS)."
+  },
+  {
+    "id": "mangadex",
+    "baseUrl": "https://mangadex.org",
+    "engineType": "mangadex",
+    "name": "MangaDex API v5",
+    "reason": "Metadata-only source; canonical domain."
+  },
+  {
+    "id": "aquamanga",
+    "baseUrl": "https://aquareader.net",
+    "engineType": "madara",
+    "name": "Aqua Manga",
+    "reason": "Canonical domain (aquamanga.com/.org -> aquareader.net per DOMAIN_MIRRORS)."
+  },
+  {
+    "id": "komikindo_info",
+    "baseUrl": "https://mangasusuku.com",
+    "engineType": "custom_html",
+    "name": "KomikIndo",
+    "reason": "Domain migration detected by catalog-liveness (komikindo.info -> mangasusuku.com)."
+  },
+  {
+    "id": "mangabuddy",
+    "baseUrl": "https://comizy.io",
+    "engineType": "madara",
+    "name": "MangaBuddy",
+    "reason": "Domain migration detected by catalog-liveness (mangabuddy.com -> comizy.io)."
+  },
+  {
+    "id": "manhwalist_org",
+    "baseUrl": "https://ch1.isekaikomik.site",
+    "engineType": "custom_html",
+    "name": "ManhwaList.org",
+    "reason": "Domain migration detected by catalog-liveness (isekaikomik.com -> ch1.isekaikomik.site)."
+  },
+  {
+    "id": "umimanga",
+    "baseUrl": "http://www.umimanga.com",
+    "engineType": "custom_html",
+    "name": "Umi Manga",
+    "reason": "Domain migration detected by catalog-liveness (umimanga.com -> www.umimanga.com)."
+  },
+  {
+    "id": "manhuaplus",
+    "baseUrl": "https://manhuaplus.com",
+    "engineType": "madara",
+    "name": "Manhua Plus",
+    "reason": "Canonical domain from curated engine registry."
+  },
+  {
+    "id": "harimanga",
+    "baseUrl": "https://harimanga.me",
+    "engineType": "madara",
+    "name": "Hari Manga",
+    "reason": "Canonical domain from curated engine registry."
+  },
+  {
+    "id": "anisascans",
+    "baseUrl": "https://anisascans.in",
+    "engineType": "madara",
+    "name": "Anisa Scans",
+    "reason": "Canonical domain from curated engine registry."
+  },
+  {
+    "id": "adultwebtoon",
+    "baseUrl": "https://adultwebtoon.com",
+    "engineType": "madara",
+    "name": "Adult Webtoon",
+    "reason": "Canonical domain (underscore-prefixed id resolved to clean domain)."
+  }
+]
