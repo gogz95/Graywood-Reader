@@ -183,22 +183,121 @@ export function detectKotatsuFormat(genres: string[], title: string): MangaType 
  * Uses native DecompressionStream('deflate-raw') if available (modern browsers & Node 18+),
  * with support for uncompressed stored files.
  */
+/**
+ * Helper to decompress deflate-raw or deflate payload.
+ */
+async function decompressDeflateStream(slice: Uint8Array): Promise<string> {
+  if (typeof DecompressionStream !== 'undefined') {
+    try {
+      const ds = new DecompressionStream('deflate-raw');
+      const writer = ds.writable.getWriter();
+      writer.write(slice as any);
+      writer.close();
+      const response = new Response(ds.readable);
+      return await response.text();
+    } catch {
+      try {
+        const ds = new DecompressionStream('deflate');
+        const writer = ds.writable.getWriter();
+        writer.write(slice as any);
+        writer.close();
+        const response = new Response(ds.readable);
+        return await response.text();
+      } catch {}
+    }
+  }
+
+  // Node.js fallback (tests & server)
+  if (typeof process !== 'undefined') {
+    try {
+      const zlib = await import('zlib');
+      try {
+        return zlib.inflateRawSync(Buffer.from(slice)).toString('utf-8');
+      } catch {
+        return zlib.inflateSync(Buffer.from(slice)).toString('utf-8');
+      }
+    } catch {}
+  }
+  return '';
+}
+
+/**
+ * Extracts files from a ZIP archive ArrayBuffer / Uint8Array in standard JS environments.
+ * Uses standard ZIP Central Directory parsing (accurate for all Android ZipOutputStream & desktop formats)
+ * with a local headers scan fallback.
+ */
 export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Record<string, string>> {
   const uint8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength);
   const files: Record<string, string> = {};
-
-  let offset = 0;
   const len = uint8.byteLength;
 
-  while (offset + 30 <= len) {
-    const signature = view.getUint32(offset, true);
-    // Local file header signature = 0x04034b50 ("PK\x03\x04")
-    if (signature !== 0x04034b50) {
+  // 1. Primary: Central Directory Reader (EOCD search from end of file)
+  let eocdOffset = -1;
+  for (let i = len - 22; i >= Math.max(0, len - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      eocdOffset = i;
       break;
     }
+  }
 
-    const flags = view.getUint16(offset + 6, true);
+  if (eocdOffset !== -1) {
+    const cdCount = view.getUint16(eocdOffset + 10, true);
+    const cdOffset = view.getUint32(eocdOffset + 16, true);
+
+    let currCd = cdOffset;
+    for (let i = 0; i < cdCount && currCd + 46 <= len; i++) {
+      const sig = view.getUint32(currCd, true);
+      if (sig !== 0x02014b50) break;
+
+      const compressionMethod = view.getUint16(currCd + 10, true);
+      const compressedSize = view.getUint32(currCd + 20, true);
+      const fileNameLen = view.getUint16(currCd + 28, true);
+      const extraLen = view.getUint16(currCd + 30, true);
+      const commentLen = view.getUint16(currCd + 32, true);
+      const localHeaderOffset = view.getUint32(currCd + 42, true);
+
+      const nameBytes = uint8.subarray(currCd + 46, currCd + 46 + fileNameLen);
+      const fileName = new TextDecoder('utf-8').decode(nameBytes);
+
+      currCd += 46 + fileNameLen + extraLen + commentLen;
+
+      if (fileName.endsWith('/') || fileNameLen === 0) continue;
+
+      if (localHeaderOffset + 30 <= len && view.getUint32(localHeaderOffset, true) === 0x04034b50) {
+        const localFileNameLen = view.getUint16(localHeaderOffset + 26, true);
+        const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
+        const dataOffset = localHeaderOffset + 30 + localFileNameLen + localExtraLen;
+
+        if (dataOffset + compressedSize <= len) {
+          const compressedSlice = uint8.subarray(dataOffset, dataOffset + compressedSize);
+          try {
+            if (compressionMethod === 0) {
+              files[fileName] = new TextDecoder('utf-8').decode(compressedSlice);
+            } else if (compressionMethod === 8) {
+              const decompressed = await decompressDeflateStream(compressedSlice);
+              if (decompressed) {
+                files[fileName] = decompressed;
+              }
+            }
+          } catch (e) {
+            console.warn(`[Kotatsu Importer] Failed to decompress ${fileName}:`, e);
+          }
+        }
+      }
+    }
+
+    if (Object.keys(files).length > 0) {
+      return files;
+    }
+  }
+
+  // 2. Fallback: Sequential Local Headers Scanning
+  let offset = 0;
+  while (offset + 30 <= len) {
+    const signature = view.getUint32(offset, true);
+    if (signature !== 0x04034b50) break;
+
     const compressionMethod = view.getUint16(offset + 8, true);
     let compressedSize = view.getUint32(offset + 18, true);
     const fileNameLen = view.getUint16(offset + 26, true);
@@ -209,13 +308,13 @@ export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Re
     const fileName = new TextDecoder('utf-8').decode(nameBytes);
 
     const dataOffset = nameOffset + fileNameLen + extraFieldLen;
+    if (dataOffset > len) break;
 
-    // Handle data descriptor flag (bit 3) where sizes might follow compressed data
-    if ((flags & 0x08) && compressedSize === 0) {
+    if (compressedSize === 0) {
       let nextHeader = dataOffset;
       while (nextHeader + 4 <= len) {
         const sig = view.getUint32(nextHeader, true);
-        if (sig === 0x04034b50 || sig === 0x02014b50 || sig === 0x08074b50) {
+        if (sig === 0x04034b50 || sig === 0x02014b50 || sig === 0x06054b50) {
           break;
         }
         nextHeader++;
@@ -223,65 +322,21 @@ export async function unzipArchive(buffer: ArrayBuffer | Uint8Array): Promise<Re
       compressedSize = nextHeader - dataOffset;
     }
 
-    if (dataOffset + compressedSize > len) {
-      break;
-    }
-
     const compressedSlice = uint8.subarray(dataOffset, dataOffset + compressedSize);
-
-    // Skip directories
     if (!fileName.endsWith('/') && fileNameLen > 0) {
       try {
         if (compressionMethod === 0) {
-          // Stored (no compression)
-          const text = new TextDecoder('utf-8').decode(compressedSlice);
-          files[fileName] = text;
+          files[fileName] = new TextDecoder('utf-8').decode(compressedSlice);
         } else if (compressionMethod === 8) {
-          // Deflate
-          let decompressedText = '';
-          if (typeof DecompressionStream !== 'undefined') {
-            try {
-              const ds = new DecompressionStream('deflate-raw');
-              const writer = ds.writable.getWriter();
-              writer.write(compressedSlice as any);
-              writer.close();
-              const response = new Response(ds.readable);
-              decompressedText = await response.text();
-            } catch {
-              try {
-                const ds = new DecompressionStream('deflate');
-                const writer = ds.writable.getWriter();
-                writer.write(compressedSlice as any);
-                writer.close();
-                const response = new Response(ds.readable);
-                decompressedText = await response.text();
-              } catch {}
-            }
-          }
-          
-          // Node.js fallback if DecompressionStream was not present or threw
-          if (!decompressedText && typeof process !== 'undefined') {
-            try {
-              const zlib = await import('zlib');
-              const uncompressedBuf = zlib.inflateRawSync(Buffer.from(compressedSlice));
-              decompressedText = uncompressedBuf.toString('utf-8');
-            } catch {}
-          }
-
-          if (decompressedText) {
-            files[fileName] = decompressedText;
+          const decompressed = await decompressDeflateStream(compressedSlice);
+          if (decompressed) {
+            files[fileName] = decompressed;
           }
         }
-      } catch (err) {
-        console.warn(`[Kotatsu Importer] Failed decompressing ${fileName}:`, err);
-      }
+      } catch {}
     }
 
     offset = dataOffset + compressedSize;
-    // Check if followed by data descriptor (0x08074b50)
-    if (offset + 4 <= len && view.getUint32(offset, true) === 0x08074b50) {
-      offset += 16;
-    }
   }
 
   return files;

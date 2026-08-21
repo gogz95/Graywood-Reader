@@ -1213,13 +1213,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                         const file = e.target.files?.[0];
                         if (!file) return;
                         try {
-                          let imported: MangaItem[] = [];
-                          if (file.name.endsWith('.zip') || file.type.includes('zip')) {
-                            const arrayBuffer = await file.arrayBuffer();
-                            imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
-                          } else {
-                            const text = await file.text();
-                            imported = await parseKotatsuBackup(text, activeProfile?.id || 'usr_admin');
+                          const arrayBuffer = await file.arrayBuffer();
+                          const imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
+
+                          if (!imported || imported.length === 0) {
+                            throw new Error('No series found in this Kotatsu backup file.');
                           }
 
                           // Use atomic bulk import endpoint
@@ -1236,6 +1234,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                           }
                         } catch (err: any) {
                           alert(`Failed to import Kotatsu backup: ${err.message}`);
+                        } finally {
+                          e.target.value = '';
                         }
                       }}
                     />
