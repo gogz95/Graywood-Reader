@@ -33,7 +33,11 @@ import {
   AlertTriangle,
   ExternalLink,
   Eye,
-  Upload
+  Upload,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  FileText,
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
@@ -208,6 +212,123 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  // Restoration Progress Tracker State
+  const [restoreProgress, setRestoreProgress] = useState<{
+    isActive: boolean;
+    stage: 'reading_file' | 'parsing' | 'restoring' | 'indexing' | 'completed' | 'error';
+    sourceType: 'Kotatsu' | 'Tachiyomi' | 'Graywood Snapshot' | 'Backup';
+    fileName?: string;
+    current: number;
+    total: number;
+    percent: number;
+    currentSeriesTitle?: string;
+    statusMessage: string;
+    errorMessage?: string;
+  }>({
+    isActive: false,
+    stage: 'reading_file',
+    sourceType: 'Backup',
+    current: 0,
+    total: 0,
+    percent: 0,
+    statusMessage: '',
+  });
+
+  const executeRestorationPipeline = async (
+    sourceType: 'Kotatsu' | 'Tachiyomi' | 'Graywood Snapshot',
+    file: File,
+    parseFn: () => Promise<MangaItem[]> | MangaItem[]
+  ) => {
+    setRestoreProgress({
+      isActive: true,
+      stage: 'reading_file',
+      sourceType,
+      fileName: file.name,
+      current: 0,
+      total: 0,
+      percent: 5,
+      statusMessage: `Reading "${file.name}"...`,
+    });
+
+    try {
+      await new Promise((r) => setTimeout(r, 60));
+
+      setRestoreProgress((prev) => ({
+        ...prev,
+        stage: 'parsing',
+        percent: 15,
+        statusMessage: `Decompressing and analyzing ${sourceType} backup data...`,
+      }));
+
+      const imported = await parseFn();
+
+      if (!imported || imported.length === 0) {
+        throw new Error(`No manga series found in this ${sourceType} backup file.`);
+      }
+
+      const total = imported.length;
+      setRestoreProgress((prev) => ({
+        ...prev,
+        stage: 'restoring',
+        total,
+        percent: 25,
+        statusMessage: `Discovered ${total} series. Starting atomic database restoration...`,
+      }));
+
+      const batchSize = 250;
+      for (let i = 0; i < total; i += batchSize) {
+        const chunk = imported.slice(i, i + batchSize);
+        const currentCount = Math.min(total, i + chunk.length);
+        const currentPercent = Math.round(25 + ((currentCount / total) * 65));
+        const lastTitle = chunk[chunk.length - 1]?.title;
+
+        setRestoreProgress((prev) => ({
+          ...prev,
+          current: currentCount,
+          percent: currentPercent,
+          currentSeriesTitle: lastTitle,
+          statusMessage: `Restoring series batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(total / batchSize)} (${currentCount} of ${total})...`,
+        }));
+
+        const bulkRes = await apiFetch('/api/manga/bulk-import', {
+          method: 'POST',
+          body: JSON.stringify(chunk),
+        });
+
+        if (!bulkRes.ok) {
+          const data = await bulkRes.json().catch(() => ({}));
+          throw new Error(data.message || data.error || `Failed to restore ${sourceType} backup`);
+        }
+      }
+
+      setRestoreProgress((prev) => ({
+        ...prev,
+        stage: 'indexing',
+        current: total,
+        percent: 96,
+        statusMessage: 'Finalizing category shelves, reading positions, and refreshing library...',
+      }));
+
+      await onRefreshData();
+
+      setRestoreProgress((prev) => ({
+        ...prev,
+        stage: 'completed',
+        percent: 100,
+        statusMessage: `✓ Successfully restored all ${total} series and categories into your library!`,
+      }));
+
+      showToast(`✓ Successfully restored ${total} series from ${sourceType} backup!`);
+    } catch (err: any) {
+      setRestoreProgress((prev) => ({
+        ...prev,
+        stage: 'error',
+        errorMessage: err.message || 'Restoration failed',
+        statusMessage: `Restoration failed: ${err.message}`,
+      }));
+    }
   };
 
   const handleSave = async () => {
@@ -387,8 +508,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                 : 'text-secondary hover:text-primary hover:bg-elevated/60'
             }`}
           >
-            <Upload className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
+            {restoreProgress.isActive && restoreProgress.stage !== 'completed' && restoreProgress.stage !== 'error' ? (
+              <Loader2 className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
+            )}
             <span>Backup & Restore</span>
+            {restoreProgress.isActive && (
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                restoreProgress.stage === 'completed'
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : restoreProgress.stage === 'error'
+                  ? 'bg-rose-500/20 text-rose-300'
+                  : 'bg-accent-2/20 text-accent-2 border border-accent-2/30 animate-pulse'
+              }`}>
+                {restoreProgress.percent}%
+              </span>
+            )}
           </button>
 
           <button
@@ -1179,6 +1315,114 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                 )}
               </div>
 
+              {/* Dynamic Live Restoration Loading Bar Card */}
+              {restoreProgress.isActive && (
+                <div className={`p-5 rounded-2xl border transition-all duration-300 shadow-xl space-y-3.5 ${
+                  restoreProgress.stage === 'completed'
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100'
+                    : restoreProgress.stage === 'error'
+                    ? 'bg-rose-950/40 border-rose-500/50 text-rose-100'
+                    : 'bg-surface/95 border-accent/40 shadow-accent/5'
+                }`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`p-2.5 rounded-xl border flex items-center justify-center shrink-0 ${
+                        restoreProgress.stage === 'completed'
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                          : restoreProgress.stage === 'error'
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                          : 'bg-accent/20 text-accent border-accent/30'
+                      }`}>
+                        {restoreProgress.stage === 'completed' ? (
+                          <CheckCircle2 className="w-5 h-5" />
+                        ) : restoreProgress.stage === 'error' ? (
+                          <AlertTriangle className="w-5 h-5" />
+                        ) : (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-primary text-sm sm:text-base truncate">
+                            {restoreProgress.stage === 'completed'
+                              ? 'Restoration Completed'
+                              : restoreProgress.stage === 'error'
+                              ? 'Restoration Failed'
+                              : `Restoring ${restoreProgress.sourceType} Backup`}
+                          </h4>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                            restoreProgress.stage === 'completed'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : restoreProgress.stage === 'error'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              : 'bg-accent/20 text-accent border border-accent/40 animate-pulse'
+                          }`}>
+                            {restoreProgress.stage.replace('_', ' ')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-secondary truncate">
+                          {restoreProgress.fileName ? `File: ${restoreProgress.fileName}` : 'Processing backup archive'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono font-black text-sm sm:text-base text-primary">
+                        {restoreProgress.percent}%
+                      </span>
+                      {(restoreProgress.stage === 'completed' || restoreProgress.stage === 'error') && (
+                        <button
+                          type="button"
+                          onClick={() => setRestoreProgress((prev) => ({ ...prev, isActive: false }))}
+                          className="p-1.5 rounded-lg bg-elevated hover:bg-elevated text-secondary hover:text-primary transition-colors text-xs font-bold"
+                          title="Dismiss progress notification"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Loading Bar */}
+                  <div className="w-full bg-app/90 border border-edge rounded-full h-3.5 overflow-hidden p-0.5 shadow-inner relative">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 relative overflow-hidden ${
+                        restoreProgress.stage === 'completed'
+                          ? 'bg-emerald-400'
+                          : restoreProgress.stage === 'error'
+                          ? 'bg-rose-500'
+                          : 'bg-gradient-to-r from-accent via-accent-2 to-emerald-400'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(3, restoreProgress.percent))}%` }}
+                    >
+                      {restoreProgress.stage !== 'completed' && restoreProgress.stage !== 'error' && (
+                        <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Status Message & Statistics Subtitle */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-secondary font-medium truncate max-w-md">
+                      {restoreProgress.statusMessage}
+                    </span>
+                    {restoreProgress.total > 0 && (
+                      <span className="font-mono text-muted text-[11px] shrink-0">
+                        {restoreProgress.current} / {restoreProgress.total} series
+                      </span>
+                    )}
+                  </div>
+
+                  {restoreProgress.stage === 'error' && restoreProgress.errorMessage && (
+                    <div className="p-3 bg-rose-950/60 border border-rose-500/40 rounded-xl text-rose-200 text-xs font-medium space-y-1">
+                      <div className="font-bold">Error Details:</div>
+                      <div>{restoreProgress.errorMessage}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Kotatsu Backup Migration Card */}
               <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                 <div className="flex items-center justify-between">
@@ -1206,39 +1450,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        try {
+                        executeRestorationPipeline('Kotatsu', file, async () => {
                           const arrayBuffer = await file.arrayBuffer();
-                          const imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
-
-                          if (!imported || imported.length === 0) {
-                            throw new Error('No series found in this Kotatsu backup file.');
-                          }
-
-                          showToast(`Restoring ${imported.length} series in high-speed batches...`);
-
-                          const batchSize = 250;
-                          for (let i = 0; i < imported.length; i += batchSize) {
-                            const chunk = imported.slice(i, i + batchSize);
-                            const bulkRes = await apiFetch('/api/manga/bulk-import', {
-                              method: 'POST',
-                              body: JSON.stringify(chunk),
-                            });
-                            if (!bulkRes.ok) {
-                              const data = await bulkRes.json().catch(() => ({}));
-                              throw new Error(data.message || data.error || 'Failed to restore Kotatsu backup');
-                            }
-                            if (imported.length > batchSize) {
-                              showToast(`Restored ${Math.min(imported.length, i + batchSize)} of ${imported.length} series...`);
-                            }
-                          }
-
-                          onRefreshData();
-                          showToast(`✓ Successfully restored ${imported.length} series from Kotatsu backup!`);
-                        } catch (err: any) {
-                          alert(`Failed to import Kotatsu backup: ${err.message}`);
-                        } finally {
-                          e.target.value = '';
-                        }
+                          return parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
+                        });
+                        e.target.value = '';
                       }}
                     />
                   </label>
@@ -1291,37 +1507,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        try {
+                        executeRestorationPipeline('Tachiyomi', file, async () => {
                           const text = await file.text();
-                          const imported = parseTachiyomiBackup(text, activeProfile?.id || 'usr_admin');
-
-                          if (!imported || imported.length === 0) {
-                            throw new Error('No series found in this Tachiyomi backup file.');
-                          }
-
-                          showToast(`Restoring ${imported.length} series in high-speed batches...`);
-
-                          const batchSize = 250;
-                          for (let i = 0; i < imported.length; i += batchSize) {
-                            const chunk = imported.slice(i, i + batchSize);
-                            const bulkRes = await apiFetch('/api/manga/bulk-import', {
-                              method: 'POST',
-                              body: JSON.stringify(chunk),
-                            });
-                            if (!bulkRes.ok) {
-                              const data = await bulkRes.json().catch(() => ({}));
-                              throw new Error(data.message || data.error || 'Failed to restore Tachiyomi backup');
-                            }
-                            if (imported.length > batchSize) {
-                              showToast(`Restored ${Math.min(imported.length, i + batchSize)} of ${imported.length} series...`);
-                            }
-                          }
-
-                          onRefreshData();
-                          showToast(`✓ Successfully restored ${imported.length} series from Tachiyomi backup!`);
-                        } catch (err: any) {
-                          alert(`Failed to import Tachiyomi backup: ${err.message}`);
-                        }
+                          return parseTachiyomiBackup(text, activeProfile?.id || 'usr_admin');
+                        });
+                        e.target.value = '';
                       }}
                     />
                   </label>
@@ -1374,24 +1564,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        try {
+                        executeRestorationPipeline('Graywood Snapshot', file, async () => {
                           const text = await file.text();
                           const parsed = JSON.parse(text);
                           const items: MangaItem[] = Array.isArray(parsed)
                             ? parsed
                             : parsed.mangaDatabase || parsed.mangas || parsed.items || [];
-                          if (!Array.isArray(items) || items.length === 0) {
-                            throw new Error('No valid manga items found in JSON file');
-                          }
-                          await apiFetch('/api/manga/bulk-import', {
-                            method: 'POST',
-                            body: JSON.stringify(items),
-                          });
-                          onRefreshData();
-                          showToast(`Successfully restored ${items.length} series into your library!`);
-                        } catch (err: any) {
-                          alert(`Failed to import library JSON: ${err.message}`);
-                        }
+                          return items;
+                        });
+                        e.target.value = '';
                       }}
                     />
                   </label>

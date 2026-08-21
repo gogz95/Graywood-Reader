@@ -44,6 +44,27 @@ describe('Tachiyomi v2 import', () => {
     expect(item.totalChapters).toBe(3);
   });
 
+  it('resolves category names from backupCategories index references', () => {
+    const backupWithCategories = {
+      version: 2,
+      backupCategories: [
+        { name: 'Reading List', order: 0 },
+        { name: 'Top Tier Manhwa', order: 1 },
+      ],
+      backupManga: [
+        {
+          manga: ['https://example.com/manga/2', 'Omniscient Reader', 1, '', '', '', ['Manhwa'], 1, ''],
+          categories: [0, 1],
+        },
+      ],
+    };
+
+    const items = parseTachiyomiBackup(JSON.stringify(backupWithCategories), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].categories).toContain('Reading List');
+    expect(items[0].categories).toContain('Top Tier Manhwa');
+  });
+
   it('throws on invalid JSON / empty backup', () => {
     expect(() => parseTachiyomiBackup('not json')).toThrow();
     expect(() => parseTachiyomiBackup('{"mangas":[]}')).toThrow();

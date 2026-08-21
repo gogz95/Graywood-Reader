@@ -124,6 +124,9 @@ import {
   rejectCatalogWrite,
 } from "./server/appState";
 
+export const sourceCustomCookies = new Map<string, string[]>();
+export const sourceCustomUserAgents = new Map<string, string>();
+
 export {
   app,
   startServer,

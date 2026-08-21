@@ -92,6 +92,8 @@ export default function App() {
   const [editingManga, setEditingManga] = useState<MangaItem | null>(null);
   const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
   const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
+  const [challengeModalOpen, setChallengeModalOpen] = useState(false);
+  const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -266,6 +268,24 @@ export default function App() {
       console.error('Fetch settings error:', err);
     }
   };
+
+  const fetchChallengeCount = async () => {
+    try {
+      const res = await apiFetch('/api/challenges');
+      if (res.ok) {
+        const data = await res.json();
+        setPendingChallengesCount(data.count || 0);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchChallengeCount();
+    const interval = setInterval(fetchChallengeCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     setAppSettings(newSettings);
@@ -821,6 +841,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         unreadCount={unreadCount}
         duplicateCount={duplicates.length}
+        pendingChallengesCount={pendingChallengesCount}
         onOpenAddModal={() => {
           setEditingManga(null);
           setAddModalOpen(true);
@@ -831,6 +852,7 @@ export default function App() {
         isIncognito={isIncognito}
         onToggleIncognito={() => setIsIncognito(!isIncognito)}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
+        onOpenChallengesModal={() => setChallengeModalOpen(true)}
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
         onOpenProfileModal={() => setUserProfileModalOpen(true)}
@@ -1071,6 +1093,13 @@ export default function App() {
           onClose={() => setAnalyticsOpen(false)}
         />
       )}
+
+      {/* Manual Challenge & Captcha Solver Notification Modal */}
+      <ChallengeNotificationModal
+        isOpen={challengeModalOpen}
+        onClose={() => setChallengeModalOpen(false)}
+        onChallengesCountChange={(cnt) => setPendingChallengesCount(cnt)}
+      />
 
       {/* Reusable Non-blocking Confirmation Modal */}
       <ConfirmModal

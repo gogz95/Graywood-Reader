@@ -87,6 +87,32 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     throw new Error('No manga entries found in the backup file.');
   }
 
+  // Build Tachiyomi category index and ID map
+  const tachiCategoryMap = new Map<number | string, string>();
+  const rawCategories = (parsed as any).backupCategories || (parsed as any).categories || (parsed as any).mangaCategories || [];
+  if (Array.isArray(rawCategories)) {
+    rawCategories.forEach((cat, index) => {
+      if (cat && typeof cat === 'object') {
+        const catName = cat.name || cat.title;
+        if (catName) {
+          tachiCategoryMap.set(index, catName); // 0-based index
+          tachiCategoryMap.set(String(index), catName);
+          if (cat.order !== undefined) {
+            tachiCategoryMap.set(cat.order, catName);
+            tachiCategoryMap.set(String(cat.order), catName);
+          }
+          if (cat.id !== undefined) {
+            tachiCategoryMap.set(cat.id, catName);
+            tachiCategoryMap.set(String(cat.id), catName);
+          }
+        }
+      } else if (typeof cat === 'string' && cat.trim()) {
+        tachiCategoryMap.set(index, cat.trim());
+        tachiCategoryMap.set(String(index), cat.trim());
+      }
+    });
+  }
+
   const importedItems: MangaItem[] = [];
 
   for (let i = 0; i < rawList.length; i++) {
@@ -167,10 +193,24 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     const hasWorkingSource = Boolean(url && url.trim().length > 0 && !isMangaDexSourceLink(sourceName, url));
     const isFlagged = !hasWorkingSource;
     const flagReason = !hasWorkingSource ? 'Missing source' : undefined;
-    const categories: string[] = Array.isArray(entry.categories)
-      ? entry.categories.map((c: any) => typeof c === 'string' ? c : (c.name || String(c.id || ''))).filter(Boolean)
-      : [];
     const id = `tachi_${Date.now()}_${i}_${title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16)}`;
+    const categories: string[] = [];
+    const rawEntryCategories = entry.categories || (entry.manga as any)?.categories || [];
+    if (Array.isArray(rawEntryCategories)) {
+      for (const catRef of rawEntryCategories) {
+        if (typeof catRef === 'string') {
+          const resolved = tachiCategoryMap.get(catRef) || (isNaN(Number(catRef)) ? catRef : tachiCategoryMap.get(Number(catRef)));
+          const finalName = resolved || catRef;
+          if (finalName && !categories.includes(finalName)) categories.push(finalName);
+        } else if (typeof catRef === 'number') {
+          const resolved = tachiCategoryMap.get(catRef) || tachiCategoryMap.get(String(catRef));
+          if (resolved && !categories.includes(resolved)) categories.push(resolved);
+        } else if (catRef && typeof catRef === 'object') {
+          const catName = catRef.name || (catRef.id !== undefined ? tachiCategoryMap.get(catRef.id) : null);
+          if (catName && !categories.includes(catName)) categories.push(catName);
+        }
+      }
+    }
 
     importedItems.push({
       id,

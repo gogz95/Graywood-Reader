@@ -90,15 +90,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   const tabs: Array<{
     id: AppNavTab;
     label: string;
+    mobileLabel: string;
     icon: React.ComponentType<{ className?: string }>;
     badge?: number;
     title?: string;
   }> = [
-    { id: 'library', label: 'Library', icon: BookOpen, badge: unreadCount, title: 'Your Manga Library' },
-    { id: 'browse', label: 'Browse', icon: Compass, title: 'Explore Popular & Trending Manga' },
-    { id: 'sources', label: 'Sources', icon: Globe, title: 'Manage Scraper Engines & Connectors' },
-    { id: 'updates', label: 'Scan Logs', icon: RefreshCw, title: 'Automatic Update History & Release Logs' },
-    { id: 'duplicates', label: 'Deduplicate', icon: Search, badge: duplicateCount, title: 'Merge Duplicate Series' },
+    { id: 'library', label: 'My Library', mobileLabel: 'Library', icon: BookOpen, badge: unreadCount, title: 'Your Manga Library' },
+    { id: 'browse', label: 'Catalog', mobileLabel: 'Explore', icon: Compass, title: 'Explore Popular & Trending Manga' },
+    { id: 'sources', label: 'Sources', mobileLabel: 'Sources', icon: Globe, title: 'Manage Scraper Engines & Connectors' },
+    { id: 'autoupdate', label: 'Scan Logs', mobileLabel: 'Updates', icon: RefreshCw, title: 'Automatic Update History & Release Logs' },
+    { id: 'duplicates', label: 'Deduplicate', mobileLabel: 'Duplicates', icon: Search, badge: duplicateCount, title: 'Merge Duplicate Series' },
   ];
 
   const searchInput = (

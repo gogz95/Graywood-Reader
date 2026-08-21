@@ -35,6 +35,7 @@ import {
   Check,
   Folder,
   Settings,
+  Bookmark,
 } from 'lucide-react';
 
 interface LibraryViewProps {
@@ -129,8 +130,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (statusFilter !== 'all' && statusFilter !== 'favorites' && statusFilter !== 'flagged' && item.status !== statusFilter) return false;
 
     // Category / Custom Shelf Filter
-    if (activeCategory && (!item.categories || !item.categories.includes(activeCategory))) {
-      return false;
+    if (activeCategory) {
+      const activeCatObj = categories.find((c) => c.id === activeCategory);
+      const activeName = activeCatObj?.name?.toLowerCase().trim();
+      const hasCat = item.categories?.some((c) => {
+        const cStr = String(c).trim();
+        return cStr === activeCategory || (activeName && cStr.toLowerCase() === activeName);
+      });
+      if (!hasCat) return false;
     }
 
     // Origin Type Filter
@@ -254,154 +261,222 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Control Bar: Filters, Sort, View toggle */}
-      <div className="bg-surface/90 border border-edge rounded-xl p-4 space-y-4">
-        {/* Custom Shelves & Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-semibold">
-          <button
-            onClick={() => {
-              setActiveCategory(null);
-              setStatusFilter('all');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              activeCategory === null && statusFilter === 'all'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>All ({mangaList.length})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveCategory(null);
-              setStatusFilter('reading');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              activeCategory === null && statusFilter === 'reading'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Reading ({totalReading})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveCategory(null);
-              setStatusFilter('favorites');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              activeCategory === null && statusFilter === 'favorites'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            <Star className="w-3.5 h-3.5 fill-accent-fg" />
-            <span>Favorites ({mangaList.filter((m) => m.isFavorite).length})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveCategory(null);
-              setStatusFilter('flagged');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              activeCategory === null && statusFilter === 'flagged'
-                ? 'bg-danger text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-danger hover:bg-elevated'
-            }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Flagged ({mangaList.filter((m) => m.isFlagged).length})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveCategory(null);
-              setStatusFilter('completed');
-            }}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-              activeCategory === null && statusFilter === 'completed'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-            <span>Completed ({totalCompleted})</span>
-          </button>
+      <div className="bg-surface/90 border border-edge rounded-2xl p-4 space-y-3.5 shadow-sm">
+        {/* Row 1: Primary Status Tabs & View Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-semibold max-w-full pb-0.5">
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('all');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeCategory === null && statusFilter === 'all'
+                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>All ({mangaList.length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('reading');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeCategory === null && statusFilter === 'reading'
+                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Reading ({totalReading})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('favorites');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeCategory === null && statusFilter === 'favorites'
+                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
+              }`}
+            >
+              <Star className="w-3.5 h-3.5 fill-accent-fg" />
+              <span>Favorites ({mangaList.filter((m) => m.isFavorite).length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('flagged');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeCategory === null && statusFilter === 'flagged'
+                  ? 'bg-danger text-accent-fg font-black shadow-sm'
+                  : 'bg-elevated/70 text-danger hover:bg-elevated'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Flagged ({mangaList.filter((m) => m.isFlagged).length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('completed');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                activeCategory === null && statusFilter === 'completed'
+                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
+              }`}
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span>Completed ({totalCompleted})</span>
+            </button>
+          </div>
 
-          {/* Divider between default tabs and custom shelves */}
-          {categories.length > 0 && <div className="h-5 w-[1px] bg-edge mx-1 shrink-0" />}
+          {/* Sort & View Mode Controls */}
+          <div className="flex items-center gap-2 text-xs ml-auto shrink-0">
+            <button
+              onClick={() => {
+                setIsSelectMode(!isSelectMode);
+                if (isSelectMode) setSelectedIds(new Set());
+              }}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
+                isSelectMode
+                  ? 'bg-accent text-accent-fg border-accent shadow-sm'
+                  : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
+              }`}
+            >
+              {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+              <span>{isSelectMode ? 'Cancel' : 'Select'}</span>
+            </button>
 
-          {/* User Custom Shelves */}
-          {categories.map((cat) => {
-            const isCatActive = activeCategory === cat.id;
-            const count = mangaList.filter((m) => m.categories?.includes(cat.id)).length;
-
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setActiveCategory(cat.id);
-                  setStatusFilter('all');
-                }}
-                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                  isCatActive
-                    ? 'font-bold shadow-sm ring-1 ring-white/20'
-                    : 'bg-elevated/80 text-secondary hover:bg-elevated'
-                }`}
-                style={
-                  isCatActive
-                    ? { backgroundColor: cat.color || '#f59e0b', color: '#000' }
-                    : undefined
-                }
+            <div className="flex items-center gap-1.5 text-secondary">
+              <select
+                value={sortBy}
+                onChange={(e: any) => setSortBy(e.target.value)}
+                className="bg-app border border-edge rounded-xl px-2.5 py-1.5 text-primary text-xs font-bold focus:outline-none focus:border-accent"
               >
-                <span style={!isCatActive ? { color: cat.color || '#f59e0b' } : undefined}>
-                  {renderCategoryIcon(cat.icon, 'w-3.5 h-3.5')}
-                </span>
-                <span>{cat.name}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                    isCatActive ? 'bg-black/20 text-black' : 'bg-surface text-muted'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                <option value="unread">⚡ Unread Ahead</option>
+                <option value="lastRead">🕒 Recently Read</option>
+                <option value="updated">🔄 Updated</option>
+                <option value="title">🔤 Title A-Z</option>
+                <option value="rating">★ Highest Rating</option>
+                <option value="chapter">📊 Progress</option>
+              </select>
+            </div>
 
-          <div className="flex items-center gap-1 ml-auto pl-2 shrink-0">
+            <div className="flex items-center bg-app border border-edge rounded-xl p-0.5">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'}`}
+                title="Grid View"
+              >
+                <Layers className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary hover:text-primary'}`}
+                title="Table View"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Dedicated Custom Shelves Ribbon */}
+        <div className="flex items-center gap-2 pt-2 border-t border-edge/60 min-w-0">
+          <div className="flex items-center gap-1 text-[11px] font-bold text-muted shrink-0 hidden sm:flex">
+            <Bookmark className="w-3.5 h-3.5 text-accent" />
+            <span>Shelves:</span>
+          </div>
+
+          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+            {categories.map((cat) => {
+              const isCatActive = activeCategory === cat.id;
+              const count = mangaList.filter((m) => {
+                const cStr = m.categories || [];
+                return cStr.includes(cat.id) || (cat.name && cStr.some((c) => String(c).toLowerCase().trim() === cat.name.toLowerCase().trim()));
+              }).length;
+
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    if (activeCategory === cat.id) {
+                      setActiveCategory(null);
+                    } else {
+                      setActiveCategory(cat.id);
+                      setStatusFilter('all');
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
+                    isCatActive
+                      ? 'font-black shadow-md ring-2 ring-white/30'
+                      : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60'
+                  }`}
+                  style={
+                    isCatActive
+                      ? { backgroundColor: cat.color || '#f59e0b', color: '#000' }
+                      : undefined
+                  }
+                >
+                  <span style={!isCatActive ? { color: cat.color || '#f59e0b' } : undefined}>
+                    {renderCategoryIcon(cat.icon, 'w-3 h-3')}
+                  </span>
+                  <span>{cat.name}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      isCatActive ? 'bg-black/25 text-black' : 'bg-surface text-muted'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            {categories.length === 0 && (
+              <span className="text-xs text-muted italic">No custom shelves created yet.</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 pl-1">
             <button
               onClick={() => setIsManageCategoriesOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-xs font-bold flex items-center gap-1 transition-all"
+              className="px-2.5 py-1 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-xs font-bold flex items-center gap-1 transition-all"
               title="Add or organize custom shelves"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Shelf</span>
+              <Plus className="w-3 h-3" />
+              <span>{categories.length === 0 ? 'Create Shelf' : 'Manage'}</span>
             </button>
           </div>
         </div>
 
-        {/* Secondary Filter Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/80 pt-3">
-          {/* Origin Type Filter */}
+        {/* Row 3: Secondary Filter Bar (Origin Type & 18+ Filter) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/60 pt-2.5 min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-secondary font-medium mr-1">Type:</span>
+            {/* Origin Type Filter */}
+            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5">
               <button
                 onClick={() => setTypeFilter('all')}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-xs sm:text-sm ${
+                className={`px-2.5 py-1 rounded-lg transition-all font-bold ${
                   typeFilter === 'all'
-                    ? 'bg-elevated text-white font-semibold'
+                    ? 'bg-elevated text-primary shadow-xs'
                     : 'text-secondary hover:text-primary'
                 }`}
               >
-                All
+                All Formats
               </button>
               <button
                 onClick={() => setTypeFilter('manhwa')}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
                   typeFilter === 'manhwa'
-                    ? 'bg-elevated text-white font-semibold'
+                    ? 'bg-elevated text-primary shadow-xs'
                     : 'text-secondary hover:text-primary'
                 }`}
               >
@@ -409,9 +484,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={() => setTypeFilter('manhua')}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
                   typeFilter === 'manhua'
-                    ? 'bg-elevated text-white font-semibold'
+                    ? 'bg-elevated text-primary shadow-xs'
                     : 'text-secondary hover:text-primary'
                 }`}
               >
@@ -420,11 +495,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
 
             {/* 18+ NSFW Content Toggle */}
-            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-lg p-0.5 shadow-inner">
+            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5 shadow-inner">
               <button
                 type="button"
                 onClick={() => setNsfwFilter('all')}
-                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs ${
                   nsfwFilter === 'all'
                     ? 'bg-elevated text-primary shadow-xs'
                     : 'text-muted hover:text-secondary'
@@ -436,7 +511,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 type="button"
                 onClick={() => setNsfwFilter('safe')}
-                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs ${
                   nsfwFilter === 'safe'
                     ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-xs'
                     : 'text-muted hover:text-secondary'
@@ -448,7 +523,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <button
                 type="button"
                 onClick={() => setNsfwFilter('18+')}
-                className={`px-2 py-1 rounded-md font-bold transition-all text-xs flex items-center gap-1 ${
+                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 ${
                   nsfwFilter === '18+'
                     ? 'bg-rose-950 text-rose-300 border border-rose-500/50 shadow-xs'
                     : 'text-muted hover:text-rose-400'
@@ -463,57 +538,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           </div>
 
-            {/* Sort & View Mode Controls */}
-            <div className="flex items-center gap-3">
+          {activeCategory && (
+            <div className="flex items-center gap-1.5 text-xs text-secondary">
+              <span>Active Shelf:</span>
+              <span className="font-black text-primary">
+                {categories.find((c) => c.id === activeCategory)?.name || 'Custom Shelf'}
+              </span>
               <button
-                onClick={() => {
-                  setIsSelectMode(!isSelectMode);
-                  if (isSelectMode) setSelectedIds(new Set());
-                }}
-                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 border ${
-                  isSelectMode
-                    ? 'bg-accent text-accent-fg border-accent shadow-sm'
-                    : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
-                }`}
+                onClick={() => setActiveCategory(null)}
+                className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold"
               >
-                {isSelectMode ? <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                <span>{isSelectMode ? 'Cancel Select' : 'Select'}</span>
+                ✕ Clear
               </button>
-
-              <div className="flex items-center gap-1.5 text-secondary">
-                <ArrowUpDown className="w-3.5 h-3.5 text-accent" />
-                <span>Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e: any) => setSortBy(e.target.value)}
-                  className="bg-app border border-edge rounded px-2 py-1 text-primary focus:outline-none focus:border-accent/50"
-                >
-                  <option value="unread">⚡ Unread Chapters Ahead</option>
-                  <option value="lastRead">🕒 Recently Read</option>
-                  <option value="updated">🔄 Recently Updated</option>
-                  <option value="title">🔤 Title A-Z</option>
-                  <option value="rating">★ Highest Rating</option>
-                  <option value="chapter">📊 Chapter Progress</option>
-                </select>
-              </div>
-
-              <div className="flex items-center bg-app border border-edge rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-elevated text-accent' : 'text-secondary'}`}
-                  title="Grid View"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary'}`}
-                  title="Table View"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
+          )}
         </div>
       </div>
 

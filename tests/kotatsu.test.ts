@@ -282,6 +282,35 @@ describe('Kotatsu ZIP archive backup import', () => {
     expect(item.userId).toBe('usr_kotatsu');
     expect(item.notes).toContain('2h 0m reading time');
   });
+
+  it('resolves real category names from categories.json and favourites_categories.json in ZIP archive', async () => {
+    const zip = new AdmZip();
+    zip.addFile('categories.json', Buffer.from(JSON.stringify([
+      { id: 10, name: 'Favorite Webtoons' },
+      { id: 20, name: 'Must Read' }
+    ])));
+    zip.addFile('favourites_categories.json', Buffer.from(JSON.stringify([
+      { favourite_id: 501, category_id: 10 },
+      { favourite_id: 501, category_id: 20 }
+    ])));
+    zip.addFile('favourites.json', Buffer.from(JSON.stringify([
+      {
+        id: 501,
+        manga: {
+          id: 501,
+          title: 'The Greatest Estate Developer',
+          source: 'ASURASCANS',
+          publicUrl: 'https://asurascans.com/comics/estate-dev',
+          genres: ['Comedy', 'Fantasy', 'Manhwa']
+        }
+      }
+    ])));
+
+    const items = await parseKotatsuBackup(zip.toBuffer(), 'usr_kotatsu');
+    expect(items).toHaveLength(1);
+    expect(items[0].categories).toContain('Favorite Webtoons');
+    expect(items[0].categories).toContain('Must Read');
+  });
 });
 
 describe('Kotatsu export', () => {

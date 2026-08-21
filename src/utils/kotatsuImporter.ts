@@ -381,6 +381,7 @@ export async function parseKotatsuBackup(
   let favouritesList: KotatsuFavouriteEntry[] = [];
   let historyList: KotatsuHistoryEntry[] = [];
   const categoriesMap: Map<string | number, string> = new Map();
+  const favToCategoriesMap = new Map<string, Array<string | number>>();
   const statisticsMap = new Map<string, { timeSpentSeconds?: number; chaptersRead?: number; lastRead?: number | string; pagesRead?: number }>();
   let totalImportedReadingTime = 0;
   let totalImportedChaptersStat = 0;
@@ -406,17 +407,33 @@ export async function parseKotatsuBackup(
         return (parts[parts.length - 1] || '').toLowerCase().trim();
       };
       
-      // Parse categories if available
+      // Parse categories and favourites_categories junction tables
       for (const [name, content] of Object.entries(files)) {
         const base = getBase(name);
         if (base === 'sources' || base === 'sources.json') continue; // Ignore sources file
-        if (base === 'categories' || base === 'categories.json' || base === 'favourites_categories' || base === 'favourites_categories.json' || base.includes('categor')) {
+        if (base === 'categories' || base === 'categories.json' || (base.includes('categor') && !base.includes('favourit') && !base.includes('favorit'))) {
           try {
             const parsedCats = JSON.parse(content);
             const list: KotatsuCategory[] = Array.isArray(parsedCats) ? parsedCats : parsedCats.categories || [];
             for (const cat of list) {
               if (cat && cat.id !== undefined && cat.name) {
                 categoriesMap.set(cat.id, cat.name);
+                categoriesMap.set(String(cat.id), cat.name);
+              }
+            }
+          } catch {}
+        } else if (base === 'favourites_categories' || base === 'favourites_categories.json' || base === 'favorites_categories' || base === 'favorites_categories.json') {
+          try {
+            const parsedJunction = JSON.parse(content);
+            const list = Array.isArray(parsedJunction) ? parsedJunction : parsedJunction.favourites_categories || parsedJunction.favorites_categories || [];
+            for (const j of list) {
+              if (!j) continue;
+              const favId = j.favourite_id !== undefined ? String(j.favourite_id) : j.favouriteId !== undefined ? String(j.favouriteId) : j.manga_id !== undefined ? String(j.manga_id) : j.mangaId !== undefined ? String(j.mangaId) : '';
+              const catId = j.category_id !== undefined ? j.category_id : j.categoryId !== undefined ? j.categoryId : j.id;
+              if (favId && catId !== undefined) {
+                const arr = favToCategoriesMap.get(favId) || [];
+                arr.push(catId);
+                favToCategoriesMap.set(favId, arr);
               }
             }
           } catch {}
@@ -752,15 +769,33 @@ export async function parseKotatsuBackup(
     }
 
     const categories: string[] = [];
-    if (entry.categoryId !== undefined && entry.categoryId !== null) {
-      categories.push(String(entry.categoryId));
-    } else if (entry.category_id !== undefined && entry.category_id !== null) {
-      categories.push(String(entry.category_id));
+    const catIdCandidates: Array<string | number> = [];
+
+    if (entry.categoryId !== undefined && entry.categoryId !== null) catIdCandidates.push(entry.categoryId);
+    if (entry.category_id !== undefined && entry.category_id !== null) catIdCandidates.push(entry.category_id);
+    if ((m as any).categoryId !== undefined && (m as any).categoryId !== null) catIdCandidates.push((m as any).categoryId);
+    if ((m as any).category_id !== undefined && (m as any).category_id !== null) catIdCandidates.push((m as any).category_id);
+
+    // Look up from favourites_categories junction map if present
+    const entryId = entry.id !== undefined ? String(entry.id) : '';
+    const mIdStr = m.id !== undefined ? String(m.id) : '';
+    const junctionCats = (entryId ? favToCategoriesMap.get(entryId) : null) || (mIdStr ? favToCategoriesMap.get(mIdStr) : null);
+    if (junctionCats && junctionCats.length > 0) {
+      catIdCandidates.push(...junctionCats);
     }
+
+    // Resolve category candidates through categoriesMap
+    for (const rawCat of catIdCandidates) {
+      const resolvedName = categoriesMap.get(rawCat) || categoriesMap.get(Number(rawCat)) || (typeof rawCat === 'string' && isNaN(Number(rawCat)) ? rawCat : null);
+      if (resolvedName && !categories.includes(resolvedName)) {
+        categories.push(resolvedName);
+      }
+    }
+
     if (Array.isArray(entry.categories)) {
       for (const c of entry.categories) {
-        const cName = typeof c === 'string' ? c : (c.name || (c.id ? String(c.id) : ''));
-        if (cName && !categories.includes(cName)) categories.push(cName);
+        const raw = typeof c === 'string' ? c : (c.name || (c.id !== undefined ? categoriesMap.get(c.id) || categoriesMap.get(Number(c.id)) : ''));
+        if (raw && !categories.includes(raw)) categories.push(raw);
       }
     }
 
