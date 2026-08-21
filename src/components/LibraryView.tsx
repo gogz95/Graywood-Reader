@@ -36,6 +36,11 @@ import {
   Folder,
   Settings,
   Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  Grid3X3,
+  List,
 } from 'lucide-react';
 
 interface LibraryViewProps {
@@ -68,13 +73,38 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
   const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
-  const [sortBy, setSortBy] = useState<'updated' | 'title' | 'chapter' | 'rating' | 'unread' | 'lastRead'>('updated');
+  const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'title' | 'rating' | 'chapter'>('updated');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Categories & Custom Shelves
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+  const [isShelvesExpanded, setIsShelvesExpanded] = useState(false);
+  const shelvesRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkShelfScroll = React.useCallback(() => {
+    if (!shelvesRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = shelvesRef.current;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+  }, []);
+
+  const scrollShelves = (direction: 'left' | 'right') => {
+    if (!shelvesRef.current) return;
+    const offset = direction === 'left' ? -260 : 260;
+    shelvesRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    setTimeout(checkShelfScroll, 220);
+  };
+
+  const handleShelfWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!isShelvesExpanded && shelvesRef.current && e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY * 1.5;
+      checkShelfScroll();
+    }
+  };
 
   const fetchCategories = React.useCallback(async () => {
     try {
@@ -97,6 +127,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     window.addEventListener('refresh-categories', handleRefresh);
     return () => window.removeEventListener('refresh-categories', handleRefresh);
   }, [fetchCategories, mangaList]);
+
+  React.useEffect(() => {
+    checkShelfScroll();
+    window.addEventListener('resize', checkShelfScroll);
+    return () => window.removeEventListener('resize', checkShelfScroll);
+  }, [checkShelfScroll, categories]);
 
   // Multi-Select States
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
@@ -395,13 +431,115 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Row 2: Dedicated Custom Shelves Ribbon */}
-        <div className="flex items-center gap-2 pt-2 border-t border-edge/60 min-w-0">
-          <div className="flex items-center gap-1 text-[11px] font-bold text-muted shrink-0 hidden sm:flex">
-            <Bookmark className="w-3.5 h-3.5 text-accent" />
-            <span>Shelves:</span>
+        <div className="pt-2.5 border-t border-edge/60 space-y-2 min-w-0">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-secondary shrink-0">
+              <Bookmark className="w-3.5 h-3.5 text-accent" />
+              <span>Shelves</span>
+              {categories.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-elevated text-primary border border-edge">
+                  {categories.length}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto text-xs">
+              {/* Scroll buttons (visible when single row and scrollable) */}
+              {!isShelvesExpanded && categories.length > 2 && (
+                <div className="flex items-center gap-0.5 bg-app border border-edge rounded-xl p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => scrollShelves('left')}
+                    disabled={!canScrollLeft}
+                    className={`p-1 rounded-lg transition-colors ${
+                      canScrollLeft ? 'text-primary hover:bg-elevated hover:text-accent' : 'text-muted/40 cursor-not-allowed'
+                    }`}
+                    title="Scroll shelves left"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollShelves('right')}
+                    disabled={!canScrollRight}
+                    className={`p-1 rounded-lg transition-colors ${
+                      canScrollRight ? 'text-primary hover:bg-elevated hover:text-accent' : 'text-muted/40 cursor-not-allowed'
+                    }`}
+                    title="Scroll shelves right"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Expand / Wrap Grid Toggle */}
+              {categories.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => setIsShelvesExpanded(!isShelvesExpanded)}
+                  className={`px-2 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all border ${
+                    isShelvesExpanded
+                      ? 'bg-accent text-accent-fg border-accent shadow-xs'
+                      : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
+                  }`}
+                  title={isShelvesExpanded ? 'Collapse shelves to single scrollable row' : 'Expand all shelves'}
+                >
+                  {isShelvesExpanded ? <List className="w-3 h-3" /> : <Grid3X3 className="w-3 h-3" />}
+                  <span>{isShelvesExpanded ? 'Row' : 'All'}</span>
+                </button>
+              )}
+
+              {/* Manage Shelves Button */}
+              <button
+                onClick={() => setIsManageCategoriesOpen(true)}
+                className="px-2.5 py-1 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-[11px] font-bold flex items-center gap-1 transition-all shadow-xs"
+                title="Add or organize custom shelves"
+              >
+                <Plus className="w-3 h-3" />
+                <span>{categories.length === 0 ? 'Create Shelf' : 'Manage'}</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+          {/* Shelves Container */}
+          <div
+            ref={shelvesRef}
+            onWheel={handleShelfWheel}
+            onScroll={checkShelfScroll}
+            className={`transition-all duration-200 min-w-0 ${
+              isShelvesExpanded
+                ? 'flex flex-wrap items-center gap-1.5 py-1 max-h-48 overflow-y-auto'
+                : 'flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth'
+            }`}
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'var(--color-edge, rgba(255,255,255,0.15)) transparent'
+            }}
+          >
+            {/* All Shelves Pill */}
+            <button
+              onClick={() => {
+                setActiveCategory(null);
+                setStatusFilter('all');
+              }}
+              className={`px-2.5 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
+                activeCategory === null
+                  ? 'bg-accent text-accent-fg font-black shadow-sm ring-1 ring-white/20'
+                  : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60'
+              }`}
+            >
+              <Folder className="w-3 h-3" />
+              <span>All Shelves</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                  activeCategory === null ? 'bg-black/25 text-black' : 'bg-surface text-muted'
+                }`}
+              >
+                {mangaList.length}
+              </span>
+            </button>
+
+            {/* Individual Custom Category Shelves */}
             {categories.map((cat) => {
               const isCatActive = activeCategory === cat.id;
               const count = mangaList.filter((m) => {
@@ -420,10 +558,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       setStatusFilter('all');
                     }
                   }}
-                  className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
+                  className={`px-2.5 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
                     isCatActive
-                      ? 'font-black shadow-md ring-2 ring-white/30'
-                      : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60'
+                      ? 'font-black shadow-md ring-2 ring-white/40 scale-[1.02]'
+                      : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60 hover:border-edge'
                   }`}
                   style={
                     isCatActive
@@ -434,7 +572,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <span style={!isCatActive ? { color: cat.color || '#f59e0b' } : undefined}>
                     {renderCategoryIcon(cat.icon, 'w-3 h-3')}
                   </span>
-                  <span>{cat.name}</span>
+                  <span className="font-semibold">{cat.name}</span>
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
                       isCatActive ? 'bg-black/25 text-black' : 'bg-surface text-muted'
@@ -447,19 +585,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             })}
 
             {categories.length === 0 && (
-              <span className="text-xs text-muted italic">No custom shelves created yet.</span>
+              <span className="text-xs text-muted italic py-0.5">No custom shelves created yet. Click "+ Create Shelf" to make one!</span>
             )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0 pl-1">
-            <button
-              onClick={() => setIsManageCategoriesOpen(true)}
-              className="px-2.5 py-1 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-xs font-bold flex items-center gap-1 transition-all"
-              title="Add or organize custom shelves"
-            >
-              <Plus className="w-3 h-3" />
-              <span>{categories.length === 0 ? 'Create Shelf' : 'Manage'}</span>
-            </button>
           </div>
         </div>
 
@@ -545,14 +672,16 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
 
           {activeCategory && (
-            <div className="flex items-center gap-1.5 text-xs text-secondary">
+            <div className="flex items-center gap-1.5 text-xs text-secondary bg-elevated/80 border border-edge/80 px-2.5 py-1 rounded-xl">
               <span>Active Shelf:</span>
-              <span className="font-black text-primary">
+              <span className="font-black text-accent-2">
                 {categories.find((c) => c.id === activeCategory)?.name || 'Custom Shelf'}
               </span>
               <button
+                type="button"
                 onClick={() => setActiveCategory(null)}
-                className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold"
+                className="ml-1 text-[10px] px-1.5 py-0.5 rounded-lg bg-surface hover:bg-danger/20 text-muted hover:text-danger font-bold transition-all"
+                title="Clear shelf filter"
               >
                 ✕ Clear
               </button>
