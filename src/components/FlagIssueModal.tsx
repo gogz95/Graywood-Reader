@@ -52,7 +52,7 @@ interface FlagIssueModalProps {
   onFlagged?: (isFlagged: boolean, reason: string) => void;
 }
 
-export const FlagIssueModal: React.FC<FlagIssueModalProps> = ({
+export const FlagIssueModal: React.FC<FlagIssueModalProps> = React.memo(({
   manga,
   onClose,
   onReport,
@@ -110,7 +110,7 @@ export const FlagIssueModal: React.FC<FlagIssueModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
@@ -189,5 +189,5 @@ export const FlagIssueModal: React.FC<FlagIssueModalProps> = ({
     </div>,
     document.body
   );
-};
+});
 

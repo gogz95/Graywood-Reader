@@ -287,27 +287,11 @@ img {
 }
 
 /* ── Rendering performance optimizations ─────────────────────────────────── */
-/* Promote off-screen / below-fold content to skip painting until visible.
-   Applied sparingly — only to scrollable containers and long lists. */
-.scroll-container,
-.overflow-y-auto,
-.overflow-auto {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 500px;
-}
-
-/* Isolate heavy layout sections to prevent full-page re-layout */
+/* Isolate heavy grid cards to prevent unnecessary full-page reflows */
 .view-card,
 .library-grid > *,
 .browse-grid > * {
   contain: layout style paint;
-}
-
-/* Optimize GPU compositing for animated/modals */
-.fixed-modal,
-[class*="backdrop"] {
-  will-change: transform;
-  transform: translateZ(0);
 }
 
 /* Tell the browser images outside the viewport don't need decoding yet */
@@ -315,4 +299,5 @@ img[loading="lazy"] {
   content-visibility: auto;
   contain-intrinsic-size: auto 300px;
 }
+
 

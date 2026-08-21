@@ -46,7 +46,7 @@ function computeMetadataOverrides(
   return OVERRIDEABLE_METADATA.filter((field) => overridden.has(field));
 }
 
-export const AddEditModal: React.FC<AddEditModalProps> = ({
+export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
   initialManga,
   onClose,
   onSave,
@@ -138,7 +138,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-app/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-surface border border-edge rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-0 my-8">
         <div className="p-5 bg-app border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -316,4 +316,4 @@ export const AddEditModal: React.FC<AddEditModalProps> = ({
       </div>
     </div>
   );
-};
+});

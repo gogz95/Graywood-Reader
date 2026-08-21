@@ -31,7 +31,7 @@ function buildHeatmapDays(activities: DailyReadingActivity[], days = 112) {
   });
 }
 
-export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ mangaList, onClose }) => {
+export const AnalyticsModal: React.FC<AnalyticsModalProps> = React.memo(({ mangaList, onClose }) => {
   const libraryChapters = useMemo(
     () => mangaList.reduce((acc, m) => acc + (Number(m.currentChapter) || 0), 0),
     [mangaList]
@@ -92,7 +92,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ mangaList, onClo
     'bg-accent-bright shadow-md shadow-accent/50';
 
   return (
-    <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-surface border border-edge rounded-2xl max-w-3xl w-full p-6 space-y-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-edge pb-3">
           <div className="font-black text-primary text-base flex items-center gap-2">
@@ -195,4 +195,4 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ mangaList, onClo
       </div>
     </div>
   );
-};
+});

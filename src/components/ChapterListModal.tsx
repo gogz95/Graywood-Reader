@@ -27,7 +27,7 @@ interface ChapterListModalProps {
   onMarkRead: (chapterNumber: number) => void;
 }
 
-export const ChapterListModal: React.FC<ChapterListModalProps> = ({
+export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
   manga,
   onClose,
   onOpenReader,
@@ -113,7 +113,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-app/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-surface border border-edge rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[85vh] my-8">
         {/* Header */}
         <div className="p-5 bg-gradient-to-r from-app via-surface to-app border-b border-edge flex items-center justify-between gap-4">
@@ -299,4 +299,4 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
       </div>
     </div>
   );
-};
+});

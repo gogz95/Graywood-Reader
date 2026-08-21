@@ -35,7 +35,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
   onToggleFlagDropdown,
 }) => {
   return (
-    <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-surface border border-edge rounded-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl text-primary text-xs sm:text-sm">
         <div className="flex items-center justify-between border-b border-edge pb-3">
           <div className="font-extrabold text-primary text-base flex items-center gap-2">

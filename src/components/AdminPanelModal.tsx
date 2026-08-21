@@ -13,7 +13,7 @@ interface AdminPanelModalProps {
   onClose: () => void;
 }
 
-export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
+export const AdminPanelModal: React.FC<AdminPanelModalProps> = React.memo(({
   currentUser,
   allUsers,
   mangaList,
@@ -52,7 +52,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-app/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6 space-y-6 shadow-2xl relative my-0 sm:my-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-edge pb-4">
@@ -246,5 +246,5 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
       </div>
     </div>
   );
-};
+});
 

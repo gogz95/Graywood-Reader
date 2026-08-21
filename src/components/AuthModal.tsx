@@ -11,7 +11,7 @@ interface AuthModalProps {
   guestProfile?: UserProfile;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({
+export const AuthModal: React.FC<AuthModalProps> = React.memo(({
   onLogin,
   onRegister,
   existingUsers,
@@ -118,9 +118,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 bg-app/85 backdrop-blur-xl flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
     >
-      <div className="bg-surface/95 border border-edge rounded-t-3xl sm:rounded-3xl max-w-md w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col my-0 sm:my-auto relative backdrop-blur-md">
+      <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-3xl max-w-md w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col my-0 sm:my-auto relative">
         <button type="button" onClick={onClose} title="Close Auth Portal" className="absolute top-4 right-4 p-2 rounded-full bg-elevated text-secondary hover:text-primary z-10">
           <X className="w-4 h-4" />
         </button>
@@ -203,4 +203,4 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
     </div>
   );
-};
+});
