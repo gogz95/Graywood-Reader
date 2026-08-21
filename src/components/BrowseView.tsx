@@ -3,8 +3,6 @@ import { apiFetch } from '../utils/api';
 import { MangaItem, SourceDefinition, hasWorkingReaderSource } from '../types';
 import { isReaderAvailable } from '../utils/catalog';
 
-import { extractPanelImages } from '../utils/extractImages';
-
 import {
   Compass,
   Search,
@@ -107,13 +105,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       const res = await apiFetch(`/api/explore?${params.toString()}`);
       if (!res.ok) throw new Error(`Explore feed returned ${res.status}`);
       const data = await res.json();
-      // Extract preview images for each item
-      const itemsWithImages = data.items?.map(item => {
-        const images = extractPanelImages(item.htmlContent || '');
-        return { ...item, previewImages: Array.from(new Set(images)) };
-      }) || [];
-
-      setResults(itemsWithImages);
+      setResults(Array.isArray(data.items) ? data.items : []);
       setTotalPages(Number(data.totalPages) || 0);
     } catch (e: any) {
       console.error('[Explore] Feed error:', e.message);

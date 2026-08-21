@@ -21,6 +21,6 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "server.ts", "sqlite-db.ts", "server", "tests", "rebuild-db.ts", "vite.config.mts", "vitest.config.mts"],
+  "include": ["src", "server.ts", "sqlite-db.ts", "server", "tests", "scripts", "vite.config.mts", "vitest.config.mts"],
   "exclude": ["node_modules", "dist", "dist-server"]
 }

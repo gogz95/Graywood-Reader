@@ -1,9 +1,9 @@
 /**
  * Clear and rebuild the manga database from all working sources.
- * Usage: npx tsx rebuild-db.ts
+ * Usage: npm run db:rebuild  OR  npx tsx scripts/rebuild-db.ts
  */
-import { SqliteDb } from './sqlite-db';
-import { updateDatabaseWithAllAvailableSeries } from './server';
+import { SqliteDb } from '../sqlite-db';
+import { updateDatabaseWithAllAvailableSeries } from '../server';
 
 async function main() {
   console.log('[Rebuild] Clearing all manga from database...');
@@ -36,7 +36,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('[Rebuild] Fatal error:', err);
   process.exit(1);
 });
