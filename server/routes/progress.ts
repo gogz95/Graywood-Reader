@@ -63,6 +63,7 @@ progressRouter.post("/api/reader/progress", (req, res) => {
   try {
     const ch = Number(chapterNumber) || 0;
     SqliteDb.setUserLibraryChapter(userId, String(mangaId), ch);
+    SqliteDb.setUserFavorite(userId, String(mangaId), true);
   } catch (err) {
     console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
   }

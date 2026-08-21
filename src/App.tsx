@@ -376,6 +376,7 @@ export default function App() {
             currentChapter: nextCh,
             latestChapter: Math.max(m.latestChapter, nextCh),
             lastReadAt: new Date().toISOString(),
+            isFavorite: true,
           };
         }
         return m;
@@ -672,26 +673,43 @@ export default function App() {
     }
 
     const isPrivate = appSettings.privateModeEnabled;
+    const currentManga = mangaList.find((m) => m.id === mangaId) || (readerTarget?.manga?.id === mangaId ? readerTarget.manga : null);
 
-    setMangaList((prev) =>
-      prev.map((m) => {
-        if (m.id === mangaId) {
-          const nextCh = Math.max(m.currentChapter, chapterNumber);
-          const updates: any = {
-            ...m,
-            currentChapter: nextCh,
-            latestChapter: Math.max(m.latestChapter, nextCh),
-            status: m.status === 'plan_to_read' ? 'reading' : m.status,
-          };
-          // In private mode don't update last-read timestamp used by analytics/history.
-          if (!isPrivate) {
-            updates.lastReadAt = new Date().toISOString();
+    setMangaList((prev) => {
+      const exists = prev.some((m) => m.id === mangaId);
+      if (exists) {
+        return prev.map((m) => {
+          if (m.id === mangaId) {
+            const nextCh = Math.max(m.currentChapter, chapterNumber);
+            const updates: any = {
+              ...m,
+              currentChapter: nextCh,
+              latestChapter: Math.max(m.latestChapter, nextCh),
+              status: m.status === 'plan_to_read' ? 'reading' : m.status,
+              isFavorite: true,
+            };
+            // In private mode don't update last-read timestamp used by analytics/history.
+            if (!isPrivate) {
+              updates.lastReadAt = new Date().toISOString();
+            }
+            return updates;
           }
-          return updates;
-        }
-        return m;
-      })
-    );
+          return m;
+        });
+      } else if (currentManga) {
+        const nextCh = Math.max(currentManga.currentChapter || 0, chapterNumber);
+        const newManga: MangaItem = {
+          ...currentManga,
+          currentChapter: nextCh,
+          latestChapter: Math.max(currentManga.latestChapter || 1, nextCh),
+          status: currentManga.status === 'plan_to_read' ? 'reading' : (currentManga.status || 'reading'),
+          isFavorite: true,
+          lastReadAt: !isPrivate ? new Date().toISOString() : undefined,
+        };
+        return [...prev, newManga];
+      }
+      return prev;
+    });
 
     if (activeProfileId === 'usr_guest') {
       saveClientSessionProgress(mangaId, chapterNumber);
@@ -707,10 +725,10 @@ export default function App() {
       await apiFetch('/api/reader/mark-read', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mangaId, chapterNumber }),
+        body: JSON.stringify({ mangaId, chapterNumber, manga: currentManga }),
       });
 
-      const mangaItem = mangaList.find((m) => m.id === mangaId);
+      const mangaItem = mangaList.find((m) => m.id === mangaId) || currentManga;
       if (!mangaItem) return;
 
       // AniList Live Scrobbler
@@ -787,7 +805,7 @@ export default function App() {
     );
   };
 
-  const unreadCount = mangaList.filter((m) => m.latestChapter > m.currentChapter).length;
+  const unreadCount = myLibraryList.filter((m) => m.latestChapter > m.currentChapter).length;
 
   return (
     <div className="min-h-screen bg-app text-primary font-sans antialiased flex flex-col">

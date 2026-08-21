@@ -953,6 +953,7 @@ app.post("/api/manga/increment/:id", (req, res) => {
   SqliteDb.setUserLibraryChapter(userId, id, newChapter, {
     status: overlay.status === 'plan_to_read' ? 'reading' : overlay.status,
   });
+  SqliteDb.setUserFavorite(userId, id, true);
   const updated = SqliteDb.applyUserOverlay([existing], userId)[0];
   res.json(updated);
 });
@@ -6102,8 +6103,34 @@ app.get("/api/reader/panel-image", (req, res) => {
 
 // Mark Chapter as Read
 app.post("/api/reader/mark-read", (req, res) => {
-  const { mangaId, chapterNumber } = req.body || {};
-  const manga = SqliteDb.getMangaById(String(mangaId)) || mangaDatabase.find((m) => m.id === mangaId);
+  const { mangaId, chapterNumber, manga: mangaPayload } = req.body || {};
+  let manga = SqliteDb.getMangaById(String(mangaId)) || mangaDatabase.find((m) => m.id === mangaId);
+  if (!manga && mangaPayload && typeof mangaPayload === 'object') {
+    const rawManga: MangaItem = {
+      id: String(mangaId || mangaPayload.id || `manga_${Date.now()}`),
+      title: String(mangaPayload.title || 'Untitled Series'),
+      altTitles: Array.isArray(mangaPayload.altTitles) ? mangaPayload.altTitles : [],
+      type: ['manga', 'manhwa', 'manhua'].includes(mangaPayload.type) ? mangaPayload.type : 'manhwa',
+      coverImage: String(mangaPayload.coverImage || ''),
+      description: String(mangaPayload.description || ''),
+      genres: Array.isArray(mangaPayload.genres) ? mangaPayload.genres : ['Action'],
+      status: 'reading',
+      currentChapter: Number(chapterNumber) || 0,
+      totalChapters: mangaPayload.totalChapters ? Number(mangaPayload.totalChapters) : null,
+      latestChapter: Number(mangaPayload.latestChapter) || Number(chapterNumber) || 1,
+      rating: Number(mangaPayload.rating) || 9.0,
+      sourceUrl: String(mangaPayload.sourceUrl || ''),
+      sourceName: String(mangaPayload.sourceName || 'Explore'),
+      autoUpdateEnabled: mangaPayload.autoUpdateEnabled !== false,
+      notes: String(mangaPayload.notes || ''),
+      addedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      lastReadAt: new Date().toISOString(),
+      isFavorite: true,
+    };
+    syncAddOrUpdateManga(rawManga);
+    manga = rawManga;
+  }
   if (!manga) {
     return res.status(404).json({ error: "Manga not found" });
   }
@@ -6113,6 +6140,9 @@ app.post("/api/reader/mark-read", (req, res) => {
   SqliteDb.setUserLibraryChapter(userId, manga.id, newChapterNum, {
     status: manga.status === 'plan_to_read' ? 'reading' : manga.status,
   });
+  // Auto-add to user favorites / library on reading
+  SqliteDb.setUserFavorite(userId, manga.id, true);
+
   // Keep page-level progress row in sync for resume
   SqliteDb.upsertReadingProgress({
     manga_id: manga.id,
