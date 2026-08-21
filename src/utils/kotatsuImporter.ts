@@ -702,6 +702,23 @@ export async function parseKotatsuBackup(
       }
     }
 
+    // Direct chapter progress fields
+    if (typeof entry.currentChapter === 'number' && entry.currentChapter > currentChapter) {
+      currentChapter = entry.currentChapter;
+    }
+    if (typeof (m as any).currentChapter === 'number' && (m as any).currentChapter > currentChapter) {
+      currentChapter = (m as any).currentChapter;
+    }
+    if (typeof entry.progress === 'number' && entry.progress > currentChapter) {
+      currentChapter = entry.progress;
+    }
+    if (typeof (m as any).progress === 'number' && (m as any).progress > currentChapter) {
+      currentChapter = (m as any).progress;
+    }
+    if (typeof (entry as any).lastChapterRead === 'number' && (entry as any).lastChapterRead > currentChapter) {
+      currentChapter = (entry as any).lastChapterRead;
+    }
+
     // Favorites & Library inclusion: all items in a Kotatsu backup are user library items
     const isFavorite = entry.favorite !== false && (entry as any).isFavorite !== false;
 

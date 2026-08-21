@@ -139,6 +139,30 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       currentChapter = readChapters.length;
     }
 
+    // Check history list
+    const historyList = entry.history || entry.manga?.history;
+    if (Array.isArray(historyList) && historyList.length > 0) {
+      for (const h of historyList) {
+        if (h && typeof h.chapter_number === 'number' && h.chapter_number > currentChapter) {
+          currentChapter = Math.floor(h.chapter_number);
+        }
+      }
+    }
+
+    // Direct chapter progress fields
+    if (typeof entry.currentChapter === 'number' && entry.currentChapter > currentChapter) {
+      currentChapter = entry.currentChapter;
+    }
+    if (typeof (entry.manga as any)?.currentChapter === 'number' && (entry.manga as any).currentChapter > currentChapter) {
+      currentChapter = (entry.manga as any).currentChapter;
+    }
+    if (typeof entry.last_chapter_read === 'number' && entry.last_chapter_read > currentChapter) {
+      currentChapter = Math.floor(entry.last_chapter_read);
+    }
+    if (typeof (entry.manga as any)?.last_chapter_read === 'number' && (entry.manga as any).last_chapter_read > currentChapter) {
+      currentChapter = Math.floor((entry.manga as any).last_chapter_read);
+    }
+
     const type: MangaType = detectFormatFromGenres(genres, title);
     const hasWorkingSource = Boolean(url && url.trim().length > 0 && !isMangaDexSourceLink(sourceName, url));
     const isFlagged = !hasWorkingSource;

@@ -337,4 +337,51 @@ export function hasWorkingReaderSource(manga: {
   return false;
 }
 
+export function isNsfwManga(manga?: {
+  genres?: string[];
+  title?: string;
+  altTitles?: string[];
+  notes?: string;
+  description?: string;
+}): boolean {
+  if (!manga) return false;
+  const genres = Array.isArray(manga.genres) ? manga.genres : [];
+  for (const g of genres) {
+    const glc = g.toLowerCase().trim();
+    if (
+      glc === '18+' ||
+      glc === 'adult' ||
+      glc === 'mature' ||
+      glc === 'smut' ||
+      glc === 'ecchi' ||
+      glc === 'hentai' ||
+      glc === 'erotica' ||
+      glc === 'nsfw' ||
+      glc === 'r18' ||
+      glc === 'porn' ||
+      glc === 'uncensored' ||
+      glc.includes('18+') ||
+      glc.includes('adult') ||
+      glc.includes('hentai') ||
+      glc.includes('erotica')
+    ) {
+      return true;
+    }
+  }
+
+  const textToCheck = `${manga.title || ''} ${(manga.altTitles || []).join(' ')} ${manga.notes || ''}`.toLowerCase();
+  if (
+    textToCheck.includes('[18+]') ||
+    textToCheck.includes('(18+)') ||
+    textToCheck.includes(' 18+ ') ||
+    textToCheck.includes('[uncensored]') ||
+    textToCheck.includes('[nsfw]') ||
+    textToCheck.includes('(nsfw)')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 

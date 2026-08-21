@@ -875,15 +875,55 @@ app.post("/api/manga/bulk-import", (req, res) => {
     syncedFromApi: MANGA_CREATE_FIELDS.syncedFromApi(body.syncedFromApi),
     apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
     isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
+    categories: Array.isArray(body.categories) ? body.categories : [],
     userId,
   }));
 
   syncBulkAddOrUpdateManga(processedItems);
 
   if (uid) {
+    const existingCats = SqliteDb.getCategories(uid);
+    const catNameToId = new Map<string, string>();
+    for (const c of existingCats) {
+      catNameToId.set(c.name.toLowerCase().trim(), c.id);
+      catNameToId.set(c.id, c.id);
+    }
+    const colorList = ['#f59e0b', '#f43f5e', '#10b981', '#a855f7', '#0ea5e9', '#6366f1', '#06b6d4', '#ec4899'];
+
     for (const item of processedItems) {
       if (item.isFavorite) {
         SqliteDb.setUserFavorite(uid, item.id, true);
+      }
+      if (item.currentChapter > 0 || item.status) {
+        SqliteDb.setUserLibraryChapter(uid, item.id, item.currentChapter, { status: item.status });
+      }
+      if (Array.isArray(item.categories) && item.categories.length > 0) {
+        const resolvedIds: string[] = [];
+        for (const catNameOrId of item.categories) {
+          const trimmed = String(catNameOrId).trim();
+          if (!trimmed) continue;
+          let catId = catNameToId.get(trimmed.toLowerCase()) || catNameToId.get(trimmed);
+          if (!catId) {
+            catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            const pickColor = colorList[existingCats.length % colorList.length];
+            SqliteDb.createCategory({
+              id: catId,
+              name: trimmed,
+              color: pickColor,
+              icon: 'Bookmark',
+              sortOrder: existingCats.length,
+              userId: uid,
+              createdAt: new Date().toISOString(),
+            });
+            catNameToId.set(trimmed.toLowerCase(), catId);
+            catNameToId.set(catId, catId);
+            existingCats.push({ id: catId, name: trimmed, sortOrder: existingCats.length, userId: uid });
+          }
+          resolvedIds.push(catId);
+        }
+        if (resolvedIds.length > 0) {
+          SqliteDb.setMangaCategories(item.id, resolvedIds, uid);
+        }
       }
     }
   }
@@ -5044,6 +5084,8 @@ export function migrateImportedBackupsToFavorites(): number {
   const adminId = profiles.find((p: any) => p.role === 'admin')?.id || 'usr_admin';
 
   let fixed = 0;
+  const colorList = ['#f59e0b', '#f43f5e', '#10b981', '#a855f7', '#0ea5e9', '#6366f1', '#06b6d4', '#ec4899'];
+
   for (const m of allManga) {
     if (m.id.startsWith('kotatsu_') || m.id.startsWith('tachi_')) {
       if (!m.isFavorite) {
@@ -5063,6 +5105,53 @@ export function migrateImportedBackupsToFavorites(): number {
       }
       for (const p of profiles) {
         SqliteDb.setUserFavorite(p.id, m.id, true);
+      }
+
+      // Restore category links from backup metadata
+      if (Array.isArray(m.categories) && m.categories.length > 0) {
+        const targetUsers = [adminId, m.userId, ...profiles.map((p: any) => p.id)].filter(Boolean);
+        for (const uid of Array.from(new Set(targetUsers))) {
+          const userCats = SqliteDb.getCategories(uid);
+          const userCatMap = new Map<string, string>();
+          for (const c of userCats) {
+            userCatMap.set(c.name.toLowerCase().trim(), c.id);
+            userCatMap.set(c.id, c.id);
+          }
+
+          const resolvedIds: string[] = [];
+          for (const rawCat of m.categories) {
+            const trimmed = String(rawCat).trim();
+            if (!trimmed) continue;
+            let catId = userCatMap.get(trimmed.toLowerCase()) || userCatMap.get(trimmed);
+            if (!catId) {
+              catId = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+              const pickColor = colorList[userCats.length % colorList.length];
+              SqliteDb.createCategory({
+                id: catId,
+                name: trimmed,
+                color: pickColor,
+                icon: 'Bookmark',
+                sortOrder: userCats.length,
+                userId: uid,
+                createdAt: new Date().toISOString(),
+              });
+              userCatMap.set(trimmed.toLowerCase(), catId);
+              userCatMap.set(catId, catId);
+              userCats.push({ id: catId, name: trimmed, sortOrder: userCats.length, userId: uid });
+            }
+            resolvedIds.push(catId);
+          }
+          if (resolvedIds.length > 0) {
+            SqliteDb.setMangaCategories(m.id, resolvedIds, uid);
+          }
+        }
+      }
+
+      if (m.currentChapter > 0 || m.status) {
+        const targetUsers = [adminId, m.userId, ...profiles.map((p: any) => p.id)].filter(Boolean);
+        for (const uid of Array.from(new Set(targetUsers))) {
+          SqliteDb.setUserLibraryChapter(uid, m.id, m.currentChapter, { status: m.status });
+        }
       }
     }
   }

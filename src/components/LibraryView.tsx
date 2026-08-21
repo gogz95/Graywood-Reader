@@ -6,6 +6,7 @@ import {
   MangaType,
   hasWorkingReaderSource,
   UserCategory,
+  isNsfwManga,
 } from '../types';
 import { ManageCategoriesModal, renderCategoryIcon } from './ManageCategoriesModal';
 import { apiFetch } from '../utils/api';
@@ -65,6 +66,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 }) => {
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
+  const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
   const [sortBy, setSortBy] = useState<'updated' | 'title' | 'chapter' | 'rating' | 'unread' | 'lastRead'>('updated');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
@@ -131,8 +133,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       return false;
     }
 
-    // Type Filter
+    // Origin Type Filter
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
+
+    // 18+ / NSFW Content Filter
+    if (nsfwFilter === 'safe' && isNsfwManga(item)) return false;
+    if (nsfwFilter === '18+' && !isNsfwManga(item)) return false;
 
     // Search Query
     if (searchQuery) {
@@ -378,38 +384,83 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         {/* Secondary Filter Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/80 pt-3">
           {/* Origin Type Filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-secondary font-medium mr-1">Type:</span>
-            <button
-              onClick={() => setTypeFilter('all')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-xs sm:text-sm ${
-                typeFilter === 'all'
-                  ? 'bg-elevated text-white font-semibold'
-                  : 'text-secondary hover:text-primary'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setTypeFilter('manhwa')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
-                typeFilter === 'manhwa'
-                  ? 'bg-elevated text-white font-semibold'
-                  : 'text-secondary hover:text-primary'
-              }`}
-            >
-              <span>🇰🇷</span> Manhwa
-            </button>
-            <button
-              onClick={() => setTypeFilter('manhua')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
-                typeFilter === 'manhua'
-                  ? 'bg-elevated text-white font-semibold'
-                  : 'text-secondary hover:text-primary'
-              }`}
-            >
-              <span>🇨🇳</span> Manhua
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-secondary font-medium mr-1">Type:</span>
+              <button
+                onClick={() => setTypeFilter('all')}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-xs sm:text-sm ${
+                  typeFilter === 'all'
+                    ? 'bg-elevated text-white font-semibold'
+                    : 'text-secondary hover:text-primary'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setTypeFilter('manhwa')}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
+                  typeFilter === 'manhwa'
+                    ? 'bg-elevated text-white font-semibold'
+                    : 'text-secondary hover:text-primary'
+                }`}
+              >
+                <span>🇰🇷</span> Manhwa
+              </button>
+              <button
+                onClick={() => setTypeFilter('manhua')}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all flex items-center gap-1 text-xs sm:text-sm ${
+                  typeFilter === 'manhua'
+                    ? 'bg-elevated text-white font-semibold'
+                    : 'text-secondary hover:text-primary'
+                }`}
+              >
+                <span>🇨🇳</span> Manhua
+              </button>
+            </div>
+
+            {/* 18+ NSFW Content Toggle */}
+            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-lg p-0.5 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setNsfwFilter('all')}
+                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                  nsfwFilter === 'all'
+                    ? 'bg-elevated text-primary shadow-xs'
+                    : 'text-muted hover:text-secondary'
+                }`}
+                title="Show all content"
+              >
+                All Content
+              </button>
+              <button
+                type="button"
+                onClick={() => setNsfwFilter('safe')}
+                className={`px-2 py-1 rounded-md font-bold transition-all text-xs ${
+                  nsfwFilter === 'safe'
+                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                    : 'text-muted hover:text-secondary'
+                }`}
+                title="Hide 18+ / Adult series"
+              >
+                Safe
+              </button>
+              <button
+                type="button"
+                onClick={() => setNsfwFilter('18+')}
+                className={`px-2 py-1 rounded-md font-bold transition-all text-xs flex items-center gap-1 ${
+                  nsfwFilter === '18+'
+                    ? 'bg-rose-950 text-rose-300 border border-rose-500/50 shadow-xs'
+                    : 'text-muted hover:text-rose-400'
+                }`}
+                title="Show only 18+ / Mature series"
+              >
+                <span>🔞 18+</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-900/60 text-rose-300">
+                  {mangaList.filter(isNsfwManga).length}
+                </span>
+              </button>
+            </div>
           </div>
 
             {/* Sort & View Mode Controls */}
@@ -548,6 +599,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     {hasNewChapter && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md animate-pulse">
                         +{manga.latestChapter - manga.currentChapter} New
+                      </span>
+                    )}
+
+                    {isNsfwManga(manga) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-md">
+                        🔞 18+
                       </span>
                     )}
 
@@ -722,9 +779,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                               onClick={() => {
                                 if (!isSelectMode) onSelectManga(manga);
                               }}
-                              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1"
+                              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1 flex items-center gap-1.5"
                             >
-                              {manga.title}
+                              <span>{manga.title}</span>
+                              {isNsfwManga(manga) && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
+                                  🔞 18+
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-secondary line-clamp-1">
                               {manga.altTitles[0] || 'No alt title'}

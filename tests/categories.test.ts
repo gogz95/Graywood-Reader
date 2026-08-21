@@ -107,4 +107,77 @@ describe('User-Defined Categories & Custom Shelves', () => {
     expect(deleteRes.status).toBe(200);
     expect(deleteRes.body.success).toBe(true);
   });
+
+  it('restores and auto-creates categories from backup bulk import', async () => {
+    const backupCategoryName = `Imported Category ${Date.now()}`;
+    const backupItems = [
+      {
+        id: `kotatsu_backup_cat_${Date.now()}`,
+        title: 'Overgeared',
+        sourceName: 'Asura Scans',
+        sourceUrl: 'https://asurascans.com/comics/overgeared',
+        isFavorite: true,
+        categories: [backupCategoryName],
+      },
+    ];
+
+    const importRes = await request(app)
+      .post('/api/manga/bulk-import')
+      .send(backupItems);
+
+    expect(importRes.status).toBe(201);
+    expect(importRes.body.count).toBe(1);
+
+    // Verify category was automatically created in user categories
+    const getCatsRes = await request(app).get('/api/categories');
+    expect(getCatsRes.status).toBe(200);
+    const foundCat = getCatsRes.body.find((c: any) => c.name === backupCategoryName);
+    expect(foundCat).toBeDefined();
+
+    // Verify manga is linked to this category
+    const mangaCategories = SqliteDb.getMangaCategories(backupItems[0].id, 'usr_admin');
+    expect(mangaCategories).toContain(foundCat.id);
+  });
+
+  it('restores user reading progress on backup bulk import', async () => {
+    const progressMangaId = `tachi_prog_${Date.now()}`;
+    const backupItems = [
+      {
+        id: progressMangaId,
+        title: 'Solo Leveling',
+        sourceName: 'Asura Scans',
+        sourceUrl: 'https://asurascans.com/comics/solo-leveling',
+        currentChapter: 142,
+        totalChapters: 200,
+        status: 'reading',
+        isFavorite: true,
+      },
+    ];
+
+    const importRes = await request(app)
+      .post('/api/manga/bulk-import')
+      .send(backupItems);
+
+    expect(importRes.status).toBe(201);
+
+    // Verify progress is persisted in user library state
+    const stateMap = SqliteDb.getUserLibraryStateMap('usr_admin');
+    const itemState = stateMap.get(progressMangaId);
+    expect(itemState).toBeDefined();
+    expect(itemState?.currentChapter).toBe(142);
+    expect(itemState?.status).toBe('reading');
+  });
+
+  it('correctly detects 18+ / NSFW manga for library toggle', async () => {
+    const { isNsfwManga } = await import('../src/types');
+
+    expect(isNsfwManga({ genres: ['Action', 'Fantasy'] })).toBe(false);
+    expect(isNsfwManga({ genres: ['Action', '18+', 'Drama'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['Smut', 'Romance'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['Adult', 'Psychological'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['Erotica'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['Hentai'] })).toBe(true);
+    expect(isNsfwManga({ title: 'Secret Class [18+]' })).toBe(true);
+    expect(isNsfwManga({ title: 'Regular Title', notes: 'Imported uncensored [nsfw]' })).toBe(true);
+  });
 });
