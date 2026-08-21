@@ -2,7 +2,7 @@
 # MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # ==============================================================================
 
-FROM node:22-alpine AS builder
+FROM node:lts-alpine AS builder
 
 WORKDIR /app
 
@@ -10,8 +10,7 @@ COPY package*.json ./
 
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache python3 make g++ && \
+RUN apk add --no-cache python3 make g++ && \
     npm ci && \
     apk del python3 make g++
 
@@ -19,7 +18,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:lts-alpine AS runner
 
 WORKDIR /app
 
@@ -29,8 +28,7 @@ ENV HOST=0.0.0.0
 
 COPY package*.json ./
 
-RUN apk update && apk upgrade --no-cache && \
-    apk add --no-cache python3 make g++ libstdc++ wget && \
+RUN apk add --no-cache python3 make g++ libstdc++ wget && \
     npm ci --omit=dev && \
     apk del python3 make g++
 
