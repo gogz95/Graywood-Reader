@@ -58,7 +58,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
         mangaTitle: manga.title,
         chapterNumbers: chapters.map((c) => c.chapterNumber),
         fetchChapterPages: async (chNum) => {
-          const res = await apiFetch(`/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&chapterNumber=${chNum}`);
+          const res = await apiFetch(`/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&chapterNumber=${chNum}${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}${manga.title ? `&title=${encodeURIComponent(manga.title)}` : ''}`);
           if (!res.ok) return [];
           const data = await res.json();
           return Array.isArray(data.pages) ? data.pages : [];
@@ -86,7 +86,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = ({
   const fetchChapters = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/reader/chapters/${manga.id}?order=${sortOrder}`);
+      const res = await apiFetch(`/api/reader/chapters/${encodeURIComponent(manga.id)}?order=${sortOrder}${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}`);
       if (res.ok) {
         const data = await res.json();
         setChapters(data);

@@ -2433,19 +2433,48 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
   const { mangaId } = req.params;
   const order = (req.query.order as string) || 'desc'; // 'desc' or 'asc'
 
-  const manga = resolveManga(mangaId);
-  if (!manga) {
+  let manga = resolveManga(mangaId);
+  let liveSourceUrl = (req.query.url as string) || manga?.sourceUrl || '';
+
+  // If liveSourceUrl is empty, try inferring from mangaId prefix (e.g. asura_..., flame_..., kotatsu_...)
+  if (!liveSourceUrl && mangaId) {
+    if (mangaId.startsWith('asura_')) {
+      const slug = mangaId.replace('asura_', '');
+      liveSourceUrl = `https://asurascans.com/comics/${slug}`;
+    } else if (mangaId.startsWith('flame_')) {
+      const slug = mangaId.replace('flame_', '');
+      liveSourceUrl = `https://flamecomics.xyz/series/${slug}`;
+    } else if (mangaId.startsWith('kotatsu_')) {
+      for (const src of KOTATSU_SOURCES) {
+        if (mangaId.startsWith(`kotatsu_${src.id}_`)) {
+          const pathOrSlug = mangaId.replace(`kotatsu_${src.id}_`, '');
+          liveSourceUrl = pathOrSlug.startsWith('http') ? pathOrSlug : `${src.baseUrl.replace(/\/$/, '')}/${pathOrSlug}`;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!manga && !liveSourceUrl) {
     return res.status(404).json({ error: "Manga not found" });
   }
 
   // Resolve the best available live source URL — skip MangaDex (metadata-only), prefer
   // availableSources when the primary sourceUrl points to MangaDex.
-  let liveSourceUrl = manga.sourceUrl || '';
-  if (liveSourceUrl && liveSourceUrl.toLowerCase().includes('mangadex.org') && manga.availableSources?.length) {
+  if (manga && liveSourceUrl && liveSourceUrl.toLowerCase().includes('mangadex.org') && manga.availableSources?.length) {
     const alt = manga.availableSources.find(
       (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
     );
     if (alt) liveSourceUrl = alt.sourceUrl;
+  }
+
+  // If no working live source URL exists (e.g. series was imported from MangaDex metadata only),
+  // auto-discover a live scanlation source by title.
+  if (manga && (!liveSourceUrl || liveSourceUrl.toLowerCase().includes('mangadex.org'))) {
+    const autoSource = await autoDiscoverLiveSourceForManga(manga);
+    if (autoSource) {
+      liveSourceUrl = autoSource.sourceUrl;
+    }
   }
 
   // If no working live source URL exists (e.g. series was imported from MangaDex metadata only),
@@ -4803,6 +4832,8 @@ const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'hotcomics',   name: 'HotComics',          domain: 'hotcomics.net',   engine: 'hotcomics', lang: 'en', isNsfw: true },
   { id: 'daycomics',   name: 'DayComics',          domain: 'daycomics.com',   engine: 'hotcomics', lang: 'en', isNsfw: true },
   // ── Custom API Sources ────────────────────────────────────────────────────
+  { id: 'asurascans',  name: 'Asura Scans',        domain: 'asurascans.com',  engine: 'custom', lang: 'en', isNsfw: false },
+  { id: 'flamecomics', name: 'Flame Comics',       domain: 'flamecomics.xyz', engine: 'custom', lang: 'en', isNsfw: false },
   { id: 'batoto',      name: 'Bato.to',            domain: 'bato.to',         engine: 'batoto', lang: 'en', isNsfw: false },
   { id: 'comickfun',   name: 'ComickFun',          domain: 'comick.fun',      engine: 'comickfun', lang: 'en', isNsfw: false },
   { id: 'comick',      name: 'ComicK',             domain: 'comick.io',       engine: 'comickfun', lang: 'en', isNsfw: false },
@@ -5350,11 +5381,14 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
     if (chapters.length > 0) return chapters;
   }
   
+  if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
+    return (await fetchAsuraChapterList(targetUrl)).chapters;
+  }
+  if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
+    return await fetchFlameChapterList(targetUrl);
+  }
+
   switch (domainId) {
-    case 'asura':
-      return (await fetchAsuraChapterList(targetUrl)).chapters;
-    case 'flame':
-      return await fetchFlameChapterList(targetUrl);
     case 'dynasty':
       return await fetchDynastyChapterList(targetUrl);
     case 'manhwa18':
@@ -5410,11 +5444,10 @@ async function extractLiveDomainChapterPages(
     // 0. Auto Domain Mirror Redirection + manhwa18 path normalization
     const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
 
-
     console.log(`[Live Source Extractor] Extracting Chapter ${chapterNumber} from ${domainId} (${targetUrl})`);
 
     // 1. Asura Scans Official API v2 Integration with Slug Hash Fallback
-    if (domainId === 'asura') {
+    if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
       try {
         const { chapters, matchedSlug } = await fetchAsuraChapterList(targetUrl);
 
@@ -5466,7 +5499,7 @@ async function extractLiveDomainChapterPages(
     }
 
     // 2. Flame Comics Next.js API Integration (Kotatsu-Redo)
-    if (domainId === 'flame') {
+    if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
       try {
         const ctx = await fetchFlameSeriesContext(targetUrl);
         if (ctx) {
@@ -5682,7 +5715,7 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
   let chapterId = (req.query.chapterId as string) || '';
 
   const manga = resolveManga(String(mangaId || '')) || mangaDatabase.find((m) => m.apiId === mangaId);
-  const mangaTitle = manga ? manga.title : 'Webtoon Series';
+  let mangaTitle = (req.query.title as string) || (manga ? manga.title : 'Webtoon Series');
   const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 1;
 
   // 1. MangaDex is used for METADATA only (search/enrichment/covers) and is intentionally
@@ -5691,6 +5724,31 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
 
   // 2. LIVE DOMAIN SOURCE CRAWLER RESOLUTION (KOTATSU IMAGE ENGINE)
   let targetUrl = (req.query.url as string) || manga?.sourceUrl || '';
+
+  // If targetUrl is still empty, infer from mangaId prefix
+  if (!targetUrl && mangaId) {
+    if (mangaId.startsWith('asura_')) {
+      const slug = mangaId.replace('asura_', '');
+      targetUrl = `https://asurascans.com/comics/${slug}`;
+      if (mangaTitle === 'Webtoon Series') {
+        mangaTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+    } else if (mangaId.startsWith('flame_')) {
+      const slug = mangaId.replace('flame_', '');
+      targetUrl = `https://flamecomics.xyz/series/${slug}`;
+      if (mangaTitle === 'Webtoon Series') {
+        mangaTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+    } else if (mangaId.startsWith('kotatsu_')) {
+      for (const src of KOTATSU_SOURCES) {
+        if (mangaId.startsWith(`kotatsu_${src.id}_`)) {
+          const pathOrSlug = mangaId.replace(`kotatsu_${src.id}_`, '');
+          targetUrl = pathOrSlug.startsWith('http') ? pathOrSlug : `${src.baseUrl.replace(/\/$/, '')}/${pathOrSlug}`;
+          break;
+        }
+      }
+    }
+  }
 
   // If the primary sourceUrl is MangaDex (metadata-only), check availableSources
   // for a non-MangaDex live source URL that can actually serve chapter images.

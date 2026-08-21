@@ -317,7 +317,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       const url = `/api/reader/chapter-pages?mangaId=${encodeURIComponent(
         manga.id
-      )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}`;
+      )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}${manga.title ? `&title=${encodeURIComponent(manga.title)}` : ''}`;
       const res = await apiFetch(url);
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));

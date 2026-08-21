@@ -605,7 +605,7 @@ export default function App() {
     if (ch === undefined || ch <= 0) {
       ch = manga.currentChapter > 0 ? manga.currentChapter : 0;
       try {
-        const res = await apiFetch(`/api/reader/chapters/${encodeURIComponent(manga.id)}?order=desc`);
+        const res = await apiFetch(`/api/reader/chapters/${encodeURIComponent(manga.id)}?order=desc${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}`);
         if (res.ok) {
           const list = await res.json();
           if (Array.isArray(list) && list.length > 0) {
