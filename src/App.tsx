@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 
 import { Navbar } from './components/Navbar';
 import { MangaDetailModal } from './components/MangaDetailModal';

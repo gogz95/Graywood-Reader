@@ -9,7 +9,11 @@ import {
   RefreshCw,
   Globe,
   BookOpen,
+  Image as ImageIcon,
+  Palette,
+  Eye,
 } from 'lucide-react';
+import { CoverArtPickerModal } from './CoverArtPickerModal';
 
 interface AddEditModalProps {
   initialManga?: MangaItem | null;
@@ -65,6 +69,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
   const [sourceName, setSourceName] = useState(initialManga?.sourceName || 'MangaDex');
   const [notes, setNotes] = useState(initialManga?.notes || '');
   const [enriching, setEnriching] = useState(false);
+  const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
 
   const handleAutoEnrich = async () => {
     if (!title.trim()) {
@@ -261,15 +266,68 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
 
           {/* Cover Image & Genres */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-secondary mb-1">Cover Image URL:</label>
-              <input
-                type="text"
-                placeholder="https://..."
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-secondary">Cover Artwork:</label>
+                <button
+                  type="button"
+                  onClick={() => setIsCoverPickerOpen(true)}
+                  className="px-2.5 py-1 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+                  title="Browse volume covers, alternate posters, and source artwork"
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                  <span>Browse All Covers</span>
+                </button>
+              </div>
+
+              <div className="flex gap-3 items-start bg-app p-2.5 rounded-xl border border-edge">
+                <div
+                  onClick={() => setIsCoverPickerOpen(true)}
+                  className="w-14 h-20 rounded-lg overflow-hidden bg-surface border border-edge shrink-0 relative group cursor-pointer shadow-sm"
+                  title="Click to change cover"
+                >
+                  {coverImage ? (
+                    <img
+                      src={coverImage}
+                      alt="Cover Preview"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-1">
+                      <ImageIcon className="w-5 h-5" />
+                      <span className="text-[9px] font-bold">No Art</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <input
+                    type="text"
+                    placeholder="https://... (or click Browse All Covers)"
+                    value={coverImage}
+                    onChange={(e) => setCoverImage(e.target.value)}
+                    className="w-full bg-surface border border-edge rounded-lg p-2 text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-muted">
+                    <span className="truncate">Standard 3:4 Manga Poster Ratio</span>
+                    {coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCoverPickerOpen(true)}
+                        className="text-accent hover:underline font-semibold"
+                      >
+                        Change Art
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -314,6 +372,19 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
           </div>
         </form>
       </div>
+
+      {/* Cover Art Picker Modal */}
+      <CoverArtPickerModal
+        isOpen={isCoverPickerOpen}
+        onClose={() => setIsCoverPickerOpen(false)}
+        currentCoverUrl={coverImage}
+        mangaId={initialManga?.id}
+        mangaTitle={title || initialManga?.title || 'Unknown'}
+        availableSources={initialManga?.availableSources}
+        onSelectCover={(newCoverUrl) => {
+          setCoverImage(newCoverUrl);
+        }}
+      />
     </div>
   );
 });

@@ -29,6 +29,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
   const [tab, setTab] = useState<'profiles' | 'settings'>('profiles');
   const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
 
+  // Only show current active profile and built-in profiles (Guest Reader, and Host Administrator if on host computer)
+  // All other users are hidden from quick switch accounts
+  const visibleProfiles = React.useMemo(() => {
+    return profiles.filter((p) => {
+      if (p.id === activeProfileId) return true;
+      if (p.id === 'usr_guest') return true;
+      if (p.id === 'usr_admin' && isHostComputer) return true;
+      return false;
+    });
+  }, [profiles, activeProfileId, isHostComputer]);
+
   // Settings tab form states
   const [editName, setEditName] = useState(activeProfile?.name || '');
   const [editAvatar, setEditAvatar] = useState(activeProfile?.avatar || '🥷');
@@ -130,7 +141,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
             }`}
           >
             <User className="w-3.5 h-3.5" />
-            <span>Select Profile ({profiles.length})</span>
+            <span>Select Profile ({visibleProfiles.length})</span>
           </button>
           <button
             type="button"
@@ -181,7 +192,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
-              {profiles.map((profile) => {
+              {visibleProfiles.map((profile) => {
                 const isActive = profile.id === activeProfileId;
                 return (
                   <div
@@ -235,7 +246,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
                         {profile.email ? profile.email : 'Personal Library'}
                       </span>
 
-                      {profiles.length > 1 &&
+                      {visibleProfiles.length > 1 &&
                         profile.id !== 'usr_admin' &&
                         profile.id !== 'usr_guest' &&
                         profile.role !== 'admin' && (

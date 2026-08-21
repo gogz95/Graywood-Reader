@@ -190,6 +190,95 @@ describe('User-Defined Categories & Custom Shelves', () => {
     SqliteDb.deleteCategory(catIdA, userA.id);
   });
 
+  it('guarantees complete isolation across four distinct users with zero mirroring or striping', async () => {
+    const user1 = { id: 'usr_iso_user1', username: 'iso_user1', role: 'user' as const };
+    const user2 = { id: 'usr_iso_user2', username: 'iso_user2', role: 'user' as const };
+    const user3 = { id: 'usr_iso_admin', username: 'iso_admin', role: 'admin' as const };
+    const user4 = { id: 'usr_iso_guest', username: 'iso_guest', role: 'user' as const };
+
+    const token1 = signAuthToken({ sub: user1.id, ...user1 });
+    const token2 = signAuthToken({ sub: user2.id, ...user2 });
+    const token3 = signAuthToken({ sub: user3.id, ...user3 });
+    const token4 = signAuthToken({ sub: user4.id, ...user4 });
+
+    // 1. Initially all 4 users have 0 categories
+    for (const token of [token1, token2, token3, token4]) {
+      const res = await request(app).get('/api/categories').set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    }
+
+    // 2. Each user creates their own distinct shelf
+    const res1 = await request(app).post('/api/categories').set('Authorization', `Bearer ${token1}`).send({ name: 'User 1 Shelf' });
+    const res2 = await request(app).post('/api/categories').set('Authorization', `Bearer ${token2}`).send({ name: 'User 2 Shelf' });
+    const res3 = await request(app).post('/api/categories').set('Authorization', `Bearer ${token3}`).send({ name: 'Admin Shelf' });
+    const res4 = await request(app).post('/api/categories').set('Authorization', `Bearer ${token4}`).send({ name: 'Guest Shelf' });
+
+    expect(res1.status).toBe(201);
+    expect(res2.status).toBe(201);
+    expect(res3.status).toBe(201);
+    expect(res4.status).toBe(201);
+
+    const id1 = res1.body.id;
+    const id2 = res2.body.id;
+    const id3 = res3.body.id;
+    const id4 = res4.body.id;
+
+    // 3. User 1 assigns manga M1 to Shelf 1
+    await request(app).post('/api/categories/assign').set('Authorization', `Bearer ${token1}`).send({ mangaId: 'm_shared_1', categoryIds: [id1] });
+    // User 2 assigns manga M1 to Shelf 2
+    await request(app).post('/api/categories/assign').set('Authorization', `Bearer ${token2}`).send({ mangaId: 'm_shared_1', categoryIds: [id2] });
+    // User 3 assigns manga M2 to Shelf 3
+    await request(app).post('/api/categories/assign').set('Authorization', `Bearer ${token3}`).send({ mangaId: 'm_shared_2', categoryIds: [id3] });
+    // User 4 assigns manga M3 to Shelf 4
+    await request(app).post('/api/categories/assign').set('Authorization', `Bearer ${token4}`).send({ mangaId: 'm_shared_3', categoryIds: [id4] });
+
+    // 4. Verify each user's /api/categories returns ONLY their own category
+    const list1 = await request(app).get('/api/categories').set('Authorization', `Bearer ${token1}`);
+    const list2 = await request(app).get('/api/categories').set('Authorization', `Bearer ${token2}`);
+    const list3 = await request(app).get('/api/categories').set('Authorization', `Bearer ${token3}`);
+    const list4 = await request(app).get('/api/categories').set('Authorization', `Bearer ${token4}`);
+
+    expect(list1.body.map((c: any) => c.name)).toEqual(['User 1 Shelf']);
+    expect(list2.body.map((c: any) => c.name)).toEqual(['User 2 Shelf']);
+    expect(list3.body.map((c: any) => c.name)).toEqual(['Admin Shelf']);
+    expect(list4.body.map((c: any) => c.name)).toEqual(['Guest Shelf']);
+
+    // 5. Verify overlay on manga items is strictly isolated per user
+    const sampleItems = [
+      { id: 'm_shared_1', title: 'Shared 1', categories: [] },
+      { id: 'm_shared_2', title: 'Shared 2', categories: [] },
+      { id: 'm_shared_3', title: 'Shared 3', categories: [] },
+    ] as any[];
+
+    const ov1 = SqliteDb.applyUserOverlay(sampleItems, user1.id);
+    const ov2 = SqliteDb.applyUserOverlay(sampleItems, user2.id);
+    const ov3 = SqliteDb.applyUserOverlay(sampleItems, user3.id);
+    const ov4 = SqliteDb.applyUserOverlay(sampleItems, user4.id);
+
+    expect(ov1.find((m) => m.id === 'm_shared_1')?.categories).toEqual([id1]);
+    expect(ov1.find((m) => m.id === 'm_shared_2')?.categories).toEqual([]);
+    expect(ov1.find((m) => m.id === 'm_shared_3')?.categories).toEqual([]);
+
+    expect(ov2.find((m) => m.id === 'm_shared_1')?.categories).toEqual([id2]);
+    expect(ov2.find((m) => m.id === 'm_shared_2')?.categories).toEqual([]);
+    expect(ov2.find((m) => m.id === 'm_shared_3')?.categories).toEqual([]);
+
+    expect(ov3.find((m) => m.id === 'm_shared_1')?.categories).toEqual([]);
+    expect(ov3.find((m) => m.id === 'm_shared_2')?.categories).toEqual([id3]);
+    expect(ov3.find((m) => m.id === 'm_shared_3')?.categories).toEqual([]);
+
+    expect(ov4.find((m) => m.id === 'm_shared_1')?.categories).toEqual([]);
+    expect(ov4.find((m) => m.id === 'm_shared_2')?.categories).toEqual([]);
+    expect(ov4.find((m) => m.id === 'm_shared_3')?.categories).toEqual([id4]);
+
+    // Clean up
+    SqliteDb.deleteCategory(id1, user1.id);
+    SqliteDb.deleteCategory(id2, user2.id);
+    SqliteDb.deleteCategory(id3, user3.id);
+    SqliteDb.deleteCategory(id4, user4.id);
+  });
+
   it('restores and auto-creates categories for importing user only on bulk import', async () => {
     const backupCategoryName = `Imported Test Shelf ${Date.now()}`;
     const testSeriesId = `kotatsu_backup_cat_${Date.now()}`;

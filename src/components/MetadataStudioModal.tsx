@@ -23,6 +23,8 @@ import {
   ArrowRight,
   Palette,
   ShieldCheck,
+  ZoomIn,
+  Search,
 } from 'lucide-react';
 
 interface SourceOption {
@@ -65,11 +67,15 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
   const [currentGenres, setCurrentGenres] = useState<string[]>(manga.genres || []);
   const [currentAltTitles, setCurrentAltTitles] = useState<string[]>(manga.altTitles || []);
   const [locks, setLocks] = useState<Set<string>>(new Set(manga.metadataOverrides || []));
+  const [coverSearchQuery, setCoverSearchQuery] = useState(manga.title || '');
+  const [coverCategory, setCoverCategory] = useState<string>('all');
+  const [lightboxCover, setLightboxCover] = useState<{ url: string; label: string; source: string } | null>(null);
 
-  const fetchOptions = useCallback(async () => {
+  const fetchOptions = useCallback(async (qOverride?: string) => {
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/manga/${manga.id}/metadata-options`);
+      const qParam = qOverride ? `?q=${encodeURIComponent(qOverride)}` : '';
+      const res = await apiFetch(`/api/manga/${manga.id}/metadata-options${qParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.sources) {
@@ -326,7 +332,7 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
 
           <div className="ml-auto flex items-center gap-2 pb-2">
             <button
-              onClick={fetchOptions}
+              onClick={() => fetchOptions()}
               disabled={loading}
               className="px-2.5 py-1 rounded-lg bg-elevated hover:bg-elevated/80 text-secondary hover:text-primary text-xs font-semibold flex items-center gap-1.5 transition-all"
               title="Re-query connected sources for latest art and fields"
@@ -376,6 +382,67 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
                 </div>
               </div>
 
+              {/* Cover Art Search & Filter Bar */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 bg-app p-3 rounded-xl border border-edge">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    fetchOptions(coverSearchQuery);
+                  }}
+                  className="relative flex-1 w-full"
+                >
+                  <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={coverSearchQuery}
+                    onChange={(e) => setCoverSearchQuery(e.target.value)}
+                    placeholder="Search alternate titles for MangaDex volume covers & AniList HQ art..."
+                    className="w-full bg-surface border border-edge rounded-xl pl-9 pr-20 py-2 text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-accent text-accent-fg font-bold text-xs flex items-center gap-1 shadow-sm"
+                  >
+                    <Sparkles className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                    <span>Search</span>
+                  </button>
+                </form>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+                  <button
+                    onClick={() => setCoverCategory('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      coverCategory === 'all'
+                        ? 'bg-accent text-accent-fg font-black shadow-sm'
+                        : 'bg-elevated text-secondary hover:text-primary'
+                    }`}
+                  >
+                    All ({allCovers.length})
+                  </button>
+                  <button
+                    onClick={() => setCoverCategory('mangadex')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      coverCategory === 'mangadex'
+                        ? 'bg-accent text-accent-fg font-black shadow-sm'
+                        : 'bg-elevated text-secondary hover:text-primary'
+                    }`}
+                  >
+                    MangaDex ({allCovers.filter(c => c.source.toLowerCase().includes('mangadex')).length})
+                  </button>
+                  <button
+                    onClick={() => setCoverCategory('anilist')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                      coverCategory === 'anilist'
+                        ? 'bg-accent text-accent-fg font-black shadow-sm'
+                        : 'bg-elevated text-secondary hover:text-primary'
+                    }`}
+                  >
+                    AniList ({allCovers.filter(c => c.source.toLowerCase().includes('anilist')).length})
+                  </button>
+                </div>
+              </div>
+
               {/* Cover Grid */}
               {loading && allCovers.length <= 1 ? (
                 <div className="p-12 text-center text-secondary flex flex-col items-center gap-3">
@@ -384,7 +451,14 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {allCovers.map((cover, idx) => {
+                  {allCovers
+                    .filter((cover) => {
+                      if (coverCategory === 'all') return true;
+                      if (coverCategory === 'mangadex') return cover.source.toLowerCase().includes('mangadex');
+                      if (coverCategory === 'anilist') return cover.source.toLowerCase().includes('anilist');
+                      return true;
+                    })
+                    .map((cover, idx) => {
                     const isActive = currentCover === cover.url;
                     return (
                       <div
@@ -411,6 +485,19 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
                               <span>ACTIVE</span>
                             </div>
                           )}
+
+                          {/* Lightbox trigger */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxCover(cover);
+                            }}
+                            className="absolute top-2 left-2 p-1.5 rounded-lg bg-black/60 hover:bg-black/90 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Inspect full image"
+                          >
+                            <ZoomIn className="w-3.5 h-3.5" />
+                          </button>
 
                           {/* Source Tag */}
                           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2.5 pt-6">
@@ -796,6 +883,60 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxCover && (
+        <div
+          onClick={() => setLightboxCover(null)}
+          className="fixed inset-0 z-[130] bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-xl max-h-[90vh] bg-surface border border-edge rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+          >
+            <div className="p-3 bg-app border-b border-edge flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase text-accent-2 block">{lightboxCover.source}</span>
+                <span className="text-xs font-bold text-primary">{lightboxCover.label}</span>
+              </div>
+              <button
+                onClick={() => setLightboxCover(null)}
+                className="p-1.5 rounded-full bg-elevated text-secondary hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-black/50 overflow-auto">
+              <img
+                src={lightboxCover.url}
+                alt={lightboxCover.label}
+                className="max-h-[75vh] w-auto object-contain rounded-xl shadow-2xl"
+              />
+            </div>
+            <div className="p-3 bg-app border-t border-edge flex items-center justify-between">
+              <a
+                href={lightboxCover.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open high-res original</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSelectCover(lightboxCover.url, lightboxCover.source);
+                  setLightboxCover(null);
+                }}
+                className="px-4 py-1.5 rounded-xl bg-accent text-accent-fg font-bold text-xs"
+              >
+                Select This Cover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

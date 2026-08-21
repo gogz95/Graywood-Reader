@@ -104,8 +104,8 @@ db.exec(`
 
 try {
   db.exec(`
-    DELETE FROM categories WHERE name LIKE 'Imported Category %';
     DELETE FROM manga_categories WHERE category_id NOT IN (SELECT id FROM categories);
+    UPDATE manga SET categories = '[]' WHERE categories IS NOT NULL AND categories != '[]';
   `);
 } catch (e) { }
 
@@ -274,8 +274,7 @@ const stmtUpsertManga = db.prepare(`
     flagReason=excluded.flagReason,
     flaggedAt=excluded.flaggedAt,
     metadataOverrides=excluded.metadataOverrides,
-    customTags=excluded.customTags,
-    categories=excluded.categories
+    customTags=excluded.customTags
 `);
 
 const stmtUpdateProgress = db.prepare(`
@@ -486,7 +485,7 @@ function mapMangaItemToRow(item: MangaItem) {
     flaggedAt: item.flaggedAt || (item.isFlagged ? new Date().toISOString() : null),
     metadataOverrides: JSON.stringify(item.metadataOverrides || []),
     customTags: JSON.stringify(item.customTags || []),
-    categories: JSON.stringify(item.categories || []),
+    categories: '[]',
   };
 }
 

@@ -1135,6 +1135,8 @@ app.get("/api/manga/:id/metadata-options", async (req, res) => {
   const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
   if (!manga) return res.status(404).json({ error: "Manga not found" });
 
+  const searchOverride = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : '';
+
   // 1. Gather all unique source candidates
   interface SourceOption {
     sourceName: string;
@@ -1167,7 +1169,7 @@ app.get("/api/manga/:id/metadata-options", async (req, res) => {
   }
 
   // Also check MangaDex ID
-  let mdId = manga.apiId || (manga.id?.startsWith('md_') ? manga.id.replace('md_', '') : null) || manga.sourceUrl?.match(/\/title\/([a-f0-9-]+)/i)?.[1];
+  let mdId = (!searchOverride && manga.apiId) ? manga.apiId : ((!searchOverride && manga.id?.startsWith('md_')) ? manga.id.replace('md_', '') : null) || (!searchOverride ? manga.sourceUrl?.match(/\/title\/([a-f0-9-]+)/i)?.[1] : null);
 
   const sourceResults: SourceOption[] = [];
 
@@ -1175,12 +1177,13 @@ app.get("/api/manga/:id/metadata-options", async (req, res) => {
   await Promise.allSettled([
     // MangaDex fetch if available
     (async () => {
-      if (!mdId && manga.title && manga.title !== 'Unknown') {
+      const targetQuery = searchOverride || manga.title;
+      if (!mdId && targetQuery && targetQuery !== 'Unknown') {
         try {
-          const cleanTitle = manga.title.replace(/\s*\([^)]*\)/g, '').trim();
+          const cleanTitle = targetQuery.replace(/\s*\([^)]*\)/g, '').trim();
           if (cleanTitle.length > 2) {
             const searchRes = await fetchMangaDex(
-              `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=3&includes[]=cover_art`
+              `https://api.mangadex.org/manga?title=${encodeURIComponent(cleanTitle)}&limit=5&includes[]=cover_art`
             );
             if (searchRes.ok) {
               const searchJson = await searchRes.json();
@@ -1243,6 +1246,66 @@ app.get("/api/manga/:id/metadata-options", async (req, res) => {
           }
         } catch (_) {}
       }
+    })(),
+
+    // AniList high-resolution artwork fetch
+    (async () => {
+      const aniQuery = searchOverride || manga.title;
+      if (!aniQuery || aniQuery === 'Unknown') return;
+      try {
+        const cleanTitle = aniQuery.replace(/\s*\([^)]*\)/g, '').trim();
+        if (cleanTitle.length < 2) return;
+        const graphqlQuery = `
+          query ($search: String) {
+            Page(page: 1, perPage: 4) {
+              media(search: $search, type: MANGA) {
+                id
+                title { english romaji native }
+                coverImage { extraLarge large medium color }
+                bannerImage
+                description
+                genres
+                averageScore
+              }
+            }
+          }
+        `;
+        const aniRes = await fetch('https://graphql.anilist.co', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ query: graphqlQuery, variables: { search: cleanTitle } }),
+        });
+        if (aniRes.ok) {
+          const aniJson = await aniRes.json();
+          const list = aniJson.data?.Page?.media || [];
+          for (const m of list) {
+            const aniTitle = m.title?.english || m.title?.romaji || m.title?.native || cleanTitle;
+            const covers: Array<{ url: string; label?: string }> = [];
+            if (m.coverImage?.extraLarge) {
+              covers.push({ url: m.coverImage.extraLarge, label: 'AniList HQ Poster (Extra Large)' });
+            }
+            if (m.coverImage?.large && m.coverImage.large !== m.coverImage.extraLarge) {
+              covers.push({ url: m.coverImage.large, label: 'AniList Standard Poster' });
+            }
+            if (m.bannerImage) {
+              covers.push({ url: m.bannerImage, label: 'AniList Official Banner Art' });
+            }
+            if (covers.length > 0) {
+              sourceResults.push({
+                sourceName: 'AniList',
+                sourceUrl: `https://anilist.co/manga/${m.id}`,
+                title: aniTitle,
+                description: m.description ? m.description.replace(/<[^>]*>/g, '') : '',
+                coverImage: covers[0]?.url,
+                covers,
+                rating: m.averageScore ? Number((m.averageScore / 10).toFixed(1)) : undefined,
+                genres: m.genres || [],
+                altTitles: [m.title?.romaji, m.title?.native, m.title?.english].filter((t: any) => t && t !== aniTitle),
+              });
+            }
+          }
+        }
+      } catch (_) {}
     })(),
 
     // Other sources fetch

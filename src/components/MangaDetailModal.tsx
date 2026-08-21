@@ -29,6 +29,7 @@ import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 import { SourceFinderModal } from './SourceFinderModal';
 import { MetadataStudioModal } from './MetadataStudioModal';
 import { MetadataPersonalizerPanel } from './MetadataPersonalizerPanel';
+import { CoverArtPickerModal } from './CoverArtPickerModal';
 
 interface MangaDetailModalProps {
   manga: MangaItem;
@@ -64,8 +65,31 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [isSourceFinderOpen, setIsSourceFinderOpen] = useState(false);
   const [isMetadataStudioOpen, setIsMetadataStudioOpen] = useState(false);
+  const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>(manga.categories || []);
+
+  const handleSelectCoverArt = async (newCoverUrl: string, sourceName?: string) => {
+    const nextOverrides = Array.from(new Set([...(manga.metadataOverrides || []), 'coverImage']));
+    try {
+      const res = await apiFetch(`/api/manga/${manga.id}/custom-metadata-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coverImage: newCoverUrl,
+          metadataOverrides: nextOverrides,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.manga) {
+          onUpdateManga(data.manga);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update cover:', err);
+    }
+  };
 
   React.useEffect(() => {
     setActiveCategoryIds(manga.categories || []);
@@ -176,18 +200,18 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
           <div className="flex flex-col sm:flex-row gap-5 items-start">
             <div
               className="relative group cursor-pointer shrink-0"
-              onClick={() => setIsMetadataStudioOpen(true)}
-              title="Click to personalize cover art & metadata across sources"
+              onClick={() => setIsCoverPickerOpen(true)}
+              title="Click to preview and select covers from all sources"
             >
               <img
                 src={manga.coverImage}
                 alt={manga.title}
                 className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-app shadow-xl border border-edge group-hover:opacity-90 group-hover:scale-[1.02] transition-all"
               />
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-opacity p-2 text-center text-white">
-                <Palette className="w-5 h-5 text-accent" />
-                <span className="text-[11px] font-bold">Poster Studio</span>
-                <span className="text-[9px] text-secondary">Click to customize</span>
+              <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 rounded-xl flex flex-col items-center justify-center gap-2 transition-opacity p-2 text-center text-white">
+                <Palette className="w-6 h-6 text-accent" />
+                <span className="text-xs font-black tracking-wide">Change Cover</span>
+                <span className="text-[10px] text-muted">Preview all sources</span>
               </div>
             </div>
 
@@ -621,6 +645,17 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
         isOpen={isMetadataStudioOpen}
         onClose={() => setIsMetadataStudioOpen(false)}
         onUpdateManga={onUpdateManga}
+      />
+
+      {/* Interactive Multi-Source Cover Art Picker */}
+      <CoverArtPickerModal
+        isOpen={isCoverPickerOpen}
+        onClose={() => setIsCoverPickerOpen(false)}
+        currentCoverUrl={manga.coverImage}
+        mangaId={manga.id}
+        mangaTitle={manga.title}
+        availableSources={manga.availableSources}
+        onSelectCover={handleSelectCoverArt}
       />
     </div>
   );
