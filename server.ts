@@ -4192,6 +4192,47 @@ function throttleExploreDomain(host: string): Promise<void> {
   return Promise.resolve();
 }
 
+// ── Browse Catalog Meta: full-catalog filter data ────────────────────────────
+// Returns all unique genres, types, and active sources from the buffered
+// explore catalog so the Browse UI can populate filters dynamically.
+app.get("/api/explore/meta", (_req, res) => {
+  const buf = exploreBufferRef.current;
+  if (!buf || buf.items.length === 0) {
+    // No buffer yet — return empty sets; client will try again after buffer warms.
+    return res.json({ genres: [], types: [], sources: [] });
+  }
+
+  const genreCounts = new Map<string, number>();
+  const typeSet = new Set<string>();
+  const sourceMap = new Map<string, string>(); // id → name
+
+  for (const it of buf.items) {
+    for (const g of (it.genres || [])) {
+      if (typeof g === 'string' && g.trim()) {
+        const normalized = g.trim();
+        genreCounts.set(normalized, (genreCounts.get(normalized) || 0) + 1);
+      }
+    }
+    if (it.type) typeSet.add(String(it.type).toLowerCase());
+    if (it.__sourceId && it.__sourceName) sourceMap.set(it.__sourceId, it.__sourceName);
+  }
+
+  // Sort genres by frequency descending so the most common appear first in the UI.
+  const genres = [...genreCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+
+  const types = [...typeSet].sort();
+
+  // Also include all currently alive/enabled sources (not just those in the buffer)
+  // so the source dropdown is always complete.
+  const allActiveSources = KOTATSU_SOURCES
+    .filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id))
+    .map((s) => ({ id: s.id, name: s.name }));
+
+  return res.json({ genres, types, sources: allActiveSources, totalItems: buf.items.length, builtAt: buf.builtAt });
+});
+
 app.get("/api/explore", async (req, res) => {
   const rawSourceId = ((req.query.sourceId as string) || '').trim();
   const q = ((req.query.q as string) || '').trim();

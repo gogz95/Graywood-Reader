@@ -2,7 +2,7 @@
 # MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # ==============================================================================
 
-FROM node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -11,6 +11,7 @@ COPY package*.json ./
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends python3 make g++ && \
     npm ci && \
     apt-get purge -y --auto-remove python3 make g++ && \
@@ -20,7 +21,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
@@ -31,6 +32,7 @@ ENV HOST=0.0.0.0
 COPY package*.json ./
 
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends python3 make g++ wget ca-certificates && \
     npm ci --omit=dev && \
     apt-get purge -y --auto-remove python3 make g++ && \

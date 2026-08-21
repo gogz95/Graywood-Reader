@@ -99,7 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     title?: string;
   }> = [
     { id: 'library', label: 'My Library', mobileLabel: 'Library', icon: BookOpen, badge: unreadCount, title: 'Your Manga Library' },
-    { id: 'browse', label: 'Catalog', mobileLabel: 'Explore', icon: Compass, title: 'Explore Popular & Trending Manga' },
+    { id: 'browse', label: 'Browse', mobileLabel: 'Browse', icon: Compass, title: 'Browse All Active Sources' },
     { id: 'sources', label: 'Sources', mobileLabel: 'Sources', icon: Globe, title: 'Manage Scraper Engines & Connectors' },
     { id: 'autoupdate', label: 'Scan Logs', mobileLabel: 'Updates', icon: RefreshCw, title: 'Automatic Update History & Release Logs' },
     { id: 'duplicates', label: 'Deduplicate', mobileLabel: 'Duplicates', icon: Search, badge: duplicateCount, title: 'Merge Duplicate Series' },

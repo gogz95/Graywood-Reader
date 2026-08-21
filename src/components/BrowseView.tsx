@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, SourceDefinition, hasWorkingReaderSource } from '../types';
-import { isReaderAvailable } from '../utils/catalog';
+import { MangaItem, hasWorkingReaderSource } from '../types';
+
 
 import {
   Compass,
@@ -11,14 +11,14 @@ import {
   Star,
   BookOpen,
   Layers,
-  Globe,
   RefreshCw,
   Sparkles,
   Play,
   Filter,
+  X,
 } from 'lucide-react';
 
-// A single series coming from the LIVE explore feed (never the local library).
+// A single series coming from the LIVE browse feed (never the local library).
 export interface ExploreItem {
   id: string;
   title: string;
@@ -33,6 +33,14 @@ export interface ExploreItem {
   __sourceId?: string;
   __sourceName?: string;
   previewImages?: string[];
+}
+
+/** Catalog metadata from the server: all genres/types/sources in the full buffer. */
+interface CatalogMeta {
+  genres: string[];
+  types: string[];
+  sources: { id: string; name: string }[];
+  totalItems?: number;
 }
 
 const FALLBACK_COVER =
@@ -52,79 +60,93 @@ interface BrowseViewProps {
   onTrack: (item: Partial<MangaItem>) => void;
 }
 
-const ITEMS_PER_PAGE = 30;
+/** Compute an appropriate per-page limit based on the client's screen width. */
+function computeLimit(): number {
+  const w = window.innerWidth;
+  if (w < 640) return 24;   // mobile
+  if (w < 1024) return 36;  // tablet
+  if (w < 1440) return 48;  // standard desktop
+  if (w < 2560) return 60;  // large desktop
+  return 84;                 // 4K+
+}
 
 export const BrowseView: React.FC<BrowseViewProps> = ({
-  mangaList,
   searchQuery: seedSearch,
   onSelectManga,
   onOpenReader,
   onTrack,
 }) => {
   const [results, setResults] = useState<ExploreItem[]>([]);
-  const [sources, setSources] = useState<SourceDefinition[]>([]);
+  const [meta, setMeta] = useState<CatalogMeta>({ genres: [], types: [], sources: [] });
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [query, setQuery] = useState<string>(seedSearch || '');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [metaLoaded, setMetaLoaded] = useState(false);
 
-  // Load the source list for the source filter dropdown (from server registry).
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiFetch('/api/kotatsu/sources');
-        if (res.ok) {
-          const list: SourceDefinition[] = await res.json();
-          const defaults = ['asurascans', 'flamecomics', 'weebcentral', 'demonicscans', 'manhwa18'];
-          const ordered = [...defaults];
-          for (const s of list) {
-            if (!ordered.includes(s.id)) ordered.push(s.id);
-          }
-          setSources(list.filter((s) => ordered.includes(s.id)));
-        }
-      } catch (_) {
-        /* source list optional — explore still works with defaults */
+  // Device-aware items-per-page — computed once on mount.
+  const limitRef = useRef(computeLimit());
+  const limit = limitRef.current;
+
+  // ── Load catalog meta (genres/types/sources from full buffer) ─────────────
+  const fetchMeta = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/explore/meta');
+      if (res.ok) {
+        const data: CatalogMeta = await res.json();
+        setMeta(data);
+        setMetaLoaded(true);
       }
-    })();
+    } catch {
+      // meta is optional — browse still works without it
+    }
   }, []);
 
-  // Fetch the live explore feed whenever filters/page change.
-  const fetchExplore = useCallback(async () => {
+  useEffect(() => { fetchMeta(); }, [fetchMeta]);
+
+  // ── Fetch the live browse feed ────────────────────────────────────────────
+  const fetchBrowse = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ limit: String(ITEMS_PER_PAGE), page: String(page) });
+      const params = new URLSearchParams({
+        limit: String(limit),
+        page: String(page),
+        width: String(window.innerWidth),
+        height: String(window.innerHeight),
+      });
       if (selectedSource !== 'all') params.set('sourceId', selectedSource);
       if (query.trim()) params.set('q', query.trim());
       const res = await apiFetch(`/api/explore?${params.toString()}`);
-      if (!res.ok) throw new Error(`Explore feed returned ${res.status}`);
+      if (!res.ok) throw new Error(`Browse feed returned ${res.status}`);
       const data = await res.json();
       setResults(Array.isArray(data.items) ? data.items : []);
       setTotalPages(Number(data.totalPages) || 0);
+      setTotalCount(Number(data.totalCount) || 0);
     } catch (e: any) {
-      console.error('[Explore] Feed error:', e.message);
-      setError('Live explore feed unavailable. Try again or pick a different source.');
+      console.error('[Browse] Feed error:', e.message);
+      setError('Live browse feed unavailable. Try again or pick a different source.');
       setResults([]);
       setTotalPages(0);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [selectedSource, query, page]);
+  }, [selectedSource, query, page, limit]);
 
   useEffect(() => {
     setPage(1);
-  }, [selectedSource, query, typeFilter, selectedTag]);
+    setSelectedTags(new Set());
+  }, [selectedSource, query, typeFilter]);
 
-  // Fetch the live explore feed on mount and whenever filters/page change.
-  useEffect(() => {
-    fetchExplore();
-  }, [fetchExplore]);
+  useEffect(() => { fetchBrowse(); }, [fetchBrowse]);
 
   const handleTrack = (item: ExploreItem) => {
     onTrack({
@@ -140,9 +162,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       totalChapters: item.latestChapter || null,
       rating: 9.0,
       sourceUrl: item.sourceUrl,
-      sourceName: item.__sourceName || item.sourceName || 'Explore',
+      sourceName: item.__sourceName || item.sourceName || 'Browse',
       autoUpdateEnabled: true,
-      notes: 'Added from Live Explore',
+      notes: 'Added from Browse',
       isFavorite: true,
     });
     setTrackedKeys((prev) => new Set(prev).add(item.title.trim().toLowerCase()));
@@ -153,8 +175,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     if (seedSearch !== undefined) setQuery(seedSearch);
   }, [seedSearch]);
 
-  // Popular tags derived from the current live feed so the chips always match real data.
-  const popularTags = useMemo(() => {
+  // Tags visible in the current page — used as fallback when meta isn't loaded yet.
+  const pageGenres = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of results) {
       for (const g of r.genres || []) {
@@ -162,18 +184,39 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       }
     }
     return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 16)
+      .sort((a, b) => b[1] - a[1])
       .map(([tag]) => tag);
   }, [results]);
 
-  const visible = results.filter((r) =>
-    (typeFilter === 'all' ? true : (r.type || 'manga').toLowerCase() === typeFilter) &&
-    (selectedTag ? (r.genres || []).some((g) => g.toLowerCase() === selectedTag.toLowerCase()) : true)
+  // Use full-catalog genres from meta when available, else fall back to page genres.
+  const displayGenres = metaLoaded && meta.genres.length > 0 ? meta.genres : pageGenres;
+
+  // Client-side post-filter for type and selected tags (server handles source/query).
+  const visible = useMemo(
+    () =>
+      results.filter((r) => {
+        if (typeFilter !== 'all' && (r.type || 'manga').toLowerCase() !== typeFilter) return false;
+        if (selectedTags.size > 0) {
+          const rGenres = (r.genres || []).map((g) => g.toLowerCase());
+          for (const t of selectedTags) {
+            if (!rGenres.includes(t.toLowerCase())) return false;
+          }
+        }
+        return true;
+      }),
+    [results, typeFilter, selectedTags]
   );
 
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      next.has(tag) ? next.delete(tag) : next.add(tag);
+      return next;
+    });
+  };
+
   const toManga = (r: ExploreItem, forReader: boolean): MangaItem => ({
-    id: r.id || `explore_${Date.now()}`,
+    id: r.id || `browse_${Date.now()}`,
     title: r.title,
     altTitles: [],
     type: (r.type as MangaItem['type']) || 'manhwa',
@@ -186,7 +229,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     totalChapters: r.latestChapter || null,
     rating: 9.0,
     sourceUrl: r.sourceUrl,
-    sourceName: r.__sourceName || r.sourceName || 'Explore',
+    sourceName: r.__sourceName || r.sourceName || 'Browse',
     autoUpdateEnabled: true,
     notes: '',
     addedAt: new Date().toISOString(),
@@ -194,7 +237,20 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     lastReadAt: new Date().toISOString(),
   });
 
-  const countLabel = results.length > 0 ? `${results.length} live series` : '';
+  // Types for the dropdown: prefer meta list, fall back to hard-coded defaults.
+  const typeOptions = useMemo(() => {
+    const defaults = ['manga', 'manhwa', 'manhua'];
+    if (metaLoaded && meta.types.length > 0) {
+      return [...new Set([...meta.types, ...defaults])].sort();
+    }
+    return defaults;
+  }, [metaLoaded, meta.types]);
+
+  const handleRefresh = () => {
+    setPage(1);
+    fetchBrowse();
+    setTimeout(fetchMeta, 3000);
+  };
 
   return (
     <div className="space-y-6">
@@ -207,41 +263,55 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black text-primary flex items-center gap-2">
-                Explore
+                Browse
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success border border-success/25">
                   LIVE
                 </span>
+                {metaLoaded && meta.totalItems != null && meta.totalItems > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent-2/10 text-accent-2 border border-accent-2/20">
+                    {meta.totalItems.toLocaleString()} indexed
+                  </span>
+                )}
               </h2>
               <p className="text-[11px] text-secondary leading-snug">
-                Discover series scraped live from your enabled sources — not just what's in your library.
+                Discover series scraped live from all your enabled sources.
               </p>
             </div>
           </div>
-<div className="flex-1 flex flex-col sm:flex-row gap-2 sm:ml-4">
+
+          {/* Controls row */}
+          <div className="flex-1 flex flex-col sm:flex-row gap-2 sm:ml-4">
+            {/* Source selector — full list from server meta */}
             <select
               value={selectedSource}
               onChange={(e) => setSelectedSource(e.target.value)}
               className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/40 sm:w-52"
             >
-              <option value="all">All Sources</option>
-              {sources.map((s) => (
+              <option value="all">
+                All Sources{meta.sources.length > 0 ? ` (${meta.sources.length})` : ''}
+              </option>
+              {meta.sources.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
             </select>
 
+            {/* Type selector — dynamic from catalog meta */}
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/40 sm:w-40"
             >
               <option value="all">All Types</option>
-              <option value="manhwa">Manhwa</option>
-              <option value="manhua">Manhua</option>
-              <option value="manga">Manga</option>
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </option>
+              ))}
             </select>
 
+            {/* Search input */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
@@ -254,50 +324,50 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-secondary">
-          <span className="inline-flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5 text-accent" /> Feed refreshes live · {countLabel}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFiltersOpen((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border text-xs sm:text-sm ${
-                filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
-              }`}
-              title={filtersOpen ? 'Hide tags' : 'Show tags'}
-            >
-              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
-            </button>
-            <button
-              onClick={() => setPage(1)}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
-              title="Refresh the live feed"
-            >
-              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Refresh
-            </button>
-          </div>
+        {/* Actions row */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border text-xs sm:text-sm ${
+              filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
+            }`}
+            title={filtersOpen ? 'Hide tags' : 'Show tags'}
+          >
+            <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
+            {selectedTags.size > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-accent-2 text-white text-[10px] font-black leading-none">
+                {selectedTags.size}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
+            title="Refresh the live feed"
+          >
+            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Refresh
+          </button>
         </div>
 
-        {filtersOpen && popularTags.length > 0 && (
+        {/* Tag chips — genres from the full catalog buffer */}
+        {filtersOpen && displayGenres.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tags</span>
-            <button
-              onClick={() => setSelectedTag(null)}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
-                selectedTag === null
-                  ? 'bg-accent-2 text-white border-accent-2'
-                  : 'bg-elevated text-secondary border-edge hover:text-primary'
-              }`}
-            >
-              All
-            </button>
-            {popularTags.map((tag) => (
+            {selectedTags.size > 0 && (
+              <button
+                onClick={() => setSelectedTags(new Set())}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-danger/15 text-danger border-danger/30 hover:bg-danger/25 transition-all"
+              >
+                <X className="w-3 h-3" /> Clear
+              </button>
+            )}
+            {displayGenres.slice(0, 32).map((tag) => (
               <button
                 key={tag}
-                onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                onClick={() => toggleTag(tag)}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
-                  selectedTag === tag
+                  selectedTags.has(tag)
                     ? 'bg-accent-2 text-white border-accent-2 shadow-sm'
                     : 'bg-elevated text-secondary border-edge hover:text-primary hover:border-accent-2/40'
                 }`}
@@ -312,7 +382,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted">
           <RefreshCw className="w-8 h-8 animate-spin text-accent-2" />
-          <span className="text-xs font-semibold">Streaming live catalog…</span>
+          <span className="text-xs font-semibold">Loading catalog…</span>
         </div>
       ) : error ? (
         <div className="bg-surface/60 border border-edge rounded-2xl p-12 text-center space-y-3">
@@ -321,8 +391,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
       ) : visible.length === 0 ? (
         <div className="bg-surface/60 border border-edge rounded-2xl p-16 text-center text-secondary">
-          <p className="text-sm font-semibold">No live series found.</p>
-          <p className="text-xs mt-1">Try a different source or clear your search.</p>
+          <p className="text-sm font-semibold">No series found.</p>
+          <p className="text-xs mt-1">Try a different source, type, or clear your tag selection.</p>
         </div>
       ) : (
         <>
@@ -412,7 +482,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           {totalPages > 1 && (
             <div className="sticky bottom-4 z-20 flex items-center justify-between gap-3 p-4 bg-surface/95 backdrop-blur-md border border-edge rounded-2xl shadow-2xl">
               <span className="text-xs font-mono text-secondary">
-                Page {page} / {totalPages} ({countLabel})
+                Page {page} / {totalPages}
+                {totalCount > 0 && ` · ${totalCount.toLocaleString()} total`}
               </span>
               <div className="flex gap-2">
                 <button
@@ -437,3 +508,4 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     </div>
   );
 };
+
