@@ -35,6 +35,7 @@ import {
   Eye
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
+import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
 import { AutoUpdateView } from './AutoUpdateView';
 import { AutoUpdateLog, UserProfile } from '../types';
 
@@ -1239,6 +1240,80 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                     >
                       <Download className="w-4 h-4" />
                       <span>Export Tachiyomi Backup (.json)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Kotatsu Backup Migration Card */}
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-primary text-sm flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-accent-2" />
+                      Kotatsu Ecosystem Backup Migration
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-2/20 text-accent-2 border border-accent-2/30">
+                      ZIP & JSON Standard
+                    </span>
+                  </div>
+
+                  <p className="text-secondary text-xs">
+                    Restore your complete library, categories, and reading history from Kotatsu app backups (supports <code className="text-primary font-mono text-[11px]">.bk.zip</code>, <code className="text-primary font-mono text-[11px]">.zip</code>, or <code className="text-primary font-mono text-[11px]">.json</code>).
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <label className="px-4 py-2.5 rounded-xl bg-accent-2/20 hover:bg-accent-2/30 text-accent-2 border border-accent-2/40 font-bold flex items-center gap-2 shadow-md cursor-pointer transition-all">
+                      <Download className="w-4 h-4 rotate-180" />
+                      <span>Import Kotatsu Backup (.zip / .json)</span>
+                      <input
+                        type="file"
+                        accept=".zip,.json,.bk.zip,application/zip,application/json"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            let imported: MangaItem[] = [];
+                            if (file.name.endsWith('.zip') || file.type.includes('zip')) {
+                              const arrayBuffer = await file.arrayBuffer();
+                              imported = await parseKotatsuBackup(arrayBuffer, activeProfile?.id || 'usr_admin');
+                            } else {
+                              const text = await file.text();
+                              imported = await parseKotatsuBackup(text, activeProfile?.id || 'usr_admin');
+                            }
+                            let added = 0;
+                            for (const item of imported) {
+                              await apiFetch('/api/manga', {
+                                method: 'POST',
+                                body: JSON.stringify(item),
+                              });
+                              added++;
+                            }
+                            onRefreshData();
+                            showToast(`Successfully imported ${added} series from Kotatsu backup!`);
+                          } catch (err: any) {
+                            alert(`Failed to import Kotatsu backup: ${err.message}`);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const jsonStr = exportToKotatsuBackup(mangaList);
+                        const blob = new Blob([jsonStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `kotatsu_backup_${new Date().toISOString().split('T')[0]}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        showToast('Kotatsu backup exported!');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold border border-edge flex items-center gap-2 transition-all"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export Kotatsu Backup (.json)</span>
                     </button>
                   </div>
                 </div>

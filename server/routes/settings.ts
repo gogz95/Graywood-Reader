@@ -101,3 +101,33 @@ settingsRouter.post("/api/settings/backup/import", (req, res) => {
     res.status(400).json({ error: "Invalid backup format" });
   }
 });
+
+// Export Kotatsu Backup JSON (host-only)
+settingsRouter.get("/api/settings/backup/export-kotatsu", async (_req, res) => {
+  try {
+    const { exportToKotatsuBackup } = await import('../../src/utils/kotatsuImporter');
+    const mangaList = SqliteDb.getAllManga();
+    const jsonStr = exportToKotatsuBackup(mangaList);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="kotatsu_backup.json"');
+    res.send(jsonStr);
+  } catch (err: any) {
+    res.status(500).json({ error: `Export failed: ${err.message}` });
+  }
+});
+
+// Import Kotatsu Backup (host-only; accepts JSON or parsed payload)
+settingsRouter.post("/api/settings/backup/import-kotatsu", async (req, res) => {
+  try {
+    const { parseKotatsuBackup } = await import('../../src/utils/kotatsuImporter');
+    const payload = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const items = await parseKotatsuBackup(payload, 'usr_admin');
+    if (items.length > 0) {
+      syncBulkAddOrUpdateManga(items);
+    }
+    saveDatabaseToDisk();
+    res.json({ success: true, count: items.length, totalTracked: SqliteDb.getMangaCount() });
+  } catch (err: any) {
+    res.status(400).json({ error: `Invalid Kotatsu backup: ${err.message}` });
+  }
+});

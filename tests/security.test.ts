@@ -177,8 +177,17 @@ describe('host gate path normalization', () => {
   });
 
   it('keeps destructive and settings endpoints in the protected set', () => {
-    for (const p of ['/api/db/import', '/api/db/export', '/api/settings', '/api/crawler/bypass-fetch']) {
-      expect(HOST_ONLY_PATHS.has(p)).toBe(true);
+    for (const p of [
+      '/api/db/import',
+      '/api/db/export',
+      '/api/settings',
+      '/api/settings/backup/export',
+      '/api/settings/backup/import',
+      '/api/settings/backup/export-kotatsu',
+      '/api/settings/backup/import-kotatsu',
+      '/api/crawler/bypass-fetch'
+    ]) {
+      expect(isHostOnlyPath(p)).toBe(true);
     }
   });
 });

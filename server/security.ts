@@ -247,6 +247,8 @@ export const HOST_ONLY_PATHS = new Set<string>([
   '/api/settings',
   '/api/settings/backup/export',
   '/api/settings/backup/import',
+  '/api/settings/backup/export-kotatsu',
+  '/api/settings/backup/import-kotatsu',
   '/api/settings/cache/clear',
   '/api/manga/sync-from-apis',
   '/api/manga/refresh-all-metadata',
@@ -282,6 +284,7 @@ export const HOST_ONLY_PATHS = new Set<string>([
 // except these sensitive exports which leak the full database.
 export const SENSITIVE_GET_PATHS = new Set<string>([
   '/api/settings/backup/export',
+  '/api/settings/backup/export-kotatsu',
   '/api/db/export',
 ]);
 
