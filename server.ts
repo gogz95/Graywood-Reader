@@ -5317,7 +5317,7 @@ async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapt
 // Derived from Kotatsu-Parsers (MadaraParser, MangaReaderParser, etc.)
 // ============================================================================
 
-type SourceEngine = 'madara' | 'manhwa18' | 'mangareader' | 'manga18' | 'hotcomics' | 'mangafire' | 'batoto' | 'comickfun' | 'custom';
+type SourceEngine = 'madara' | 'manhwa18' | 'mangareader' | 'manga18' | 'hotcomics' | 'mangafire' | 'batoto' | 'comickfun' | 'custom' | 'foolslide';
 
 interface EngineSourceConfig {
   id: string; name: string; domain: string; engine: SourceEngine;
@@ -5385,6 +5385,22 @@ function domainFromBaseUrl(baseUrl: string): string {
   catch { return baseUrl.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, ''); }
 }
 
+/**
+ * Sanity-check a derived host fragment before registering it as a live domain.
+ * Rejects junk/placeholder domains that cannot be valid registrable hostnames
+ * (e.g. "bananascan_com.com" won't survive `new URL()` unescaped, and catalog
+ * fallback entries like "dd.mm.yyyy" / hostnames with '_' or spaces must not be
+ * added to the URL-matching registry).
+ */
+function isPlausibleHost(d: string): boolean {
+  if (!d || d.length < 4 || d.length > 253) return false;
+  if (d.includes('_') || d.includes(' ') || d.includes('/') || d.includes('..')) return false;
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)) return false;
+  const tld = d.split('.').pop() || '';
+  if (tld.length < 2 || tld.length > 24 || /^\d+$/.test(tld)) return false;
+  return true;
+}
+
 /** One-time sync: append auto-generated engine configs for every catalog source
  *  whose engineType is madara or mangathemesia and that isn't already curated.
  *
@@ -5405,7 +5421,9 @@ function syncEngineRegistryFromCatalog(): void {
     if (curatedEngineIds.has(src.id)) continue;
     if (SCRAPER_ONLY_IDS.has(src.id)) continue;
     const domain = domainFromBaseUrl(src.baseUrl);
-    if (!domain) continue;
+    // Skip malformed / placeholder domains so junk "https://<id>.com" fallbacks
+    // (and catalog entries like "bananascan_com.com") never enter the URL matcher.
+    if (!domain || !isPlausibleHost(domain)) continue;
     if (src.engineType === 'madara') {
       ENGINE_SOURCE_REGISTRY.push({
         id: src.id, name: src.name, domain, engine: 'madara',
@@ -5425,9 +5443,39 @@ function syncEngineRegistryFromCatalog(): void {
         madaraSelectBodyPage: 'div#readerarea',
       });
       added++;
+    } else if (src.engineType === 'wpcomics') {
+      // WP-Comics is a WordPress manga theme sharing the WP-Manga/Madara DOM
+      // family (chapter rows + reading-content pages), so it reuses the Madara
+      // engine. On mismatch the extractor returns 0 chapters and the dispatch
+      // gracefully falls through to the generic resolver.
+      ENGINE_SOURCE_REGISTRY.push({
+        id: src.id, name: src.name, domain, engine: 'madara',
+        lang: src.lang, isNsfw: src.isNsfw,
+      });
+      added++;
+    } else if (src.engineType === 'foolslide') {
+      // FoolSlide readers use clean URLs (/series/{slug}/, /read/{slug}/{lang}/{vol}/{ch}/)
+      // but render their chapter list / page images via JS. Register a typed engine
+      // so these route to a dedicated handler (with adult-gate bypass) instead of
+      // being branded 'general'; anything the handler can't see falls back to generic.
+      ENGINE_SOURCE_REGISTRY.push({
+        id: src.id, name: src.name, domain, engine: 'foolslide',
+        lang: src.lang, isNsfw: src.isNsfw,
+      });
+      added++;
+    } else if (src.engineType === 'custom_html') {
+      // Give every custom_html source a typed engine path (not 'general') so the
+      // domainId resolves correctly for disabled-source checks, source labeling,
+      // circuit breaker and health tracking — even though extraction falls through
+      // to the generic resolver. (Dead/blocked ones are handled by liveness/health.)
+      ENGINE_SOURCE_REGISTRY.push({
+        id: src.id, name: src.name, domain, engine: 'custom',
+        lang: src.lang, isNsfw: src.isNsfw,
+      });
+      added++;
     }
   }
-  if (added > 0) console.log(`[Engine Registry] Auto-registered ${added} sources from catalog (madara + mangathemesia). Total: ${ENGINE_SOURCE_REGISTRY.length}`);
+  if (added > 0) console.log(`[Engine Registry] Auto-registered ${added} sources from catalog (madara + mangathemesia + wpcomics + foolslide + custom_html). Total: ${ENGINE_SOURCE_REGISTRY.length}`);
 }
 
 /** Rebuild the LIVE_DOMAINS array from the current ENGINE_SOURCE_REGISTRY. */
@@ -5895,6 +5943,111 @@ async function fetchMangaReaderChapterList(seriesUrl: string): Promise<ResolvedC
   }
 }
 
+// ── FoolSlide Engine ─────────────────────────────────────────────────────
+// FoolSlide is a PHP manga reader using clean URLs:
+//   series  : {origin}/series/{slug}/
+//   read    : {origin}/read/{slug}/{lang}/{volume}/{chapter}/
+// The reader is normally JS-driven (chapter dropdown + page images loaded via
+// AJAX by jquery.plugins.js), and many installs gate content behind an
+// "adult content notice" POST form. This handler:
+//   1. Detects & submits the adult gate (persisting the session cookie) so we
+//      aren't stuck on the notice page.
+//   2. Extracts whatever server-rendered chapter <li>/<option>/<a> rows exist.
+//   3. Returns [] when content is JS-only — the dispatch then falls through to
+//      the generic resolver rather than a hard failure.
+async function fetchFoolSlideHtml(targetUrl: string, domainId: string): Promise<string | null> {
+  const origin = new URL(targetUrl).origin;
+  const headers = { ...UA_HEADERS, 'Referer': origin + '/' };
+  const get = (url: string) => fetchWithChallengeBypass(url, {
+    headers,
+    enableCloudflareBypass: appSettings.enableCloudflareBypass,
+    flareSolverrUrl: appSettings.flareSolverrUrl,
+    captchaSolverEnabled: appSettings.captchaSolverEnabled,
+    captchaApiKey: appSettings.captchaApiKey,
+    timeoutMs: 8000,
+    sourceId: domainId,
+    onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+  });
+
+  const first = await get(targetUrl);
+  if (!first.ok || !first.html) return null;
+  updateSourceHealth(domainId, first.html, first.status);
+
+  // Detect the FoolSlide adult-content gate: a POST form with a hidden
+  // <input type="hidden" name="adult" value="true" />.
+  if (!/<form[^>]*method=["']post["'][\s\S]*?name=["']adult["']/i.test(first.html)) {
+    return first.html;
+  }
+
+  // Submit the gate, then re-fetch the same page with the session cookie.
+  try {
+    await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        ...UA_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': targetUrl,
+        'Cookie': sourceCookieJar.getCookieHeader(domainId),
+      },
+      body: 'adult=true',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch { /* non-fatal — some installs unlock purely on the GET after POST */ }
+
+  const second = await get(targetUrl);
+  if (!second.ok || !second.html) return null;
+  updateSourceHealth(domainId, second.html, second.status);
+  return second.html;
+}
+
+async function fetchFoolSlideChapterList(seriesUrl: string, domainId: string): Promise<ResolvedChapter[]> {
+  try {
+    const html = await fetchFoolSlideHtml(seriesUrl, domainId);
+    if (!html) return [];
+    const $ = cheerio.load(html);
+    const origin = new URL(seriesUrl).origin;
+    const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+
+    // Capture candidate <a href> rows and <option> values in document order.
+    const rows = $('ul.chapter-list li a, #chapter-list li a, li.chapter a, select option, .chapter a').toArray();
+    for (const row of rows) {
+      const tag = (row as any).tagName?.toLowerCase();
+      const href = tag === 'option' ? ($(row).attr('value') || '') : ($(row).attr('href') || '');
+      if (!href || /^(#|javascript:)/i.test(href)) continue;
+      const text = $(row).text().trim() || $(row).attr('title') || '';
+      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+      // FoolSlide read URLs: /read/{slug}/{lang}/{volume}/{chapter}/
+      const m = abs.match(/\/read\/[^/]+\/[^/]+\/(\d+)\/(\d+(?:\.\d+)?)\/?/i);
+      const num = m ? parseFloat(m[2]) : NaN;
+      if (!Number.isFinite(num) || num <= 0) continue;
+      if (seen.has(abs)) continue; seen.add(abs);
+      chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
+    }
+
+    // A sane page with zero rows is a JS-only theme — return [] so the
+    // dispatcher's generic resolver tries instead of dying.
+    return chapters;
+  } catch (e) {
+    console.warn('[FoolSlide Engine] Chapter list failed:', (e as Error).message);
+    return [];
+  }
+}
+
+async function fetchFoolSlideChapterPages(chapterUrl: string, domainId: string): Promise<string[] | null> {
+  try {
+    const html = await fetchFoolSlideHtml(chapterUrl, domainId);
+    if (!html) return null;
+    const origin = new URL(chapterUrl).origin;
+    const pages = extractPanelImages(html, origin);
+    return pages.length > 0 ? pages : null;
+  } catch (e) {
+    console.warn('[FoolSlide Engine] Page extraction failed:', (e as Error).message);
+    return null;
+  }
+}
+
 async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Promise<ResolvedChapter[]> {
   const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
   
@@ -5910,6 +6063,10 @@ async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Pro
   }
   if (engineConfig && engineConfig.engine === 'hotcomics') {
     const chapters = await fetchHotComicsChapterList(targetUrl, engineConfig.domain || domainId);
+    if (chapters.length > 0) return chapters;
+  }
+  if (engineConfig && engineConfig.engine === 'foolslide') {
+    const chapters = await fetchFoolSlideChapterList(targetUrl, domainId);
     if (chapters.length > 0) return chapters;
   }
   
@@ -6098,6 +6255,17 @@ async function extractLiveDomainChapterPages(
       }
       const mrPages = await fetchMangaReaderChapterPages(mrTarget.url);
       if (mrPages && mrPages.length > 0) return mrPages;
+    }
+    if (engCfg && engCfg.engine === 'foolslide') {
+      // FoolSlide JS-only themes may return [] for the chapter list — in that
+      // case fall through to the generic resolver instead of substituting a
+      // wrong chapter or nulling the read.
+      const fsChapters = await fetchFoolSlideChapterList(targetUrl, domainId);
+      const fsTarget = matchResolvedChapter(fsChapters, chapterNumber);
+      if (fsTarget) {
+        const fsPages = await fetchFoolSlideChapterPages(fsTarget.url, domainId);
+        if (fsPages && fsPages.length > 0) return fsPages;
+      }
     }
 
     // 4. Madara Engine (WP-Manga theme) — dedicated AJAX chapter extractor
