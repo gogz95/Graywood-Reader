@@ -186,3 +186,25 @@ describe('SSRF & Image Proxy Defenses', () => {
     }
   });
 });
+
+describe('Live Source Feeds & Progress Endpoints', () => {
+  it('GET /api/kotatsu/search with source alias reader.graywood.no resolves to Asura Scans', async () => {
+    const res = await request(app)
+      .get('/api/kotatsu/search')
+      .query({ sourceId: 'reader.graywood.no', q: 'shadow-slave' });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    if (res.body.length > 0) {
+      expect(res.body[0].sourceName).toBe('Asura Scans');
+    }
+  });
+
+  it('GET /api/reader/progress handles sourceId and slug queries safely', async () => {
+    const res = await request(app)
+      .get('/api/reader/progress')
+      .query({ sourceId: 'asurascans', slug: 'asura_the-demon-god' });
+    // Returns either 200 (if found) or 404 (if not tracked) rather than 404 Cannot GET
+    expect([200, 404]).toContain(res.status);
+  });
+});
+

@@ -70,12 +70,14 @@ export async function fetchAsuraSeriesMetadata(slugOrUrl: string): Promise<Asura
 }
 
 export async function fetchAsuraChapterList(targetUrl: string): Promise<{ chapters: ResolvedScraperChapter[]; matchedSlug: string | null }> {
-  let rawSlug = '';
-  if (targetUrl.includes('/series/')) {
-    const parts = targetUrl.split('/');
-    const idx = parts.indexOf('series');
+  let rawSlug = targetUrl.trim();
+  if (rawSlug.includes('/')) {
+    const parts = rawSlug.split('/').filter(Boolean);
+    const idx = parts.findIndex((p) => p === 'comics' || p === 'series' || p === 'manga' || p === 's');
     if (idx !== -1 && parts[idx + 1]) {
       rawSlug = parts[idx + 1];
+    } else {
+      rawSlug = parts[parts.length - 1] || '';
     }
   }
   if (!rawSlug) return { chapters: [], matchedSlug: null };

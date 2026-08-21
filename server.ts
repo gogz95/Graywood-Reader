@@ -2271,6 +2271,160 @@ app.post("/api/db/refresh-all", async (_req, res) => {
 });
 
 // ==========================================
+// AUTO-DISCOVERY ENGINE FOR LIVE SOURCES
+// ==========================================
+
+/**
+ * Automatically searches active scanlation sources (Asura, ComicK, Flame, etc.)
+ * for a matching live source URL by series title / alternate titles.
+ */
+export async function searchLiveSourcesForSeries(
+  title: string,
+  altTitles: string[] = []
+): Promise<{ sourceName: string; sourceUrl: string; confidence: number }[]> {
+  const discovered: { sourceName: string; sourceUrl: string; confidence: number }[] = [];
+  const seenUrls = new Set<string>();
+
+  const candidateQueries = Array.from(new Set([
+    title,
+    ...(altTitles || []),
+  ]))
+    .map((t) => (t ? t.replace(/\s*\([^)]*\)/g, '').replace(/uncensored|reboot|hd|season \d+|ch \d+/gi, '').trim() : ''))
+    .filter((t) => t.length >= 2);
+
+  for (const q of candidateQueries.slice(0, 3)) {
+    // 1. Check Asura Scans JSON API
+    if (!disabledSourceIds.has('asurascans') && isSourceAlive('asurascans')) {
+      try {
+        const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(q)}`, {
+          headers: ASURA_API_HEADERS,
+          signal: AbortSignal.timeout(6000),
+        });
+        if (asuraRes.ok) {
+          const asuraJson = await asuraRes.json();
+          const list = Array.isArray(asuraJson?.data) ? asuraJson.data : [];
+          for (const s of list) {
+            const sTitle = s.title || '';
+            const sim = calculateStringSimilarity(q, sTitle);
+            if (sim >= 55) {
+              const slug = s.slug || s.id || '';
+              const pubPath = s.public_url || `/comics/${slug}`;
+              const sUrl = `https://asurascans.com${pubPath}`;
+              if (!seenUrls.has(sUrl)) {
+                seenUrls.add(sUrl);
+                discovered.push({ sourceName: 'Asura Scans', sourceUrl: sUrl, confidence: sim });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check ComicK API
+    if (!disabledSourceIds.has('comick') && isSourceAlive('comick')) {
+      try {
+        const ckRes = await fetch(`https://api.comick.fun/v1.0/search?q=${encodeURIComponent(q)}`, {
+          headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'application/json' },
+          signal: AbortSignal.timeout(6000),
+        });
+        if (ckRes.ok) {
+          const ckJson = await ckRes.json();
+          const items = Array.isArray(ckJson) ? ckJson : (Array.isArray(ckJson?.data) ? ckJson.data : []);
+          for (const it of items) {
+            const itTitle = it.title || '';
+            const sim = calculateStringSimilarity(q, itTitle);
+            if (sim >= 55 && it.slug) {
+              const sUrl = `https://comick.io/comic/${it.slug}`;
+              if (!seenUrls.has(sUrl)) {
+                seenUrls.add(sUrl);
+                discovered.push({ sourceName: 'ComicK', sourceUrl: sUrl, confidence: sim });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Check Flame Comics
+    if (!disabledSourceIds.has('flamecomics') && isSourceAlive('flamecomics')) {
+      try {
+        const flameSlug = q.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const flameCtx = await fetchFlameSeriesContext(`https://flamecomics.xyz/series/${flameSlug}`);
+        if (flameCtx && flameCtx.matchedSeries?.title) {
+          const sim = calculateStringSimilarity(q, flameCtx.matchedSeries.title);
+          if (sim >= 55) {
+            const sUrl = `https://flamecomics.xyz/series/${flameCtx.seriesId || flameSlug}`;
+            if (!seenUrls.has(sUrl)) {
+              seenUrls.add(sUrl);
+              discovered.push({ sourceName: 'Flame Comics', sourceUrl: sUrl, confidence: sim });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (discovered.length >= 3) break;
+  }
+
+  discovered.sort((a, b) => b.confidence - a.confidence);
+  return discovered;
+}
+
+/**
+ * Automatically discovers a live source for a manga when none is set or when
+ * the manga only has a MangaDex metadata URL. Attaches the source to the manga
+ * and persists the update.
+ */
+export async function autoDiscoverLiveSourceForManga(
+  manga: MangaItem
+): Promise<{ sourceName: string; sourceUrl: string } | null> {
+  // Check if manga already has a valid non-MangaDex live source in availableSources
+  if (Array.isArray(manga.availableSources) && manga.availableSources.length > 0) {
+    const existingLive = manga.availableSources.find(
+      (s) => s && s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+    );
+    if (existingLive) {
+      if (!manga.sourceUrl || manga.sourceUrl.toLowerCase().includes('mangadex.org')) {
+        manga.sourceUrl = existingLive.sourceUrl;
+        manga.sourceName = existingLive.sourceName || manga.sourceName;
+        SqliteDb.upsertManga(manga);
+        const idx = mangaDatabase.findIndex((m) => m.id === manga.id);
+        if (idx !== -1) mangaDatabase[idx] = manga;
+        saveDatabaseToDisk();
+      }
+      return existingLive;
+    }
+  }
+
+  const results = await searchLiveSourcesForSeries(manga.title, manga.altTitles);
+  if (results.length === 0) return null;
+
+  const best = results[0];
+  if (!Array.isArray(manga.availableSources)) manga.availableSources = [];
+
+  for (const r of results) {
+    if (!manga.availableSources.some((s) => s.sourceUrl === r.sourceUrl)) {
+      manga.availableSources.push({ sourceName: r.sourceName, sourceUrl: r.sourceUrl });
+    }
+  }
+
+  // Update primary sourceUrl if it was MangaDex or empty
+  if (!manga.sourceUrl || manga.sourceUrl.toLowerCase().includes('mangadex.org')) {
+    manga.sourceUrl = best.sourceUrl;
+    manga.sourceName = best.sourceName;
+  }
+
+  manga.lastUpdated = new Date().toISOString();
+  SqliteDb.upsertManga(manga);
+  const idx = mangaDatabase.findIndex((m) => m.id === manga.id);
+  if (idx !== -1) mangaDatabase[idx] = manga;
+  saveDatabaseToDisk();
+
+  console.log(`[Live Source Discovery] Auto-linked live source "${best.sourceName}" (${best.sourceUrl}) for "${manga.title}"`);
+  return best;
+}
+
+// ==========================================
 // BUILT-IN WEBTOON & MANGA READER ENDPOINTS
 // ==========================================
 
@@ -2284,13 +2438,6 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
     return res.status(404).json({ error: "Manga not found" });
   }
 
-  // MangaDex chapter feed is DISABLED for reading — MangaDex is metadata-only.
-  // We skip the feed and fall through to the live-source or fabricated chapter list below.
-
-  // Live-source REAL chapter list (before the fabricated generator). For series with a live
-  // source we enumerate the source's actual chapters so the UI only lists chapters that exist
-  // (fixes: wrong chapters shown, and series not lining up with the source's real numbering).
-
   // Resolve the best available live source URL — skip MangaDex (metadata-only), prefer
   // availableSources when the primary sourceUrl points to MangaDex.
   let liveSourceUrl = manga.sourceUrl || '';
@@ -2299,6 +2446,15 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
       (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
     );
     if (alt) liveSourceUrl = alt.sourceUrl;
+  }
+
+  // If no working live source URL exists (e.g. series was imported from MangaDex metadata only),
+  // auto-discover a live scanlation source by title.
+  if (!liveSourceUrl || liveSourceUrl.toLowerCase().includes('mangadex.org')) {
+    const autoSource = await autoDiscoverLiveSourceForManga(manga);
+    if (autoSource) {
+      liveSourceUrl = autoSource.sourceUrl;
+    }
   }
 
   if (liveSourceUrl && (liveSourceUrl.startsWith('http://') || liveSourceUrl.startsWith('https://')) && !liveSourceUrl.toLowerCase().includes('mangadex.org')) {
@@ -2346,6 +2502,32 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
   }
 
   res.json(chapters);
+});
+
+// List/discover available live reading sources for a series
+app.get("/api/reader/sources/:mangaId", async (req, res) => {
+  const { mangaId } = req.params;
+  const manga = resolveManga(mangaId);
+  if (!manga) return res.status(404).json({ error: "Manga not found" });
+
+  const existing = (manga.availableSources || []).filter(
+    (s) => s && s.sourceUrl && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+  );
+
+  // Discover more live sources
+  const discovered = await searchLiveSourcesForSeries(manga.title, manga.altTitles);
+  const combined = [...existing];
+  for (const d of discovered) {
+    if (!combined.some((s) => s.sourceUrl === d.sourceUrl)) {
+      combined.push({ sourceName: d.sourceName, sourceUrl: d.sourceUrl });
+    }
+  }
+
+  res.json({
+    currentSource: manga.sourceUrl,
+    currentSourceName: manga.sourceName,
+    sources: combined,
+  });
 });
 
 
@@ -3990,6 +4172,42 @@ app.get("/api/kotatsu/search", async (req, res) => {
       return res.json(enriched);
     }
 
+    // ── Dedicated Scraper Search (Asura Scans JSON API) ─────────────
+    if (sourceDef.id === 'asurascans') {
+      try {
+        const cleanQuery = query.replace(/^asura_/i, '').replace(/[-_]/g, ' ').trim();
+        const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(cleanQuery || query)}`, {
+          headers: ASURA_API_HEADERS,
+          signal: AbortSignal.timeout(12000),
+        });
+        if (asuraRes.ok) {
+          const json = await asuraRes.json();
+          const data: any[] = Array.isArray(json?.data) ? json.data : [];
+          const results = data.map((s: any) => {
+            const slug = s.slug || s.id || '';
+            const pubPath = s.public_url || `/comics/${slug}`;
+            return {
+              id: `asura_${slug}`,
+              title: s.title || 'Unknown',
+              sourceUrl: `https://asurascans.com${pubPath}`,
+              coverImage: s.cover || '',
+              sourceName: 'Asura Scans',
+              description: (s.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
+              genres: (Array.isArray(s.genres) ? s.genres : []).map((g: any) => g?.name).filter(Boolean),
+              latestChapter: s.chapter_count ? Number(s.chapter_count) : 1,
+              type: s.type || 'manhwa',
+              rating: typeof s.rating === 'number' ? Number(s.rating.toFixed(1)) : 9.0,
+            };
+          });
+          res.setHeader('X-Total-Count', String(results.length));
+          res.setHeader('X-Total-Pages', '1');
+          return res.json(results);
+        }
+      } catch (err: any) {
+        console.warn('[Kotatsu Search] Asura API search error:', err.message);
+      }
+    }
+
     // ── 3. Live HTML scraping via fetchWithChallengeBypass (RC-6 fix: parity
     //    with the chapter-read path so CF-protected sites work in search too)
     //    Uses cheerio DOM-proximity parsing (RC-3 fix: pairs cover+title from
@@ -5483,6 +5701,14 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     if (altSource) {
       console.log(`[Reader Stream Engine] Promoting alternative live source "${altSource.sourceName}" over MangaDex metadata-only sourceUrl.`);
       targetUrl = altSource.sourceUrl;
+    }
+  }
+
+  // If no live source is configured (e.g. imported from MangaDex metadata), auto-discover one now
+  if ((!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) && manga) {
+    const autoSource = await autoDiscoverLiveSourceForManga(manga);
+    if (autoSource) {
+      targetUrl = autoSource.sourceUrl;
     }
   }
 
