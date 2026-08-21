@@ -6659,15 +6659,30 @@ class KotatsuImageEngine {
     chapterNumber: number = 1
   ): Promise<string[] | null> {
     const cacheKey = `${domainId}:${targetUrl}:${chapterNumber}`;
+    // 1. In-memory fast cache
     const cached = this.pageListCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.maxCacheAgeMs) {
-      console.log(`[Kotatsu Image Engine] Cache Hit for ${cacheKey} (${cached.pages.length} pages)`);
+      console.log(`[Kotatsu Image Engine] Memory Cache Hit for ${cacheKey} (${cached.pages.length} pages)`);
       return cached.pages;
     }
 
+    // 2. Persistent SQLite cache (fast-boot & multi-process survivable)
+    try {
+      const sqliteCached = SqliteDb.getCachedChapterPages(domainId, chapterNumber, targetUrl);
+      if (sqliteCached && sqliteCached.pages.length > 0) {
+        console.log(`[Kotatsu Image Engine] SQLite Cache Hit for ${cacheKey} (${sqliteCached.pages.length} pages)`);
+        this.pageListCache.set(cacheKey, { pages: sqliteCached.pages, timestamp: Date.now() });
+        return sqliteCached.pages;
+      }
+    } catch (_) {}
+
+    // 3. Live Scraper Extraction
     const pages = await extractLiveDomainChapterPages(targetUrl, domainId, chapterNumber);
     if (pages && pages.length > 0) {
       this.pageListCache.set(cacheKey, { pages, timestamp: Date.now() });
+      try {
+        SqliteDb.setCachedChapterPages(domainId, chapterNumber, targetUrl, pages, this.maxCacheAgeMs);
+      } catch (_) {}
     }
     return pages;
   }

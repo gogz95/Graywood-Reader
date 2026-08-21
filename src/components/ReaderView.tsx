@@ -557,6 +557,66 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [settings.viewMode, settings.guidedPanelView, currentPageIndex, chapterData, settings.autoScrollSpeed, isWebtoon, toggleBookmarkPage]);
 
+  // Gamepad Controller Support (e.g. 8BitDo, Bluetooth remote, Xbox, PlayStation controllers)
+  useEffect(() => {
+    let animId: number;
+    let lastButtonPress = 0;
+
+    const pollGamepad = () => {
+      const gamepads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        const now = Date.now();
+        if (now - lastButtonPress > 250) {
+          // D-Pad Right (button 15), R1 (button 5), or A (button 0) -> Next
+          if (gp.buttons[15]?.pressed || gp.buttons[5]?.pressed) {
+            lastButtonPress = now;
+            if (settings.viewMode === 'rtl' && chapterData) {
+              if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+            } else if (chapterData) {
+              if (currentPageIndex < chapterData.pages.length - 1) {
+                setCurrentPageIndex((prev) => prev + 1);
+              } else if (chapterData.nextChapterNumber) {
+                setCurrentChapterNum(chapterData.nextChapterNumber);
+              }
+            }
+          }
+          // D-Pad Left (button 14) or L1 (button 4) -> Prev
+          else if (gp.buttons[14]?.pressed || gp.buttons[4]?.pressed) {
+            lastButtonPress = now;
+            if (settings.viewMode === 'rtl' && chapterData) {
+              if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+            } else if (chapterData) {
+              if (currentPageIndex > 0) {
+                setCurrentPageIndex((prev) => prev - 1);
+              } else if (chapterData.prevChapterNumber) {
+                setCurrentChapterNum(chapterData.prevChapterNumber);
+              }
+            }
+          }
+          // Y button (button 3) -> Toggle Auto-Scroll
+          else if (gp.buttons[3]?.pressed) {
+            lastButtonPress = now;
+            setIsAutoScrolling((prev) => {
+              const next = !prev;
+              triggerToast(next ? `Auto-Scroll Started (${settings.autoScrollSpeed}x)` : 'Auto-Scroll Paused');
+              return next;
+            });
+          }
+          // X button (button 2) -> Toggle HUD
+          else if (gp.buttons[2]?.pressed) {
+            lastButtonPress = now;
+            setShowHud((prev) => !prev);
+          }
+        }
+      }
+      animId = requestAnimationFrame(pollGamepad);
+    };
+
+    animId = requestAnimationFrame(pollGamepad);
+    return () => cancelAnimationFrame(animId);
+  }, [chapterData, currentPageIndex, settings.viewMode, settings.autoScrollSpeed, triggerToast]);
+
   // Handle Offline Download Chapter
   const handleDownloadChapter = useCallback(async () => {
     if (!chapterData || !chapterData.pages || chapterData.pages.length === 0) return;
@@ -953,12 +1013,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   return (
                     <div className="flex items-center justify-center gap-1 w-full max-h-[85vh]">
                       {leftIndex !== null && chapterData.pages[leftIndex] && (
-                        <div className="flex-1 flex justify-end">
+                        <div className={`flex-1 flex ${rightIndex === null ? 'justify-center' : 'justify-end'}`}>
                           <img
                             src={pageLoadStates.get(leftIndex)?.blobUrl || chapterData.pages[leftIndex]}
                             alt={`Page ${leftIndex + 1}`}
                             style={imageFilterStyle}
-                            className="max-h-[82vh] w-auto object-contain rounded-l-xl shadow-2xl border-r border-edge/30"
+                            className={`max-h-[82vh] w-auto object-contain shadow-2xl ${rightIndex === null ? 'rounded-xl' : 'rounded-l-xl border-r border-edge/30'}`}
                           />
                         </div>
                       )}

@@ -6,6 +6,7 @@ import net from 'net';
 import express from 'express';
 import { Agent } from 'undici';
 import { UserProfile } from '../src/types';
+import { SqliteDb } from '../sqlite-db';
 
 declare global {
   namespace Express {
@@ -178,19 +179,41 @@ export function signAuthToken(payload: Record<string, unknown>): string {
 }
 
 /**
- * Revoked token ids (jti). Populated by /api/auth/logout. In-memory only:
- * a restart clears the list, but tokens are short-lived (<= AUTH_TOKEN_TTL_MS)
- * and rotation of ENCRYPTION_SECRET invalidates every token anyway.
+ * Revoked token ids (jti). Populated by /api/auth/logout.
+ * Persisted in SQLite `revoked_tokens` table with in-memory memoization
+ * so logouts survive server restarts.
  */
 const revokedTokenJtis = new Set<string>();
 
-export function revokeAuthToken(jti: string): void {
-  if (jti) revokedTokenJtis.add(jti);
+export function revokeAuthToken(jti: string, expiresAt?: number): void {
+  if (!jti) return;
+  revokedTokenJtis.add(jti);
+  const exp = expiresAt && expiresAt > Date.now() ? expiresAt : Date.now() + AUTH_TOKEN_TTL_MS;
+  SqliteDb.revokeToken(jti, exp);
 }
 
 export function isAuthTokenRevoked(jti: string): boolean {
-  return revokedTokenJtis.has(jti);
+  if (!jti) return false;
+  if (revokedTokenJtis.has(jti)) return true;
+  if (SqliteDb.isTokenRevoked(jti)) {
+    revokedTokenJtis.add(jti);
+    return true;
+  }
+  return false;
 }
+
+// Initial and periodic cleanup of expired tokens and chapter page caches
+try {
+  SqliteDb.cleanupExpiredRevokedTokens();
+  SqliteDb.cleanupExpiredChapterPages();
+} catch {}
+
+setInterval(() => {
+  try {
+    SqliteDb.cleanupExpiredRevokedTokens();
+    SqliteDb.cleanupExpiredChapterPages();
+  } catch {}
+}, 60 * 60 * 1000); // Hourly cleanup
 
 export function verifyAuthToken(token: string): Record<string, unknown> | null {
   if (!token) return null;
@@ -203,7 +226,7 @@ export function verifyAuthToken(token: string): Record<string, unknown> | null {
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (typeof payload.exp === 'number' && payload.exp < Date.now()) return null;
-    if (typeof payload.jti === 'string' && revokedTokenJtis.has(payload.jti)) return null;
+    if (typeof payload.jti === 'string' && isAuthTokenRevoked(payload.jti)) return null;
     return payload;
   } catch {
     return null;

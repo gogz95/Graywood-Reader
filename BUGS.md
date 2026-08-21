@@ -27,6 +27,27 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-038] [Other Fault] The Summer at Her House
+- **Status**: `open`
+- **Priority**: `low`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Darkmodes (2026-08-21)
+- **Description**: Flagged issue: Other Fault.
+
+Series: The Summer at Her House (manhwa18_49b4deb55cd3fa03759fa463)
+Source: Manhwa18
+Flag reason: Other Fault
+
+Loads wrong metadata for source
+- **Steps to Reproduce**:
+  1. 1. Open series "The Summer at Her House"
+2. Trigger reading / metadata load
+3. Observe: Other Fault
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 _No active bugs._
 
 ---

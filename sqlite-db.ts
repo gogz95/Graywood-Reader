@@ -194,6 +194,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_user_fav_user ON user_favorites(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_lib_user ON user_library_state(user_id, last_read_at);
   CREATE INDEX IF NOT EXISTS idx_sticky_notes_manga ON page_sticky_notes(manga_id, chapter_number);
+
+  -- Persistent revoked token blacklist (logout survives process restarts)
+  CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti TEXT PRIMARY KEY,
+    revoked_at TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_revoked_tokens_exp ON revoked_tokens(expires_at);
+
+  -- Chapter page URL cache with TTL (sub-millisecond reading access & rate-limit shield)
+  CREATE TABLE IF NOT EXISTS chapter_pages_cache (
+    manga_id TEXT NOT NULL,
+    chapter_number REAL NOT NULL,
+    source_url TEXT NOT NULL,
+    pages TEXT NOT NULL,
+    page_count INTEGER NOT NULL,
+    cached_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    PRIMARY KEY (manga_id, chapter_number, source_url)
+  );
+  CREATE INDEX IF NOT EXISTS idx_chapter_cache_exp ON chapter_pages_cache(expires_at);
 `);
 
 try { db.exec('ALTER TABLE page_sticky_notes ADD COLUMN user_id TEXT'); } catch (e) { }
@@ -372,6 +393,29 @@ const stmtGetUserLibraryStateOne = db.prepare(`
   SELECT * FROM user_library_state WHERE user_id = ? AND manga_id = ?
 `);
 const stmtDeleteUserLibraryStateByUser = db.prepare(`DELETE FROM user_library_state WHERE user_id = ?`);
+
+const stmtRevokeToken = db.prepare(`
+  INSERT OR REPLACE INTO revoked_tokens (jti, revoked_at, expires_at)
+  VALUES (?, ?, ?)
+`);
+const stmtIsTokenRevoked = db.prepare(`
+  SELECT 1 FROM revoked_tokens WHERE jti = ? AND expires_at > ?
+`);
+const stmtCleanupRevokedTokens = db.prepare(`
+  DELETE FROM revoked_tokens WHERE expires_at <= ?
+`);
+
+const stmtGetCachedPages = db.prepare(`
+  SELECT pages, page_count FROM chapter_pages_cache
+  WHERE manga_id = ? AND chapter_number = ? AND source_url = ? AND expires_at > ?
+`);
+const stmtSetCachedPages = db.prepare(`
+  INSERT OR REPLACE INTO chapter_pages_cache (manga_id, chapter_number, source_url, pages, page_count, cached_at, expires_at)
+  VALUES (@manga_id, @chapter_number, @source_url, @pages, @page_count, @cached_at, @expires_at)
+`);
+const stmtCleanupCachedPages = db.prepare(`
+  DELETE FROM chapter_pages_cache WHERE expires_at <= ?
+`);
 
 // Helper Serializers & Deserializers
 function mapRowToMangaItem(row: any): MangaItem {
@@ -1021,6 +1065,75 @@ export const SqliteDb = {
 
   deleteStickyNote(id: string, userId?: string): boolean {
     return deleteStickyNote(id, userId);
+  },
+
+  // ── Persistent Token Revocation ──────────────────────────────────────────
+  revokeToken(jti: string, expiresAt: number): void {
+    if (!jti) return;
+    try {
+      stmtRevokeToken.run(jti, new Date().toISOString(), expiresAt);
+    } catch (e) {
+      console.error('[SQLite Engine] Failed to record revoked token:', e);
+    }
+  },
+
+  isTokenRevoked(jti: string): boolean {
+    if (!jti) return false;
+    try {
+      const row = stmtIsTokenRevoked.get(jti, Date.now());
+      return Boolean(row);
+    } catch {
+      return false;
+    }
+  },
+
+  cleanupExpiredRevokedTokens(): number {
+    try {
+      const info = stmtCleanupRevokedTokens.run(Date.now());
+      return info.changes;
+    } catch {
+      return 0;
+    }
+  },
+
+  // ── Chapter Pages Cache (Stale-While-Revalidate) ───────────────────────────
+  getCachedChapterPages(mangaId: string, chapterNumber: number, sourceUrl: string): { pages: string[]; pageCount: number } | null {
+    try {
+      const row = stmtGetCachedPages.get(mangaId, chapterNumber, sourceUrl, Date.now()) as { pages: string; page_count: number } | undefined;
+      if (!row || !row.pages) return null;
+      const pages = JSON.parse(row.pages);
+      if (!Array.isArray(pages) || pages.length === 0) return null;
+      return { pages, pageCount: Number(row.page_count) || pages.length };
+    } catch {
+      return null;
+    }
+  },
+
+  setCachedChapterPages(mangaId: string, chapterNumber: number, sourceUrl: string, pages: string[], ttlMs: number = 6 * 60 * 60 * 1000): void {
+    if (!mangaId || !sourceUrl || !Array.isArray(pages) || pages.length === 0) return;
+    try {
+      const now = Date.now();
+      stmtSetCachedPages.run({
+        manga_id: mangaId,
+        chapter_number: chapterNumber,
+        source_url: sourceUrl,
+        pages: JSON.stringify(pages),
+        page_count: pages.length,
+        cached_at: now,
+        expires_at: now + ttlMs,
+      });
+    } catch (err) {
+      console.error('[SQLite Engine] Failed to cache chapter pages:', err);
+    }
+  },
+
+  cleanupExpiredChapterPages(): number {
+    try {
+      const info = stmtCleanupCachedPages.run(Date.now());
+      return info.changes;
+    } catch {
+      return 0;
+    }
   },
 };
 

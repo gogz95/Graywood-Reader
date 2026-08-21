@@ -83,6 +83,16 @@ describe('auth tokens (HMAC-signed)', () => {
     expect(verifyAuthToken(forged)).toBeNull();
   });
 
+  it('rejects a revoked token and persists revocation in SQLite', () => {
+    const token = signAuthToken({ sub: 'usr_revokeme', role: 'user' });
+    const payloadBefore = verifyAuthToken(token);
+    expect(payloadBefore?.sub).toBe('usr_revokeme');
+    expect(typeof payloadBefore?.jti).toBe('string');
+
+    revokeAuthToken(payloadBefore!.jti as string);
+    expect(verifyAuthToken(token)).toBeNull();
+  });
+
   it('rejects empty / malformed tokens', () => {
     expect(verifyAuthToken('')).toBeNull();
     expect(verifyAuthToken('no-dot')).toBeNull();

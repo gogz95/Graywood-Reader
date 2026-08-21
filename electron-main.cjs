@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -98,4 +98,18 @@ app.on('window-all-closed', () => {
   // platforms quit, which triggers the will-quit teardown of the server.
   if (process.platform !== 'darwin') app.quit();
 });
-app.on('will-quit', () => { writeLog('Electron app quitting'); if (serverProcess) serverProcess.kill(); });
+app.on('will-quit', () => {
+  writeLog('Electron app quitting');
+  if (serverProcess && serverProcess.pid) {
+    if (process.platform === 'win32') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`taskkill /pid ${serverProcess.pid} /T /F`, { stdio: 'ignore' });
+      } catch (_) {
+        try { serverProcess.kill(); } catch (_) {}
+      }
+    } else {
+      try { serverProcess.kill('SIGTERM'); } catch (_) {}
+    }
+  }
+});
