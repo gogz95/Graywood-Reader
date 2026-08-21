@@ -3,6 +3,15 @@ import {
   isMangaDexSourceLink,
   hasWorkingReaderSource,
 } from '../types';
+import {
+  resolveAtomicField,
+  resolveAggregativeField,
+  uniqArray,
+  applyOverrides,
+  ensureCoreFields,
+  snapshotMetadataOverrides,
+  pickBestRepresentative,
+} from './metadataHelpers';
 
 // Content rating helpers for 18+ / adult filtering in the Unified Catalog.
 const ADULT_GENRES = new Set([
@@ -33,82 +42,129 @@ export function normalizeTitleKey(t: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
-/** Pick the best single representative when the same series appears multiple times. */
-function pickBestRepresentative(a: MangaItem, b: MangaItem): MangaItem {
-  const score = (m: MangaItem) => {
-    let s = 0;
-    if (m.isFavorite) s += 10000;
-    s += (m.availableSources?.length || 0) * 1000;
-    if (m.apiId || m.sourceUrl) s += 500;
-    s += (m.latestChapter || 0);
-    s += (m.rating || 0) * 10;
-    return s;
-  };
-  return score(a) >= score(b) ? a : b;
-}
-
-/** Merge two entries that refer to the SAME series, preserving as much data as possible. */
+/**
+ * Merge two entries that refer to the SAME series.
+ *
+ * Jellyfin-inspired two-bucket merge strategy:
+ *
+ *  ATOMIC fields  (title, description, coverImage, rating)
+ *   → Value comes exclusively from the PREFERRED source (the one with a working
+ *     reader, or the higher-scored representative).  Falls back to the other
+ *     source only when the preferred value is absent/empty.
+ *
+ *  AGGREGATIVE fields  (altTitles, genres, availableSources, metadataOverrides)
+ *   → UNION of both sources, de-duplicated.  No information is discarded.
+ *
+ *  LOCAL OVERRIDE layer  (items recorded in `metadataOverrides`)
+ *   → Always wins.  Re-applied on top of the merged result so manual user
+ *     edits can never be clobbered by a remote merge.
+ *
+ *  English titles are preferred over romanised/native alternatives.
+ */
 export function mergeMangaItems(a: MangaItem, b: MangaItem): MangaItem {
+  // ── 1. Pick the preferred (more authoritative) representative ────────────
   const base = pickBestRepresentative(a, b);
   const other = base === a ? b : a;
 
-  const uniq = <T,>(arr: T[]): T[] => Array.from(new Set(arr));
   const srcKey = (s: { sourceName?: string; sourceUrl?: string }) =>
     `${(s.sourceName || '').toLowerCase()}::${(s.sourceUrl || '').toLowerCase()}`;
 
-  const mergedSourcesMap = new Map<string, NonNullable<NonNullable<MangaItem['availableSources']>[number]>>();
+  // ── 2. Determine which item has a working (non-MangaDex) reader ──────────
+  const hasReader = (m: MangaItem): boolean => {
+    if (m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl)) return true;
+    return Boolean(
+      m.availableSources &&
+        m.availableSources.some(
+          (s) => s.sourceUrl && !isMangaDexSourceLink(s.sourceName, s.sourceUrl),
+        ),
+    );
+  };
+  // The "preferred" source for ATOMIC metadata is the one with a working reader.
+  // If neither has one, fall back to the best-scored representative.
+  const preferred = hasReader(base) ? base : hasReader(other) ? other : base;
+  const secondary = preferred === base ? other : base;
+
+  // ── 3. Snapshot local overrides so they survive the merge ────────────────
+  // We snapshot from both items and will re-apply them at the end.
+  const preferredOverrideSnap = snapshotMetadataOverrides(preferred);
+  const secondaryOverrideSnap = snapshotMetadataOverrides(secondary);
+
+  // ── 4. Build merged availableSources (aggregative) ──────────────────────
+  const mergedSourcesMap = new Map<
+    string,
+    NonNullable<NonNullable<MangaItem['availableSources']>[number]>
+  >();
   for (const s of [...(a.availableSources || []), ...(b.availableSources || [])]) {
     if (!s || (!s.sourceName && !s.sourceUrl)) continue;
     mergedSourcesMap.set(srcKey(s), s);
   }
   const mergedSources = Array.from(mergedSourcesMap.values());
-  const mergedAltTitles = uniq([...(a.altTitles || []), ...(b.altTitles || [])].filter(Boolean));
-  const mergedGenres = uniq([...(a.genres || []), ...(b.genres || [])].filter(Boolean));
 
-  // Prefer the variant that is actually readable (has a working source).
-  const hasReader = (m: MangaItem): boolean => {
-    if (m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl)) return true;
-    return Boolean(m.availableSources && m.availableSources.some((s) => s.sourceUrl && !isMangaDexSourceLink(s.sourceName, s.sourceUrl)));
-  };
-  const preferred = hasReader(base) ? base : hasReader(other) ? other : base;
-
-  // Resolve a non-MangaDex source URL when possible so merged series stay readable.
+  // ── 5. Resolve the best readable source URL ──────────────────────────────
   const readableUrl = ((): { url: string; name: string } => {
-    const preferNonMd = [...(base.availableSources || []), base];
-    const anyMd = [...(other.availableSources || []), other];
-    const pool = [...preferNonMd, ...anyMd];
+    const pool = [
+      ...(base.availableSources || []), base,
+      ...(other.availableSources || []), other,
+    ];
     for (const s of pool) {
-      const url = (s as any).sourceUrl || '';
-      const name = (s as any).sourceName || '';
+      const url = (s as unknown as Record<string, string>).sourceUrl || '';
+      const name = (s as unknown as Record<string, string>).sourceName || '';
       if (url && !isMangaDexSourceLink(name, url)) return { url, name };
     }
-    // Fall back to a MangaDex URL only if nothing else exists (kept for metadata, not reading).
+    // Fall back to MangaDex only if nothing readable exists.
     for (const s of pool) {
-      const url = (s as any).sourceUrl || '';
-      const name = (s as any).sourceName || '';
+      const url = (s as unknown as Record<string, string>).sourceUrl || '';
+      const name = (s as unknown as Record<string, string>).sourceName || '';
       if (url) return { url, name };
     }
     return { url: '', name: '' };
   })();
 
-  return {
+  // ── 6. Build the merged object ───────────────────────────────────────────
+  //   Spread `preferred` first so all fields not explicitly overridden inherit
+  //   its values (covers things like `status`, `type`, `addedAt`, etc.).
+  const merged: MangaItem = {
     ...preferred,
-    title: base.title || other.title,
-    altTitles: mergedAltTitles,
-    genres: mergedGenres,
-    apiId: base.apiId || other.apiId || null,
-    sourceUrl: readableUrl.url || preferred.sourceUrl || base.sourceUrl || other.sourceUrl || '',
+
+    // ATOMIC — preferred wins; fall back to secondary only if empty.
+    title:       resolveAtomicField(preferred, secondary, 'title'),
+    description: resolveAtomicField(preferred, secondary, 'description'),
+    coverImage:  resolveAtomicField(preferred, secondary, 'coverImage'),
+    rating:      resolveAtomicField(preferred, secondary, 'rating'),
+
+    // AGGREGATIVE — union of both.
+    altTitles:         resolveAggregativeField(a, b, 'altTitles'),
+    genres:            resolveAggregativeField(a, b, 'genres'),
+    metadataOverrides: resolveAggregativeField(a, b, 'metadataOverrides'),
+
+    // Source routing.
+    apiId:      base.apiId || other.apiId || null,
+    sourceUrl:  readableUrl.url  || preferred.sourceUrl  || base.sourceUrl  || other.sourceUrl  || '',
     sourceName: readableUrl.name || preferred.sourceName || base.sourceName || other.sourceName || '',
     availableSources: mergedSources,
+
+    // Progress — always take the maximum (most advanced reading position).
     currentChapter: Math.max(a.currentChapter || 0, b.currentChapter || 0),
-    latestChapter: Math.max(a.latestChapter || 0, b.latestChapter || 0),
-    rating: Math.max(a.rating || 0, b.rating || 0),
+    latestChapter:  Math.max(a.latestChapter  || 0, b.latestChapter  || 0),
+
+    // Booleans — logical OR so a positive flag from either item is kept.
     isFavorite: Boolean(a.isFavorite || b.isFavorite),
+
+    // Timestamps — keep the more recent lastUpdated.
     lastUpdated:
       new Date(b.lastUpdated || 0).getTime() > new Date(a.lastUpdated || 0).getTime()
         ? b.lastUpdated
         : a.lastUpdated,
   };
+
+  // ── 7. Re-apply local overrides (LOCAL OVERRIDE LAYER always wins) ───────
+  // Preferred source overrides take priority over secondary source overrides
+  // (applied last = wins), consistent with the atomic-field priority above.
+  let result = applyOverrides(merged, secondaryOverrideSnap);
+  result = applyOverrides(result, preferredOverrideSnap);
+
+  // ── 8. Guarantee core fields are never empty ─────────────────────────────
+  return ensureCoreFields(result);
 }
 
 // Dedupe the catalog so the same series is never shown more than once, keying on the
@@ -168,3 +224,7 @@ export function sortManga(list: MangaItem[], sortBy: SortBy): MangaItem[] {
   });
   return sorted;
 }
+
+// Re-export helpers so callers don't need a separate import for common utilities.
+export { uniqArray, ensureCoreFields, snapshotMetadataOverrides, pickBestRepresentative } from './metadataHelpers';
+

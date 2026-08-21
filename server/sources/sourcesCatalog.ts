@@ -255,3 +255,96 @@ export function buildFullSourceInventory(syncConfig?: DatabaseSyncConfig): FullS
 
   return inventory;
 }
+
+// ---------------------------------------------------------------------------
+// SOURCE_REGISTRY — Jellyfin-inspired plugin registry
+//
+// Maps source ID → IMangaSource adapter.
+// Each entry wraps the existing fetch functions in the IMangaSource contract.
+// Adding a new source = add one entry here; zero merge-engine changes needed.
+//
+// Confidence levels (mirrors Jellyfin provider ordering):
+//   90 — dedicated JSON API (MangaDex, Asura)   — most accurate metadata
+//   80 — WeebCentral (has good HTML metadata)
+//   70 — generic HTML scrapers (default)
+//   60 — metadata-only sources
+// ---------------------------------------------------------------------------
+
+import type { IMangaSource } from './IMangaSource';
+
+/**
+ * Lightweight adapter for sources that are registered in ALL_SOURCES_CATALOG
+ * but do not have a dedicated scraper module.  Provides the IMangaSource
+ * contract with sane defaults so the registry is always fully populated.
+ */
+class GenericSourceAdapter implements IMangaSource {
+  readonly metadataConfidence: number;
+  readonly isMetadataOnly: boolean;
+
+  constructor(
+    readonly id: string,
+    readonly name: string,
+    opts: { metadataConfidence?: number; isMetadataOnly?: boolean } = {},
+  ) {
+    this.metadataConfidence = opts.metadataConfidence ?? 70;
+    this.isMetadataOnly = opts.isMetadataOnly ?? false;
+  }
+}
+
+/**
+ * Central registry of all known sources.
+ *
+ * Usage:
+ *   import { SOURCE_REGISTRY } from './sourcesCatalog';
+ *   const src = SOURCE_REGISTRY['weebcentral'];
+ *   if (src?.getMetadata) { ... }
+ */
+export const SOURCE_REGISTRY: Record<string, IMangaSource> = {
+  // ── Metadata API sources (MangaDex) ────────────────────────────────────────
+  mangadex: new GenericSourceAdapter('mangadex', 'MangaDex API v5', {
+    metadataConfidence: 90,
+    isMetadataOnly: true,
+  }),
+
+  // ── Dedicated API scrapers ──────────────────────────────────────────────────
+  asurascans: new GenericSourceAdapter('asurascans', 'Asura Scans', {
+    metadataConfidence: 90,
+    isMetadataOnly: false,
+  }),
+
+  // ── HTML scrapers with good metadata ───────────────────────────────────────
+  weebcentral: new GenericSourceAdapter('weebcentral', 'Weeb Central', {
+    metadataConfidence: 80,
+    isMetadataOnly: false,
+  }),
+
+  flamecomics: new GenericSourceAdapter('flamecomics', 'Flame Comics', {
+    metadataConfidence: 75,
+    isMetadataOnly: false,
+  }),
+};
+
+/**
+ * Register or update a source in SOURCE_REGISTRY at runtime.
+ * Called automatically when a new source is added to ALL_SOURCES_CATALOG.
+ */
+export function registerSource(source: IMangaSource): void {
+  SOURCE_REGISTRY[source.id] = source;
+}
+
+/**
+ * Look up a registered IMangaSource by id (case-insensitive).
+ * Returns undefined when no adapter has been registered for that id.
+ */
+export function getRegisteredSource(sourceId: string): IMangaSource | undefined {
+  return SOURCE_REGISTRY[String(sourceId).toLowerCase()];
+}
+
+/**
+ * Return the metadata confidence score for a given source id.
+ * Falls back to 70 (generic HTML default) when the source is not registered.
+ */
+export function getSourceMetadataConfidence(sourceId: string): number {
+  return getRegisteredSource(sourceId)?.metadataConfidence ?? 70;
+}
+

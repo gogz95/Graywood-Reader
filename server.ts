@@ -133,6 +133,12 @@ import {
   canWriteCatalog,
   rejectCatalogWrite,
 } from "./server/appState";
+import {
+  snapshotMetadataOverrides,
+  restoreMetadataOverrides,
+  ensureCoreFields,
+  preferEnglishTitle,
+} from "./src/utils/metadataHelpers";
 
 export const sourceCustomCookies = new Map<string, string[]>();
 export const sourceCustomUserAgents = new Map<string, string>();
@@ -342,16 +348,11 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
       batch.map(async (item) => {
         let updated = await refreshSingleMangaMetadata({ ...item }).catch(() => ({ ...item }));
 
-        // Clean up altTitles & ensure non-empty description
+        // Clean up altTitles (strip exact-title duplicates).
         const altSet = new Set((updated.altTitles || []).filter((a) => a && a.toLowerCase() !== updated.title.toLowerCase()));
         updated.altTitles = Array.from(altSet);
-        if (!updated.description || updated.description.trim() === '') {
-          updated.description = `${updated.title} is an active series tracked via ${updated.sourceName || 'Webtoon Source'}.`;
-        }
-        if (!updated.genres || updated.genres.length === 0) {
-          updated.genres = ['Action', 'Fantasy'];
-        }
-        return updated;
+        // Ensure every core field has a non-empty value (shared ensureCoreFields helper).
+        return ensureCoreFields(updated);
       })
     );
     updatedItems.push(...results);
@@ -369,34 +370,9 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
 }
 
 
-// Descriptive metadata fields a live refresh may overwrite. Fields the user has
-// manually customized (recorded in `metadataOverrides`) are preserved so manual
-// edits never vanish when metadata is refreshed. `latestChapter` is intentionally
-// excluded — it is a live counter that should always keep updating.
-const OVERRIDEABLE_METADATA = ['title', 'description', 'coverImage', 'rating', 'genres', 'altTitles'] as const;
-
-// Copy the current values of any user-overridden metadata fields so they can be
-// restored after a live refresh mutates the manga object.
-function snapshotMetadataOverrides(manga: MangaItem): Record<string, any> {
-  const overridden = Array.isArray(manga.metadataOverrides) ? manga.metadataOverrides : [];
-  const snap: Record<string, any> = {};
-  for (const field of OVERRIDEABLE_METADATA) {
-    if (overridden.includes(field)) {
-      const value = (manga as any)[field];
-      snap[field] = Array.isArray(value) ? [...value] : value;
-    }
-  }
-  return snap;
-}
-
-// Re-apply user-overridden metadata fields (deep-copying arrays to avoid aliasing).
-function restoreMetadataOverrides(manga: MangaItem, snap: Record<string, any>) {
-  for (const field of OVERRIDEABLE_METADATA) {
-    if (!(field in snap)) continue;
-    const value = snap[field];
-    (manga as any)[field] = Array.isArray(value) ? [...value] : value;
-  }
-}
+// snapshotMetadataOverrides, restoreMetadataOverrides and OVERRIDEABLE_METADATA_FIELDS
+// now live in src/utils/metadataHelpers.ts (Jellyfin-inspired shared module).
+// They are imported at the top of this file.
 
 // Helper: Refresh metadata for a single manga item from live sources
 // Helper: Refresh metadata for a single manga item from live sources & MangaDex API
@@ -458,7 +434,8 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
         const coverFileName = coverRel?.attributes?.fileName;
 
         if (attrs.title) {
-          const mainTitle = attrs.title.en || Object.values(attrs.title)[0];
+          // Prefer English title; fall back to first available language.
+          const mainTitle = preferEnglishTitle(attrs.title);
           if (mainTitle) manga.title = mainTitle;
         }
         if (attrs.description && (attrs.description.en || Object.values(attrs.description)[0])) {
