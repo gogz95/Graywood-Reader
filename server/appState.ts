@@ -162,6 +162,12 @@ export function buildEncryptedSettings() {
     captchaApiKey: appSettings.captchaApiKey && !appSettings.captchaApiKey.startsWith('enc:')
       ? encryptPII(appSettings.captchaApiKey)
       : (appSettings.captchaApiKey || ''),
+    discordWebhookUrl: (appSettings as any).discordWebhookUrl && !(appSettings as any).discordWebhookUrl.startsWith('enc:')
+      ? encryptPII((appSettings as any).discordWebhookUrl)
+      : ((appSettings as any).discordWebhookUrl || ''),
+    telegramBotToken: (appSettings as any).telegramBotToken && !(appSettings as any).telegramBotToken.startsWith('enc:')
+      ? encryptPII((appSettings as any).telegramBotToken)
+      : ((appSettings as any).telegramBotToken || ''),
   };
 }
 
@@ -455,6 +461,8 @@ export function loadDatabaseFromDisk() {
           ...appSettings,
           ...parsedSettings,
           captchaApiKey: decryptPII(parsedSettings.captchaApiKey || ''),
+          discordWebhookUrl: decryptPII(parsedSettings.discordWebhookUrl || ''),
+          telegramBotToken: decryptPII(parsedSettings.telegramBotToken || ''),
         };
       } catch (e) { }
     } else if (legacyParsed?.appSettings) {
@@ -462,6 +470,8 @@ export function loadDatabaseFromDisk() {
         ...appSettings,
         ...legacyParsed.appSettings,
         captchaApiKey: decryptPII(legacyParsed.appSettings.captchaApiKey || ''),
+        discordWebhookUrl: decryptPII(legacyParsed.appSettings.discordWebhookUrl || ''),
+        telegramBotToken: decryptPII(legacyParsed.appSettings.telegramBotToken || ''),
       };
     }
 
@@ -535,6 +545,15 @@ export const SETTINGS_ALLOWED_KEYS = new Set<string>([
   'captchaApiKey', 'stealthMode', 'preferredLanguage',
   'autoFormatReadingMode', 'defaultMangaMode', 'defaultManhwaMode',
   'defaultManhuaMode', 'readerDefaults',
+  // Webhook & Push Notifications
+  'discordWebhookUrl', 'discordWebhookEnabled',
+  'telegramBotToken', 'telegramChatId', 'telegramWebhookEnabled',
+  'notifyOnlyReadingStatus',
+  // App Lock
+  'appLockEnabled', 'appLockPinHash', 'appLockType', 'appLockTimeoutMinutes',
+  // Ambient Soundscapes & Polish
+  'ambientSoundEnabled', 'ambientSoundPreset', 'ambientSoundVolume',
+  'pageTurnSfxEnabled', 'magnifierEnabled',
 ]);
 export const READER_DEFAULTS_ALLOWED_KEYS = new Set<string>([
   'viewMode', 'maxWidth', 'pageGap', 'bgColor', 'zoomLevel', 'autoMarkRead',
@@ -547,7 +566,7 @@ export const CONFIG_ALLOWED_KEYS = new Set<string>([
   'subdomain', 'autoUpdateIntervalMinutes', 'enableWebCrawling', 'sources',
   'disabledSources', 'removedSources', 'reactivatedSources', 'lastSyncTime', 'totalTracked',
 ]);
-// Sentinel returned in place of the real captcha API key whenever settings
+// Sentinel returned in place of secrets whenever settings
 // leave the server. Clients/backup files that send it back mean "no change".
 export const MASKED_SECRET = '••••••••';
 
@@ -570,6 +589,12 @@ export function sanitizeIncomingSettings(raw: any): Record<string, any> {
   // Secret handling: empty or masked values mean "keep the existing key".
   if (clean.captchaApiKey === undefined || clean.captchaApiKey === '' || clean.captchaApiKey === MASKED_SECRET) {
     delete clean.captchaApiKey;
+  }
+  if (clean.discordWebhookUrl === undefined || clean.discordWebhookUrl === '' || clean.discordWebhookUrl === MASKED_SECRET) {
+    delete clean.discordWebhookUrl;
+  }
+  if (clean.telegramBotToken === undefined || clean.telegramBotToken === '' || clean.telegramBotToken === MASKED_SECRET) {
+    delete clean.telegramBotToken;
   }
   return clean;
 }
@@ -605,14 +630,32 @@ export let appSettings = {
   captchaSolverEnabled: true,
   captchaApiKey: '', // 2Captcha / CapSolver API key
   stealthMode: true,
+  // Webhooks & Notifications
+  discordWebhookUrl: '',
+  discordWebhookEnabled: false,
+  telegramBotToken: '',
+  telegramChatId: '',
+  telegramWebhookEnabled: false,
+  notifyOnlyReadingStatus: true,
+  // App Lock
+  appLockEnabled: false,
+  appLockPinHash: '',
+  appLockType: 'pin' as 'pin' | 'password' | 'biometric',
+  appLockTimeoutMinutes: 5,
+  // Ambient Soundscapes
+  ambientSoundEnabled: false,
+  ambientSoundPreset: 'off' as 'rain' | 'campfire' | 'lofi' | 'off',
+  ambientSoundVolume: 0.5,
+  pageTurnSfxEnabled: true,
+  magnifierEnabled: true,
   readerDefaults: {
-    viewMode: 'webtoon',
+    viewMode: 'webtoon' as const,
     maxWidth: '850px',
     pageGap: 8,
-    bgColor: 'slate',
+    bgColor: 'slate' as const,
     zoomLevel: 100,
     autoMarkRead: true,
-    imageFilter: 'normal',
+    imageFilter: 'normal' as const,
     autoScrollEnabled: false,
     autoScrollSpeed: 1, // 0.5, 1, 1.5, 2, 2.5, 3
     tapZonesEnabled: true,
@@ -620,7 +663,7 @@ export let appSettings = {
     showPageNumberOverlay: true,
     showPersistentPageBadge: true,
     autoNextChapter: true,
-    mangaFitMode: 'fit-height',
+    mangaFitMode: 'fit-height' as const,
     preloadCount: 3,
   },
 };

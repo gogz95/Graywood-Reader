@@ -38,11 +38,17 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
+  Bell,
+  Send,
+  KeyRound,
+  Fingerprint,
+  Volume2,
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
 import { AutoUpdateView } from './AutoUpdateView';
 import { AutoUpdateLog, UserProfile } from '../types';
+import { hashPin } from './AppLockOverlay';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -98,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   isUpdating = false,
 }) => {
   const [activeSection, setActiveSection] = useState<
-    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'duplicates' | 'subdomain' | 'restore' | 'backup'
+    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'webhooks' | 'security' | 'duplicates' | 'subdomain' | 'restore' | 'backup'
   >('reader');
   const isAdmin = activeProfile?.role === 'admin';
 
@@ -207,6 +213,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
     } finally {
       setIsCheckingCaptchaBalance(false);
     }
+  };
+
+  // Webhook Testing States
+  const [isTestingDiscord, setIsTestingDiscord] = useState(false);
+  const [discordTestStatus, setDiscordTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [telegramTestStatus, setTelegramTestStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // App Lock Pin Setup States
+  const [pinInput, setPinInput] = useState('');
+  const [pinConfirmInput, setPinConfirmInput] = useState('');
+  const [pinMessage, setPinMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleTestDiscord = async () => {
+    setIsTestingDiscord(true);
+    setDiscordTestStatus(null);
+    try {
+      const res = await apiFetch('/api/webhooks/test-discord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: formData.discordWebhookUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDiscordTestStatus({ ok: true, message: data.message || 'Discord notification sent!' });
+      } else {
+        setDiscordTestStatus({ ok: false, message: data.error || 'Failed to send Discord notification' });
+      }
+    } catch (err: any) {
+      setDiscordTestStatus({ ok: false, message: err.message || 'Network error' });
+    } finally {
+      setIsTestingDiscord(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setIsTestingTelegram(true);
+    setTelegramTestStatus(null);
+    try {
+      const res = await apiFetch('/api/webhooks/test-telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: formData.telegramBotToken,
+          chatId: formData.telegramChatId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramTestStatus({ ok: true, message: data.message || 'Telegram notification sent!' });
+      } else {
+        setTelegramTestStatus({ ok: false, message: data.error || 'Failed to send Telegram notification' });
+      }
+    } catch (err: any) {
+      setTelegramTestStatus({ ok: false, message: err.message || 'Network error' });
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
+  const handleSetNewPin = async () => {
+    if (!pinInput || pinInput.length < 4) {
+      setPinMessage({ ok: false, text: 'PIN must be at least 4 digits.' });
+      return;
+    }
+    if (pinInput !== pinConfirmInput) {
+      setPinMessage({ ok: false, text: 'PINs do not match.' });
+      return;
+    }
+    const hashed = await hashPin(pinInput);
+    setFormData((prev) => ({
+      ...prev,
+      appLockPinHash: hashed,
+      appLockEnabled: true,
+    }));
+    setPinMessage({ ok: true, text: 'PIN updated and App Lock enabled!' });
+    setPinInput('');
+    setPinConfirmInput('');
   };
 
   const showToast = (msg: string) => {
@@ -466,6 +550,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                 <Lock className="w-3 h-3 text-muted" />
               </span>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('webhooks')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
+              activeSection === 'webhooks'
+                ? 'bg-accent text-accent-fg shadow-md font-black'
+                : 'text-secondary hover:text-primary hover:bg-elevated/60'
+            }`}
+          >
+            <Bell className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-indigo-400" />
+            <span>Webhooks & Push</span>
+            {!isAdmin && (
+              <span title="Admin access required" className="inline-flex">
+                <Lock className="w-3 h-3 text-muted" />
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('security')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap ${
+              activeSection === 'security'
+                ? 'bg-accent text-accent-fg shadow-md font-black'
+                : 'text-secondary hover:text-primary hover:bg-elevated/60'
+            }`}
+          >
+            <KeyRound className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-amber-400" />
+            <span>App Lock & Security</span>
           </button>
 
           <button
@@ -1298,6 +1413,288 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
             ) : (
               renderAdminLockNotice('Sources & Anti-DDoS Network')
             )
+          )}
+
+          {/* WEBHOOKS & PUSH NOTIFICATIONS */}
+          {activeSection === 'webhooks' && (
+            isAdmin ? (
+              <div className="space-y-6 text-xs sm:text-sm">
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-primary text-sm sm:text-base">
+                        Discord & Telegram Chapter Webhooks
+                      </h3>
+                      <p className="text-secondary text-xs">
+                        Dispatch rich notification embeds to Discord channels or Telegram chats whenever background crawlers discover new chapter releases.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Rule Card */}
+                <div className="p-4 bg-app rounded-2xl border border-edge">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div>
+                      <div className="font-bold text-primary flex items-center gap-2">
+                        <span>Reading List Filter Only</span>
+                      </div>
+                      <div className="text-[11px] text-secondary">
+                        Only dispatch notifications for series marked as "Reading" (skips Completed, Dropped, or Plan to Read)
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.notifyOnlyReadingStatus !== false}
+                      onChange={(e) => setFormData({ ...formData, notifyOnlyReadingStatus: e.target.checked })}
+                      className="w-5 h-5 accent-accent"
+                    />
+                  </label>
+                </div>
+
+                {/* Discord Webhook Card */}
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-primary text-sm flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                      <span>Discord Rich Embed Webhook</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      Discord API
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 p-4 bg-surface rounded-xl border border-edge">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <div className="font-bold text-primary">Enable Discord Notifications</div>
+                        <div className="text-[11px] text-secondary">Send embedded alerts with cover art and 1-click read buttons</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formData.discordWebhookEnabled || false}
+                        onChange={(e) => setFormData({ ...formData, discordWebhookEnabled: e.target.checked })}
+                        className="w-5 h-5 accent-accent"
+                      />
+                    </label>
+
+                    <div className="space-y-1.5 pt-1">
+                      <label className="font-bold text-secondary text-[11px]">Discord Webhook URL:</label>
+                      <input
+                        type="password"
+                        value={formData.discordWebhookUrl || ''}
+                        onChange={(e) => setFormData({ ...formData, discordWebhookUrl: e.target.value })}
+                        placeholder="https://discord.com/api/webhooks/..."
+                        className="w-full bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-edge/60">
+                      <button
+                        type="button"
+                        onClick={handleTestDiscord}
+                        disabled={isTestingDiscord || !formData.discordWebhookUrl}
+                        className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                      >
+                        {isTestingDiscord ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        <span>Send Test Discord Notification</span>
+                      </button>
+
+                      {discordTestStatus && (
+                        <span className={`text-xs font-semibold ${discordTestStatus.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {discordTestStatus.message}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Telegram Push Card */}
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-primary text-sm flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-sky-500" />
+                      <span>Telegram Bot Push Notifications</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                      Telegram Bot API
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 p-4 bg-surface rounded-xl border border-edge">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <div className="font-bold text-primary">Enable Telegram Alerts</div>
+                        <div className="text-[11px] text-secondary">Instant messages to your private Telegram chat or channel</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formData.telegramWebhookEnabled || false}
+                        onChange={(e) => setFormData({ ...formData, telegramWebhookEnabled: e.target.checked })}
+                        className="w-5 h-5 accent-accent"
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-secondary text-[11px]">Telegram Bot Token:</label>
+                        <input
+                          type="password"
+                          value={formData.telegramBotToken || ''}
+                          onChange={(e) => setFormData({ ...formData, telegramBotToken: e.target.value })}
+                          placeholder="123456789:ABCdefGhIJKlmNoPQRstuVWXyz"
+                          className="w-full bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="font-bold text-secondary text-[11px]">Chat / Channel ID:</label>
+                        <input
+                          type="text"
+                          value={formData.telegramChatId || ''}
+                          onChange={(e) => setFormData({ ...formData, telegramChatId: e.target.value })}
+                          placeholder="@my_manga_channel or -100123456789"
+                          className="w-full bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-edge/60">
+                      <button
+                        type="button"
+                        onClick={handleTestTelegram}
+                        disabled={isTestingTelegram || !formData.telegramBotToken || !formData.telegramChatId}
+                        className="px-4 py-2 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 font-bold text-xs flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                      >
+                        {isTestingTelegram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        <span>Send Test Telegram Message</span>
+                      </button>
+
+                      {telegramTestStatus && (
+                        <span className={`text-xs font-semibold ${telegramTestStatus.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {telegramTestStatus.message}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              renderAdminLockNotice('Push Notifications & Webhooks')
+            )
+          )}
+
+          {/* APP LOCK & SECURITY */}
+          {activeSection === 'security' && (
+            <div className="space-y-6 text-xs sm:text-sm">
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-primary text-sm sm:text-base">
+                      App Lock & Privacy Protection
+                    </h3>
+                    <p className="text-secondary text-xs">
+                      Lock Graywood Reader with a numeric PIN or password to protect your library and reading history from unauthorized local access.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Master App Lock Toggle */}
+              <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div>
+                    <div className="font-bold text-primary text-sm flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-amber-400" />
+                      <span>Enable Application Lock</span>
+                    </div>
+                    <div className="text-xs text-secondary mt-0.5">
+                      Require PIN or password entry when opening the reader or after an idle timeout
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.appLockEnabled || false}
+                    onChange={(e) => setFormData({ ...formData, appLockEnabled: e.target.checked })}
+                    className="w-5 h-5 accent-accent"
+                  />
+                </label>
+
+                {formData.appLockEnabled && (
+                  <div className="space-y-4 pt-3 border-t border-edge">
+                    {/* Auto-Lock Timeout */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-surface border border-edge">
+                      <div>
+                        <div className="font-bold text-primary">Auto-Lock Inactivity Timeout</div>
+                        <div className="text-[11px] text-secondary">Automatically lock after inactivity or app blur</div>
+                      </div>
+                      <select
+                        value={formData.appLockTimeoutMinutes ?? 5}
+                        onChange={(e) => setFormData({ ...formData, appLockTimeoutMinutes: parseInt(e.target.value, 10) })}
+                        className="px-3 py-1.5 rounded-lg bg-app border border-edge text-primary text-xs font-semibold"
+                      >
+                        <option value={0}>Immediate (Every session)</option>
+                        <option value={1}>1 Minute</option>
+                        <option value={5}>5 Minutes</option>
+                        <option value={15}>15 Minutes</option>
+                        <option value={-1}>On Window Minimize / Tab Blur</option>
+                      </select>
+                    </div>
+
+                    {/* Change / Set PIN */}
+                    <div className="p-4 rounded-xl bg-surface border border-edge space-y-3">
+                      <div className="font-bold text-primary text-xs">Set / Update Security PIN:</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-secondary block mb-1">New 4–6 Digit PIN:</label>
+                          <input
+                            type="password"
+                            maxLength={6}
+                            value={pinInput}
+                            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                            placeholder="Enter 4-6 digits"
+                            className="w-full bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono tracking-widest text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-secondary block mb-1">Confirm PIN:</label>
+                          <input
+                            type="password"
+                            maxLength={6}
+                            value={pinConfirmInput}
+                            onChange={(e) => setPinConfirmInput(e.target.value.replace(/\D/g, ''))}
+                            placeholder="Re-enter digits"
+                            className="w-full bg-app border border-edge rounded-lg px-3 py-2 text-primary text-xs font-mono tracking-widest text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          type="button"
+                          onClick={handleSetNewPin}
+                          disabled={!pinInput || pinInput.length < 4}
+                          className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          Save New PIN
+                        </button>
+
+                        {pinMessage && (
+                          <span className={`text-xs font-semibold ${pinMessage.ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {pinMessage.text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* 6. BACKUP RESTORATION & LIBRARY MIGRATION (Available to all logged-in users) */}

@@ -114,4 +114,29 @@ describe('Local Library Caching & Endpoints', () => {
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(1);
   });
+
+  it('scans CBR archives and detects zip-compressed CBR pages', () => {
+    const cbrPath = path.join(tempDir, 'Sample Manga Vol 02.cbr');
+    const zip = new AdmZip();
+    zip.addFile('page_1.png', Buffer.from('png-page-1'));
+    zip.writeZip(cbrPath);
+
+    const archives = scanStorage(true);
+    expect(archives.length).toBe(2);
+    const cbr = archives.find((a) => a.fileName.endsWith('.cbr'));
+    expect(cbr).toBeDefined();
+    expect(cbr?.type).toBe('cbr');
+    expect(cbr?.pageCount).toBe(1);
+  });
+
+  it('scans PDF files and extracts page count or default SVG frame', () => {
+    const pdfPath = path.join(tempDir, 'Artbook.pdf');
+    fs.writeFileSync(pdfPath, '%PDF-1.4 /Type /Page /Type /Page %%EOF');
+
+    const archives = scanStorage(true);
+    const pdf = archives.find((a) => a.fileName.endsWith('.pdf'));
+    expect(pdf).toBeDefined();
+    expect(pdf?.type).toBe('pdf');
+    expect(pdf?.pageCount).toBeGreaterThanOrEqual(1);
+  });
 });

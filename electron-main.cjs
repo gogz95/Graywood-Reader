@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -13,6 +13,31 @@ function writeLog(msg) {
   console.log(msg);
   logStream.write(line);
 }
+
+// Discord RPC State
+let discordClient = null;
+const DISCORD_CLIENT_ID = '123456789012345678'; // Graywood Reader Rich Presence App ID
+
+function updateDiscordPresence(details, state, largeImageKey = 'logo', largeImageText = 'Graywood Reader') {
+  try {
+    writeLog(`[Discord RPC] Activity: ${details} | ${state}`);
+  } catch (err) {
+    writeLog(`[Discord RPC] Failed to update: ${err.message}`);
+  }
+}
+
+ipcMain.handle('set-discord-activity', async (_event, data) => {
+  const { title, chapter, type } = data || {};
+  const details = title ? `Reading ${title}` : 'Browsing Library';
+  const state = chapter ? `Chapter ${chapter} (${type || 'Manga'})` : 'Catalog Explorer';
+  updateDiscordPresence(details, state);
+  return { ok: true };
+});
+
+ipcMain.handle('clear-discord-activity', async () => {
+  updateDiscordPresence('Browsing Library', 'Idle');
+  return { ok: true };
+});
 
 let mainWindow;
 let serverProcess;

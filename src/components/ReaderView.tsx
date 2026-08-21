@@ -27,6 +27,8 @@ import { PageGridModal } from './reader/PageGridModal';
 import { StickyNotesDrawer } from './reader/StickyNotesDrawer';
 import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
 import { QuickJumpModal } from './reader/QuickJumpModal';
+import { AmbientSoundModal } from './reader/AmbientSoundModal';
+import { soundscapes } from '../utils/soundscapes';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -150,6 +152,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Auto-scroll state
   const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
+
+  // Ambient Soundscape state
+  const [showAmbientModal, setShowAmbientModal] = useState<boolean>(false);
+  const [pageTurnSfxEnabled, setPageTurnSfxEnabled] = useState<boolean>(true);
+
+  // Panel Magnifier Loupe Tool state
+  const [isLoupeActive, setIsLoupeActive] = useState<boolean>(false);
+  const [loupeData, setLoupeData] = useState<{ x: number; y: number; bgX: number; bgY: number; imgSrc: string } | null>(null);
 
   // Bookmarking & Downloading
   const [bookmarkedPages, setBookmarkedPages] = useState<number[]>([]);
@@ -501,6 +511,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           return nextState;
         });
       } else if (e.key === 'ArrowRight' || e.key === 'd') {
+        if (pageTurnSfxEnabled) soundscapes.playPageTurn();
         if (settings.viewMode === 'rtl' && chapterData) {
           if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
         } else if (chapterData) {
@@ -511,6 +522,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }
         }
       } else if (e.key === 'ArrowLeft' || e.key === 'a') {
+        if (pageTurnSfxEnabled) soundscapes.playPageTurn();
         if (settings.viewMode === 'rtl' && chapterData) {
           if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
         } else if (chapterData) {
@@ -536,6 +548,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setNoteInputText('');
         setNoteInputColor('yellow');
         setActiveNoteModal({ pageIndex: currentPageIndex });
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsLoupeActive((prev) => {
+          const next = !prev;
+          triggerToast(next ? 'Panel Magnifier: Active (hover image)' : 'Panel Magnifier: Disabled');
+          return next;
+        });
       } else if (e.key === 'f') {
         if (!document.fullscreenElement) {
           document.documentElement.requestFullscreen().catch(() => {});
@@ -672,6 +690,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }, (_, i) => i + 1).reverse();
   }, [manga.latestChapter, manga.currentChapter]);
 
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!isLoupeActive) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    const relX = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100));
+    const relY = Math.max(0, Math.min(100, ((y - rect.top) / rect.height) * 100));
+    setLoupeData({ x, y, bgX: relX, bgY: relY, imgSrc: e.currentTarget.src });
+  };
+
+  const handleImageMouseLeave = () => {
+    if (isLoupeActive) setLoupeData(null);
+  };
+
   return (
     <div className={`fixed inset-0 z-50 flex flex-col ${settings.imageFilter === 'oled' ? 'bg-black text-white' : bgStyleClass} font-sans select-none overflow-hidden`}>
       {/* Toast Notice */}
@@ -711,6 +743,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           isDownloadingOffline={isDownloadingOffline}
           downloadProgress={downloadProgress}
           privateModeEnabled={privateModeEnabled}
+          isAmbientActive={soundscapes.getCurrentPreset() !== 'off'}
+          onOpenAmbientModal={() => setShowAmbientModal(true)}
+          isLoupeActive={isLoupeActive}
+          onToggleLoupe={() => {
+            setIsLoupeActive((prev) => {
+              const next = !prev;
+              triggerToast(next ? 'Panel Magnifier: Active' : 'Panel Magnifier: Disabled');
+              return next;
+            });
+          }}
           onClose={onClose}
           onPrevChapter={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
           onNextChapter={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}
@@ -909,14 +951,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
                     }`}
                   >
-                    {/* Image Render */}
+                      {/* Image Render */}
                     <img
                       src={displaySrc}
                       alt={`Page ${idx + 1}`}
                       style={imageFilterStyle}
+                      onMouseMove={handleImageMouseMove}
+                      onMouseLeave={handleImageMouseLeave}
                       className={`w-full h-auto block object-contain transition-opacity duration-300 ${
                         isSeamless ? 'm-0 p-0 border-0' : ''
-                      } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'}`}
+                      } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                       loading="eager"
                     />
 
@@ -1018,7 +1062,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                             src={pageLoadStates.get(leftIndex)?.blobUrl || chapterData.pages[leftIndex]}
                             alt={`Page ${leftIndex + 1}`}
                             style={imageFilterStyle}
-                            className={`max-h-[82vh] w-auto object-contain shadow-2xl ${rightIndex === null ? 'rounded-xl' : 'rounded-l-xl border-r border-edge/30'}`}
+                            onMouseMove={handleImageMouseMove}
+                            onMouseLeave={handleImageMouseLeave}
+                            className={`max-h-[82vh] w-auto object-contain shadow-2xl ${rightIndex === null ? 'rounded-xl' : 'rounded-l-xl border-r border-edge/30'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                           />
                         </div>
                       )}
@@ -1028,7 +1074,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                             src={pageLoadStates.get(rightIndex)?.blobUrl || chapterData.pages[rightIndex]}
                             alt={`Page ${rightIndex + 1}`}
                             style={imageFilterStyle}
-                            className="max-h-[82vh] w-auto object-contain rounded-r-xl shadow-2xl"
+                            onMouseMove={handleImageMouseMove}
+                            onMouseLeave={handleImageMouseLeave}
+                            className={`max-h-[82vh] w-auto object-contain rounded-r-xl shadow-2xl ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                           />
                         </div>
                       )}
@@ -1049,13 +1097,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         src={displaySrc}
                         alt={`Page ${currentPageIndex + 1}`}
                         style={imageFilterStyle}
+                        onMouseMove={handleImageMouseMove}
+                        onMouseLeave={handleImageMouseLeave}
                         className={`w-full rounded-xl shadow-2xl transition-all ${
                           settings.mangaFitMode === 'fit-height'
                             ? 'max-h-[82vh] w-auto object-contain'
                             : settings.mangaFitMode === 'fit-width'
                             ? 'w-full h-auto'
                             : 'w-auto h-auto'
-                        }`}
+                        } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                       />
 
                       {isLoading && (
@@ -1197,6 +1247,29 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }
         }}
       />
+
+      {/* AMBIENT SOUNDSCAPE & SFX MODAL */}
+      <AmbientSoundModal
+        isOpen={showAmbientModal}
+        onClose={() => setShowAmbientModal(false)}
+        pageTurnSfxEnabled={pageTurnSfxEnabled}
+        onTogglePageTurnSfx={setPageTurnSfxEnabled}
+      />
+
+      {/* FLOATING CIRCULAR PANEL MAGNIFIER / LOUPE LENS */}
+      {isLoupeActive && loupeData && (
+        <div
+          className="pointer-events-none fixed z-9999 w-44 h-44 rounded-full border-2 border-indigo-400 shadow-2xl shadow-indigo-500/50 overflow-hidden ring-4 ring-black/40"
+          style={{
+            left: `${loupeData.x - 88}px`,
+            top: `${loupeData.y - 88}px`,
+            backgroundImage: `url(${loupeData.imgSrc})`,
+            backgroundPosition: `${loupeData.bgX}% ${loupeData.bgY}%`,
+            backgroundSize: '280%',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+      )}
     </div>
   );
 };

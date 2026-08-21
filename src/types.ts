@@ -147,6 +147,24 @@ export interface AppSettings {
   defaultMangaMode?: ReaderViewMode;
   defaultManhwaMode?: ReaderViewMode;
   defaultManhuaMode?: ReaderViewMode;
+  // Webhook & Push Notification Properties
+  discordWebhookUrl?: string;
+  discordWebhookEnabled?: boolean;
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  telegramWebhookEnabled?: boolean;
+  notifyOnlyReadingStatus?: boolean;
+  // App Lock & Security Properties
+  appLockEnabled?: boolean;
+  appLockPinHash?: string;
+  appLockType?: 'pin' | 'password' | 'biometric';
+  appLockTimeoutMinutes?: number;
+  // Ambient Soundscape & Reader Immersion Properties
+  ambientSoundEnabled?: boolean;
+  ambientSoundPreset?: 'rain' | 'campfire' | 'lofi' | 'off';
+  ambientSoundVolume?: number;
+  pageTurnSfxEnabled?: boolean;
+  magnifierEnabled?: boolean;
   readerDefaults: ReaderSettings;
 }
 

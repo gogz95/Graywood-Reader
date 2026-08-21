@@ -10,6 +10,8 @@ import {
   StickyNote,
   Download,
   Maximize,
+  Search,
+  Sparkles,
 } from 'lucide-react';
 import { MangaItem, ChapterData, ScanGroupOption, ReaderSettings, ReaderViewMode, PageStickyNote } from '../../types';
 
@@ -31,6 +33,10 @@ export interface ReaderHeaderProps {
   isDownloadingOffline: boolean;
   downloadProgress: { loaded: number; total: number } | null;
   privateModeEnabled?: boolean;
+  isAmbientActive?: boolean;
+  onOpenAmbientModal?: () => void;
+  isLoupeActive?: boolean;
+  onToggleLoupe?: () => void;
   onClose: () => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
@@ -61,6 +67,10 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
   isDownloadingOffline,
   downloadProgress,
   privateModeEnabled,
+  isAmbientActive,
+  onOpenAmbientModal,
+  isLoupeActive,
+  onToggleLoupe,
   onClose,
   onPrevChapter,
   onNextChapter,
@@ -201,6 +211,36 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
 
       {/* Right Action Bar */}
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Ambient Atmosphere & Lo-Fi Audio Trigger */}
+        {onOpenAmbientModal && (
+          <button
+            onClick={onOpenAmbientModal}
+            className={`p-2 sm:p-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all ${
+              isAmbientActive
+                ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400 animate-pulse'
+                : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
+            }`}
+            title="Ambient Soundscape & Lo-Fi Audio (Rain, Forest, Campfire, SFX)"
+          >
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        )}
+
+        {/* Panel Magnifier / Loupe Tool */}
+        {onToggleLoupe && (
+          <button
+            onClick={onToggleLoupe}
+            className={`p-2 sm:p-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all ${
+              isLoupeActive
+                ? 'bg-accent/20 border-accent/40 text-accent ring-2 ring-accent/30'
+                : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-primary'
+            }`}
+            title="Panel Magnifier Loupe Tool (Hotkey M)"
+          >
+            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        )}
+
         {/* Sticky Notes Drawer Trigger */}
         <button
           onClick={onToggleNotesDrawer}

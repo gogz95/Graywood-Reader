@@ -23,12 +23,13 @@ export const settingsRouter = Router();
 
 // GET Settings
 settingsRouter.get("/api/settings", (_req, res) => {
-  // Secrets never leave the server in plaintext: the captcha API key is
-  // replaced by a mask sentinel for EVERY caller (host UI included — the
-  // password input shows it as set without exposing the value).
+  // Secrets never leave the server in plaintext: captcha API keys and webhook
+  // URLs/tokens are replaced by a mask sentinel for EVERY caller.
   res.json({
     ...appSettings,
     captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+    discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
+    telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
   });
 });
 
@@ -51,6 +52,8 @@ settingsRouter.post("/api/settings", (req, res) => {
     settings: {
       ...appSettings,
       captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+      discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
+      telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
     },
   });
 });
@@ -66,6 +69,8 @@ settingsRouter.get("/api/settings/backup/export", (_req, res) => {
     appSettings: {
       ...appSettings,
       captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+      discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
+      telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
     },
   };
 

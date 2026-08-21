@@ -23,6 +23,7 @@ import { AuthModal } from './components/AuthModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
 import { ChallengeNotificationModal } from './components/ChallengeNotificationModal';
+import { AppLockOverlay } from './components/AppLockOverlay';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
   MangaItem,
@@ -286,6 +287,54 @@ export default function App() {
     const interval = setInterval(fetchChallengeCount, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // App Lock Lifecycle & Inactivity Timeout
+  const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (appSettings.appLockEnabled && appSettings.appLockPinHash) {
+      if (appSettings.appLockTimeoutMinutes === 0) {
+        setIsAppLocked(true);
+      }
+    }
+  }, [appSettings.appLockEnabled, appSettings.appLockPinHash]);
+
+  useEffect(() => {
+    if (!appSettings.appLockEnabled || !appSettings.appLockPinHash) {
+      setIsAppLocked(false);
+      return;
+    }
+    const timeoutMins = appSettings.appLockTimeoutMinutes ?? 5;
+    if (timeoutMins === -1) {
+      const handleVisibility = () => {
+        if (document.hidden) setIsAppLocked(true);
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('blur', handleVisibility);
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibility);
+        window.removeEventListener('blur', handleVisibility);
+      };
+    } else if (timeoutMins > 0) {
+      let timer: number;
+      const resetIdle = () => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          setIsAppLocked(true);
+        }, timeoutMins * 60 * 1000);
+      };
+      resetIdle();
+      window.addEventListener('mousemove', resetIdle);
+      window.addEventListener('keydown', resetIdle);
+      window.addEventListener('touchstart', resetIdle);
+      return () => {
+        window.clearTimeout(timer);
+        window.removeEventListener('mousemove', resetIdle);
+        window.removeEventListener('keydown', resetIdle);
+        window.removeEventListener('touchstart', resetIdle);
+      };
+    }
+  }, [appSettings.appLockEnabled, appSettings.appLockPinHash, appSettings.appLockTimeoutMinutes]);
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
     setAppSettings(newSettings);
@@ -1111,6 +1160,16 @@ export default function App() {
         onConfirm={confirmModal.onConfirm}
         onCancel={closeConfirmModal}
       />
+
+      {/* Glassmorphic Application Lock Overlay */}
+      {appSettings.appLockEnabled && (
+        <AppLockOverlay
+          isLocked={isAppLocked}
+          pinHash={appSettings.appLockPinHash || ''}
+          lockType={appSettings.appLockType || 'pin'}
+          onUnlock={() => setIsAppLocked(false)}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-edge bg-surface/60 py-6 pb-24 md:pb-6 text-center text-xs text-muted">

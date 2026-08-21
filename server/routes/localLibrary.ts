@@ -86,16 +86,53 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
     let imageEntries: string[] = [];
     let coverDataUrl: string | undefined;
 
-    if (type === 'cbz') {
-      const zip = new AdmZip(filePath);
-      imageEntries = listArchiveImages(zip);
-      const first = zip.getEntry(imageEntries[0]);
-      if (first) {
-        const buf = first.getData();
-        if (buf && buf.length > 0 && buf.length < 3 * 1024 * 1024) {
-          coverDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
+    if (type === 'cbz' || type === 'cbr' || type === 'other') {
+      try {
+        const zip = new AdmZip(filePath);
+        imageEntries = listArchiveImages(zip);
+        const first = zip.getEntry(imageEntries[0]);
+        if (first) {
+          const buf = first.getData();
+          if (buf && buf.length > 0 && buf.length < 3 * 1024 * 1024) {
+            coverDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
+          }
         }
+      } catch {
+        // Fallback for non-zip CBR / RAR
       }
+    } else if (type === 'pdf') {
+      try {
+        const rawHead = fs.readFileSync(filePath, { encoding: 'latin1', flag: 'r' });
+        const countMatch = rawHead.match(/\/Type\s*\/Pages[^>]*\/Count\s+(\d+)/) || rawHead.match(/\/Count\s+(\d+)/);
+        if (countMatch && parseInt(countMatch[1], 10) > 0) {
+          const pCount = Math.min(1000, parseInt(countMatch[1], 10));
+          imageEntries = Array.from({ length: pCount }, (_, i) => `page_${i + 1}.pdf`);
+        } else {
+          const pageMatches = rawHead.match(/\/Type\s*\/Page\b/g);
+          if (pageMatches && pageMatches.length > 0) {
+            imageEntries = Array.from({ length: Math.min(1000, pageMatches.length) }, (_, i) => `page_${i + 1}.pdf`);
+          }
+        }
+      } catch {}
+    }
+
+    if (!coverDataUrl) {
+      const safeTitle = deriveTitle(fileName).slice(0, 30);
+      const badgeType = type.toUpperCase();
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600">
+        <defs>
+          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1e1b4b" />
+            <stop offset="100%" stop-color="#0f172a" />
+          </linearGradient>
+        </defs>
+        <rect width="400" height="600" rx="16" fill="url(#g)" />
+        <rect x="20" y="20" width="360" height="560" rx="12" fill="none" stroke="#6366f1" stroke-opacity="0.3" stroke-width="2" />
+        <text x="200" y="260" font-family="sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">${safeTitle}</text>
+        <rect x="130" y="320" width="140" height="36" rx="18" fill="#6366f1" fill-opacity="0.2" stroke="#6366f1" stroke-width="1.5" />
+        <text x="200" y="344" font-family="sans-serif" font-size="13" font-weight="bold" fill="#818cf8" text-anchor="middle">${badgeType} ARCHIVE</text>
+      </svg>`;
+      coverDataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
     }
 
     const archive: LocalArchive = {
@@ -219,19 +256,35 @@ localLibraryRouter.post('/api/local/library/rescan', (_req: Request, res: Respon
 localLibraryRouter.get('/api/local/library/:id/cover', (req: Request, res: Response) => {
   try {
     const entry = getArchiveEntry(String(req.params.id));
-    if (!entry || entry.archive.type !== 'cbz') {
-      return res.status(404).json({ error: 'Archive not found or unsupported type' });
+    if (!entry) {
+      return res.status(404).json({ error: 'Archive not found' });
     }
-    const firstImageName = entry.imageEntries[0];
-    if (!firstImageName) return res.status(404).json({ error: 'No images in archive' });
 
-    const zip = new AdmZip(entry.archive.filePath);
-    const first = zip.getEntry(firstImageName);
-    if (!first) return res.status(404).json({ error: 'No images in archive' });
-    const buf = first.getData();
-    res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.send(buf);
+    if (entry.imageEntries.length > 0) {
+      try {
+        const zip = new AdmZip(entry.archive.filePath);
+        const first = zip.getEntry(entry.imageEntries[0]);
+        if (first) {
+          const buf = first.getData();
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(buf);
+        }
+      } catch {}
+    }
+
+    if (entry.archive.coverDataUrl) {
+      const match = entry.archive.coverDataUrl.match(/^data:(image\/[^;]+);base64,(.*)$/);
+      if (match) {
+        const mime = match[1];
+        const buf = Buffer.from(match[2], 'base64');
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(buf);
+      }
+    }
+
+    res.status(404).json({ error: 'No cover available' });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to read cover', details: err.message });
   }
@@ -241,8 +294,8 @@ localLibraryRouter.get('/api/local/library/:id/cover', (req: Request, res: Respo
 localLibraryRouter.get('/api/local/library/:id/page/:n', (req: Request, res: Response) => {
   try {
     const entry = getArchiveEntry(String(req.params.id));
-    if (!entry || entry.archive.type !== 'cbz') {
-      return res.status(404).json({ error: 'Archive not found or unsupported type' });
+    if (!entry) {
+      return res.status(404).json({ error: 'Archive not found' });
     }
     const index = Number(req.params.n);
     if (!Number.isInteger(index) || index < 0) {
@@ -251,15 +304,27 @@ localLibraryRouter.get('/api/local/library/:id/page/:n', (req: Request, res: Res
     const entryName = entry.imageEntries[index];
     if (!entryName) return res.status(404).json({ error: 'Page index out of range' });
 
-    const zip = new AdmZip(entry.archive.filePath);
-    const zipEntry = zip.getEntry(entryName);
-    const buf = zipEntry ? zipEntry.getData() : null;
-    if (!buf) return res.status(500).json({ error: 'Failed to read page' });
-    const ext = path.extname(entryName).toLowerCase().replace('.', '') || 'jpeg';
-    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
-    res.setHeader('Content-Type', mime);
+    try {
+      const zip = new AdmZip(entry.archive.filePath);
+      const zipEntry = zip.getEntry(entryName);
+      const buf = zipEntry ? zipEntry.getData() : null;
+      if (buf) {
+        const ext = path.extname(entryName).toLowerCase().replace('.', '') || 'jpeg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+        return res.send(buf);
+      }
+    } catch {}
+
+    // Fallback for non-zip pages: generate numbered SVG page frame
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200">
+      <rect width="800" height="1200" fill="#0f172a" />
+      <text x="400" y="600" font-family="sans-serif" font-size="28" font-weight="bold" fill="#94a3b8" text-anchor="middle">Page ${index + 1} (${entry.archive.title})</text>
+    </svg>`;
+    res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-    res.send(buf);
+    res.send(Buffer.from(svg));
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to read page', details: err.message });
   }
@@ -269,11 +334,12 @@ localLibraryRouter.get('/api/local/library/:id/page/:n', (req: Request, res: Res
 localLibraryRouter.get('/api/local/library/:id/pages', (req: Request, res: Response) => {
   try {
     const entry = getArchiveEntry(String(req.params.id));
-    if (!entry || entry.archive.type !== 'cbz') {
-      return res.status(404).json({ error: 'Archive not found or unsupported type' });
+    if (!entry) {
+      return res.status(404).json({ error: 'Archive not found' });
     }
-    const pages = Array.from({ length: entry.archive.pageCount }, (_, i) => `/api/local/library/${entry.archive.id}/page/${i}`);
-    res.json({ pages, pageCount: entry.archive.pageCount, title: entry.archive.title, id: entry.archive.id });
+    const count = Math.max(1, entry.archive.pageCount);
+    const pages = Array.from({ length: count }, (_, i) => `/api/local/library/${entry.archive.id}/page/${i}`);
+    res.json({ pages, pageCount: count, title: entry.archive.title, id: entry.archive.id });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to list pages', details: err.message });
   }

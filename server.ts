@@ -66,6 +66,8 @@ import { gdprRouter } from "./server/routes/gdpr";
 import { settingsRouter } from "./server/routes/settings";
 import { progressRouter } from "./server/routes/progress";
 import { bugsRouter } from "./server/routes/bugs";
+import { webhooksRouter } from "./server/routes/webhooks";
+import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
 import { isAdImageSrc } from "./server/adFilter";
 import {
   APP_VERSION,
@@ -250,6 +252,7 @@ app.use(gdprRouter);
 app.use(settingsRouter);
 app.use(progressRouter);
 app.use(bugsRouter);
+app.use(webhooksRouter);
 
 // Initialize Gemini Client
 const getGeminiClient = () => {
@@ -2289,6 +2292,7 @@ export async function runLiveRateSpacedAutoUpdate(): Promise<{
         });
 
         console.log(`[Auto-Updater Engine] 🚀 NEW RELEASE DISCOVERED: "${item.title}" Ch. ${prevCh} -> Ch. ${foundLatestCh} via ${sourceNameUsed}`);
+        dispatchNewChapterWebhooks(item, foundLatestCh).catch((e) => console.error("[Webhook Notifier] Error:", e));
       }
     }
   } catch (err: any) {

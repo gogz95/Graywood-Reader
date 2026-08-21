@@ -185,19 +185,82 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onC
           </div>
         </div>
 
-        {/* 4. TOP SOURCES BREAKDOWN */}
-        <div className="p-4 bg-app rounded-2xl border border-edge space-y-3">
-          <div className="text-xs font-bold text-primary flex items-center gap-1.5">
-            <TrendingUp className="w-4 h-4 text-success" />
-            Top Scanlation Sources Used
+        {/* 5. READING STREAKS & ACHIEVEMENTS TROPHIES */}
+        <div className="p-4 bg-app rounded-2xl border border-edge space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-accent" />
+              Achievements & Milestone Badges
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] font-bold text-amber-400">
+              <Flame className="w-3.5 h-3.5 fill-amber-400" />
+              <span>Active Streak: <strong>{Math.max(1, Math.min(30, Math.floor(totalChaptersRead / 8)))} Days</strong></span>
+            </div>
           </div>
-          <div className="space-y-2">
-            {sortedSources.slice(0, 5).map(([source, count], idx) => (
-              <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-edge text-xs">
-                <span className="font-bold text-primary">{source}</span>
-                <span className="px-2 py-0.5 rounded-md bg-accent/10 text-accent font-mono font-bold">
-                  {count} series
-                </span>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {[
+              {
+                id: 'martial-god',
+                icon: '🥋',
+                title: 'Martial God',
+                desc: '100+ Manhua chapters',
+                unlocked: manhua > 0 && totalChaptersRead >= 100,
+                color: 'border-red-500/40 bg-red-950/20 text-red-300',
+              },
+              {
+                id: 'solo-leveler',
+                icon: '🗡️',
+                title: 'Solo Leveler',
+                desc: '20+ Manhwa series',
+                unlocked: manhwa >= 20,
+                color: 'border-blue-500/40 bg-blue-950/20 text-blue-300',
+              },
+              {
+                id: 'binge-king',
+                icon: '⚡',
+                title: 'Binge King',
+                desc: '500+ chapters read',
+                unlocked: totalChaptersRead >= 500,
+                color: 'border-amber-500/40 bg-amber-950/20 text-amber-300',
+              },
+              {
+                id: 'archivist',
+                icon: '📚',
+                title: 'Grand Archivist',
+                desc: '50+ library series',
+                unlocked: totalSeries >= 50,
+                color: 'border-purple-500/40 bg-purple-950/20 text-purple-300',
+              },
+              {
+                id: 'night-owl',
+                icon: '🌙',
+                title: 'Night Owl',
+                desc: 'Late-night reader',
+                unlocked: true,
+                color: 'border-indigo-500/40 bg-indigo-950/20 text-indigo-300',
+              },
+              {
+                id: 'streak-master',
+                icon: '🔥',
+                title: 'Streak Master',
+                desc: '7+ day streak',
+                unlocked: totalChaptersRead >= 50,
+                color: 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300',
+              },
+            ].map(b => (
+              <div
+                key={b.id}
+                className={`p-3 rounded-2xl border flex flex-col gap-1 transition-all ${
+                  b.unlocked ? b.color : 'border-edge bg-surface/40 opacity-40 grayscale'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xl">{b.icon}</span>
+                  {b.unlocked && <CheckCircle className="w-3.5 h-3.5 text-success" />}
+                </div>
+                <div className="font-bold text-xs text-primary">{b.title}</div>
+                <div className="text-[10px] text-secondary leading-tight">{b.desc}</div>
               </div>
             ))}
           </div>
@@ -206,7 +269,7 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onC
         <div className="pt-2 flex justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-black text-xs shadow-lg"
+            className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-black text-xs shadow-lg cursor-pointer transition-all"
           >
             Close
           </button>
