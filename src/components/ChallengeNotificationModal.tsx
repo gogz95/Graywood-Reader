@@ -17,6 +17,8 @@ import {
   Check,
   Globe,
   Sliders,
+  Ban,
+  AlertOctagon,
 } from 'lucide-react';
 
 export interface ChallengeItem {
@@ -139,6 +141,36 @@ export const ChallengeNotificationModal: React.FC<ChallengeNotificationModalProp
       alert(`Verification error: ${err.message}`);
     } finally {
       setVerifyingId(null);
+    }
+  };
+
+  const handleFlagBroken = async (challenge: ChallengeItem) => {
+    if (!window.confirm(`Are you sure you want to flag "${challenge.sourceName}" as broken and disable it? This will trip its circuit breaker and stop future challenge alerts.`)) {
+      return;
+    }
+    setFlaggingId(challenge.id);
+    try {
+      const res = await apiFetch(`/api/challenges/${challenge.id}/flag-broken`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceId: challenge.sourceId,
+          reason: `Flagged broken by user during ${challenge.challengeType} challenge`,
+        }),
+      });
+      if (res.ok) {
+        showToast(`✓ "${challenge.sourceName}" flagged as broken & disabled.`);
+        const next = challenges.filter((c) => c.id !== challenge.id);
+        setChallenges(next);
+        if (onChallengesCountChange) onChallengesCountChange(next.length);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to flag source as broken');
+      }
+    } catch (err: any) {
+      alert(`Error flagging source: ${err.message}`);
+    } finally {
+      setFlaggingId(null);
     }
   };
 
@@ -325,7 +357,7 @@ export const ChallengeNotificationModal: React.FC<ChallengeNotificationModalProp
                       <button
                         type="button"
                         onClick={() => handleManualResolve(c)}
-                        disabled={verifyingId === c.id}
+                        disabled={verifyingId === c.id || flaggingId === c.id}
                         className="px-3.5 py-1.5 rounded-xl bg-surface hover:bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-1.5 transition-all"
                       >
                         {verifyingId === c.id ? (
@@ -334,6 +366,21 @@ export const ChallengeNotificationModal: React.FC<ChallengeNotificationModalProp
                           <Check className="w-3.5 h-3.5 text-success" />
                         )}
                         <span>I Solved It / Recheck</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleFlagBroken(c)}
+                        disabled={flaggingId === c.id || verifyingId === c.id}
+                        className="px-3.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+                        title="Flag this source as broken and disable it from scans"
+                      >
+                        {flaggingId === c.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Ban className="w-3.5 h-3.5 text-rose-400" />
+                        )}
+                        <span>Flag as Broken</span>
                       </button>
 
                       <button

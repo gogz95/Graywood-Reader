@@ -18,6 +18,7 @@ const KotatsuSourcesView = lazy(() => import('./components/KotatsuSourcesView').
 
 // Lightweight modals remain eager (tiny bundles)
 import { AnalyticsModal } from './components/AnalyticsModal';
+import { AchievementsModal } from './components/AchievementsModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
@@ -95,6 +96,7 @@ export default function App() {
   const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
   const [challengeModalOpen, setChallengeModalOpen] = useState(false);
   const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
+  const [achievementsOpen, setAchievementsOpen] = useState(false);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -901,6 +903,7 @@ export default function App() {
         isIncognito={isIncognito}
         onToggleIncognito={() => setIsIncognito(!isIncognito)}
         onOpenAnalytics={() => setAnalyticsOpen(true)}
+        onOpenAchievements={() => setAchievementsOpen(true)}
         onOpenChallengesModal={() => setChallengeModalOpen(true)}
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
@@ -1140,6 +1143,15 @@ export default function App() {
         <AnalyticsModal
           mangaList={displayMangaList}
           onClose={() => setAnalyticsOpen(false)}
+        />
+      )}
+
+      {/* Reading Achievements & Manga Wrapped Modal */}
+      {achievementsOpen && (
+        <AchievementsModal
+          isOpen={achievementsOpen}
+          onClose={() => setAchievementsOpen(false)}
+          mangaList={displayMangaList}
         />
       )}
 

@@ -68,6 +68,7 @@ import { progressRouter } from "./server/routes/progress";
 import { bugsRouter } from "./server/routes/bugs";
 import { webhooksRouter } from "./server/routes/webhooks";
 import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
+import { startAutoBackupScheduler } from "./server/services/autoBackupService";
 import { isAdImageSrc } from "./server/adFilter";
 import {
   APP_VERSION,
@@ -1383,6 +1384,61 @@ app.post("/api/challenges/test", (req, res) => {
   });
   res.json({ success: true, notification: testNotif });
 });
+
+// Flag Source as Broken during Captcha / Challenge
+const handleFlagSourceBroken = (req: express.Request, res: express.Response) => {
+  const { id } = req.params;
+  const { reason, sourceId: reqSourceId } = req.body || {};
+  const challenges = challengeManager.getActiveChallenges();
+  const found = challenges.find((c) => c.id === id || c.sourceId === id || c.sourceId === reqSourceId);
+  const targetSourceId = found?.sourceId || reqSourceId || (id ? id.replace(/^chn_/, '') : '');
+
+  if (!targetSourceId) {
+    return res.status(400).json({ error: "Source ID is required" });
+  }
+
+  const targetSourceName = found?.sourceName || targetSourceId;
+
+  // 1. Disable the source globally
+  disabledSourceIds.add(targetSourceId);
+  syncConfig.disabledSources = Array.from(disabledSourceIds);
+
+  // 2. Mark in health map & trip circuit breaker
+  const failureReason = reason || `Manually flagged as broken during challenge/captcha`;
+  let h = sourceHealthMap.get(targetSourceId);
+  if (!h) {
+    h = { id: targetSourceId, lastChecked: Date.now(), lastStatus: 'broken', consecutiveFailures: 10 };
+    sourceHealthMap.set(targetSourceId, h);
+  }
+  h.lastStatus = 'broken';
+  h.failureReason = failureReason;
+  h.consecutiveFailures = Math.max(h.consecutiveFailures || 0, 10);
+  sourceCircuitBreaker.trip(targetSourceId, failureReason);
+  h.circuitState = 'OPEN';
+
+  // 3. Dismiss/resolve active challenge
+  if (found) {
+    challengeManager.dismissChallenge(found.id);
+  }
+  challengeManager.resolveChallenge(targetSourceId);
+
+  // 4. Save state to disk
+  saveDatabaseToDisk();
+  scheduleSourceHealthPersist();
+
+  console.log(`[Challenge Engine] Source "${targetSourceName}" (${targetSourceId}) manually flagged as broken and disabled. Reason: ${failureReason}`);
+  res.json({
+    success: true,
+    sourceId: targetSourceId,
+    sourceName: targetSourceName,
+    message: `Source "${targetSourceName}" has been flagged as broken and disabled.`,
+  });
+};
+
+app.post("/api/challenges/:id/flag-broken", handleFlagSourceBroken);
+app.post("/api/challenges/flag-broken", handleFlagSourceBroken);
+app.post("/api/kotatsu/sources/flag-broken", handleFlagSourceBroken);
+app.post("/api/sources/flag-broken", handleFlagSourceBroken);
 
 app.put("/api/manga/:id", (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
@@ -2993,6 +3049,45 @@ app.get("/api/reader/chapters/:mangaId", async (req, res) => {
       }
     } catch (err) {
       console.error("Real chapter list fetch error:", err);
+    }
+  }
+
+  // MangaDex Direct Fallback
+  const mangaDexId = manga?.apiId || (mangaId && mangaId.startsWith('md_') ? mangaId.replace('md_', '') : null) || (manga?.id && manga.id.startsWith('md_') ? manga.id.replace('md_', '') : null);
+  if (mangaDexId) {
+    try {
+      const feedRes = await fetchMangaDex(
+        `https://api.mangadex.org/manga/${mangaDexId}/feed?limit=250&translatedLanguage[]=en&order[chapter]=desc&includeExternalUrl=0`
+      );
+      if (feedRes && feedRes.ok) {
+        const data = await feedRes.json();
+        const rawChapters: any[] = data.data || [];
+        if (rawChapters.length > 0) {
+          const mapped = rawChapters
+            .filter((c) => c.attributes?.chapter && !isNaN(parseFloat(c.attributes.chapter)))
+            .map((c) => {
+              const chNum = parseFloat(c.attributes.chapter);
+              return {
+                id: `md_${c.id}`,
+                chapterNumber: chNum,
+                title: c.attributes.title || `Chapter ${c.attributes.chapter}`,
+                releaseDate: c.attributes.publishAt ? c.attributes.publishAt.split('T')[0] : '',
+                scanGroup: 'MangaDex (Scanlation)',
+                pageCount: c.attributes.pages || 0,
+                isRead: manga ? chNum <= (manga.currentChapter || 0) : false,
+              };
+            });
+
+          if (mapped.length > 0) {
+            const sorted = [...mapped].sort((a, b) =>
+              order === 'asc' ? a.chapterNumber - b.chapterNumber : b.chapterNumber - a.chapterNumber
+            );
+            return res.json(sorted);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[MangaDex Chapter Fallback] Feed fetch failed:', err);
     }
   }
 
@@ -6990,9 +7085,58 @@ app.get("/api/reader/chapter-pages", async (req, res) => {
     }
   }
 
-  // 3. MangaDex is NOT used for reading (metadata only). If the live source above could
-  //    not be resolved, fall through to a generated placeholder panel with the correct
-  //    title instead of guessing a series from a title search.
+  // 3. MangaDex Direct Reading Fallback (@home CDN)
+  const mdSeriesId = manga?.apiId || (mangaId && mangaId.startsWith('md_') ? mangaId.replace('md_', '') : null) || (manga?.id && manga.id.startsWith('md_') ? manga.id.replace('md_', '') : null);
+  let mdChapterUuid = chapterId && chapterId.startsWith('md_') ? chapterId.replace('md_', '') : (chapterId && chapterId.length === 36 ? chapterId : null);
+
+  if (!mdChapterUuid && mdSeriesId) {
+    try {
+      const feedRes = await fetchMangaDex(
+        `https://api.mangadex.org/manga/${mdSeriesId}/feed?chapter=${chapterNumber}&translatedLanguage[]=en&limit=1`
+      );
+      if (feedRes && feedRes.ok) {
+        const feedJson = await feedRes.json();
+        if (feedJson.data?.[0]?.id) {
+          mdChapterUuid = feedJson.data[0].id;
+        }
+      }
+    } catch {}
+  }
+
+  if (mdChapterUuid) {
+    try {
+      const atHomeRes = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${mdChapterUuid}`);
+      if (atHomeRes && atHomeRes.ok) {
+        const atHomeJson = await atHomeRes.json();
+        const base = atHomeJson.baseUrl;
+        const hash = atHomeJson.chapter?.hash;
+        const fileNames: string[] = atHomeJson.chapter?.data || [];
+        if (base && hash && fileNames.length > 0) {
+          const rawPages = fileNames.map((fn) => `${base}/data/${hash}/${fn}`);
+          const proxiedPages = rawPages.map(
+            (p) => `/api/reader/proxy-image?url=${encodeURIComponent(p)}&sourceUrl=${encodeURIComponent('https://mangadex.org/')}`
+          );
+          console.log(`[Reader Stream Engine] Loaded ${proxiedPages.length} panels from MangaDex @home for Chapter ${chapterNumber}`);
+          return res.json({
+            chapterId: `md_${mdChapterUuid}`,
+            mangaId,
+            mangaTitle,
+            chapterNumber,
+            title: `Chapter ${chapterNumber}`,
+            scanGroup: 'MangaDex (Scanlation)',
+            selectedGroup: 'MangaDex',
+            pages: proxiedPages,
+            totalChapters,
+            nextChapterNumber: chapterNumber < totalChapters ? chapterNumber + 1 : null,
+            prevChapterNumber: chapterNumber > 1 ? chapterNumber - 1 : null,
+            isPlaceholder: false,
+          });
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Reader Stream Engine] MangaDex @home page fetch failed:', e.message);
+    }
+  }
 
   // 4. Content-unavailable response (honest empty state instead of fake comic panels)
   const reason = targetUrl
@@ -7526,6 +7670,9 @@ async function startServer() {
   // 5. Warm the Explore catalog buffer in the background and refresh it on an
   //    interval, so /browse loads are served from memory instead of live scrapes.
   scheduleExploreRefresher();
+
+  // 6. Start scheduled local auto-backup service
+  startAutoBackupScheduler(30);
 }
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {

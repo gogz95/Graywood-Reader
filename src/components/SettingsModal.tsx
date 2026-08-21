@@ -298,6 +298,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
     setTimeout(() => setToastMessage(null), 4500);
   };
 
+  // Local Scheduled Backups State
+  const [localBackups, setLocalBackups] = useState<Array<{ filename: string; sizeBytes: number; createdAt: string; seriesCount: number }>>([]);
+  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
+  const [isTriggeringBackup, setIsTriggeringBackup] = useState(false);
+
+  const fetchLocalBackups = async () => {
+    setIsLoadingBackups(true);
+    try {
+      const res = await apiFetch('/api/backups');
+      if (res.ok) {
+        const data = await res.json();
+        setLocalBackups(data.backups || []);
+      }
+    } catch {} finally {
+      setIsLoadingBackups(false);
+    }
+  };
+
+  const handleTriggerBackup = async () => {
+    setIsTriggeringBackup(true);
+    try {
+      const res = await apiFetch('/api/backups/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: 'manual' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ Backup ${data.filename} created!`);
+        fetchLocalBackups();
+      } else {
+        showToast(`❌ Backup failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Backup failed: ${err.message}`);
+    } finally {
+      setIsTriggeringBackup(false);
+    }
+  };
+
+  const handleRestoreLocalBackup = async (filename: string) => {
+    if (!window.confirm(`Are you sure you want to restore from ${filename}? Existing library state will be merged.`)) return;
+    try {
+      const res = await apiFetch(`/api/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ ${data.message}`);
+        onRefreshData();
+      } else {
+        showToast(`❌ Restore failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Restore failed: ${err.message}`);
+    }
+  };
+
+  const handleDeleteLocalBackup = async (filename: string) => {
+    if (!window.confirm(`Delete backup ${filename}?`)) return;
+    try {
+      const res = await apiFetch(`/api/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ Backup deleted.`);
+        fetchLocalBackups();
+      }
+    } catch (err: any) {
+      showToast(`❌ Delete failed: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'backup') {
+      fetchLocalBackups();
+    }
+  }, [activeSection]);
+
   // Restoration Progress Tracker State
   const [restoreProgress, setRestoreProgress] = useState<{
     isActive: boolean;
@@ -2043,6 +2119,136 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                       <Trash2 className="w-4 h-4" />
                       <span>Clear Image Cache Buffer</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Automated Scheduled Backups Card */}
+                <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-primary text-sm">
+                      <Clock className="w-4 h-4 text-accent" />
+                      <span>Automated Local Backups (/data/backups/)</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.autoBackupEnabled || false}
+                        onChange={(e) => setFormData({ ...formData, autoBackupEnabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-elevated peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent" />
+                    </label>
+                  </div>
+
+                  <p className="text-secondary text-xs">
+                    Automatically writes rolling JSON database snapshots to local storage on a schedule. Older snapshots beyond your retention limit are safely rotated.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-secondary">Backup Schedule</label>
+                      <select
+                        value={formData.autoBackupSchedule || 'daily'}
+                        onChange={(e: any) => setFormData({ ...formData, autoBackupSchedule: e.target.value })}
+                        disabled={!formData.autoBackupEnabled}
+                        className="w-full bg-surface border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
+                      >
+                        <option value="hourly">Every Hour</option>
+                        <option value="daily">Daily (Every 24 Hours)</option>
+                        <option value="weekly">Weekly (Every 7 Days)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-secondary">Retention Limit (Snapshots)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={formData.autoBackupMaxCount ?? 10}
+                        onChange={(e) => setFormData({ ...formData, autoBackupMaxCount: parseInt(e.target.value, 10) || 10 })}
+                        disabled={!formData.autoBackupEnabled}
+                        className="w-full bg-surface border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-edge">
+                    <button
+                      type="button"
+                      onClick={handleTriggerBackup}
+                      disabled={isTriggeringBackup}
+                      className="px-3.5 py-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent font-bold text-xs border border-accent/30 flex items-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <Zap className={`w-3.5 h-3.5 ${isTriggeringBackup ? 'animate-spin' : ''}`} />
+                      <span>{isTriggeringBackup ? 'Creating Snapshot...' : 'Create Snapshot Now'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={fetchLocalBackups}
+                      disabled={isLoadingBackups}
+                      className="p-2 rounded-xl bg-elevated hover:bg-elevated/80 text-secondary hover:text-primary transition-colors text-xs font-bold flex items-center gap-1"
+                      title="Refresh backup list"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBackups ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Local Backups List */}
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {localBackups.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-secondary bg-surface/40 rounded-xl border border-edge">
+                        No automated backup snapshots found on disk.
+                      </div>
+                    ) : (
+                      localBackups.map((b) => (
+                        <div
+                          key={b.filename}
+                          className="p-2.5 bg-surface hover:bg-surface/80 rounded-xl border border-edge flex items-center justify-between gap-2 transition-colors"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-mono text-xs font-bold text-primary truncate">
+                              {b.filename}
+                            </div>
+                            <div className="text-[11px] text-secondary flex items-center gap-2">
+                              <span>{new Date(b.createdAt).toLocaleString()}</span>
+                              <span>•</span>
+                              <span>{b.seriesCount} series</span>
+                              <span>•</span>
+                              <span>{(b.sizeBytes / 1024).toFixed(1)} KB</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleRestoreLocalBackup(b.filename)}
+                              className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold transition-all"
+                              title="Restore library state from this snapshot"
+                            >
+                              Restore
+                            </button>
+                            <a
+                              href={`/api/backups/${encodeURIComponent(b.filename)}/download`}
+                              download={b.filename}
+                              className="p-1 rounded-lg bg-elevated hover:bg-elevated/80 text-secondary hover:text-primary transition-colors"
+                              title="Download backup file"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLocalBackup(b.filename)}
+                              className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                              title="Delete backup"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 

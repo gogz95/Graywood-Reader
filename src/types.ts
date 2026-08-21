@@ -159,9 +159,14 @@ export interface AppSettings {
   appLockPinHash?: string;
   appLockType?: 'pin' | 'password' | 'biometric';
   appLockTimeoutMinutes?: number;
+  // Scheduled Auto-Backups
+  autoBackupEnabled?: boolean;
+  autoBackupSchedule?: 'hourly' | 'daily' | 'weekly';
+  autoBackupMaxCount?: number;
+  autoBackupLastRun?: string;
   // Ambient Soundscape & Reader Immersion Properties
   ambientSoundEnabled?: boolean;
-  ambientSoundPreset?: 'rain' | 'campfire' | 'lofi' | 'off';
+  ambientSoundPreset?: 'rain' | 'campfire' | 'waves' | 'cafe' | 'off';
   ambientSoundVolume?: number;
   pageTurnSfxEnabled?: boolean;
   magnifierEnabled?: boolean;

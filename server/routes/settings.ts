@@ -136,3 +136,67 @@ settingsRouter.post("/api/settings/backup/import-kotatsu", async (req, res) => {
     res.status(400).json({ error: `Invalid Kotatsu backup: ${err.message}` });
   }
 });
+
+// ============================================================================
+// SCHEDULED LOCAL BACKUPS API
+// ============================================================================
+
+// GET /api/backups - List local automated backups
+settingsRouter.get("/api/backups", async (_req, res) => {
+  const { listLocalBackups } = await import('../services/autoBackupService');
+  res.json({
+    backups: listLocalBackups(),
+    settings: {
+      autoBackupEnabled: appSettings.autoBackupEnabled,
+      autoBackupSchedule: appSettings.autoBackupSchedule,
+      autoBackupMaxCount: appSettings.autoBackupMaxCount,
+      autoBackupLastRun: appSettings.autoBackupLastRun,
+    },
+  });
+});
+
+// POST /api/backups/create - Trigger manual backup snapshot
+settingsRouter.post("/api/backups/create", async (req, res) => {
+  const { createBackupNow } = await import('../services/autoBackupService');
+  const label = typeof req.body?.label === 'string' ? req.body.label : 'manual';
+  const result = createBackupNow(label);
+  if (!result.success) {
+    return res.status(500).json({ error: result.error || 'Failed to create backup' });
+  }
+  res.json({ success: true, filename: result.filename });
+});
+
+// POST /api/backups/:filename/restore - Restore local backup
+settingsRouter.post("/api/backups/:filename/restore", async (req, res) => {
+  const { restoreLocalBackup } = await import('../services/autoBackupService');
+  const filename = req.params.filename;
+  const result = restoreLocalBackup(filename);
+  if (!result.success) {
+    return res.status(400).json({ error: result.message });
+  }
+  res.json(result);
+});
+
+// DELETE /api/backups/:filename - Delete local backup
+settingsRouter.delete("/api/backups/:filename", async (req, res) => {
+  const { deleteLocalBackup } = await import('../services/autoBackupService');
+  const filename = req.params.filename;
+  const result = deleteLocalBackup(filename);
+  if (!result.success) {
+    return res.status(404).json({ error: result.error || 'Backup not found' });
+  }
+  res.json({ success: true });
+});
+
+// GET /api/backups/:filename/download - Download specific backup file
+settingsRouter.get("/api/backups/:filename/download", async (req, res) => {
+  const path = await import('path');
+  const fs = await import('fs');
+  const { getBackupsDirectory } = await import('../services/autoBackupService');
+  const safeName = path.basename(req.params.filename);
+  const fullPath = path.join(getBackupsDirectory(), safeName);
+  if (!fs.existsSync(fullPath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  res.download(fullPath, safeName);
+});

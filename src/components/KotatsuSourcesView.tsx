@@ -22,8 +22,10 @@ import {
   Power,
   Grid,
   X,
+  Activity,
 } from 'lucide-react';
 import { SourceDefinition, SourceEngineType, MangaItem } from '../types';
+import { SourceHealthDashboardModal } from './SourceHealthDashboardModal';
 
 interface KotatsuSourceResult {
   id: string;
@@ -80,6 +82,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
   const [activeTab, setActiveTab] = useState<ViewSection>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
 
   // Category & Expanded Results (Popular, Latest, Search, Expanded 50/page)
   const [popularResults, setPopularResults] = useState<KotatsuSourceResult[]>([]);
@@ -620,6 +623,15 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </select>
 
           <button
+            onClick={() => setIsHealthDashboardOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 font-bold text-xs border border-accent-2/30 flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+            title="Open real-time source latency diagnostics and circuit breaker dashboard"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Health & Circuits</span>
+          </button>
+
+          <button
             onClick={handleClearAppCache}
             disabled={isClearingCache}
             className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated border border-edge-strong text-primary hover:text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md active:scale-95"
@@ -1126,6 +1138,12 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </button>
         </div>
       )}
+
+      {/* Source Health & Circuit Dashboard Modal */}
+      <SourceHealthDashboardModal
+        isOpen={isHealthDashboardOpen}
+        onClose={() => setIsHealthDashboardOpen(false)}
+      />
     </div>
   );
 };

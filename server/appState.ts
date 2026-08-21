@@ -551,6 +551,8 @@ export const SETTINGS_ALLOWED_KEYS = new Set<string>([
   'notifyOnlyReadingStatus',
   // App Lock
   'appLockEnabled', 'appLockPinHash', 'appLockType', 'appLockTimeoutMinutes',
+  // Scheduled Auto-Backups
+  'autoBackupEnabled', 'autoBackupSchedule', 'autoBackupMaxCount', 'autoBackupLastRun',
   // Ambient Soundscapes & Polish
   'ambientSoundEnabled', 'ambientSoundPreset', 'ambientSoundVolume',
   'pageTurnSfxEnabled', 'magnifierEnabled',
@@ -642,9 +644,14 @@ export let appSettings = {
   appLockPinHash: '',
   appLockType: 'pin' as 'pin' | 'password' | 'biometric',
   appLockTimeoutMinutes: 5,
+  // Scheduled Auto-Backups
+  autoBackupEnabled: false,
+  autoBackupSchedule: 'daily' as 'hourly' | 'daily' | 'weekly',
+  autoBackupMaxCount: 10,
+  autoBackupLastRun: '',
   // Ambient Soundscapes
   ambientSoundEnabled: false,
-  ambientSoundPreset: 'off' as 'rain' | 'campfire' | 'lofi' | 'off',
+  ambientSoundPreset: 'off' as 'rain' | 'campfire' | 'waves' | 'cafe' | 'off',
   ambientSoundVolume: 0.5,
   pageTurnSfxEnabled: true,
   magnifierEnabled: true,

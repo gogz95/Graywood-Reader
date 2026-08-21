@@ -15,6 +15,7 @@ import {
   Shield,
   EyeOff,
   ShieldAlert,
+  Trophy,
 } from 'lucide-react';
 
 import { AppNavTab, UserProfile } from '../types';
@@ -35,6 +36,7 @@ interface NavbarProps {
   isIncognito: boolean;
   onToggleIncognito: () => void;
   onOpenAnalytics: () => void;
+  onOpenAchievements?: () => void;
   onOpenChallengesModal?: () => void;
   activeProfile: UserProfile;
   isHostComputer?: boolean;
@@ -189,6 +191,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Calendar className="w-4 h-4 text-info" />
               </button>
 
+              {onOpenAchievements && (
+                <button
+                  onClick={onOpenAchievements}
+                  title="View Reading Achievements & Manga Wrapped"
+                  className="hidden sm:block p-2.5 rounded-xl bg-elevated/70 hover:bg-elevated text-secondary hover:text-amber-400 border border-edge-strong/60 transition-all"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                </button>
+              )}
+
               {/* Challenge / Captcha Alert Button */}
               {pendingChallengesCount > 0 && onOpenChallengesModal && (
                 <button
@@ -297,6 +309,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Calendar className="w-4 h-4 text-info" />
               <span>Activity Heatmap</span>
             </button>
+
+            {onOpenAchievements && (
+              <button
+                onClick={() => closeQuickMenu(onOpenAchievements)}
+                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2"
+              >
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>Achievements & Recap</span>
+              </button>
+            )}
 
             <button
               onClick={() => closeQuickMenu(onOpenAddModal)}

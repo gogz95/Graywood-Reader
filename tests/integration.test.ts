@@ -347,6 +347,23 @@ describe('Live Source Feeds & Progress Endpoints', () => {
     expect(resAll.status).toBe(200);
     expect(resAll.body.success).toBe(true);
   });
+
+  it('POST /api/challenges/:id/flag-broken flags source as broken and disables it', async () => {
+    // 1. Trigger a test challenge
+    const testRes = await request(app).post('/api/challenges/test');
+    expect(testRes.status).toBe(200);
+    const challengeId = testRes.body.notification?.id || 'chn_asurascans_test';
+
+    // 2. Flag as broken
+    const flagRes = await request(app)
+      .post(`/api/challenges/${challengeId}/flag-broken`)
+      .send({ reason: 'Unsolvable Cloudflare challenge' });
+
+    expect(flagRes.status).toBe(200);
+    expect(flagRes.body.success).toBe(true);
+    expect(flagRes.body.sourceId).toBe('asurascans_test');
+    expect(flagRes.body.message).toContain('flagged as broken');
+  });
 });
 
 
