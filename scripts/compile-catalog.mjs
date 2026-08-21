@@ -58,34 +58,43 @@ const ANNOTATION_RX = /@MangaSourceParser\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"(
 function sanitizeParserDomain(raw) {
   if (!raw) return null;
   let d = String(raw).trim().toLowerCase();
-  d = d.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/\/.*$/, '')
-    .replace(/^www\./, '').replace(/\.$/, '');
+  d = d.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const slashIdx = d.indexOf('/');
+  if (slashIdx !== -1) {
+    d = d.slice(0, slashIdx);
+  }
+  if (d.startsWith('www.')) {
+    d = d.slice(4);
+  }
+  if (d.endsWith('.')) {
+    d = d.slice(0, -1);
+  }
   if (!d || d.length < 4 || d.length > 253) return null;
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d)) return null; // hostname only, no '_'
-  if (d.includes('..') || /^-|-$/.test(d) || /--/.test(d)) return null;
+  if (d.includes('..') || d.startsWith('-') || d.endsWith('-') || d.includes('--')) return null;
   const tld = d.split('.').pop() || '';
   if (tld.length < 2 || tld.length > 24) return null;
-    return d;
+  return d;
 }
 
 // ---------------------------------------------------------------------------
 // Legacy regex domain extractor (for comparison / delta reporting).
 // Replicates the primitive logic the server used historically.
 // ---------------------------------------------------------------------------
-const LEGACY_DOMAIN_RX = /https?:\/\/([^\/\s'"]+)/;
+const LEGACY_DOMAIN_RX = /https?:\/\/([^/\s'"]+)/;
 function legacyBaseUrl(content, id) {
   if (!content) return null;
   let m = content.match(/baseUrl\s*=\s*["']([^"']+)["']/);
   if (!m) m = content.match(/baseUrl\s*=\s*["']([^"']+)["']/i);
   if (!m) {
     const parserMatch = content.match(PARSER_CLASS_RX);
-    if (parserMatch) {
+    if (parserMatch && parserMatch.index !== undefined) {
       const idx = parserMatch.index;
       const window = content.slice(Math.max(0, idx - 400), idx + 400);
       m = window.match(LEGACY_DOMAIN_RX);
     }
   }
-    return m ? m[1] : null;
+  return m ? m[1] : null;
 }
 
 // ---------------------------------------------------------------------------

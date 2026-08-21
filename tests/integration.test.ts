@@ -321,5 +321,32 @@ describe('Live Source Feeds & Progress Endpoints', () => {
     expect(attachRes.body.manga.isFlagged).toBe(false);
     expect(attachRes.body.manga.availableSources).toHaveLength(1);
   });
+
+  it('GET /api/sources/dashboard returns summary and top monitored sources', async () => {
+    const res = await request(app).get('/api/sources/dashboard');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('summary');
+    expect(res.body.summary).toHaveProperty('totalMonitored');
+    expect(res.body.summary).toHaveProperty('healthy');
+    expect(Array.isArray(res.body.sources)).toBe(true);
+    expect(res.body.sources.length).toBeGreaterThan(0);
+    expect(res.body.sources[0]).toHaveProperty('circuitState');
+    expect(res.body.sources[0]).toHaveProperty('engine');
+  });
+
+  it('POST /api/kotatsu/sources/circuit-reset resets specific source or all sources', async () => {
+    const resSingle = await request(app)
+      .post('/api/kotatsu/sources/circuit-reset')
+      .send({ sourceId: 'asurascans' });
+    expect(resSingle.status).toBe(200);
+    expect(resSingle.body.success).toBe(true);
+
+    const resAll = await request(app)
+      .post('/api/kotatsu/sources/circuit-reset')
+      .send({});
+    expect(resAll.status).toBe(200);
+    expect(resAll.body.success).toBe(true);
+  });
 });
+
 

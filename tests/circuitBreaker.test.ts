@@ -94,6 +94,53 @@ describe('SourceCircuitBreaker', () => {
     expect(breaker.canAttempt('blocked-source')).toBe(false);
   });
 
+  it('scales cooldown exponentially on consecutive trips and resets on success', () => {
+    // 1st trip: 1x base cooldown = 1000ms
+    breaker.recordFailure('asurascans', 500);
+    breaker.recordFailure('asurascans', 500);
+    breaker.recordFailure('asurascans', 500);
+    const state1 = breaker.getState('asurascans');
+    expect(state1.state).toBe('OPEN');
+    expect(state1.tripCount).toBe(1);
+    expect(state1.cooldownMs).toBe(1000);
+
+    // Force HALF_OPEN by manually updating state's nextProbeTime
+    (breaker as any).states.get('asurascans').nextProbeTime = Date.now() - 10;
+    expect(breaker.canAttempt('asurascans')).toBe(true);
+
+    // 2nd trip: 2x base cooldown = 2000ms
+    breaker.recordFailure('asurascans', 500);
+    const state2 = breaker.getState('asurascans');
+    expect(state2.state).toBe('OPEN');
+    expect(state2.tripCount).toBe(2);
+    expect(state2.cooldownMs).toBe(2000);
+
+    // Force HALF_OPEN again
+    (breaker as any).states.get('asurascans').nextProbeTime = Date.now() - 10;
+    expect(breaker.canAttempt('asurascans')).toBe(true);
+
+    // 3rd trip: 4x base cooldown = 4000ms
+    breaker.recordFailure('asurascans', 500);
+    const state3 = breaker.getState('asurascans');
+    expect(state3.state).toBe('OPEN');
+    expect(state3.tripCount).toBe(3);
+    expect(state3.cooldownMs).toBe(4000);
+
+    // Success resets trip count and cooldown
+    breaker.recordSuccess('asurascans');
+    const state4 = breaker.getState('asurascans');
+    expect(state4.state).toBe('CLOSED');
+    expect(state4.tripCount).toBe(0);
+  });
+
+  it('severe HTTP errors (403, 503, 429) count as double failures', () => {
+    breaker.recordFailure('blocked_source', 403, 'Cloudflare 403 Forbidden');
+    breaker.recordFailure('blocked_source', 503, 'Service Unavailable');
+    // 2 + 2 = 4 >= 3 threshold -> trips OPEN
+    expect(breaker.getState('blocked_source').state).toBe('OPEN');
+    expect(breaker.canAttempt('blocked_source')).toBe(false);
+  });
+
   it('case-insensitively normalizes source IDs', () => {
     breaker.recordFailure('MangaDex', 500);
     expect(breaker.getState('mangadex').failures).toBe(1);

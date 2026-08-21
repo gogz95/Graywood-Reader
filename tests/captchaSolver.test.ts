@@ -39,3 +39,40 @@ describe('challenge detection', () => {
     expect(result.type).toBe('none');
   });
 });
+
+import { FlareSolverrSessionPool } from '../server/captchaSolver';
+
+describe('FlareSolverrSessionPool', () => {
+  it('manages sessions and recycles after error threshold', async () => {
+    const pool = new FlareSolverrSessionPool();
+    expect(pool.getActiveCount()).toBe(0);
+
+    // Mock session creation by setting directly in private map for deterministic unit testing
+    (pool as any).sessions.set('asurascans', {
+      sessionId: 'session_asura_123',
+      sourceKey: 'asurascans',
+      createdAt: Date.now(),
+      lastUsed: Date.now(),
+      consecutiveErrors: 0,
+    });
+
+    expect(pool.getActiveCount()).toBe(1);
+
+    // Test recordSessionSuccess
+    pool.recordSessionSuccess('asurascans');
+    expect((pool as any).sessions.get('asurascans').consecutiveErrors).toBe(0);
+
+    // Test consecutive errors
+    pool.recordSessionFailure('asurascans');
+    expect((pool as any).sessions.get('asurascans').consecutiveErrors).toBe(1);
+
+    pool.recordSessionFailure('asurascans');
+    expect((pool as any).sessions.get('asurascans').consecutiveErrors).toBe(2);
+
+    // Session should be flagged as failed and next getOrCreateSession will purge it
+    const existing = (pool as any).sessions.get('asurascans');
+    const isFailed = existing.consecutiveErrors >= (pool as any).maxErrorsBeforeRecycle;
+    expect(isFailed).toBe(true);
+  });
+});
+

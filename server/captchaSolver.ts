@@ -1,6 +1,8 @@
 import { URL } from 'url';
 import { fetchWithSsrfGuard } from './security';
 import { challengeManager } from './challengeManager';
+import { getBrowserHeaders } from './userAgentPool';
+import { sourceCircuitBreaker } from './circuitBreaker';
 
 export interface ChallengeDetectionResult {
   isChallenge: boolean;
@@ -57,6 +59,147 @@ export interface FetchBypassResult {
   methodUsed?: string;
   error?: string;
 }
+
+interface FlareSolverrSessionEntry {
+  sessionId: string;
+  sourceKey: string;
+  createdAt: number;
+  lastUsed: number;
+  consecutiveErrors: number;
+}
+
+/**
+ * Manages persistent FlareSolverr browser sessions keyed by domain/source.
+ * Reusing sessions keeps Cloudflare clearance tokens and browser context warm.
+ */
+export class FlareSolverrSessionPool {
+  private sessions = new Map<string, FlareSolverrSessionEntry>();
+  private maxSessionAgeMs = 20 * 60 * 1000; // 20 min max session lifetime
+  private sessionIdleTtlMs = 8 * 60 * 1000;  // 8 min idle TTL
+  private maxErrorsBeforeRecycle = 2;
+
+  /**
+   * Acquire or create a valid FlareSolverr session for a given source / domain.
+   */
+  public async getOrCreateSession(
+    flareSolverrUrl: string,
+    sourceKey: string,
+    timeoutSeconds: number = 10
+  ): Promise<string | null> {
+    const key = (sourceKey || 'default').toLowerCase().replace(/[^a-z0-9-_]/g, '_');
+    const existing = this.sessions.get(key);
+    const now = Date.now();
+
+    if (existing) {
+      const isExpired = (now - existing.createdAt) > this.maxSessionAgeMs;
+      const isIdle = (now - existing.lastUsed) > this.sessionIdleTtlMs;
+      const isFailed = existing.consecutiveErrors >= this.maxErrorsBeforeRecycle;
+
+      if (!isExpired && !isIdle && !isFailed) {
+        existing.lastUsed = now;
+        return existing.sessionId;
+      }
+
+      // Destroy stale / errored session on server
+      await this.destroySession(flareSolverrUrl, existing.sessionId);
+      this.sessions.delete(key);
+    }
+
+    // Create a new session with unique ID
+    const sessionId = `gy_${key}_${Math.random().toString(36).substring(2, 8)}`;
+    try {
+      const endpoint = flareSolverrUrl.replace(/\/+$/, '');
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cmd: 'sessions.create',
+          session: sessionId,
+        }),
+        signal: AbortSignal.timeout(timeoutSeconds * 1000),
+      });
+
+      if (res.ok) {
+        const data: any = await res.json();
+        if (data.status === 'ok') {
+          const sid = data.session || sessionId;
+          this.sessions.set(key, {
+            sessionId: sid,
+            sourceKey: key,
+            createdAt: now,
+            lastUsed: now,
+            consecutiveErrors: 0,
+          });
+          return sid;
+        }
+      }
+    } catch (_) {
+      // If session creation fails (e.g. FlareSolverr v2 without session support), fallback to stateless
+    }
+
+    return null;
+  }
+
+  /**
+   * Record success on a session.
+   */
+  public recordSessionSuccess(sourceKey: string): void {
+    const key = (sourceKey || 'default').toLowerCase().replace(/[^a-z0-9-_]/g, '_');
+    const existing = this.sessions.get(key);
+    if (existing) {
+      existing.lastUsed = Date.now();
+      existing.consecutiveErrors = 0;
+    }
+  }
+
+  /**
+   * Record failure on a session. If error count exceeds threshold, session will be recycled.
+   */
+  public recordSessionFailure(sourceKey: string): void {
+    const key = (sourceKey || 'default').toLowerCase().replace(/[^a-z0-9-_]/g, '_');
+    const existing = this.sessions.get(key);
+    if (existing) {
+      existing.consecutiveErrors++;
+    }
+  }
+
+  /**
+   * Destroy a session on the FlareSolverr server and remove from memory.
+   */
+  public async destroySession(flareSolverrUrl: string, sessionId: string): Promise<void> {
+    if (!sessionId) return;
+    try {
+      const endpoint = flareSolverrUrl.replace(/\/+$/, '');
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cmd: 'sessions.destroy',
+          session: sessionId,
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch (_) {
+      // Best-effort cleanup
+    }
+  }
+
+  /**
+   * Clear all sessions from pool.
+   */
+  public async destroyAll(flareSolverrUrl: string): Promise<void> {
+    for (const [, s] of this.sessions) {
+      await this.destroySession(flareSolverrUrl, s.sessionId);
+    }
+    this.sessions.clear();
+  }
+
+  public getActiveCount(): number {
+    return this.sessions.size;
+  }
+}
+
+export const flareSolverrSessionPool = new FlareSolverrSessionPool();
 
 /**
  * Scan HTTP response body and status code for Cloudflare and Captcha bot protection screens.
@@ -157,29 +300,49 @@ export function detectChallenge(html: string, statusCode: number): ChallengeDete
 
 /**
  * Solve Cloudflare / Turnstile challenges via a local or remote FlareSolverr proxy.
+ * Uses persistent FlareSolverr sessions per domain to reuse active clearance cookies.
  */
 export async function solveWithFlareSolverr(
   targetUrl: string,
   flareSolverrUrl: string = 'http://localhost:8191/v1',
-  timeoutSeconds: number = 30
+  timeoutSeconds: number = 30,
+  sourceKey?: string
 ): Promise<FlareSolverrResponse> {
   const startTime = Date.now();
+  let origin = '';
+  try { origin = new URL(targetUrl).origin; } catch { origin = targetUrl; }
+  const domainKey = sourceKey || origin.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[^a-z0-9-_]/g, '_');
+
   try {
     const endpoint = flareSolverrUrl.replace(/\/+$/, '');
+
+    // Attempt to acquire or reuse a FlareSolverr session
+    const sessionId = await flareSolverrSessionPool.getOrCreateSession(
+      endpoint,
+      domainKey,
+      Math.min(timeoutSeconds, 10)
+    );
+
+    const payload: Record<string, any> = {
+      cmd: 'request.get',
+      url: targetUrl,
+      maxTimeout: timeoutSeconds * 1000,
+    };
+    if (sessionId) {
+      payload.session = sessionId;
+    }
+
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cmd: 'request.get',
-        url: targetUrl,
-        maxTimeout: timeoutSeconds * 1000,
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout((timeoutSeconds + 5) * 1000),
     });
 
     const elapsed = Date.now() - startTime;
 
     if (!res.ok) {
+      if (sessionId) flareSolverrSessionPool.recordSessionFailure(domainKey);
       return {
         ok: false,
         status: `HTTP_${res.status}`,
@@ -190,6 +353,7 @@ export async function solveWithFlareSolverr(
 
     const data: any = await res.json();
     if (data.status === 'ok' && data.solution) {
+      if (sessionId) flareSolverrSessionPool.recordSessionSuccess(domainKey);
       return {
         ok: true,
         status: 'ok',
@@ -205,6 +369,7 @@ export async function solveWithFlareSolverr(
       };
     }
 
+    if (sessionId) flareSolverrSessionPool.recordSessionFailure(domainKey);
     return {
       ok: false,
       status: data.status || 'error',
@@ -213,6 +378,7 @@ export async function solveWithFlareSolverr(
       error: data.message || 'Unknown FlareSolverr error',
     };
   } catch (err: any) {
+    if (domainKey) flareSolverrSessionPool.recordSessionFailure(domainKey);
     return {
       ok: false,
       status: 'connection_error',
@@ -331,9 +497,10 @@ export async function checkSolverBalance(apiKey: string, provider: 'auto' | '2ca
 
 /**
  * Perform a resilient fetch with automatic Cloudflare & Captcha challenge bypass:
- * 1. Direct stealth request
- * 2. If challenged, automatically triggers FlareSolverr or 2Captcha/CapSolver
- * 3. Returns HTML with bypass metadata
+ * 1. Fast-fails if circuit breaker is OPEN
+ * 2. Direct stealth request with realistic browser profiles & client hints
+ * 3. If challenged, automatically triggers persistent FlareSolverr session or 2Captcha/CapSolver
+ * 4. Returns HTML with bypass metadata
  */
 export async function fetchWithChallengeBypass(
   targetUrl: string,
@@ -342,19 +509,27 @@ export async function fetchWithChallengeBypass(
   const origin = new URL(targetUrl).origin;
   const timeoutMs = options.timeoutMs || 20000;
 
-  const defaultHeaders: Record<string, string> = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    Referer: origin + '/',
-    ...(options.headers || {}),
-  };
+  // Fast-fail if source circuit breaker is tripped OPEN
+  if (options.sourceId && !sourceCircuitBreaker.canAttempt(options.sourceId)) {
+    return {
+      ok: false,
+      status: 503,
+      html: '',
+      bypassed: false,
+      error: `Circuit breaker is OPEN for source ${options.sourceId} (fast-fail)`,
+    };
+  }
+
+  // Generate realistic browser headers matching modern Chrome / Safari / Firefox
+  const browserHeaders = getBrowserHeaders(targetUrl, {
+    sourceId: options.sourceId,
+    customHeaders: options.headers,
+  });
 
   // Step 1: Direct Stealth Fetch (redirect-safe SSRF guard on every hop)
   try {
     const directRes = await fetchWithSsrfGuard(targetUrl, {
-      headers: defaultHeaders,
+      headers: browserHeaders,
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -364,6 +539,7 @@ export async function fetchWithChallengeBypass(
     if (!challenge.isChallenge && directRes.ok) {
       if (options.sourceId) {
         challengeManager.resolveChallenge(options.sourceId);
+        sourceCircuitBreaker.recordSuccess(options.sourceId);
       }
       return {
         ok: true,
@@ -380,12 +556,13 @@ export async function fetchWithChallengeBypass(
         `[Challenge Solver] Source at ${origin} triggered ${challenge.type} challenge (HTTP ${directRes.status}). Attempting auto-bypass...`
       );
 
-      // A. Try FlareSolverr
+      // A. Try FlareSolverr (with persistent session pooling)
       if (options.enableCloudflareBypass !== false && options.flareSolverrUrl) {
         const solverResult = await solveWithFlareSolverr(
           targetUrl,
           options.flareSolverrUrl,
-          Math.round(timeoutMs / 1000)
+          Math.round(timeoutMs / 1000),
+          options.sourceId
         );
 
         if (solverResult.ok && solverResult.html) {
@@ -393,6 +570,7 @@ export async function fetchWithChallengeBypass(
 
           if (options.sourceId) {
             challengeManager.resolveChallenge(options.sourceId);
+            sourceCircuitBreaker.recordSuccess(options.sourceId);
           }
 
           if (options.sourceId && options.onCookieUpdate && solverResult.cookies && solverResult.cookies.length > 0) {
@@ -405,7 +583,7 @@ export async function fetchWithChallengeBypass(
             status: 200,
             html: solverResult.html,
             bypassed: true,
-            methodUsed: 'FlareSolverr Automated Bypass',
+            methodUsed: 'FlareSolverr Automated Bypass (Session)',
           };
         }
       }
@@ -426,6 +604,7 @@ export async function fetchWithChallengeBypass(
           console.log(`[Challenge Solver] 2Captcha token received! Bypassed challenge.`);
           if (options.sourceId) {
             challengeManager.resolveChallenge(options.sourceId);
+            sourceCircuitBreaker.recordSuccess(options.sourceId);
           }
           return {
             ok: true,
@@ -437,7 +616,7 @@ export async function fetchWithChallengeBypass(
         }
       }
 
-      // If challenge was not automatically bypassed, record for user notification
+      // If challenge was not automatically bypassed, record for user notification & trip circuit if blocked
       const srcId = options.sourceId || origin.replace(/https?:\/\//, '').replace(/[^a-z0-9]/g, '');
       challengeManager.recordChallenge({
         sourceId: srcId,
@@ -447,6 +626,10 @@ export async function fetchWithChallengeBypass(
         httpStatus: directRes.status,
         siteKey: challenge.siteKey,
       });
+
+      if (options.sourceId && (challenge.type === 'ip_block' || challenge.type === 'cloudflare_ddos')) {
+        sourceCircuitBreaker.trip(options.sourceId, `Blocked by ${challenge.type}`);
+      }
     }
 
     return {
@@ -463,9 +646,13 @@ export async function fetchWithChallengeBypass(
         const solverResult = await solveWithFlareSolverr(
           targetUrl,
           options.flareSolverrUrl,
-          Math.round(timeoutMs / 1000)
+          Math.round(timeoutMs / 1000),
+          options.sourceId
         );
         if (solverResult.ok && solverResult.html) {
+          if (options.sourceId) {
+            sourceCircuitBreaker.recordSuccess(options.sourceId);
+          }
           return {
             ok: true,
             status: 200,
@@ -475,6 +662,10 @@ export async function fetchWithChallengeBypass(
           };
         }
       } catch (_) {}
+    }
+
+    if (options.sourceId) {
+      sourceCircuitBreaker.recordFailure(options.sourceId, 0, err?.message);
     }
 
     return {

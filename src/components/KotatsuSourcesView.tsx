@@ -108,6 +108,13 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     setProbeStatus({ testing: true });
     const startTime = performance.now();
     try {
+      // Reset circuit breaker so live probe is allowed through
+      await apiFetch('/api/kotatsu/sources/circuit-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceId: src.id }),
+      }).catch(() => {});
+
       const res = await apiFetch(`/api/kotatsu/search?sourceId=${src.id}&page=1&limit=5`);
       const latency = Math.round(performance.now() - startTime);
       if (res.ok) {

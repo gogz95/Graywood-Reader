@@ -56,6 +56,7 @@ import {
 } from "./server/captchaSolver";
 import { challengeManager } from "./server/challengeManager";
 import { sourceCircuitBreaker, CircuitState } from "./server/circuitBreaker";
+import { getBrowserHeaders } from "./server/userAgentPool";
 import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
 import { localLibraryRouter } from "./server/routes/localLibrary";
@@ -3248,7 +3249,7 @@ app.post("/api/kotatsu/sources/deactivate-all", (_req, res) => {
 
 // Fix #22: Source Health Monitoring Endpoint
 app.get("/api/kotatsu/sources/health", (_req, res) => {
-  const healthData: Record<string, SourceHealth> = {};
+  const healthData: Record<string, any> = {};
   for (const source of KOTATSU_SOURCES) {
     const h = sourceHealthMap.get(source.id);
     const cb = sourceCircuitBreaker.getState(source.id);
@@ -3258,6 +3259,8 @@ app.get("/api/kotatsu/sources/health", (_req, res) => {
         lastChecked: h?.lastChecked || cb.lastChecked || Date.now(),
         lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : 'ok'),
         consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
+        tripCount: cb.tripCount || 0,
+        nextProbeTime: cb.nextProbeTime,
         failureReason: h?.failureReason || cb.lastFailureReason,
         circuitState: cb.state,
       };
@@ -3271,6 +3274,73 @@ app.get("/api/kotatsu/sources/health", (_req, res) => {
     disabled: disabledSourceIds.size,
     sources: healthData,
     disabledSourceIds: Array.from(disabledSourceIds),
+  });
+});
+
+// Reset Circuit Breaker endpoint (manual recovery from UI or automated script)
+app.post("/api/kotatsu/sources/circuit-reset", (req, res) => {
+  const { sourceId } = req.body || {};
+  if (sourceId) {
+    sourceCircuitBreaker.reset(sourceId);
+    const h = sourceHealthMap.get(sourceId);
+    if (h) {
+      h.consecutiveFailures = 0;
+      h.lastStatus = 'ok';
+      h.failureReason = undefined;
+      h.circuitState = 'CLOSED';
+      scheduleSourceHealthPersist();
+    }
+    return res.json({ success: true, message: `Reset circuit breaker for ${sourceId}` });
+  } else {
+    sourceCircuitBreaker.reset();
+    for (const [, h] of sourceHealthMap) {
+      h.consecutiveFailures = 0;
+      h.lastStatus = 'ok';
+      h.failureReason = undefined;
+      h.circuitState = 'CLOSED';
+    }
+    scheduleSourceHealthPersist();
+    return res.json({ success: true, message: 'Reset all circuit breakers' });
+  }
+});
+
+// Live Source Health Dashboard Endpoint (P3 Observability)
+app.get("/api/sources/dashboard", (_req, res) => {
+  const topSourcesList = KOTATSU_SOURCES.slice(0, 50).map((source) => {
+    const h = sourceHealthMap.get(source.id);
+    const cb = sourceCircuitBreaker.getState(source.id);
+    const srcDef = SOURCE_MAP.get(source.id);
+    const urlStr = source.baseUrl || srcDef?.baseUrl || '';
+    let domainStr = '';
+    try { domainStr = new URL(urlStr).hostname; } catch {}
+    return {
+      id: source.id,
+      name: source.name,
+      engine: (source.id.includes('madara') ? 'madara' : 'custom'),
+      lang: source.lang || 'en',
+      domain: domainStr,
+      baseUrl: urlStr,
+      circuitState: cb.state,
+      tripCount: cb.tripCount || 0,
+      nextProbeTime: cb.nextProbeTime,
+      consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
+      lastChecked: h?.lastChecked || cb.lastChecked || 0,
+      lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : 'ok'),
+      failureReason: h?.failureReason || cb.lastFailureReason,
+    };
+  });
+
+  const summary = {
+    totalMonitored: topSourcesList.length,
+    healthy: topSourcesList.filter((s) => s.lastStatus === 'ok' && s.circuitState !== 'OPEN').length,
+    degraded: topSourcesList.filter((s) => s.lastStatus === 'degraded' || s.circuitState === 'HALF_OPEN').length,
+    blocked: topSourcesList.filter((s) => s.lastStatus === 'blocked').length,
+    down: topSourcesList.filter((s) => s.lastStatus === 'down' || s.circuitState === 'OPEN').length,
+  };
+
+  res.json({
+    summary,
+    sources: topSourcesList,
   });
 });
 
@@ -5299,6 +5369,40 @@ async function fetchDynastyChapterList(targetUrl: string): Promise<ResolvedChapt
   }
 }
 
+export function parseGenericChapterListFromHtml(sHtml: string, origin: string): ResolvedChapter[] {
+  if (!sHtml) return [];
+  const $ = cheerio.load(sHtml);
+  const out: ResolvedChapter[] = [];
+  const seen = new Set<string>();
+
+  // 1. Check anchor tags and <option> tags in document order across typical chapter wrappers
+  const candidateNodes = $('a[href], select option[value], ul.chapter-list li a, .chapters-list li a, #chapterlist li a, div.eplister li a, .row-content-chapter li a, .list-chapter .row a, .element .title a').toArray();
+
+  const chapterRegex = /(?:chapter|chapitre|capitulo|capítulo|cap|chap|ch|episode|ep|глава|tập|tap|vol|volume|#)[^\d]*(\d+(?:\.\d+)?)/i;
+  const pathNumberRegex = /\/(?:chapter|chap|ch|episode|ep)[-_/]?(\d+(?:\.\d+)?)/i;
+
+  let autoNum = 1;
+  for (const node of candidateNodes) {
+    const tag = (node as any).tagName?.toLowerCase();
+    const href = tag === 'option' ? ($(node).attr('value') || '') : ($(node).attr('href') || '');
+    if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
+    const text = $(node).text().trim() || $(node).attr('title') || '';
+    
+    const numMatch = (href + ' ' + text).match(chapterRegex) || href.match(pathNumberRegex);
+    if (!numMatch && !/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) {
+      continue;
+    }
+    const num = numMatch ? parseFloat(numMatch[1]) : autoNum++;
+    if (!Number.isFinite(num) || num <= 0) continue;
+
+    const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    out.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
+  }
+  return out;
+}
+
 // ---- Generic: enumerate chapter links with numbers from any series page ----------------------
 async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
   const origin = new URL(targetUrl).origin;
@@ -5314,37 +5418,7 @@ async function fetchGenericChapterList(targetUrl: string): Promise<ResolvedChapt
       onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
     });
     if (!bypassRes.ok || !bypassRes.html) return [];
-    const sHtml = bypassRes.html;
-    const $ = cheerio.load(sHtml);
-    const out: ResolvedChapter[] = [];
-    const seen = new Set<string>();
-
-    // 1. Check anchor tags and <option> tags in document order across typical chapter wrappers
-    const candidateNodes = $('a[href], select option[value], ul.chapter-list li a, .chapters-list li a, #chapterlist li a, div.eplister li a').toArray();
-
-    const chapterRegex = /(?:chapter|chapitre|capitulo|capítulo|cap|chap|ch|episode|ep|глава|tập|tap|vol|volume|#)[^\d]*(\d+(?:\.\d+)?)/i;
-    const pathNumberRegex = /\/(?:chapter|chap|ch|episode|ep)[-_]?(\d+(?:\.\d+)?)/i;
-
-    let autoNum = 1;
-    for (const node of candidateNodes) {
-      const tag = (node as any).tagName?.toLowerCase();
-      const href = tag === 'option' ? ($(node).attr('value') || '') : ($(node).attr('href') || '');
-      if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
-      const text = $(node).text().trim() || $(node).attr('title') || '';
-      
-      const numMatch = (href + ' ' + text).match(chapterRegex) || href.match(pathNumberRegex);
-      if (!numMatch && !/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) {
-        continue;
-      }
-      const num = numMatch ? parseFloat(numMatch[1]) : autoNum++;
-      if (!Number.isFinite(num) || num <= 0) continue;
-
-      const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
-      if (seen.has(abs)) continue;
-      seen.add(abs);
-      out.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
-    }
-    return out;
+    return parseGenericChapterListFromHtml(bypassRes.html, origin);
   } catch (e) {
     return [];
   }

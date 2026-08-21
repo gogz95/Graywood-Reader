@@ -17,9 +17,11 @@ export interface CircuitBreakerConfig {
 export interface SourceCircuitInfo {
   state: CircuitState;
   failures: number;
+  tripCount: number;
   nextProbeTime: number | null;
   lastChecked: number;
   lastFailureReason?: string;
+  cooldownMs?: number;
 }
 
 export class SourceCircuitBreaker {
@@ -27,9 +29,11 @@ export class SourceCircuitBreaker {
   private states = new Map<string, {
     state: CircuitState;
     failures: number;
+    tripCount: number;
     nextProbeTime: number | null;
     lastChecked: number;
     lastFailureReason?: string;
+    cooldownMs?: number;
   }>();
 
   constructor(config?: Partial<CircuitBreakerConfig>) {
@@ -71,7 +75,7 @@ export class SourceCircuitBreaker {
 
   /**
    * Record a successful response from a source.
-   * Resets the failure counter and returns the circuit to CLOSED.
+   * Resets the failure counter, tripCount, and returns the circuit to CLOSED.
    */
   public recordSuccess(sourceId: string): void {
     const normId = (sourceId || '').toLowerCase().trim();
@@ -80,15 +84,19 @@ export class SourceCircuitBreaker {
     this.states.set(normId, {
       state: 'CLOSED',
       failures: 0,
+      tripCount: 0,
       nextProbeTime: null,
       lastChecked: Date.now(),
       lastFailureReason: undefined,
+      cooldownMs: undefined,
     });
   }
 
   /**
    * Record a failed response or network error for a source.
-   * Non-transient status codes (404 Not Found, 410 Gone) count as double failures.
+   * Non-transient status codes (404, 410) and severe blocking codes (403, 503, 429, 520-524)
+   * count as double failures for faster circuit response.
+   * Implements exponential backoff on consecutive trips (up to 16x base cooldown).
    */
   public recordFailure(sourceId: string, statusCode?: number, reason?: string): void {
     const normId = (sourceId || '').toLowerCase().trim();
@@ -98,22 +106,30 @@ export class SourceCircuitBreaker {
     const entry = this.states.get(normId) || {
       state: 'CLOSED' as CircuitState,
       failures: 0,
+      tripCount: 0,
       nextProbeTime: null,
       lastChecked: now,
       lastFailureReason: undefined,
+      cooldownMs: undefined,
     };
 
     const isNonTransient = statusCode === 404 || statusCode === 410;
-    const failureIncrement = isNonTransient ? 2 : 1;
+    const isSevereBlock = statusCode === 403 || statusCode === 503 || statusCode === 429 || (statusCode && statusCode >= 520 && statusCode <= 524);
+    const failureIncrement = isNonTransient || isSevereBlock ? 2 : 1;
+
     entry.failures += failureIncrement;
     entry.lastChecked = now;
     entry.lastFailureReason = reason || (statusCode ? `HTTP ${statusCode}` : 'Network / Timeout Error');
 
-    // If currently HALF_OPEN, any failure immediately trips back to OPEN
+    // If currently HALF_OPEN or failure threshold reached, trip OPEN with exponential backoff
     if (entry.state === 'HALF_OPEN' || entry.failures >= this.config.failureThreshold) {
       entry.state = 'OPEN';
-      entry.nextProbeTime = now + this.config.cooldownPeriodMs;
-      console.warn(`[Circuit Breaker] Source "${normId}" tripped OPEN (cooldown until ${new Date(entry.nextProbeTime).toISOString()}). Reason: ${entry.lastFailureReason}`);
+      entry.tripCount = (entry.tripCount || 0) + 1;
+      const backoffMultiplier = Math.min(Math.pow(2, entry.tripCount - 1), 16);
+      const effectiveCooldown = this.config.cooldownPeriodMs * backoffMultiplier;
+      entry.cooldownMs = effectiveCooldown;
+      entry.nextProbeTime = now + effectiveCooldown;
+      console.warn(`[Circuit Breaker] Source "${normId}" tripped OPEN (trip #${entry.tripCount}, ${backoffMultiplier}x backoff, cooldown ${Math.round(effectiveCooldown / 1000)}s until ${new Date(entry.nextProbeTime).toISOString()}). Reason: ${entry.lastFailureReason}`);
     }
 
     this.states.set(normId, entry);
@@ -127,14 +143,27 @@ export class SourceCircuitBreaker {
     if (!normId) return;
 
     const now = Date.now();
-    const cooldown = customCooldownMs ?? this.config.cooldownPeriodMs;
-    this.states.set(normId, {
-      state: 'OPEN',
-      failures: this.config.failureThreshold,
-      nextProbeTime: now + cooldown,
+    const entry = this.states.get(normId) || {
+      state: 'CLOSED' as CircuitState,
+      failures: 0,
+      tripCount: 0,
+      nextProbeTime: null,
       lastChecked: now,
-      lastFailureReason: reason || 'Manual Trip / Challenge Detected',
-    });
+      lastFailureReason: undefined,
+      cooldownMs: undefined,
+    };
+
+    entry.state = 'OPEN';
+    entry.tripCount = (entry.tripCount || 0) + 1;
+    const backoffMultiplier = customCooldownMs ? 1 : Math.min(Math.pow(2, entry.tripCount - 1), 16);
+    const effectiveCooldown = customCooldownMs ?? (this.config.cooldownPeriodMs * backoffMultiplier);
+    entry.failures = Math.max(entry.failures, this.config.failureThreshold);
+    entry.cooldownMs = effectiveCooldown;
+    entry.nextProbeTime = now + effectiveCooldown;
+    entry.lastChecked = now;
+    entry.lastFailureReason = reason || 'Manual Trip / Challenge Detected';
+
+    this.states.set(normId, entry);
   }
 
   /**
@@ -147,6 +176,7 @@ export class SourceCircuitBreaker {
       return {
         state: 'CLOSED',
         failures: 0,
+        tripCount: 0,
         nextProbeTime: null,
         lastChecked: 0,
       };
