@@ -11,10 +11,7 @@ This document outlines the planned future features, community requests, and arch
 ### 🔄 1. New Chapter Push Notifications (Discord & Telegram Webhooks)
 - Dispatch rich webhooks when scanner detects new chapters for "Reading" list series. Discord: embedded message with cover art, chapter number, release group, 1-click read link. Telegram: instant push notification to private chat/channel.
 
-### 🗂️ 4. User-Defined Categories / Custom Shelves
-- Visual shelf organization beyond flat tags (e.g. "Currently Reading", "Weekend Binge", "Dropped but Maybe"). Drag-and-drop, shelf-specific unread counters. Mirrors Kotatsu-Redo / Mihon.
-
-### 🔒 5. App Lock (Password / PIN / Biometric)
+### 🔒 3. App Lock (Password / PIN / Biometric)
 - Require PIN, password, or biometric to open the app. Essential for self-hosted PWA + Electron. Mirrors Kotatsu-Redo.
 
 ---
@@ -24,8 +21,7 @@ This document outlines the planned future features, community requests, and arch
 ### 📁 6. Full CBR / RAR / PDF Reader Integration
 - Mount `/data/local_manga` with `.cbz`, `.cbr`, `.zip`, `.pdf`. Parse archive metadata, extract covers, index for offline reading. **Current: CBZ/ZIP only; CBR/RAR/PDF detected but no preview.** Mirrors Komga.
 
-### 📡 7. Per-Series Source Pinning & Migration
-- Pick source per-series. One-tap migration to alternate source when chapters are missing. Mirrors Mihon/Kotatsu-Redo.
+
 
 ### 🎮 8. Discord Rich Presence (RPC)
 - Broadcast active reading session to Discord ("Reading Solo Leveling — Ch 142" with cover art + elapsed time).
@@ -90,6 +86,7 @@ This document outlines the planned future features, community requests, and arch
 - ✅ **Automated Unit Tests + GitHub Actions CI** (Aug 2026)
 - ✅ **OPDS 1.2 Upgrade** — catalog search, pagination, cover proxying (Aug 2026)
 - ✅ **Offline Storage Rework** — Blob-based, per-series storage, LRU eviction, Download All (Aug 2026)
-- ✅ **Local CBZ / ZIP Library Ingestion** — STORAGE_PATH folder scanner, cover streaming (Aug 2026)
-- ✅ **MyAnimeList (MAL) & Kitsu Live Scrobblers** — chapter progress sync alongside AniList (Aug 2026)
+- ✅ **User-Defined Categories & Custom Shelves** — custom colors, icons, unread badges, bulk shelf mover (Aug 2026)
+- ✅ **1-Click Alternative Source Finder & Auto-Attacher** (Aug 2026)
+- ✅ **Kotatsu & Tachiyomi Backup Importers** — with Missing Source auto-flagging & library restoration (Aug 2026)
 - ✅ **Incognito / Private Reading Mode** — no history, no scrobbling, no analytics, 👁️ Private badge (Aug 2026)

@@ -47,6 +47,8 @@ export interface KotatsuManga {
   description?: string;
   summary?: string;
   chapters?: KotatsuChapter[];
+  favorite?: boolean;
+  isFavorite?: boolean;
 }
 
 export interface KotatsuFavouriteEntry {
@@ -73,6 +75,8 @@ export interface KotatsuFavouriteEntry {
   sortKey?: number;
   sort_key?: number;
   pinned?: boolean;
+  favorite?: boolean;
+  isFavorite?: boolean;
   order?: number;
 }
 
@@ -715,6 +719,19 @@ export async function parseKotatsuBackup(
       notes = `Imported from Kotatsu backup • ${timeStr} reading time`;
     }
 
+    const categories: string[] = [];
+    if (entry.categoryId !== undefined && entry.categoryId !== null) {
+      categories.push(String(entry.categoryId));
+    } else if (entry.category_id !== undefined && entry.category_id !== null) {
+      categories.push(String(entry.category_id));
+    }
+    if (Array.isArray(entry.categories)) {
+      for (const c of entry.categories) {
+        const cName = typeof c === 'string' ? c : (c.name || (c.id ? String(c.id) : ''));
+        if (cName && !categories.includes(cName)) categories.push(cName);
+      }
+    }
+
     const hasWorkingSource = Boolean(sourceUrl && sourceUrl.trim().length > 0 && !isMangaDexSourceLink(sourceName, sourceUrl));
     const isFlagged = !hasWorkingSource;
     const flagReason = !hasWorkingSource ? 'Missing source' : undefined;
@@ -744,6 +761,7 @@ export async function parseKotatsuBackup(
       isFavorite,
       isFlagged,
       flagReason,
+      categories,
     });
   }
 

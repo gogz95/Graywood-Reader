@@ -5,7 +5,10 @@ import {
   ReadingStatus,
   MangaType,
   hasWorkingReaderSource,
+  UserCategory,
 } from '../types';
+import { ManageCategoriesModal, renderCategoryIcon } from './ManageCategoriesModal';
+import { apiFetch } from '../utils/api';
 
 import {
   Plus,
@@ -29,6 +32,8 @@ import {
   Square,
   Download,
   Check,
+  Folder,
+  Settings,
 } from 'lucide-react';
 
 interface LibraryViewProps {
@@ -62,6 +67,27 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
   const [sortBy, setSortBy] = useState<'updated' | 'title' | 'chapter' | 'rating' | 'unread' | 'lastRead'>('updated');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  // Categories & Custom Shelves
+  const [categories, setCategories] = useState<UserCategory[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+
+  const fetchCategories = React.useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/categories');
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   // Multi-Select States
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
@@ -99,6 +125,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (statusFilter === 'favorites' && !item.isFavorite) return false;
     if (statusFilter === 'flagged' && !item.isFlagged) return false;
     if (statusFilter !== 'all' && statusFilter !== 'favorites' && statusFilter !== 'flagged' && item.status !== statusFilter) return false;
+
+    // Category / Custom Shelf Filter
+    if (activeCategory && (!item.categories || !item.categories.includes(activeCategory))) {
+      return false;
+    }
 
     // Type Filter
     if (typeFilter !== 'all' && item.type !== typeFilter) return false;
@@ -218,42 +249,57 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* Control Bar: Filters, Sort, View toggle */}
       <div className="bg-surface/90 border border-edge rounded-xl p-4 space-y-4">
-        {/* Status Filter Tabs */}
+        {/* Custom Shelves & Status Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-xs font-semibold">
           <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'all'
+            onClick={() => {
+              setActiveCategory(null);
+              setStatusFilter('all');
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeCategory === null && statusFilter === 'all'
                 ? 'bg-accent text-accent-fg font-bold shadow-sm'
                 : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
-            All ({mangaList.length})
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>All ({mangaList.length})</span>
           </button>
           <button
-            onClick={() => setStatusFilter('reading')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'reading'
+            onClick={() => {
+              setActiveCategory(null);
+              setStatusFilter('reading');
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeCategory === null && statusFilter === 'reading'
                 ? 'bg-accent text-accent-fg font-bold shadow-sm'
                 : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
-            Reading ({totalReading})
+            <Clock className="w-3.5 h-3.5" />
+            <span>Reading ({totalReading})</span>
           </button>
           <button
-            onClick={() => setStatusFilter('favorites')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'favorites'
+            onClick={() => {
+              setActiveCategory(null);
+              setStatusFilter('favorites');
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeCategory === null && statusFilter === 'favorites'
                 ? 'bg-accent text-accent-fg font-bold shadow-sm'
                 : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
-            ★ Favorites ({mangaList.filter((m) => m.isFavorite).length})
+            <Star className="w-3.5 h-3.5 fill-accent-fg" />
+            <span>Favorites ({mangaList.filter((m) => m.isFavorite).length})</span>
           </button>
           <button
-            onClick={() => setStatusFilter('flagged')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
-              statusFilter === 'flagged'
+            onClick={() => {
+              setActiveCategory(null);
+              setStatusFilter('flagged');
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeCategory === null && statusFilter === 'flagged'
                 ? 'bg-danger text-accent-fg font-bold shadow-sm'
                 : 'bg-elevated/80 text-danger hover:bg-elevated'
             }`}
@@ -262,35 +308,71 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <span>Flagged ({mangaList.filter((m) => m.isFlagged).length})</span>
           </button>
           <button
-            onClick={() => setStatusFilter('plan_to_read')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'plan_to_read'
+            onClick={() => {
+              setActiveCategory(null);
+              setStatusFilter('completed');
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              activeCategory === null && statusFilter === 'completed'
                 ? 'bg-accent text-accent-fg font-bold shadow-sm'
                 : 'bg-elevated/80 text-secondary hover:bg-elevated'
             }`}
           >
-            Plan to Read ({mangaList.filter((m) => m.status === 'plan_to_read').length})
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>Completed ({totalCompleted})</span>
           </button>
-          <button
-            onClick={() => setStatusFilter('completed')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'completed'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            Completed ({totalCompleted})
-          </button>
-          <button
-            onClick={() => setStatusFilter('on_hold')}
-            className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
-              statusFilter === 'on_hold'
-                ? 'bg-accent text-accent-fg font-bold shadow-sm'
-                : 'bg-elevated/80 text-secondary hover:bg-elevated'
-            }`}
-          >
-            On Hold ({mangaList.filter((m) => m.status === 'on_hold').length})
-          </button>
+
+          {/* Divider between default tabs and custom shelves */}
+          {categories.length > 0 && <div className="h-5 w-[1px] bg-edge mx-1 shrink-0" />}
+
+          {/* User Custom Shelves */}
+          {categories.map((cat) => {
+            const isCatActive = activeCategory === cat.id;
+            const count = mangaList.filter((m) => m.categories?.includes(cat.id)).length;
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  setStatusFilter('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  isCatActive
+                    ? 'font-bold shadow-sm ring-1 ring-white/20'
+                    : 'bg-elevated/80 text-secondary hover:bg-elevated'
+                }`}
+                style={
+                  isCatActive
+                    ? { backgroundColor: cat.color || '#f59e0b', color: '#000' }
+                    : undefined
+                }
+              >
+                <span style={!isCatActive ? { color: cat.color || '#f59e0b' } : undefined}>
+                  {renderCategoryIcon(cat.icon, 'w-3.5 h-3.5')}
+                </span>
+                <span>{cat.name}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isCatActive ? 'bg-black/20 text-black' : 'bg-surface text-muted'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          <div className="flex items-center gap-1 ml-auto pl-2 shrink-0">
+            <button
+              onClick={() => setIsManageCategoriesOpen(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-xs font-bold flex items-center gap-1 transition-all"
+              title="Add or organize custom shelves"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Shelf</span>
+            </button>
+          </div>
         </div>
 
         {/* Secondary Filter Bar */}
@@ -810,6 +892,40 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <option value="dropped">Dropped</option>
           </select>
 
+          {/* Bulk Shelf Assignment */}
+          {categories.length > 0 && (
+            <select
+              onChange={async (e) => {
+                const catId = e.target.value;
+                if (catId) {
+                  try {
+                    await apiFetch('/api/categories/bulk-assign', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        mangaIds: Array.from(selectedIds),
+                        categoryId: catId,
+                        action: 'add',
+                      }),
+                    });
+                    fetchCategories();
+                    setSelectedIds(new Set());
+                    setIsSelectMode(false);
+                  } catch {}
+                }
+              }}
+              defaultValue=""
+              className="bg-app border border-edge rounded-xl px-3 py-1.5 text-xs text-primary font-bold focus:outline-none"
+            >
+              <option value="" disabled>Add to Shelf...</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  📁 {cat.name}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Bulk Delete */}
           <button
             onClick={() => {
@@ -819,10 +935,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setIsSelectMode(false);
               }
             }}
-            className="px-3 py-1.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-1.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-bold text-xs flex items-center gap-1.5 transition-all"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete</span>
+            <span>Delete Selected</span>
           </button>
 
           {/* Done */}
@@ -844,6 +960,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         onAddRecommended={(rec) => {
           onAddNew();
         }}
+      />
+
+      {/* Manage Categories & Shelves Modal */}
+      <ManageCategoriesModal
+        categories={categories}
+        isOpen={isManageCategoriesOpen}
+        onClose={() => setIsManageCategoriesOpen(false)}
+        onCategoriesChanged={(updated) => setCategories(updated)}
       />
     </div>
   );

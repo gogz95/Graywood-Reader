@@ -197,8 +197,21 @@ export interface MangaItem {
    */
   metadataOverrides?: string[];
   customTags?: string[];
+  categories?: string[];
 }
 
+export interface UserCategory {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  sortOrder: number;
+  userId?: string;
+  createdAt?: string;
+  seriesCount?: number;
+  unreadCount?: number;
+}
 
 export interface DuplicateCandidate {
   id: string;

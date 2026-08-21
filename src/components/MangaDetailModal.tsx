@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, ReadingStatus, hasWorkingReaderSource } from '../types';
+import { MangaItem, ReadingStatus, hasWorkingReaderSource, UserCategory } from '../types';
+import { renderCategoryIcon } from './ManageCategoriesModal';
 
 import {
   X,
@@ -21,6 +22,7 @@ import {
   Flame,
   RefreshCw,
   AlertTriangle,
+  Folder,
 } from 'lucide-react';
 import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
 import { SourceFinderModal } from './SourceFinderModal';
@@ -56,8 +58,32 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [flagReason, setFlagReason] = useState(manga.flagReason || '');
   const [showFlagDropdown, setShowFlagDropdown] = useState(false);
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
-  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [isSourceFinderOpen, setIsSourceFinderOpen] = useState(false);
+  const [categories, setCategories] = useState<UserCategory[]>([]);
+  const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>(manga.categories || []);
+
+  React.useEffect(() => {
+    apiFetch('/api/categories')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCategories(data || []))
+      .catch(() => {});
+  }, []);
+
+  const handleToggleCategory = async (catId: string) => {
+    const next = activeCategoryIds.includes(catId)
+      ? activeCategoryIds.filter((id) => id !== catId)
+      : [...activeCategoryIds, catId];
+    setActiveCategoryIds(next);
+
+    try {
+      await apiFetch('/api/categories/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mangaId: manga.id, categoryIds: next }),
+      });
+      onUpdateManga({ ...manga, categories: next });
+    } catch {}
+  };
 
   const handleRefreshMetadata = useCallback(async () => {
     setIsRefreshingMetadata(true);
@@ -372,6 +398,44 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
         {/* Content Body */}
         <div className="p-6 space-y-6 text-xs sm:text-sm">
+          {/* Custom Shelves & Categories */}
+          {categories.length > 0 && (
+            <div className="space-y-2 bg-app/60 p-4 rounded-xl border border-edge">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-secondary flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-accent" />
+                  <span>Custom Shelves & Categories:</span>
+                </span>
+                <span className="text-[11px] text-muted">Click to assign or remove</span>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {categories.map((cat) => {
+                  const isAssigned = activeCategoryIds.includes(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleToggleCategory(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+                        isAssigned
+                          ? 'border-accent shadow-sm'
+                          : 'bg-surface border-edge text-secondary hover:text-primary hover:bg-elevated'
+                      }`}
+                      style={
+                        isAssigned
+                          ? { backgroundColor: `${cat.color || '#f59e0b'}25`, color: cat.color || '#f59e0b', borderColor: cat.color || '#f59e0b' }
+                          : undefined
+                      }
+                    >
+                      {isAssigned ? <Check className="w-3.5 h-3.5" /> : renderCategoryIcon(cat.icon, 'w-3.5 h-3.5')}
+                      <span>{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Synopsis */}
           <div className="space-y-1.5">
             <h4 className="font-bold text-primary">Synopsis</h4>

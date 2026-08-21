@@ -1153,6 +1153,81 @@ app.post("/api/manga/refresh-all-metadata", async (_req, res) => {
   }
 });
 
+// Categories & Shelves Endpoints
+app.get("/api/categories", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const categories = SqliteDb.getCategories(userId);
+  res.json(categories);
+});
+
+app.post("/api/categories", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const { name, description, color, icon, sortOrder } = req.body || {};
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: "Category name is required" });
+  }
+
+  const id = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const newCat = SqliteDb.createCategory({
+    id,
+    name: name.trim(),
+    description: description ? String(description).trim() : undefined,
+    color: color || '#f59e0b',
+    icon: icon || 'Bookmark',
+    sortOrder: Number(sortOrder) || 0,
+    userId,
+    createdAt: new Date().toISOString(),
+  });
+
+  res.status(201).json(newCat);
+});
+
+app.put("/api/categories/:id", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const { id } = req.params;
+  const updates = req.body || {};
+
+  const updated = SqliteDb.updateCategory(id, updates, userId);
+  if (!updated) {
+    return res.status(404).json({ error: "Category not found" });
+  }
+
+  res.json(updated);
+});
+
+app.delete("/api/categories/:id", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const { id } = req.params;
+
+  SqliteDb.deleteCategory(id, userId);
+  res.json({ success: true, message: "Category deleted" });
+});
+
+app.post("/api/categories/assign", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const { mangaId, categoryIds } = req.body || {};
+  if (!mangaId || !Array.isArray(categoryIds)) {
+    return res.status(400).json({ error: "mangaId and categoryIds array are required" });
+  }
+
+  SqliteDb.setMangaCategories(mangaId, categoryIds, userId);
+  const manga = SqliteDb.getMangaById(mangaId);
+  const overlaid = manga ? SqliteDb.applyUserOverlay([manga], userId)[0] : null;
+
+  res.json({ success: true, categories: categoryIds, manga: overlaid });
+});
+
+app.post("/api/categories/bulk-assign", (req, res) => {
+  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const { mangaIds, categoryId, action = 'add' } = req.body || {};
+  if (!Array.isArray(mangaIds) || !categoryId) {
+    return res.status(400).json({ error: "mangaIds array and categoryId are required" });
+  }
+
+  SqliteDb.bulkAssignCategory(mangaIds, categoryId, action, userId);
+  res.json({ success: true, count: mangaIds.length });
+});
+
 app.put("/api/manga/:id", (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
@@ -1183,15 +1258,18 @@ app.put("/api/manga/:id", (req, res) => {
     isFavorite: body.isFavorite !== undefined ? Boolean(body.isFavorite) : existing.isFavorite,
     isFlagged: body.isFlagged !== undefined ? Boolean(body.isFlagged) : existing.isFlagged,
     flagReason: body.flagReason !== undefined ? String(body.flagReason) : existing.flagReason,
+    categories: body.categories !== undefined && Array.isArray(body.categories) ? body.categories : existing.categories,
     lastUpdated: new Date().toISOString(),
   };
 
   syncAddOrUpdateManga(updatedItem);
+  const uid = resolveRequestUserId(req) || 'usr_guest';
   if (body.isFavorite !== undefined) {
-    const uid = resolveRequestUserId(req) || 'usr_guest';
     SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(body.isFavorite));
   }
-  const uid = resolveRequestUserId(req);
+  if (body.categories !== undefined && Array.isArray(body.categories)) {
+    SqliteDb.setMangaCategories(updatedItem.id, body.categories, uid);
+  }
   res.json(uid ? SqliteDb.applyUserOverlay([updatedItem], uid)[0] : updatedItem);
 });
 

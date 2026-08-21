@@ -143,6 +143,9 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     const hasWorkingSource = Boolean(url && url.trim().length > 0 && !isMangaDexSourceLink(sourceName, url));
     const isFlagged = !hasWorkingSource;
     const flagReason = !hasWorkingSource ? 'Missing source' : undefined;
+    const categories: string[] = Array.isArray(entry.categories)
+      ? entry.categories.map((c: any) => typeof c === 'string' ? c : (c.name || String(c.id || ''))).filter(Boolean)
+      : [];
     const id = `tachi_${Date.now()}_${i}_${title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16)}`;
 
     importedItems.push({
@@ -169,6 +172,7 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       isFavorite,
       isFlagged,
       flagReason,
+      categories,
     });
   }
 

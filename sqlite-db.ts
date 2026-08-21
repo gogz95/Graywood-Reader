@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote } from './src/types';
+import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote, UserCategory } from './src/types';
 
 // Ensure data directory exists (cwd-relative so bundled/Docker entrypoints share ./data)
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -54,7 +54,8 @@ db.exec(`
     flaggedAt TEXT,
     availableSources TEXT,
     metadataOverrides TEXT,
-    customTags TEXT
+    customTags TEXT,
+    categories TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_manga_title ON manga(title);
@@ -73,8 +74,33 @@ try { db.exec('ALTER TABLE manga ADD COLUMN flagReason TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN flaggedAt TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN metadataOverrides TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch (e) { }
+try { db.exec('ALTER TABLE manga ADD COLUMN categories TEXT'); } catch (e) { }
 
 try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    color TEXT,
+    icon TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS manga_categories (
+    manga_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    PRIMARY KEY (manga_id, category_id, user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_manga_categories_user ON manga_categories(user_id);
+  CREATE INDEX IF NOT EXISTS idx_manga_categories_manga ON manga_categories(manga_id);
+  CREATE INDEX IF NOT EXISTS idx_manga_categories_cat ON manga_categories(category_id);
+`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS profiles (
@@ -188,12 +214,12 @@ const stmtUpsertManga = db.prepare(`
     id, title, altTitles, type, coverImage, description, genres, status,
     currentChapter, totalChapters, latestChapter, lastUpdated, rating,
     sourceUrl, sourceName, availableSources, autoUpdateEnabled, notes, addedAt, lastReadAt,
-    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides, customTags
+    syncedFromApi, apiId, userId, isFavorite, isFlagged, flagReason, flaggedAt, metadataOverrides, customTags, categories
   ) VALUES (
     @id, @title, @altTitles, @type, @coverImage, @description, @genres, @status,
     @currentChapter, @totalChapters, @latestChapter, @lastUpdated, @rating,
     @sourceUrl, @sourceName, @availableSources, @autoUpdateEnabled, @notes, @addedAt, @lastReadAt,
-    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides, @customTags
+    @syncedFromApi, @apiId, @userId, @isFavorite, @isFlagged, @flagReason, @flaggedAt, @metadataOverrides, @customTags, @categories
   ) ON CONFLICT(id) DO UPDATE SET
     title=excluded.title,
     altTitles=excluded.altTitles,
@@ -220,7 +246,8 @@ const stmtUpsertManga = db.prepare(`
     flagReason=excluded.flagReason,
     flaggedAt=excluded.flaggedAt,
     metadataOverrides=excluded.metadataOverrides,
-    customTags=excluded.customTags
+    customTags=excluded.customTags,
+    categories=excluded.categories
 `);
 
 const stmtUpdateProgress = db.prepare(`
@@ -360,6 +387,7 @@ function mapRowToMangaItem(row: any): MangaItem {
     flaggedAt: row.flaggedAt || undefined,
     metadataOverrides: row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [],
     customTags: row.customTags ? JSON.parse(row.customTags) : [],
+    categories: row.categories ? JSON.parse(row.categories) : [],
     currentChapter: Number(row.currentChapter) || 0,
     latestChapter: Number(row.latestChapter) || 1,
     totalChapters: row.totalChapters ? Number(row.totalChapters) : null,
@@ -407,6 +435,7 @@ function mapMangaItemToRow(item: MangaItem) {
     flaggedAt: item.flaggedAt || (item.isFlagged ? new Date().toISOString() : null),
     metadataOverrides: JSON.stringify(item.metadataOverrides || []),
     customTags: JSON.stringify(item.customTags || []),
+    categories: JSON.stringify(item.categories || []),
   };
 }
 
@@ -794,9 +823,18 @@ export const SqliteDb = {
   applyUserOverlay(items: MangaItem[], userId: string | null | undefined): MangaItem[] {
     if (!userId) return items;
     const favs = this.getUserFavoriteIds(userId);
-    const lib = this.getUserLibraryStateMap(userId);
+    const userStateMap = this.getUserLibraryStateMap(userId);
+    const catRows = db.prepare('SELECT manga_id, category_id FROM manga_categories WHERE user_id = ?').all(userId) as { manga_id: string; category_id: string }[];
+    const catMap = new Map<string, string[]>();
+    for (const r of catRows) {
+      const arr = catMap.get(r.manga_id) || [];
+      arr.push(r.category_id);
+      catMap.set(r.manga_id, arr);
+    }
+
     return items.map((m) => {
-      const state = lib.get(m.id);
+      const state = userStateMap.get(m.id);
+      const userCats = catMap.get(m.id);
       return {
         ...m,
         // Per-user favorites table is source of truth once overlay is applied
@@ -804,8 +842,120 @@ export const SqliteDb = {
         currentChapter: state ? state.currentChapter : (Number(m.currentChapter) || 0),
         lastReadAt: state?.lastReadAt || m.lastReadAt,
         status: (state?.status as MangaItem['status']) || m.status,
+        categories: userCats !== undefined ? userCats : (m.categories || []),
       };
     });
+  },
+
+  getCategories(userId: string): UserCategory[] {
+    const rows = db.prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY sort_order ASC, name ASC').all(userId) as any[];
+    const countRows = db.prepare(`
+      SELECT mc.category_id, COUNT(DISTINCT mc.manga_id) as series_count
+      FROM manga_categories mc
+      WHERE mc.user_id = ?
+      GROUP BY mc.category_id
+    `).all(userId) as any[];
+    const countMap = new Map<string, number>();
+    for (const cr of countRows) countMap.set(cr.category_id, cr.series_count);
+
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description || undefined,
+      color: r.color || undefined,
+      icon: r.icon || undefined,
+      sortOrder: Number(r.sort_order) || 0,
+      userId: r.user_id,
+      createdAt: r.created_at,
+      seriesCount: countMap.get(r.id) || 0,
+    }));
+  },
+
+  createCategory(category: UserCategory): UserCategory {
+    db.prepare(`
+      INSERT INTO categories (id, user_id, name, description, color, icon, sort_order, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      category.id,
+      category.userId || 'usr_admin',
+      category.name,
+      category.description || null,
+      category.color || '#f59e0b',
+      category.icon || 'Bookmark',
+      category.sortOrder || 0,
+      category.createdAt || new Date().toISOString()
+    );
+    return category;
+  },
+
+  updateCategory(id: string, updates: Partial<UserCategory>, userId: string): UserCategory | null {
+    const existing = db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?').get(id, userId) as any;
+    if (!existing) return null;
+    const name = updates.name !== undefined ? updates.name : existing.name;
+    const description = updates.description !== undefined ? updates.description : existing.description;
+    const color = updates.color !== undefined ? updates.color : existing.color;
+    const icon = updates.icon !== undefined ? updates.icon : existing.icon;
+    const sortOrder = updates.sortOrder !== undefined ? updates.sortOrder : existing.sort_order;
+
+    db.prepare(`
+      UPDATE categories SET name = ?, description = ?, color = ?, icon = ?, sort_order = ?
+      WHERE id = ? AND user_id = ?
+    `).run(name, description, color, icon, sortOrder, id, userId);
+
+    return {
+      id,
+      name,
+      description,
+      color,
+      icon,
+      sortOrder,
+      userId,
+      createdAt: existing.created_at,
+    };
+  },
+
+  deleteCategory(id: string, userId: string): boolean {
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM manga_categories WHERE category_id = ? AND user_id = ?').run(id, userId);
+      db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').run(id, userId);
+    });
+    tx();
+    return true;
+  },
+
+  getMangaCategories(mangaId: string, userId: string): string[] {
+    const rows = db.prepare('SELECT category_id FROM manga_categories WHERE manga_id = ? AND user_id = ?').all(mangaId, userId) as { category_id: string }[];
+    return rows.map((r) => r.category_id);
+  },
+
+  setMangaCategories(mangaId: string, categoryIds: string[], userId: string): void {
+    const tx = db.transaction(() => {
+      db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?').run(mangaId, userId);
+      const stmt = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
+      for (const catId of categoryIds) {
+        if (catId && catId.trim()) stmt.run(mangaId, catId.trim(), userId);
+      }
+    });
+    tx();
+  },
+
+  bulkAssignCategory(mangaIds: string[], categoryId: string, action: 'add' | 'remove' | 'set', userId: string): void {
+    const tx = db.transaction(() => {
+      const insertStmt = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
+      const deleteStmt = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND category_id = ? AND user_id = ?');
+
+      for (const mangaId of mangaIds) {
+        if (action === 'add') {
+          insertStmt.run(mangaId, categoryId, userId);
+        } else if (action === 'remove') {
+          deleteStmt.run(mangaId, categoryId, userId);
+        } else if (action === 'set') {
+          db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?').run(mangaId, userId);
+          insertStmt.run(mangaId, categoryId, userId);
+        }
+      }
+    });
+    tx();
   },
 
   getStickyNotes(mangaId: string, userId?: string): PageStickyNote[] {
