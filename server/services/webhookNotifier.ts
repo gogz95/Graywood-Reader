@@ -86,7 +86,7 @@ export async function sendDiscordWebhook(
 
     return { success: true };
   } catch (err: any) {
-    logger.error("[Webhook Notifier] Discord dispatch failed", { error: err.message });
+    logger.error("Webhook", "[Webhook Notifier] Discord dispatch failed", { error: err.message });
     return { success: false, error: err.message };
   }
 }
@@ -141,7 +141,7 @@ export async function sendTelegramWebhook(
 
     return { success: true };
   } catch (err: any) {
-    logger.error("[Webhook Notifier] Telegram dispatch failed", { error: err.message });
+    logger.error("Webhook", "[Webhook Notifier] Telegram dispatch failed", { error: err.message });
     return { success: false, error: err.message };
   }
 }
@@ -185,7 +185,7 @@ export async function dispatchNewChapterWebhooks(
     const res = await sendDiscordWebhook(appSettings.discordWebhookUrl, payload);
     if (res.success) {
       discordSent = true;
-      logger.info(`[Webhook Notifier] Sent Discord push for "${manga.title}" Ch. ${newChapterNumber}`);
+      logger.info("Webhook", `[Webhook Notifier] Sent Discord push for "${manga.title}" Ch. ${newChapterNumber}`);
     } else if (res.error) {
       errors.push(`Discord error: ${res.error}`);
     }
@@ -196,7 +196,7 @@ export async function dispatchNewChapterWebhooks(
     const res = await sendTelegramWebhook(appSettings.telegramBotToken, appSettings.telegramChatId, payload);
     if (res.success) {
       telegramSent = true;
-      logger.info(`[Webhook Notifier] Sent Telegram push for "${manga.title}" Ch. ${newChapterNumber}`);
+      logger.info("Webhook", `[Webhook Notifier] Sent Telegram push for "${manga.title}" Ch. ${newChapterNumber}`);
     } else if (res.error) {
       errors.push(`Telegram error: ${res.error}`);
     }

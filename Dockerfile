@@ -2,7 +2,7 @@
 # MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # ==============================================================================
 
-FROM node:22-bookworm-slim AS builder
+FROM node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runner
+FROM node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS runner
 
 WORKDIR /app
 

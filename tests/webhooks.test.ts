@@ -14,7 +14,7 @@ describe('Webhook Notifier & Push Dispatcher', () => {
   it('handles invalid Discord webhook URL format gracefully', async () => {
     const result = await sendDiscordWebhook('https://example.com/not-a-discord-webhook', {
       title: 'Solo Leveling',
-      chapter: 180,
+      chapterNumber: 180,
     });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid Discord webhook URL');
@@ -23,7 +23,7 @@ describe('Webhook Notifier & Push Dispatcher', () => {
   it('handles invalid Telegram bot token or chat ID gracefully', async () => {
     const result = await sendTelegramWebhook('', '', {
       title: 'Solo Leveling',
-      chapter: 180,
+      chapterNumber: 180,
     });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Missing Telegram');
@@ -38,11 +38,19 @@ describe('Webhook Notifier & Push Dispatcher', () => {
       title: 'Solo Leveling: Ragnarok',
       currentChapter: 10,
       latestChapter: 15,
-      unreadCount: 5,
-      coverUrl: 'https://example.com/cover.jpg',
+      altTitles: [],
+      coverImage: 'https://example.com/cover.jpg',
+      description: '',
+      genres: ['Action'],
+      rating: 9,
+      notes: '',
+      addedAt: '',
+      lastReadAt: '',
+      totalChapters: null,
+      sourceUrl: '',
       sourceName: 'AsuraScans',
       type: 'manhwa',
-      status: 'Ongoing',
+      status: 'reading',
       autoUpdateEnabled: true,
       lastUpdated: new Date().toISOString(),
     };
