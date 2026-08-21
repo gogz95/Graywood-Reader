@@ -33,6 +33,18 @@ export interface LocalArchive {
   coverDataUrl?: string;
 }
 
+export interface CachedArchiveEntry {
+  archive: LocalArchive;
+  imageEntries: string[];
+  mtimeMs: number;
+  sizeBytes: number;
+}
+
+// In-memory cache for scanned comic archives
+const archiveCache = new Map<string, CachedArchiveEntry>(); // keyed by archive.id
+let lastScanTimestamp = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
 function detectType(fileName: string): LocalArchive['type'] {
   const ext = path.extname(fileName).toLowerCase();
   if (ext === '.cbz' || ext === '.zip') return 'cbz';
@@ -58,42 +70,72 @@ function listArchiveImages(zip: AdmZip): string[] {
     .map((e) => e.entryName);
 }
 
-function scanArchive(filePath: string): LocalArchive | null {
+function scanArchive(filePath: string): CachedArchiveEntry | null {
   try {
+    const stat = fs.statSync(filePath);
     const fileName = path.basename(filePath);
     const type = detectType(fileName);
-    const base: LocalArchive = {
-      id: crypto.createHash('sha256').update(filePath).digest('hex').slice(0, 24),
+    const id = crypto.createHash('sha256').update(filePath).digest('hex').slice(0, 24);
+
+    // Check if we can reuse previous cached image entries and cover
+    const existing = archiveCache.get(id);
+    if (existing && existing.mtimeMs === stat.mtimeMs && existing.sizeBytes === stat.size) {
+      return existing;
+    }
+
+    let imageEntries: string[] = [];
+    let coverDataUrl: string | undefined;
+
+    if (type === 'cbz') {
+      const zip = new AdmZip(filePath);
+      imageEntries = listArchiveImages(zip);
+      const first = zip.getEntry(imageEntries[0]);
+      if (first) {
+        const buf = first.getData();
+        if (buf && buf.length > 0 && buf.length < 3 * 1024 * 1024) {
+          coverDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
+        }
+      }
+    }
+
+    const archive: LocalArchive = {
+      id,
       title: deriveTitle(fileName),
       fileName,
       filePath,
       type,
-      pageCount: 0,
-      sizeBytes: fs.statSync(filePath).size,
+      pageCount: imageEntries.length,
+      sizeBytes: stat.size,
+      coverDataUrl,
     };
-    if (type === 'cbz') {
-      const zip = new AdmZip(filePath);
-      const images = listArchiveImages(zip);
-      base.pageCount = images.length;
-      const first = zip.getEntry(images[0]);
-      if (first) {
-        const buf = first.getData();
-        if (buf && buf.length > 0 && buf.length < 3 * 1024 * 1024) {
-          base.coverDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
-        }
-      }
-    }
-    return base;
+
+    return {
+      archive,
+      imageEntries,
+      mtimeMs: stat.mtimeMs,
+      sizeBytes: stat.size,
+    };
   } catch (err) {
     console.warn('[Local Library] Failed to scan', filePath, err);
     return null;
   }
 }
 
-export function scanStorage(): LocalArchive[] {
+export function scanStorage(forceRefresh = false): LocalArchive[] {
   const root = resolveStorageRoot();
-  if (!fs.existsSync(root)) return [];
-  const results: LocalArchive[] = [];
+  if (!fs.existsSync(root)) {
+    archiveCache.clear();
+    lastScanTimestamp = Date.now();
+    return [];
+  }
+
+  // Return cached result if TTL is active and not forcing a refresh
+  const now = Date.now();
+  if (!forceRefresh && (now - lastScanTimestamp < CACHE_TTL_MS) && archiveCache.size > 0) {
+    return Array.from(archiveCache.values()).map((e) => e.archive);
+  }
+
+  const seenIds = new Set<string>();
   const walk = (dir: string) => {
     let entries: fs.Dirent[];
     try {
@@ -103,22 +145,55 @@ export function scanStorage(): LocalArchive[] {
     }
     for (const ent of entries) {
       const full = path.join(dir, ent.name);
-      if (ent.isDirectory()) walk(full);
-      else if (ARCHIVE_EXT.test(ent.name)) {
-        const archive = scanArchive(full);
-        if (archive) results.push(archive);
+      if (ent.isDirectory()) {
+        walk(full);
+      } else if (ARCHIVE_EXT.test(ent.name)) {
+        const cached = scanArchive(full);
+        if (cached) {
+          archiveCache.set(cached.archive.id, cached);
+          seenIds.add(cached.archive.id);
+        }
       }
     }
   };
+
   walk(root);
-  return results;
+
+  // Evict removed files
+  for (const [id] of archiveCache) {
+    if (!seenIds.has(id)) {
+      archiveCache.delete(id);
+    }
+  }
+
+  lastScanTimestamp = now;
+  return Array.from(archiveCache.values()).map((e) => e.archive);
 }
 
-function findArchive(id: string): LocalArchive | null {
-  return scanStorage().find((a) => a.id === id) || null;
+export function findArchive(id: string): LocalArchive | null {
+  // 1. Fast O(1) lookup in memory cache
+  const cached = archiveCache.get(id);
+  if (cached) return cached.archive;
+
+  // 2. If not found, rescan and try once more
+  scanStorage(true);
+  return archiveCache.get(id)?.archive || null;
 }
 
-// GET /api/local/library - List all scanned local archives (rescans each call)
+export function getArchiveEntry(id: string): CachedArchiveEntry | null {
+  const cached = archiveCache.get(id);
+  if (cached) return cached;
+  scanStorage(true);
+  return archiveCache.get(id) || null;
+}
+
+// Clear the cache (useful for testing)
+export function clearArchiveCache(): void {
+  archiveCache.clear();
+  lastScanTimestamp = 0;
+}
+
+// GET /api/local/library - List all scanned local archives (cached with 60s TTL)
 localLibraryRouter.get('/api/local/library', (_req: Request, res: Response) => {
   try {
     const root = resolveStorageRoot();
@@ -129,15 +204,29 @@ localLibraryRouter.get('/api/local/library', (_req: Request, res: Response) => {
   }
 });
 
+// POST /api/local/library/rescan - Force immediate rescan of local library
+localLibraryRouter.post('/api/local/library/rescan', (_req: Request, res: Response) => {
+  try {
+    const root = resolveStorageRoot();
+    const archives = scanStorage(true);
+    res.json({ root, exists: fs.existsSync(root), count: archives.length, archives });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to rescan local library', details: err.message });
+  }
+});
+
 // GET /api/local/library/:id/cover - Stream the cover image
 localLibraryRouter.get('/api/local/library/:id/cover', (req: Request, res: Response) => {
   try {
-    const archive = findArchive(String(req.params.id));
-    if (!archive || archive.type !== 'cbz') {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry || entry.archive.type !== 'cbz') {
       return res.status(404).json({ error: 'Archive not found or unsupported type' });
     }
-    const zip = new AdmZip(archive.filePath);
-    const first = zip.getEntry(listArchiveImages(zip)[0]);
+    const firstImageName = entry.imageEntries[0];
+    if (!firstImageName) return res.status(404).json({ error: 'No images in archive' });
+
+    const zip = new AdmZip(entry.archive.filePath);
+    const first = zip.getEntry(firstImageName);
     if (!first) return res.status(404).json({ error: 'No images in archive' });
     const buf = first.getData();
     res.setHeader('Content-Type', 'image/jpeg');
@@ -151,20 +240,20 @@ localLibraryRouter.get('/api/local/library/:id/cover', (req: Request, res: Respo
 // GET /api/local/library/:id/page/:n - Stream the n-th page image
 localLibraryRouter.get('/api/local/library/:id/page/:n', (req: Request, res: Response) => {
   try {
-    const archive = findArchive(String(req.params.id));
-    if (!archive || archive.type !== 'cbz') {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry || entry.archive.type !== 'cbz') {
       return res.status(404).json({ error: 'Archive not found or unsupported type' });
     }
     const index = Number(req.params.n);
     if (!Number.isInteger(index) || index < 0) {
       return res.status(400).json({ error: 'Invalid page index' });
     }
-    const zip = new AdmZip(archive.filePath);
-    const images = listArchiveImages(zip);
-    const entryName = images[index];
+    const entryName = entry.imageEntries[index];
     if (!entryName) return res.status(404).json({ error: 'Page index out of range' });
-    const entry = zip.getEntry(entryName);
-    const buf = entry ? entry.getData() : null;
+
+    const zip = new AdmZip(entry.archive.filePath);
+    const zipEntry = zip.getEntry(entryName);
+    const buf = zipEntry ? zipEntry.getData() : null;
     if (!buf) return res.status(500).json({ error: 'Failed to read page' });
     const ext = path.extname(entryName).toLowerCase().replace('.', '') || 'jpeg';
     const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
@@ -179,12 +268,12 @@ localLibraryRouter.get('/api/local/library/:id/page/:n', (req: Request, res: Res
 // GET /api/local/library/:id/pages - Return page URL list for the reader
 localLibraryRouter.get('/api/local/library/:id/pages', (req: Request, res: Response) => {
   try {
-    const archive = findArchive(String(req.params.id));
-    if (!archive || archive.type !== 'cbz') {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry || entry.archive.type !== 'cbz') {
       return res.status(404).json({ error: 'Archive not found or unsupported type' });
     }
-    const pages = Array.from({ length: archive.pageCount }, (_, i) => `/api/local/library/${archive.id}/page/${i}`);
-    res.json({ pages, pageCount: archive.pageCount, title: archive.title, id: archive.id });
+    const pages = Array.from({ length: entry.archive.pageCount }, (_, i) => `/api/local/library/${entry.archive.id}/page/${i}`);
+    res.json({ pages, pageCount: entry.archive.pageCount, title: entry.archive.title, id: entry.archive.id });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to list pages', details: err.message });
   }

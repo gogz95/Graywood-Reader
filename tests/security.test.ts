@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import crypto from 'crypto';
 import type { Request } from 'express';
 import {
   encryptPII,
   decryptPII,
+  ENCRYPTION_SECRET,
   hashPassword,
   verifyPassword,
   signAuthToken,
@@ -24,6 +26,18 @@ describe('PII encryption (AES-256-GCM)', () => {
     expect(enc.startsWith('enc:')).toBe(true);
     expect(enc).not.toContain('user@example.com');
     expect(decryptPII(enc)).toBe('user@example.com');
+  });
+
+  it('decrypts legacy slice(0,32) padded ciphertexts for backward compatibility', () => {
+    const legacyKey = Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32));
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', legacyKey, iv);
+    let enc = cipher.update('legacy-secret@example.com', 'utf8', 'hex');
+    enc += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    const legacyCiphertext = `enc:${iv.toString('hex')}:${authTag}:${enc}`;
+
+    expect(decryptPII(legacyCiphertext)).toBe('legacy-secret@example.com');
   });
 
   it('passes through non-encrypted values untouched', () => {

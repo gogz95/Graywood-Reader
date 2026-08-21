@@ -5,6 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
+import { SqliteDb } from "./sqlite-db";
 import { MangaItem, DuplicateCandidate, AutoUpdateLog, DatabaseSyncConfig, UserProfile, UserRole, SourceDefinition, SourceEngineType, isMangaDexSourceLink } from "./src/types";
 import {
   resolveEncryptionSecret,
@@ -57,6 +58,13 @@ import { sourceCircuitBreaker, CircuitState } from "./server/circuitBreaker";
 import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
 import { localLibraryRouter } from "./server/routes/localLibrary";
+import { authRouter } from "./server/routes/auth";
+import { adminRouter } from "./server/routes/admin";
+import { gdprRouter } from "./server/routes/gdpr";
+import { settingsRouter } from "./server/routes/settings";
+import { progressRouter } from "./server/routes/progress";
+import { bugsRouter } from "./server/routes/bugs";
+import { isAdImageSrc } from "./server/adFilter";
 import {
   APP_VERSION,
   APP_USER_AGENT,
@@ -79,32 +87,45 @@ import {
   ensureSourceInRegistry,
   getSourceById,
 } from "./server/sources/sourcesCatalog";
-
-// === AD PROTECTION ===
-const KNOWN_AD_DOMAINS = [
-  'googleadservices', 'pagead2', 'googlesyndication', 'doubleclick',
-  'ads', 'adn', 'adtech', 'mediavine', 'raptive', 'springboard',
-  'content.ad', 'outbrowse', 'taboola', 'revcontent', 'nativo',
-  'push', 'popunder', 'click-under', 'interstitial'
-];
-
-function isAdImageSrc(src: string, origin: string): boolean {
-  try {
-    const url = new URL(src, origin);
-    const hostname = url.hostname.toLowerCase();
-    for (const d of KNOWN_AD_DOMAINS) { if (hostname.includes(d)) return true; }
-    if (/.*[/_](ad|banner|popunder|interstitial|media)(\?|$)/i.test(src)) return true;
-    if (hostname.includes('google')) return true;
-    return false;
-  } catch { return false; }
-}
-
-function stripAdElements($root: any): void {
-  const selectors = ['.ad-', '.banner-', '.popunder-', '.overlay-', '[class*=adsbygoogle]', '[id*=ad-]'];
-  for (const sel of selectors) { try { $root.find(sel).remove(); } catch {} }
-}
+import {
+  fetchFlameSeriesContext,
+  fetchFlameChapterList,
+  mapFlameChapters,
+} from "./server/scrapers/flameComics";
+import {
+  fetchAsuraSeriesMetadata,
+  fetchAsuraChapterList,
+  ASURA_API_HEADERS,
+  ASURA_SLUG_TOKEN_RX,
+} from "./server/scrapers/asuraScans";
+import {
+  // Shared in-memory state (live-exported bindings) & persistence layer
+  mangaDatabase,
+  userProfiles,
+  autoUpdateLogs,
+  syncConfig,
+  appSettings,
+  replaceMangaDatabase,
+  saveDatabaseToDisk,
+  flushStateNow,
+  cancelPendingSave,
+  writeLegacyJsonSnapshot,
+  loadDatabaseFromDisk,
+  purgeReaperScansFromAllStorage,
+  syncAddOrUpdateManga,
+  syncBulkAddOrUpdateManga,
+  syncDeleteManga,
+  syncResetManga,
+  resolveManga,
+  resolveRequestUserId,
+  resolveAuthUser,
+  canWriteCatalog,
+  rejectCatalogWrite,
+} from "./server/appState";
 
 export {
+  app,
+  startServer,
   encryptPII,
   decryptPII,
   hashPassword,
@@ -187,43 +208,6 @@ app.use((req, res, next) => {
 // DDOS PROTECTION & RATE LIMITING MIDDLEWARE (Bypassed for Host PC)
 app.use(rateLimitMiddleware);
 
-/**
- * Resolve the acting user for progress/favorites.
- * Never trusts client-supplied userId query/body — only Bearer token, else host default.
- */
-function resolveRequestUserId(req: express.Request): string | null {
-  const authed = (req as any).user as UserProfile | null | undefined;
-  if (authed?.id) return authed.id;
-  if (isHostRequest(req)) return 'usr_admin';
-  return null;
-}
-
-/**
- * Shared-catalog write gate. The manga catalog is GLOBAL state: creating,
- * editing or deleting rows must never be possible for anonymous remote
- * clients. Allowed: the host machine, or any authenticated (token) user.
- */
-function canWriteCatalog(req: express.Request): boolean {
-  return isHostRequest(req) || !!(req as any).user;
-}
-
-function rejectCatalogWrite(res: express.Response): void {
-  res.status(401).json({
-    error: 'Unauthorized',
-    message: 'Catalog changes require a login token (or the host computer).',
-  });
-}
-
-// Resolve the authenticated user (if any) from an Authorization header only.
-// Query-string tokens are rejected — they leak via logs, Referer, and history.
-function resolveAuthUser(req: express.Request): UserProfile | null {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (!token) return null;
-  const payload = verifyAuthToken(token);
-  if (!payload || typeof payload.sub !== 'string') return null;
-  return userProfiles.find((u) => u.id === payload.sub) || null;
-}
 
 // Attach req.user for downstream handlers; never throws and never blocks.
 app.use((req, _res, next) => {
@@ -255,6 +239,12 @@ app.use((req, res, next) => {
 app.use(opdsRouter);
 app.use(notesRouter);
 app.use(localLibraryRouter);
+app.use(authRouter);
+app.use(adminRouter);
+app.use(gdprRouter);
+app.use(settingsRouter);
+app.use(progressRouter);
+app.use(bugsRouter);
 
 // Initialize Gemini Client
 const getGeminiClient = () => {
@@ -269,376 +259,6 @@ const getGeminiClient = () => {
     },
   });
 };
-
-import { SqliteDb } from "./sqlite-db";
-
-// Persistent Database File Path
-const DB_FILE_PATH = path.join(process.cwd(), "database.json");
-
-
-
-// In-Memory DB State
-let mangaDatabase: MangaItem[] = [];
-
-let userProfiles: UserProfile[] = [
-  {
-    id: 'usr_admin',
-    name: 'Host Administrator',
-    username: 'admin',
-    email: 'admin@manga.dev',
-    avatar: '🛡️',
-    role: 'admin',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_guest',
-    name: 'Guest Reader',
-    username: 'guest',
-    email: 'guest@graywood.app',
-    avatar: '👤',
-    role: 'user',
-    createdAt: new Date().toISOString(),
-  },
-];
-
-
-// No fabricated demo entries: the update log starts empty and only ever
-// contains real scan results produced by this server.
-let autoUpdateLogs: AutoUpdateLog[] = [];
-
-let syncConfig: DatabaseSyncConfig = {
-  subdomain: 'tracker.manhuahub.app',
-  autoUpdateIntervalMinutes: 60,
-  enableWebCrawling: true,
-  sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
-  disabledSources: Array.from(disabledSourceIds),
-  removedSources: [],
-  reactivatedSources: [],
-  lastSyncTime: new Date().toISOString(),
-  totalTracked: 0,
-};
-
-// Initialize dead sources from syncConfig
-rebuildDeadSourcesSet(syncConfig);
-syncDeadSourcesToDisabled();
-
-console.log(`[Source Engine] Initialized standalone source catalog with ${KOTATSU_SOURCES.length} sources`);
-
-
-
-// Helper: Persist App State to SQLite (Profiles / Settings / Config / Logs).
-// Manga rows are persisted directly by the sync* data-access functions below.
-// PII fields are AES-256-GCM encrypted & passwords scrypt-hashed before storage.
-let saveTimeoutTimer: NodeJS.Timeout | null = null;
-
-function buildEncryptedProfiles() {
-  return userProfiles.map((p) => ({
-    ...p,
-    email: encryptPII(p.email || ''),
-    storageFolderPath: p.storageFolderPath && !String(p.storageFolderPath).startsWith('enc:')
-      ? encryptPII(String(p.storageFolderPath))
-      : (p.storageFolderPath || ''),
-    password: p.password ? (isAlreadyHashed(p.password) ? p.password : hashPassword(p.password)) : '',
-  }));
-}
-
-function buildEncryptedSettings() {
-  return {
-    ...appSettings,
-    captchaApiKey: appSettings.captchaApiKey && !appSettings.captchaApiKey.startsWith('enc:')
-      ? encryptPII(appSettings.captchaApiKey)
-      : (appSettings.captchaApiKey || ''),
-  };
-}
-
-function saveDatabaseToDisk() {
-  if (saveTimeoutTimer) clearTimeout(saveTimeoutTimer);
-
-  saveTimeoutTimer = setTimeout(() => {
-    try {
-      SqliteDb.replaceAllProfiles(buildEncryptedProfiles());
-      SqliteDb.setSetting('appSettings', JSON.stringify(buildEncryptedSettings()));
-      SqliteDb.setSetting('syncConfig', JSON.stringify(syncConfig));
-      SqliteDb.replaceAllLogs(autoUpdateLogs);
-    } catch (err) {
-      console.error("[SQLite Engine] Error persisting app state:", err);
-    }
-  }, 100);
-}
-
-// Legacy JSON snapshot writer — used only for graceful-shutdown backups and
-// explicit exports. SQLite (data/manga.db) is the canonical persistent store.
-function writeLegacyJsonSnapshot(reason: string) {
-  try {
-    const dataToSave = {
-      version: 1,
-      gdprEncrypted: true,
-      lastSaved: new Date().toISOString(),
-      mangaDatabase,
-      userProfiles: buildEncryptedProfiles(),
-      autoUpdateLogs,
-      syncConfig,
-      appSettings: buildEncryptedSettings(),
-    };
-
-    // Atomic write via temporary file
-    const tempPath = `${DB_FILE_PATH}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(dataToSave, null, 2), "utf-8");
-    fs.renameSync(tempPath, DB_FILE_PATH);
-    console.log(`[GDPR Database Engine] Wrote legacy JSON snapshot (${reason}) with ${mangaDatabase.length} series & ${userProfiles.length} encrypted profiles.`);
-  } catch (err) {
-    console.error("[GDPR Database Engine] Error writing legacy JSON snapshot:", err);
-  }
-}
-
-// ==========================================
-// UNIFIED DATABASE SYNCHRONIZATION (DA LAYER)
-// ==========================================
-
-export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
-  SqliteDb.upsertManga(item);
-  const idx = mangaDatabase.findIndex((m) => m.id === item.id);
-  if (idx !== -1) {
-    mangaDatabase[idx] = item;
-  } else {
-    mangaDatabase.unshift(item);
-  }
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-  return item;
-}
-
-export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
-  if (!items || items.length === 0) return;
-  SqliteDb.bulkUpsertManga(items);
-  // Fix #4: Build an index so each lookup is O(1) instead of O(n)
-  const idxMap = new Map<string, number>();
-  mangaDatabase.forEach((m, i) => idxMap.set(m.id, i));
-  for (const item of items) {
-    const existingIdx = idxMap.get(item.id);
-    if (existingIdx !== undefined) {
-      mangaDatabase[existingIdx] = item;
-    } else {
-      idxMap.set(item.id, mangaDatabase.length);
-      mangaDatabase.push(item);
-    }
-  }
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-}
-
-export function syncDeleteManga(id: string) {
-  SqliteDb.deleteManga(id);
-  mangaDatabase = mangaDatabase.filter((m) => m.id !== id);
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-}
-
-export function syncResetManga(items: MangaItem[]) {
-  SqliteDb.deleteAllManga();
-  SqliteDb.bulkUpsertManga(items);
-  mangaDatabase = [...items];
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-}
-
-/**
- * Canonical manga lookup: SQLite is the source of truth, with the in-memory
- * array as a fallback so handlers never disagree about which rows exist.
- */
-function resolveManga(id: string): MangaItem | undefined {
-  if (!id) return undefined;
-  return SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id) || undefined;
-}
-
-function applySyncConfigRestored(config: DatabaseSyncConfig) {
-  syncConfig = config;
-  // Restore the persisted disabled-source set so toggles survive restarts.
-  disabledSourceIds.clear();
-  if (Array.isArray(syncConfig.disabledSources)) {
-    syncConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(id));
-  }
-  if (Array.isArray(syncConfig.removedSources)) {
-    syncConfig.removedSources.forEach((id: string) => DYNAMIC_DEAD_SOURCES.add(id));
-  }
-  rebuildDeadSourcesSet();
-}
-
-/**
- * Ensure usr_admin has a scrypt password so /api/auth/login works.
- * Priority: existing hash > ADMIN_PASSWORD env > data/.admin-bootstrap-password (create once).
- */
-function ensureAdminPasswordBootstrap() {
-  const idx = userProfiles.findIndex((p) => p.id === 'usr_admin');
-  if (idx === -1) return;
-  const admin = userProfiles[idx];
-  if (admin.password && isAlreadyHashed(admin.password)) return;
-
-  let plain = (process.env.ADMIN_PASSWORD || '').trim();
-  const bootstrapPath = path.join(process.cwd(), 'data', '.admin-bootstrap-password');
-  if (!plain) {
-    try {
-      if (fs.existsSync(bootstrapPath)) {
-        plain = fs.readFileSync(bootstrapPath, 'utf8').trim();
-      }
-    } catch { /* ignore */ }
-  }
-  if (!plain) {
-    plain = crypto.randomBytes(12).toString('base64url');
-    try {
-      fs.mkdirSync(path.dirname(bootstrapPath), { recursive: true });
-      fs.writeFileSync(bootstrapPath, plain + '\n', { mode: 0o600 });
-      console.warn(
-        `[Auth Engine] Generated one-time admin password for username "admin". ` +
-        `Saved to data/.admin-bootstrap-password — change it after first login. ` +
-        `Or set ADMIN_PASSWORD in the environment before next start.`
-      );
-    } catch (err) {
-      console.error('[Auth Engine] Failed to write admin bootstrap password file:', err);
-    }
-  } else if (process.env.ADMIN_PASSWORD) {
-console.log('[Auth Engine] Applying ADMIN_PASSWORD from environment to usr_admin.');
-  }
-
-  userProfiles[idx] = { ...admin, password: hashPassword(plain), username: admin.username || 'admin' };
-  try {
-    saveDatabaseToDisk();
-  } catch (err) {
-    console.error('[Auth Engine] Failed to persist bootstrapped admin password:', err);
-  }
-}
-
-// Helper: Load App State from SQLite on Startup (with one-time legacy JSON migration)
-function loadDatabaseFromDisk() {
-  try {
-    // 0. One-time re-key of rows created by the old truncated-base64url source-ID
-    //    generator (which collapsed every series on a site into a single row).
-    //    Must run before mangaDatabase is loaded so the fixed IDs are used.
-    try { SqliteDb.rekeyCollidedSourceIds(); } catch (e) { console.warn("[SQLite Engine] rekeyCollidedSourceIds failed:", e); }
-
-    // 1. Manga library: SQLite is the canonical store.
-    //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)
-    mangaDatabase = SqliteDb.getAllManga();
-    syncConfig.totalTracked = mangaDatabase.length;
-
-    // 2. Detect whether app state already lives in SQLite; otherwise perform a
-    //    one-time migration of profiles/settings/config/logs from database.json.
-    const storedProfiles = SqliteDb.getAllProfiles();
-    const storedSettingsJson = SqliteDb.getSetting('appSettings');
-    const storedConfigJson = SqliteDb.getSetting('syncConfig');
-    const storedLogs = SqliteDb.getAllLogs();
-
-    let legacyParsed: any = null;
-    const needsLegacyMigration = storedProfiles.length === 0 && !storedSettingsJson;
-    if (needsLegacyMigration && fs.existsSync(DB_FILE_PATH)) {
-      try {
-        legacyParsed = JSON.parse(fs.readFileSync(DB_FILE_PATH, "utf-8"));
-        console.log(`[SQLite Engine] Performing one-time legacy migration from database.json...`);
-      } catch (err) {
-        console.error("[SQLite Engine] Failed to parse legacy database.json:", err);
-      }
-    }
-
-    // 3. User Profiles
-    if (storedProfiles.length > 0) {
-      userProfiles = storedProfiles.map((p: any) => ({
-        ...p,
-        email: decryptPII(p.email || ''),
-        storageFolderPath: p.storageFolderPath ? decryptPII(p.storageFolderPath) : undefined,
-      }));
-    } else if (legacyParsed?.userProfiles && Array.isArray(legacyParsed.userProfiles)) {
-      userProfiles = legacyParsed.userProfiles.map((p: any) => ({
-        ...p,
-        email: decryptPII(p.email || ''),
-        storageFolderPath: p.storageFolderPath ? decryptPII(p.storageFolderPath) : undefined,
-      }));
-    }
-
-    // Ensure seed admin/guest always exist
-    if (!userProfiles.some((p) => p.id === 'usr_admin')) {
-      userProfiles.unshift({
-        id: 'usr_admin',
-        name: 'Host Administrator',
-        username: 'admin',
-        email: 'admin@manga.dev',
-        avatar: '🛡️',
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      });
-    }
-    if (!userProfiles.some((p) => p.id === 'usr_guest')) {
-      userProfiles.push({
-        id: 'usr_guest',
-        name: 'Guest Reader',
-        username: 'guest',
-        email: 'guest@graywood.app',
-        avatar: '👤',
-        role: 'user',
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    // Bootstrap admin password if missing (env ADMIN_PASSWORD or one-time generated file)
-    ensureAdminPasswordBootstrap();
-
-    // 4. Sync Config (subdomain, update interval, disabled sources...)
-    if (storedConfigJson) {
-      try { applySyncConfigRestored({ ...syncConfig, ...JSON.parse(storedConfigJson) }); } catch (e) { }
-    } else if (legacyParsed?.syncConfig) {
-      applySyncConfigRestored({ ...syncConfig, ...legacyParsed.syncConfig });
-    }
-
-    // 5. App Settings (reader defaults, network, AI keys...)
-    if (storedSettingsJson) {
-      try {
-        const parsedSettings = JSON.parse(storedSettingsJson);
-        appSettings = {
-          ...appSettings,
-          ...parsedSettings,
-          captchaApiKey: decryptPII(parsedSettings.captchaApiKey || ''),
-        };
-      } catch (e) { }
-    } else if (legacyParsed?.appSettings) {
-      appSettings = {
-        ...appSettings,
-        ...legacyParsed.appSettings,
-        captchaApiKey: decryptPII(legacyParsed.appSettings.captchaApiKey || ''),
-      };
-    }
-
-    // 6. Auto-Update Logs
-    if (storedLogs.length > 0) {
-      autoUpdateLogs = storedLogs.map((l: any) => ({
-        id: l.id,
-        mangaId: l.mangaId || '',
-        mangaTitle: l.mangaTitle || '',
-        previousChapter: Number(l.previousChapter) || 0,
-        newChapter: Number(l.newChapter) || 0,
-        source: l.sourceName || '',
-        timestamp: l.timestamp || new Date().toISOString(),
-        type: l.type || 'manhwa',
-      }));
-    } else if (legacyParsed?.autoUpdateLogs && Array.isArray(legacyParsed.autoUpdateLogs)) {
-      autoUpdateLogs = legacyParsed.autoUpdateLogs;
-    }
-
-    // 7. Persist migrated legacy state into SQLite immediately.
-    if (legacyParsed) {
-      saveDatabaseToDisk();
-    }
-
-    console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${mangaDatabase.length} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
-
-    // 8. Rewrite stale live-source URLs (asuracomic.net → asurascans.com, /manhwa/ → /manga/, …)
-    try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
-      console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
-    }
-
-    purgeReaperScansFromAllStorage();
-  } catch (err) {
-    console.error("[SQLite Engine] Error loading app state on startup:", err);
-  }
-}
 
 export function isSeriesFromDisabledSource(m: MangaItem): boolean {
   if (disabledSourceIds.size === 0) return false;
@@ -694,7 +314,7 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
     SqliteDb.deleteManga(id);
   }
 
-  mangaDatabase = itemsToKeep;
+  replaceMangaDatabase(itemsToKeep);
   console.log(`[Active Sources Engine] Purged ${purgedIds.length} series belonging to disabled sources. Active series remaining: ${mangaDatabase.length}`);
 
   // 2. Refresh metadata for all remaining active series (bounded concurrency to avoid hammering APIs)
@@ -733,29 +353,6 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
   };
 }
 
-// Helper: Purge any residual Reaper Scans items from memory & SQLite
-function purgeReaperScansFromAllStorage() {
-  const initialLen = mangaDatabase.length;
-  mangaDatabase = mangaDatabase.filter((m) => {
-    const isReaper = (m.sourceName && m.sourceName.includes('Reaper Scans')) || (m.sourceUrl && m.sourceUrl.includes('reaperscans.com'));
-    if (isReaper) return false;
-    if (m.availableSources && m.availableSources.length > 0) {
-      m.availableSources = m.availableSources.filter(
-        (s) => s.sourceName !== 'Reaper Scans' && !s.sourceUrl.includes('reaperscans.com')
-      );
-    }
-    return true;
-  });
-
-  try {
-    const sqlitePurged = SqliteDb.purgeReaperScans();
-    const removedCount = initialLen - mangaDatabase.length;
-    if (removedCount > 0 || sqlitePurged > 0) {
-      console.log(`[Purge Engine] Successfully purged ${removedCount} memory items & ${sqlitePurged} SQLite Reaper Scans entries.`);
-      saveDatabaseToDisk();
-    }
-  } catch (e) { }
-}
 
 // Descriptive metadata fields a live refresh may overwrite. Fields the user has
 // manually customized (recorded in `metadataOverrides`) are preserved so manual
@@ -887,51 +484,20 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
 
   // 2. Asura Scans Metadata Refresh
   if (manga.sourceUrl && /asura(?:comic\.net|scans\.(?:com|org))/i.test(manga.sourceUrl)) {
-    // Normalize any legacy/mirror asura domain to the live canonical domain
     manga.sourceUrl = manga.sourceUrl.replace(/asuracomic\.net/gi, 'asurascans.com').replace(/asurascans\.(?:com|org)/gi, 'asurascans.com');
     try {
-      let slug = manga.sourceUrl.split('/').pop() || '';
-      if (manga.sourceUrl.includes('/manga/') || manga.sourceUrl.includes('/series/') || manga.sourceUrl.includes('/comics/')) {
-        const parts = manga.sourceUrl.split('/');
-        const idx = parts.findIndex((p) => p === 'manga' || p === 'series' || p === 'comics');
-        if (idx !== -1 && parts[idx + 1]) {
-          slug = parts[idx + 1];
+      const asuraMeta = await fetchAsuraSeriesMetadata(manga.sourceUrl);
+      if (asuraMeta) {
+        if (asuraMeta.title) manga.title = asuraMeta.title;
+        if (asuraMeta.coverImage) manga.coverImage = asuraMeta.coverImage;
+        if (asuraMeta.description) manga.description = asuraMeta.description;
+        if (asuraMeta.rating) manga.rating = asuraMeta.rating;
+        if (asuraMeta.latestChapter) manga.latestChapter = Math.max(manga.latestChapter || 1, asuraMeta.latestChapter);
+        if (asuraMeta.altTitles && asuraMeta.altTitles.length > 0) {
+          manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...asuraMeta.altTitles]));
         }
-      }
-
-      if (slug) {
-        // Strip the site-wide rotating token; the API resolves the bare slug.
-        const cleanSlug = slug.replace(/-[0-9a-f]{8}$/i, '') || slug;
-        const slugsToTry = Array.from(new Set([cleanSlug, slug]));
-
-        for (const s of slugsToTry) {
-          const res = await fetch(`https://api.asurascans.com/api/series/${s}`, {
-            signal: AbortSignal.timeout(12000),
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              'Accept': 'application/json',
-              'Origin': 'https://asurascans.com',
-              'Referer': 'https://asurascans.com/',
-            },
-          });
-
-          if (res.ok) {
-            const json = await res.json();
-            const series = json.series || {};
-            if (series.title) manga.title = series.title;
-            if (series.cover) manga.coverImage = series.cover;
-            if (series.description) manga.description = series.description;
-            if (series.rating) manga.rating = Math.round(Number(series.rating) * 10) / 10;
-            if (series.chapter_count) manga.latestChapter = Math.max(manga.latestChapter || 1, Number(series.chapter_count));
-            if (series.alt_titles && Array.isArray(series.alt_titles)) {
-              manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...series.alt_titles]));
-            }
-            if (series.genres && Array.isArray(series.genres)) {
-              const genreNames = series.genres.map((g: any) => (typeof g === 'string' ? g : g.name)).filter(Boolean);
-              if (genreNames.length > 0) manga.genres = Array.from(new Set([...(manga.genres || []), ...genreNames]));
-            }
-            break;
-          }
+        if (asuraMeta.genres && asuraMeta.genres.length > 0) {
+          manga.genres = Array.from(new Set([...(manga.genres || []), ...asuraMeta.genres]));
         }
       }
     } catch (e: any) {
@@ -942,39 +508,11 @@ async function refreshSingleMangaMetadata(manga: MangaItem): Promise<MangaItem> 
   // 3. Flame Comics Metadata Refresh
   if (manga.sourceUrl && manga.sourceUrl.includes('flamecomics')) {
     try {
-      const homeRes = await fetch("https://flamecomics.xyz/", { signal: AbortSignal.timeout(12000) });
-      if (homeRes.ok) {
-        const html = await homeRes.text();
-        const buildId = html.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/)?.[1];
-        if (buildId) {
-          const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`, { signal: AbortSignal.timeout(12000) });
-          if (browseRes.ok) {
-            const browseJson = await browseRes.json();
-            const seriesList = browseJson.pageProps?.series || [];
-            const rawSlug = manga.sourceUrl.split('/').pop() || '';
-            const matchedSeries = seriesList.find((s: any) => {
-              const sId = String(s.series_id || s.id);
-              const sTitle = (s.title?.toLowerCase().replace(/[^a-z0-9]/g, '') || '');
-              const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-              if (sId === rawSlug) return true;
-              if (targetNorm && sTitle === targetNorm) return true;
-              return targetNorm.length >= 5 && !!sTitle && sTitle.includes(targetNorm);
-            });
-
-            if (matchedSeries) {
-              const seriesId = matchedSeries.series_id || matchedSeries.id;
-              const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`, { signal: AbortSignal.timeout(12000) });
-              if (seriesRes.ok) {
-                const seriesData = await seriesRes.json();
-                const props = seriesData.pageProps || {};
-                const chapters = props.chapters || [];
-                if (matchedSeries.title) manga.title = matchedSeries.title;
-                if (chapters.length > 0) {
-                  manga.latestChapter = Math.max(manga.latestChapter || 1, chapters.length);
-                }
-              }
-            }
-          }
+      const flameCtx = await fetchFlameSeriesContext(manga.sourceUrl);
+      if (flameCtx) {
+        if (flameCtx.matchedSeries?.title) manga.title = flameCtx.matchedSeries.title;
+        if (flameCtx.chapters && flameCtx.chapters.length > 0) {
+          manga.latestChapter = Math.max(manga.latestChapter || 1, flameCtx.chapters.length);
         }
       }
     } catch (e: any) {
@@ -4593,17 +4131,7 @@ interface ResolvedChapter {
   pageCount: number;
 }
 
-const ASURA_API_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Accept': 'application/json',
-  'Origin': 'https://asurascans.com',
-  'Referer': 'https://asurascans.com/',
-};
 
-// Asura appends a site-wide rotating token to every series slug
-// (`/comics/<slug>-00dcbf97`). It changes on every redeploy, so it must never be
-// hard-coded — the API accepts the bare slug (the server 302s stale tokens away).
-const ASURA_SLUG_TOKEN_RX = /-[0-9a-f]{8}$/i;
 
 /** Normalize Asura chapter page payloads (string URLs or {url}/ {src} objects). */
 function normalizeAsuraPageList(rawPages: unknown): string[] {
@@ -4627,54 +4155,7 @@ function normalizeAsuraPageList(rawPages: unknown): string[] {
   return Array.from(new Set(out));
 }
 
-// Fetch a series' REAL chapter list from the Asura Scans official API (newest-first).
-// The API resolves series by their BARE slug (token stripped); the old code tried
-// hard-coded token variants (-00dcbf97 / -b8509c2a) which go stale and fail.
-async function fetchAsuraChapterList(rawTargetUrl: string): Promise<{ chapters: ResolvedChapter[]; matchedSlug: string | null }> {
-  const targetUrl = normalizeLiveTargetUrl(rawTargetUrl).replace(/\/$/, '');
-  let rawSlug = targetUrl.split('/').pop() || '';
-  if (targetUrl.includes('/manga/') || targetUrl.includes('/series/') || targetUrl.includes('/comics/')) {
-    const parts = targetUrl.split('/');
-    const idx = parts.findIndex((p) => p === 'manga' || p === 'series' || p === 'comics');
-    if (idx !== -1 && parts[idx + 1]) {
-      rawSlug = parts[idx + 1];
-    }
-  }
-  if (!rawSlug) return { chapters: [], matchedSlug: null };
 
-  const cleaned = rawSlug.replace(ASURA_SLUG_TOKEN_RX, '') || rawSlug;
-  const slugsToTry = Array.from(new Set([cleaned, rawSlug]));
-
-  for (const s of slugsToTry) {
-    try {
-      const listRes = await fetch(`https://api.asurascans.com/api/series/${s}/chapters`, {
-        headers: ASURA_API_HEADERS,
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!listRes.ok) {
-        console.warn(`[Asura API Engine] Chapter list HTTP ${listRes.status} for slug "${s}"`);
-        continue;
-      }
-      const listData = await listRes.json();
-      if (listData && Array.isArray(listData.data) && listData.data.length > 0) {
-        const chapters: ResolvedChapter[] = listData.data
-          .map((c: any) => ({
-            number: Number(c.number ?? 0),
-            id: String(c.id),
-            slug: String(c.slug || ''),
-            title: c.title ? `Chapter ${c.number} - ${c.title}` : `Chapter ${c.number}`,
-            url: c.slug ? `https://asurascans.com/series/${s}/chapters/${c.slug}` : '',
-            pageCount: Number(c.page_count) || 12,
-          }))
-          .filter((c: ResolvedChapter) => c.number > 0 && c.slug);
-        if (chapters.length > 0) return { chapters, matchedSlug: s };
-      }
-    } catch (e) {
-      console.warn(`[Asura API Engine] Chapter list fetch failed for slug "${s}":`, (e as Error).message);
-    }
-  }
-  return { chapters: [], matchedSlug: null };
-}
 
 // Exact chapter match by number, falling back to an ANCHORED slug match (never a substring
 // match — a substring like `.includes("5")` wrongly matched chapters 255, 305, etc.).
@@ -4746,68 +4227,7 @@ const UA_HEADERS = {
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
 };
 
-// ---- Flame Comics: resolve the Next.js build context + series id -----------------------------
-async function fetchFlameSeriesContext(targetUrl: string): Promise<{ buildId: string; seriesId: string; chapters: any[] } | null> {
-  try {
-    const homeRes = await fetch("https://flamecomics.xyz/", { headers: UA_HEADERS });
-    if (!homeRes.ok) return null;
-    const homeHtml = await homeRes.text();
-    const buildIdMatch = homeHtml.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
-    const buildId = buildIdMatch ? buildIdMatch[1] : null;
-    if (!buildId) return null;
 
-    const browseRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/browse.json`, { headers: UA_HEADERS });
-    if (!browseRes.ok) return null;
-    const browseJson = await browseRes.json();
-    const seriesList = browseJson.pageProps?.series || [];
-    const rawSlug = targetUrl.split('/').pop() || '';
-    const matchedSeries = seriesList.find((s: any) => {
-      const sId = String(s.series_id || s.id);
-      const sTitle = (s.title?.toLowerCase().replace(/[^a-z0-9]/g, '') || '');
-      const targetNorm = rawSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-      // 1) Exact numeric series id (Kotatsu's approach — unambiguous).
-      if (sId === rawSlug) return true;
-      // 2) Exact normalized-title equality.
-      if (targetNorm && sTitle === targetNorm) return true;
-      // 3) Substring fallback — only safe for reasonably long, unambiguous slugs
-      //    (a short slug like "solo" would otherwise match "Solo Leveling").
-      return targetNorm.length >= 5 && !!sTitle && sTitle.includes(targetNorm);
-    });
-    if (!matchedSeries) return null;
-    const seriesId = matchedSeries.series_id || matchedSeries.id;
-
-    const seriesRes = await fetch(`https://flamecomics.xyz/_next/data/${buildId}/series/${seriesId}.json`, { headers: UA_HEADERS });
-    if (!seriesRes.ok) return null;
-    const seriesData = await seriesRes.json();
-    const chapters = seriesData.pageProps?.chapters || [];
-    return { buildId, seriesId, chapters };
-  } catch (e) {
-    return null;
-  }
-}
-
-function mapFlameChapters(rawChapters: any[], seriesId: string): ResolvedChapter[] {
-  return rawChapters
-    .map((c: any) => {
-      const num = Number(c.chapter ?? c.number ?? parseFloat((c.title || '').match(/\d+(?:\.\d+)?/)?.[0] ?? '0'));
-      const token = String(c.token || c.chapter_id || c.id || '');
-      return {
-        number: Number.isFinite(num) ? num : 0,
-        id: token,
-        slug: token,
-        title: c.title ? `Chapter ${num} - ${c.title}` : `Chapter ${num}`,
-        url: token ? `https://flamecomics.xyz/series/${seriesId}/${token}` : '',
-        pageCount: Number(c.pages || c.page_count) || 12,
-      };
-    })
-    .filter((c: ResolvedChapter) => c.number > 0 && c.slug);
-}
-
-async function fetchFlameChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
-  const ctx = await fetchFlameSeriesContext(targetUrl);
-  if (!ctx) return [];
-  return mapFlameChapters(ctx.chapters, ctx.seriesId);
-}
 
 // ---- Dynasty Scans: enumerate real chapters from the series page -----------------------------
 async function fetchDynastyChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
@@ -6176,252 +5596,6 @@ app.post("/api/reader/mark-read", (req, res) => {
   res.json({ success: true, manga: updatedItem });
 });
 
-// =============================================================
-// READING PROGRESS & ACTIVITY PERSISTENCE API
-// =============================================================
-// Borrowed from Kotatsu's HistoryEntity model: store a per-user, per-chapter
-// reading position so readers can RESUME mid-chapter, and persist per-day
-// activity so the analytics/heatmap show real data instead of mock values.
-
-function resolveProgressUserId(req: express.Request): string {
-  // Anonymous remote writes land in the shared guest bucket — NEVER on the
-  // host admin's personal progress/favorites.
-  return resolveRequestUserId(req) || 'usr_guest';
-}
-
-// Save (or update) the current reading position for a manga/chapter.
-app.post("/api/reader/progress", (req, res) => {
-  const { mangaId, chapterNumber, pageIndex, pageCount, percent } = req.body || {};
-  if (!mangaId || chapterNumber === undefined) {
-    return res.status(400).json({ error: 'mangaId and chapterNumber are required' });
-  }
-  const userId = resolveProgressUserId(req);
-
-  SqliteDb.upsertReadingProgress({
-    manga_id: String(mangaId),
-    user_id: userId,
-    chapter_number: Number(chapterNumber) || 0,
-    page_index: Number(pageIndex),
-    page_count: Number(pageCount),
-    percent: Number(percent),
-  });
-
-  // Per-user library chapter (do NOT clobber global catalog currentChapter)
-  try {
-    const ch = Number(chapterNumber) || 0;
-    SqliteDb.setUserLibraryChapter(userId, String(mangaId), ch);
-  } catch (err) {
-    console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
-  }
-
-  res.json({ success: true });
-});
-
-// Get the resume position(s) for a manga (all stored chapters for the user).
-app.get("/api/reader/history/:mangaId", (req, res) => {
-  const { mangaId } = req.params;
-  const userId = resolveProgressUserId(req);
-  const rows = SqliteDb.getReadingProgress(String(mangaId), userId);
-  res.json(rows);
-});
-
-// Get the "Continue Reading" list: most-recently-read manga for the user.
-app.get("/api/reader/history", (req, res) => {
-  const userId = resolveProgressUserId(req);
-  const all = SqliteDb.getAllManga();
-  const map = new Map<string, any>();
-  for (const m of all) {
-    const prog = SqliteDb.getReadingProgress(m.id, userId);
-    for (const p of prog) {
-      const rec = map.get(m.id);
-      if (!rec || (p.last_read_at || '') > (rec.last_read_at || '')) {
-        map.set(m.id, { manga: m, progress: p });
-      }
-    }
-  }
-  const list = [...map.values()]
-    .sort((a, b) => (b.progress.last_read_at || '').localeCompare(a.progress.last_read_at || ''))
-    .slice(0, 50);
-  res.json(list);
-});
-
-// Get real reading analytics (per-day activity) for the active user, converted
-// into the ReadingAnalytics shape (streaks, totals, heatmap).
-app.get("/api/reader/analytics", (req, res) => {
-  const userId = resolveProgressUserId(req);
-  const rows = SqliteDb.getReadingActivity(userId);
-  let totalChaptersRead = 0;
-  let totalTimeMinutes = 0;
-  for (const r of rows) {
-    totalChaptersRead += Number(r.chapters_read) || 0;
-    totalTimeMinutes += Number(r.minutes_spent) || 0;
-  }
-
-  const dayMap = new Map<string, number>();
-  for (const r of rows) dayMap.set(r.date, Number(r.chapters_read) || 0);
-  const dates = [...dayMap.keys()].sort();
-
-  // Favorite genre: most common genre across the user's personal library
-  // (favorites & in-progress series weigh more), mirroring the recommendation
-  // weighting used by the frontend.
-  const genreScore = new Map<string, number>();
-  for (const m of SqliteDb.applyUserOverlay(SqliteDb.getAllManga(), userId)) {
-    const weight = (m.isFavorite ? 3 : 0) + (m.status === 'reading' ? 2 : 0) + 1;
-    for (const g of m.genres || []) {
-      genreScore.set(g, (genreScore.get(g) || 0) + weight);
-    }
-  }
-  const favoriteGenre = [...genreScore.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-
-  // Current streak: trailing consecutive days with activity, ending today.
-  const today = new Date().toISOString().substring(0, 10);
-  let currentStreak = 0;
-  let cursor = today;
-  for (let i = 0; i < 3650; i++) {
-    if (dayMap.has(cursor)) { currentStreak++; cursor = prevDate(cursor); }
-    else break;
-  }
-
-  // Longest streak across all recorded days.
-  let longestStreak = 0;
-  let run = 0;
-  for (const d of dates) {
-    if (dayMap.has(d)) { run++; longestStreak = Math.max(longestStreak, run); }
-    else run = 0;
-  }
-
-  res.json({
-    currentStreakDays: currentStreak,
-    longestStreakDays: longestStreak,
-    totalChaptersRead,
-    totalTimeMinutes,
-    favoriteGenre,
-    activities: rows.map((r) => {
-      const chapters = Number(r.chapters_read) || 0;
-      return {
-        date: r.date,
-        chaptersRead: chapters,
-        minutesSpent: Number(r.minutes_spent) || 0,
-        level: clamp(0, 4, chapters),
-      };
-    }),
-  });
-});
-
-function prevDate(iso: string): string {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().substring(0, 10);
-}
-function clamp(min: number, max: number, v: number): number {
-  return Math.min(max, Math.max(min, v));
-}
-
-// Default App & Kotatsu Reader Settings in Server Memory
-// =========================================================
-// SETTINGS FIELD WHITELIST — defense-in-depth. POST /api/settings is already
-// host-only, but no client (or malformed backup file) may ever inject keys
-// outside these lists into persisted app state.
-// =========================================================
-const SETTINGS_ALLOWED_KEYS = new Set<string>([
-  'appTheme', 'libraryLayout', 'gridColumns', 'autoMarkReadPercent',
-  'enableDownloadOffline', 'sourceTimeoutSeconds',
-  'anilistConnected', 'anilistToken', 'anilistAutoSync',
-  'malConnected', 'malToken', 'malAutoSync',
-  'kitsuConnected', 'kitsuToken', 'kitsuAutoSync',
-  'mangadexConnected', 'privateModeEnabled', 'customUserAgent',
-  'enableCloudflareBypass', 'flareSolverrUrl', 'captchaSolverEnabled',
-  'captchaApiKey', 'stealthMode', 'preferredLanguage',
-  'autoFormatReadingMode', 'defaultMangaMode', 'defaultManhwaMode',
-  'defaultManhuaMode', 'readerDefaults',
-]);
-const READER_DEFAULTS_ALLOWED_KEYS = new Set<string>([
-  'viewMode', 'maxWidth', 'pageGap', 'bgColor', 'zoomLevel', 'autoMarkRead',
-  'imageFilter', 'autoScrollEnabled', 'autoScrollSpeed', 'tapZonesEnabled',
-  'cropWhiteMargins', 'showPageNumberOverlay', 'showPersistentPageBadge',
-  'autoNextChapter', 'mangaFitMode', 'preloadCount', 'autoFormatMode',
-  'rememberPerSeries', 'guidedPanelView', 'noPanelSpacing', 'prefetchNextChapter',
-]);
-const CONFIG_ALLOWED_KEYS = new Set<string>([
-  'subdomain', 'autoUpdateIntervalMinutes', 'enableWebCrawling', 'sources',
-  'disabledSources', 'removedSources', 'reactivatedSources', 'lastSyncTime', 'totalTracked',
-]);
-// Sentinel returned in place of the real captcha API key whenever settings
-// leave the server. Clients/backup files that send it back mean "no change".
-const MASKED_SECRET = '••••••••';
-
-function sanitizeIncomingSettings(raw: any): Record<string, any> {
-  const clean: Record<string, any> = {};
-  if (!raw || typeof raw !== 'object') return clean;
-  for (const key of Object.keys(raw)) {
-    if (!SETTINGS_ALLOWED_KEYS.has(key)) continue; // drop unknown/injected keys
-    clean[key] = raw[key];
-  }
-  if (clean.readerDefaults && typeof clean.readerDefaults === 'object') {
-    const rd: Record<string, any> = {};
-    for (const key of Object.keys(clean.readerDefaults)) {
-      if (READER_DEFAULTS_ALLOWED_KEYS.has(key)) rd[key] = clean.readerDefaults[key];
-    }
-    clean.readerDefaults = rd;
-  } else {
-    delete clean.readerDefaults;
-  }
-  // Secret handling: empty or masked values mean "keep the existing key".
-  if (clean.captchaApiKey === undefined || clean.captchaApiKey === '' || clean.captchaApiKey === MASKED_SECRET) {
-    delete clean.captchaApiKey;
-  }
-  return clean;
-}
-
-function sanitizeIncomingConfig(raw: any): Record<string, any> {
-  const clean: Record<string, any> = {};
-  if (!raw || typeof raw !== 'object') return clean;
-  for (const key of Object.keys(raw)) {
-    if (CONFIG_ALLOWED_KEYS.has(key)) clean[key] = raw[key];
-  }
-  return clean;
-}
-
-let appSettings = {
-  appTheme: 'amber',
-  libraryLayout: 'grid',
-  gridColumns: 4,
-  autoMarkReadPercent: 80,
-  enableDownloadOffline: true,
-  sourceTimeoutSeconds: 15,
-  anilistConnected: true,
-  mangadexConnected: true,
-  malConnected: false,
-  malAutoSync: false,
-  kitsuConnected: false,
-  kitsuAutoSync: false,
-  privateModeEnabled: false,
-  customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
-  // Automated Cloudflare & Captcha Solver Config
-  enableCloudflareBypass: true,
-  flareSolverrUrl: 'http://localhost:8191/v1',
-  captchaSolverEnabled: true,
-  captchaApiKey: '', // 2Captcha / CapSolver API key
-  stealthMode: true,
-  readerDefaults: {
-    viewMode: 'webtoon',
-    maxWidth: '850px',
-    pageGap: 8,
-    bgColor: 'slate',
-    zoomLevel: 100,
-    autoMarkRead: true,
-    imageFilter: 'normal',
-    autoScrollEnabled: false,
-    autoScrollSpeed: 1, // 0.5, 1, 1.5, 2, 2.5, 3
-    tapZonesEnabled: true,
-    cropWhiteMargins: true,
-    showPageNumberOverlay: true,
-    showPersistentPageBadge: true,
-    autoNextChapter: true,
-    mangaFitMode: 'fit-height',
-    preloadCount: 3,
-  },
-};
 
 // Automated Cloudflare & Captcha Bypass Crawler Route
 app.post('/api/crawler/bypass-fetch', async (req, res) => {
@@ -6542,158 +5716,10 @@ app.post("/api/solver/check-balance", async (req, res) => {
 // HIGH-PERFORMANCE IMAGE PROXY WITH ETAGS & IMMUTABLE CACHING
 // ============================================================================
 
-// Sticky notes and GDPR routes are handled by the scoped routers
-// (server/routes/notes.ts) and by the host-gated handlers below.
+// Sticky notes, auth, admin, GDPR, settings, reading-progress and bug-tracker
+// routes are handled by the scoped routers in server/routes/*.
 
 
-
-// GDPR Article 15: Right to Access & Data Portability Export
-app.get("/api/gdpr/export-data/:userId", (req, res) => {
-  // Without a real session/token system, GDPR data operations are host-only.
-  if (!isHostRequest(req)) {
-    return res.status(403).json({ error: "Forbidden", message: "GDPR data operations are restricted to the host computer." });
-  }
-  const { userId } = req.params;
-  const user = userProfiles.find((u) => u.id === userId);
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  const userSeries = mangaDatabase.filter((m) => m.userId === userId);
-  // Complete Article 15 bundle: profile + owned series + ALL per-user tables
-  // (favorites, library state, page-level reading position, daily activity).
-  const libraryState = Array.from(SqliteDb.getUserLibraryStateMap(userId).entries()).map(
-    ([mangaId, state]) => ({ mangaId, ...state })
-  );
-  const gdprExportBundle = {
-    complianceNotice: "GDPR Article 15 Data Portability Export",
-    exportTimestamp: new Date().toISOString(),
-    personalData: toPublicUser(user),
-    userMangaLibrary: userSeries,
-    favorites: Array.from(SqliteDb.getUserFavoriteIds(userId)),
-    libraryState,
-    readingProgress: SqliteDb.getAllReadingProgressForUser(userId),
-    readingActivity: SqliteDb.getReadingActivity(userId),
-  };
-
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="gdpr_export_${userId}.json"`);
-  res.send(JSON.stringify(gdprExportBundle, null, 2));
-});
-
-// GDPR Article 17: Right to Erasure / Right to be Forgotten
-app.delete("/api/gdpr/erase-data/:userId", (req, res) => {
-  // Without a real session/token system, GDPR data operations are host-only.
-  if (!isHostRequest(req)) {
-    return res.status(403).json({ error: "Forbidden", message: "GDPR data operations are restricted to the host computer." });
-  }
-  const { userId } = req.params;
-  if (userId === 'usr_admin' || userId === 'usr_guest') {
-    return res.status(403).json({
-      error: "Forbidden",
-      message: "Host Administrator and Permanent Guest Reader accounts cannot be erased via GDPR endpoint.",
-    });
-  }
-  const user = userProfiles.find((u) => u.id === userId);
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  const result = SqliteDb.purgeUserData(userId);
-  userProfiles = userProfiles.filter((u) => u.id !== userId);
-  mangaDatabase = SqliteDb.getAllManga();
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-  console.log(`[GDPR Engine] User ${userId} erased. Purged ${result.mangaDeleted} owned series + reading data from SQLite.`);
-  res.json({
-    success: true,
-    message: "All user PII and library data permanently erased in compliance with GDPR Article 17.",
-    mangaDeleted: result.mangaDeleted,
-  });
-});
-
-// GET Settings
-app.get("/api/settings", (req, res) => {
-  // Secrets never leave the server in plaintext: the captcha API key is
-  // replaced by a mask sentinel for EVERY caller (host UI included — the
-  // password input shows it as set without exposing the value).
-  res.json({
-    ...appSettings,
-    captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
-  });
-});
-
-
-// POST Update Settings (host-only; whitelisted fields only)
-app.post("/api/settings", (req, res) => {
-  if (req.body) {
-    const clean = sanitizeIncomingSettings(req.body);
-    appSettings = {
-      ...appSettings,
-      ...clean,
-      readerDefaults: {
-        ...appSettings.readerDefaults,
-        ...(clean.readerDefaults || {}),
-      },
-    };
-    saveDatabaseToDisk();
-  }
-  res.json({
-    success: true,
-    settings: {
-      ...appSettings,
-      captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
-    },
-  });
-});
-
-// Export Backup JSON (host-only — see SENSITIVE_GET_PATHS)
-app.get("/api/settings/backup/export", (req, res) => {
-  const backup = {
-    version: `${APP_VERSION}-kotatsu`,
-    exportedAt: new Date().toISOString(),
-    mangaDatabase: SqliteDb.getAllManga(),
-    config: syncConfig,
-    // Secret material is masked in exports; import keeps the existing key.
-    appSettings: {
-      ...appSettings,
-      captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
-    },
-  };
-
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', 'attachment; filename="graywood_reader_backup.json"');
-  res.send(JSON.stringify(backup, null, 2));
-});
-
-// Import Backup JSON (host-only; all incoming keys whitelisted)
-app.post("/api/settings/backup/import", (req, res) => {
-  try {
-    const { mangaDatabase: importedManga, config: importedConfig, appSettings: importedSettings } = req.body;
-    if (Array.isArray(importedManga)) {
-      syncBulkAddOrUpdateManga(importedManga);
-    }
-    if (importedConfig) {
-      const cleanConfig = sanitizeIncomingConfig(importedConfig);
-      syncConfig = { ...syncConfig, ...cleanConfig, totalTracked: mangaDatabase.length };
-      if (Array.isArray(cleanConfig.disabledSources)) {
-        disabledSourceIds.clear();
-        cleanConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(String(id)));
-      }
-    }
-    if (importedSettings) {
-      const cleanSettings = sanitizeIncomingSettings(importedSettings);
-      appSettings = {
-        ...appSettings,
-        ...cleanSettings,
-        readerDefaults: {
-          ...appSettings.readerDefaults,
-          ...(cleanSettings.readerDefaults || {}),
-        },
-      };
-    }
-    saveDatabaseToDisk();
-    res.json({ success: true, count: SqliteDb.getMangaCount() });
-  } catch (err: any) {
-    res.status(400).json({ error: "Invalid backup format" });
-  }
-});
 
 
 // Clear Cache Endpoint — flushes ALL in-memory caches (Kotatsu page-list, image/temp buffers)
@@ -6705,387 +5731,6 @@ app.post("/api/settings/cache/clear", (req, res) => {
     message: `All caches cleared: Kotatsu page-list cache flushed (${before} entries), scanlation image cache and temporary canvas buffers cleared. Caches rebuild on next request.`,
     clearedEntries: before,
   });
-});
-
-// Host PC Client Context Endpoint
-app.get("/api/auth/client-context", (req, res) => {
-  const isHost = isHostRequest(req);
-  const clientIp = (req.ip || req.socket.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
-  res.json({
-    isHost,
-    clientIp,
-    defaultRole: isHost ? 'admin' : 'guest',
-  });
-});
-
-// Login: exchange a username/email + password for a signed token.
-// Available regardless of REQUIRE_AUTH (host can always mint tokens; remote
-// clients need this to gain access once auth is enabled).
-app.post("/api/auth/login", async (req, res) => {
-  const clientIp = (req.ip || req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
-
-  const { username, email, password } = req.body || {};
-  const identifier = String(username || email || '').trim().toLowerCase();
-  const pass = String(password || '');
-
-  // Per-account lockout applies to EVERY caller (also protects against
-  // distributed brute force across many IPs).
-  const accountBlock = checkAccountLockout(identifier);
-  if (accountBlock) {
-    logger.warn('Auth', `Login blocked: account "${identifier}" is locked`, { retryAfterSeconds: accountBlock.retryAfterSeconds });
-    return res.status(429).json({
-      error: 'Too Many Requests',
-      message: accountBlock.message,
-      retryAfterSeconds: accountBlock.retryAfterSeconds,
-    });
-  }
-
-  // Login brute-force rate limiting (skipped for host/localhost)
-  if (clientIp !== '127.0.0.1' && clientIp !== '::1') {
-    const block = checkLoginRateLimit(clientIp);
-    if (block) {
-      logger.warn('Auth', `Login blocked for IP ${clientIp}`, { retryAfterSeconds: block.retryAfterSeconds });
-      return res.status(429).json({
-        error: 'Too Many Requests',
-        message: block.message,
-        retryAfterSeconds: block.retryAfterSeconds,
-      });
-    }
-  }
-
-  if (!identifier || !pass) {
-    return res.status(400).json({ error: 'Bad Request', message: 'username/email and password are required.' });
-  }
-
-  const user = userProfiles.find(
-    (u) => (u.username || '').toLowerCase() === identifier || (u.email || '').toLowerCase() === identifier
-  );
-  if (!user || !user.password) {
-    recordLoginFailure(clientIp);
-    recordAccountFailure(identifier);
-    logger.warn('Auth', `Failed login attempt for "${identifier}" from ${clientIp}`);
-    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
-  }
-
-  const ok = await verifyPasswordAsync(pass, user.password);
-  if (!ok) {
-    recordLoginFailure(clientIp);
-    recordAccountFailure(identifier);
-    logger.warn('Auth', `Failed login attempt for "${user.username}" (bad password) from ${clientIp}`);
-    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
-  }
-
-  // Successful login — clear any prior failure records (IP + account)
-  clearLoginFailures(clientIp);
-  clearAccountFailures(identifier);
-  logger.info('Auth', `User "${user.username}" logged in from ${clientIp}`);
-
-  const token = signAuthToken({ sub: user.id, role: user.role });
-  res.json({
-    token,
-    expiresInMs: AUTH_TOKEN_TTL_MS,
-    user: toPublicUser(user),
-  });
-});
-
-// Logout: revoke the presented token (jti) so it stops verifying immediately.
-app.post("/api/auth/logout", (req, res) => {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (token) {
-    const payload = verifyAuthToken(token);
-    if (payload && typeof payload.jti === 'string') {
-      revokeAuthToken(payload.jti);
-      logger.info('Auth', `Token ${payload.jti} revoked via logout (user ${String(payload.sub || '?')})`);
-    }
-  }
-  res.json({ success: true });
-});
-
-// Register a new user account. Passwords are scrypt-hashed before storage.
-// Role is never taken from the client (always 'user' unless first real account on host).
-app.post("/api/auth/register", (req, res) => {
-  const body = req.body || {};
-  const name = String(body.name || '').trim();
-  const username = String(body.username || '').trim();
-  const email = String(body.email || '').trim().toLowerCase();
-  const password = String(body.password || '');
-  const avatar = String(body.avatar || '🥷').trim() || '🥷';
-
-  if (!name || !username || !email || !password) {
-    return res.status(400).json({
-      error: 'Bad Request',
-      message: 'name, username, email, and password are required.',
-    });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({
-      error: 'Bad Request',
-      message: 'Password must be at least 8 characters.',
-    });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Bad Request', message: 'A valid email address is required.' });
-  }
-
-  const usernameLc = username.toLowerCase();
-  const taken = userProfiles.some(
-    (u) =>
-      (u.username || '').toLowerCase() === usernameLc ||
-      (u.email || '').toLowerCase() === email
-  );
-  if (taken) {
-    return res.status(409).json({
-      error: 'Conflict',
-      message: 'Username or email is already registered.',
-    });
-  }
-
-  const realUsers = userProfiles.filter((u) => u.id !== 'usr_admin' && u.id !== 'usr_guest');
-  const role: UserRole =
-    realUsers.length === 0 && isHostRequest(req) ? 'admin' : 'user';
-
-  const newUser: UserProfile = {
-    id: 'usr_' + Date.now().toString(36) + '_' + crypto.randomBytes(4).toString('hex'),
-    name,
-    username,
-    email,
-    password: hashPassword(password),
-    avatar,
-    role,
-    createdAt: new Date().toISOString(),
-  };
-
-  userProfiles.push(newUser);
-  saveDatabaseToDisk();
-
-  const regToken = signAuthToken({ sub: newUser.id, role: newUser.role });
-  logger.info('Auth', `Registered user ${newUser.username} (${newUser.id}) role=${newUser.role}`);
-  res.status(201).json({
-    token: regToken,
-    expiresInMs: AUTH_TOKEN_TTL_MS,
-    user: toPublicUser(newUser),
-  });
-});
-
-// Public profile list (never includes password hashes). Emails are PII:
-// only the host or the profile's owner may see them — everyone else gets an
-// empty string instead of a full account enumeration surface.
-app.get("/api/profiles", (req, res) => {
-  const actor = (req as any).user as UserProfile | null;
-  const hostCaller = isHostRequest(req);
-  res.json(userProfiles.map((u) => {
-    const pub = toPublicUser(u);
-    if (!hostCaller && actor?.id !== u.id) pub.email = '';
-    return pub;
-  }));
-});
-
-// Return the currently authenticated user (or null). Never requires auth.
-app.get("/api/auth/me", (req, res) => {
-  const user = (req as any).user as UserProfile | null;
-  res.json({
-    authenticated: !!user,
-    authEnabled: AUTH_ENABLED,
-    user: user ? toPublicUser(user) : null,
-  });
-});
-
-// Restrict all Admin operations strictly to the Host Computer
-app.use("/api/admin", (req, res, next) => {
-  if (!isHostRequest(req)) {
-    return res.status(403).json({
-      error: "Forbidden",
-      message: "Admin functionality is strictly restricted to the host computer.",
-    });
-  }
-  next();
-});
-
-// ==========================================
-// ADMIN USER MANAGEMENT & DOUBLE CONFIRMATION
-// ==========================================
-
-// Get All Users List (Admin) — public DTOs only (no password hashes)
-app.get("/api/admin/users", (_req, res) => {
-  res.json(userProfiles.map(toPublicUser));
-});
-
-// Admin User Role Promotion/Demotion
-app.post("/api/admin/users/promote", (req, res) => {
-  const { userId, role } = req.body || {};
-  if (!userId || !role) return res.status(400).json({ error: "userId and role are required" });
-
-  if (userId === 'usr_admin' || userId === 'usr_guest') {
-    return res.status(403).json({ error: "Host Administrator and Permanent Guest Reader accounts cannot be demoted." });
-  }
-
-  const idx = userProfiles.findIndex((u) => u.id === userId);
-  if (idx === -1) return res.status(404).json({ error: "User not found" });
-
-  userProfiles[idx].role = role as UserRole;
-  saveDatabaseToDisk();
-  logger.info('Admin', `User ${userProfiles[idx].name} (${userId}) role updated to ${role}.`);
-  res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
-});
-
-// Admin Delete User with MANDATORY Double Confirmation
-app.delete("/api/admin/users/:userId", (req, res) => {
-  const { userId } = req.params;
-  const { confirm } = req.body || {};
-
-  // Check mandatory double confirmation payload
-  if (confirm !== true) {
-    return res.status(400).json({
-      error: "Mandatory double-confirmation required. Set 'confirm: true' in request body to delete user account.",
-      requiresConfirmation: true,
-    });
-  }
-
-  const user = userProfiles.find((u) => u.id === userId);
-  if (!user) {
-    return res.status(404).json({ error: "User profile not found." });
-  }
-
-  if (user.id === 'usr_admin' || user.id === 'usr_guest' || user.role === 'admin') {
-    return res.status(403).json({ error: "Host Administrator and Permanent Guest Reader accounts are protected and non-deletable." });
-  }
-
-  // Cascade purge in SQLite (profile + owned manga + reading progress/activity)
-  const result = SqliteDb.purgeUserData(userId);
-  userProfiles = userProfiles.filter((u) => u.id !== userId);
-  mangaDatabase = SqliteDb.getAllManga();
-  syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
-  logger.info('Admin', `User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${result.mangaDeleted} library records purged from SQLite)`);
-
-  res.json({
-    success: true,
-    message: `User account '${user.name}' and ${result.mangaDeleted} associated library records permanently deleted.`,
-    deletedUserId: userId,
-    remainingUsers: userProfiles.map(toPublicUser),
-  });
-});
-
-// ==========================================
-// BUG TRACKING & BUGS.MD PERSISTENCE
-// ==========================================
-
-const BUGS_FILE_PATH = path.join(process.cwd(), "BUGS.md");
-
-// Submit Bug Endpoint -> Appends directly to BUGS.md
-app.post("/api/bugs/submit", (req, res) => {
-  // Writing to a repo file is global state: host or authenticated users only
-  // (prevents anonymous remote clients from growing BUGS.md without bound).
-  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
-  const {
-    title,
-    priority,
-    file,
-    description,
-    stepsToReproduce,
-    expected,
-    actual,
-    autoFix,
-    user,
-  } = req.body || {};
-
-  if (!title || !description) {
-    return res.status(400).json({ error: "Title and description are required to submit a bug report." });
-  }
-
-  try {
-    let bugsMarkdown = fs.existsSync(BUGS_FILE_PATH)
-      ? fs.readFileSync(BUGS_FILE_PATH, "utf-8")
-      : `# 🐛 ManhuaSync Bug Tracker\n\n## Active Bugs\n\n`;
-
-    // Calculate next BUG-XXX ID
-    const bugIdMatches = Array.from(bugsMarkdown.matchAll(/\[BUG-(\d+)\]/g));
-    let nextNum = 1;
-    if (bugIdMatches.length > 0) {
-      const nums = bugIdMatches.map((m) => parseInt(m[1], 10)).filter((n) => !isNaN(n));
-      if (nums.length > 0) {
-        nextNum = Math.max(...nums) + 1;
-      }
-    }
-    const bugId = `BUG-${String(nextNum).padStart(3, '0')}`;
-
-    const formattedSteps = stepsToReproduce
-      ? (Array.isArray(stepsToReproduce) ? stepsToReproduce.map((s: string, i: number) => `  ${i + 1}. ${s}`).join('\n') : `  1. ${stepsToReproduce}`)
-      : `  1. Open application\n  2. Trigger reported scenario`;
-
-    const newBugEntry = `
-### [${bugId}] ${title.trim()}
-- **Status**: \`open\`
-- **Priority**: \`${priority || 'medium'}\`
-- **Auto-fix**: \`${autoFix || 'ask'}\`
-- **File(s)**: \`${file || 'server.ts'}\`
-- **Submitted-By**: ${user || 'User'} (${new Date().toISOString().substring(0, 10)})
-- **Description**: ${description.trim()}
-- **Steps to Reproduce**:
-${formattedSteps}
-- **Expected**: ${expected || 'Action completes without error.'}
-- **Actual**: ${actual || 'Issue occurs as described.'}
-`;
-
-    // Append under ## Active Bugs section
-    if (bugsMarkdown.includes("## Active Bugs")) {
-      bugsMarkdown = bugsMarkdown.replace("## Active Bugs", `## Active Bugs\n${newBugEntry}`);
-    } else {
-      bugsMarkdown += `\n${newBugEntry}`;
-    }
-
-    fs.writeFileSync(BUGS_FILE_PATH, bugsMarkdown, "utf-8");
-    console.log(`[Bug Tracker Engine] Successfully logged new bug [${bugId}] to BUGS.md: "${title}"`);
-
-    res.status(201).json({
-      success: true,
-      bugId,
-      message: `Bug report [${bugId}] saved successfully to BUGS.md!`,
-      entry: newBugEntry,
-    });
-  } catch (err: any) {
-    console.error("[Bug Tracker Engine] Error writing bug to BUGS.md:", err);
-    res.status(500).json({ error: "Failed to save bug report to BUGS.md", details: err.message });
-  }
-});
-
-// GET Bugs from BUGS.md
-app.get("/api/bugs", (_req, res) => {
-  try {
-    if (!fs.existsSync(BUGS_FILE_PATH)) {
-      return res.json([]);
-    }
-
-    const bugsMarkdown = fs.readFileSync(BUGS_FILE_PATH, "utf-8");
-    const bugBlocks = bugsMarkdown.split(/###\s+\[BUG-/g).slice(1);
-
-    const bugs = bugBlocks.map((block) => {
-      const firstLineEnd = block.indexOf('\n');
-      const headerText = block.substring(0, firstLineEnd).trim();
-      const idMatch = headerText.match(/^(\d+)\]\s*(.*)/);
-      const bugId = idMatch ? `BUG-${idMatch[1]}` : 'BUG-000';
-      const title = idMatch ? idMatch[2] : headerText;
-
-      const statusMatch = block.match(/-\s*\*\*Status\*\*:\s*`([^`]+)`/);
-      const priorityMatch = block.match(/-\s*\*\*Priority\*\*:\s*`([^`]+)`/);
-      const fileMatch = block.match(/-\s*\*\*File\(s\)\*\*:\s*`([^`]+)`/);
-      const descMatch = block.match(/-\s*\*\*Description\*\*:\s*([^\n]+)/);
-
-      return {
-        id: bugId,
-        title,
-        status: statusMatch ? statusMatch[1] : 'open',
-        priority: priorityMatch ? priorityMatch[1] : 'medium',
-        file: fileMatch ? fileMatch[1] : 'unknown',
-        description: descMatch ? descMatch[1] : '',
-      };
-    });
-
-    res.json(bugs);
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to read BUGS.md", details: err.message });
-  }
 });
 
 
@@ -7103,6 +5748,14 @@ let isShuttingDown = false;
 async function startServer() {
   // 1. Fast load persistent database from SQLite
   loadDatabaseFromDisk();
+
+  // 1b. Rewrite stale live-source URLs (asuracomic.net → asurascans.com, /manhwa/ → /manga/, …)
+  try { migrateStaleSourceUrlsInDatabase(); } catch (e) {
+    console.warn('[Migration] stale source URL rewrite failed:', (e as Error)?.message || e);
+  }
+
+  // 1c. Purge any residual Reaper Scans items from memory & SQLite
+  purgeReaperScansFromAllStorage();
 
   // 2. Serve built production dist folder if available (ultra-fast sub-10ms response time)
   const distPath = path.join(process.cwd(), "dist");
@@ -7135,6 +5788,9 @@ async function startServer() {
   httpServer = app.listen(PORT, HOST, () => {
     logger.info('Startup', `Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
     logger.info('Startup', `SQLite database ready (${mangaDatabase.length} series, ${userProfiles.length} users)`);
+    if ((HOST === '0.0.0.0' || HOST === '::') && !AUTH_ENABLED) {
+      logger.warn('Security', '⚠️ Server is listening on 0.0.0.0 with REQUIRE_AUTH disabled. If exposed to the internet or untrusted LAN, set REQUIRE_AUTH=1 and ensure your reverse proxy (Nginx/Caddy) strictly overwrites X-Forwarded-For.');
+    }
   });
 
   // 4. Non-blocking auto-updater (rate-spaced). The static hard-coded catalog is
@@ -7146,7 +5802,9 @@ async function startServer() {
   scheduleExploreRefresher();
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  startServer();
+}
 
 // =========================================================
 // GRACEFUL SHUTDOWN — flush pending state & write legacy JSON backup
@@ -7156,15 +5814,9 @@ function gracefulShutdown(signal: string) {
   isShuttingDown = true;
   logger.info('Shutdown', `Received ${signal}. Flushing state & writing legacy JSON backup...`);
   try {
-    if (saveTimeoutTimer) {
-      clearTimeout(saveTimeoutTimer);
-      saveTimeoutTimer = null;
-    }
+    cancelPendingSave();
     // Final synchronous SQLite flush of app state
-    SqliteDb.replaceAllProfiles(buildEncryptedProfiles());
-    SqliteDb.setSetting('appSettings', JSON.stringify(buildEncryptedSettings()));
-    SqliteDb.setSetting('syncConfig', JSON.stringify(syncConfig));
-    SqliteDb.replaceAllLogs(autoUpdateLogs);
+    flushStateNow();
     // Portable legacy snapshot (kept for backward compatibility with tooling)
     writeLegacyJsonSnapshot(`graceful shutdown via ${signal}`);
     // Flush outstanding log buffer to disk
@@ -7210,4 +5862,4 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // Example requests:
 // - Large desktop: /api/explore?width=1920&height=1080&limit=30
 // - Mobile: /api/explore?width=414&height=896&limit=30
-// - Custom limit override: /api/explore?width=1920&height=1080&limit=50
+// - Custom limit override: /api/explore?width=1920&height=1080&limit=50

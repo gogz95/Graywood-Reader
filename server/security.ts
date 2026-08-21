@@ -4,7 +4,16 @@ import crypto from 'crypto';
 import dns from 'dns';
 import net from 'net';
 import express from 'express';
+import { Agent } from 'undici';
 import { UserProfile } from '../src/types';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: UserProfile | { sub: string; role?: string; email?: string; [key: string]: any };
+    }
+  }
+}
 
 // =========================================================
 // GDPR ARTICLE 32 CRYPTOGRAPHIC ENCRYPTION & SECURITY ENGINE
@@ -51,36 +60,51 @@ export function resolveEncryptionSecret(): string {
 export const ENCRYPTION_SECRET = resolveEncryptionSecret();
 const ALGORITHM = 'aes-256-gcm';
 
+// Cryptographically sound 32-byte key derived via HKDF (RFC 5869)
+const PII_ENCRYPTION_KEY = crypto.hkdfSync('sha256', ENCRYPTION_SECRET, '', 'graywood-gdpr-aes256-key', 32);
+const LEGACY_PII_KEY = Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32));
+
 export function encryptPII(text: string): string {
   if (!text) return '';
   try {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32)), iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(PII_ENCRYPTION_KEY), iv);
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     const authTag = cipher.getAuthTag().toString('hex');
     return `enc:${iv.toString('hex')}:${authTag}:${encrypted}`;
-  } catch (err) {
+  } catch (err: any) {
     console.error('[GDPR Engine] Encryption error:', err);
-    return text;
+    throw new Error(`GDPR Encryption failed: ${err?.message || 'Cipher error'}`);
   }
 }
 
 export function decryptPII(encryptedData: string): string {
   if (!encryptedData || !encryptedData.startsWith('enc:')) return encryptedData;
+  const parts = encryptedData.slice(4).split(':');
+  if (parts.length !== 3) return encryptedData;
+  const [ivHex, authTagHex, encryptedText] = parts;
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+
+  // 1. Try decrypting with the HKDF-derived key
   try {
-    const parts = encryptedData.slice(4).split(':');
-    if (parts.length !== 3) return encryptedData;
-    const [ivHex, authTagHex, encryptedText] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_SECRET.padEnd(32).slice(0, 32)), iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(PII_ENCRYPTION_KEY), iv);
     decipher.setAuthTag(authTag);
     let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch {
-    return encryptedData;
+    // 2. Fall back to legacy padEnd/slice key for backward compatibility
+    try {
+      const legacyDecipher = crypto.createDecipheriv(ALGORITHM, LEGACY_PII_KEY, iv);
+      legacyDecipher.setAuthTag(authTag);
+      let decrypted = legacyDecipher.update(encryptedText, 'hex', 'utf8');
+      decrypted += legacyDecipher.final('utf8');
+      return decrypted;
+    } catch {
+      return encryptedData;
+    }
   }
 }
 
@@ -323,6 +347,31 @@ export async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
 }
 
 /**
+ * Undici Agent enforcing socket-level IP validation to prevent DNS rebinding TOCTOU attacks.
+ */
+export const ssrfSafeAgent = new Agent({
+  connect: {
+    lookup: (hostname: string, opts: any, callback: (err: NodeJS.ErrnoException | null, address: any, family?: number) => void) => {
+      dns.lookup(hostname, opts, (err, address, family) => {
+        if (err) return callback(err, address, family);
+        if (Array.isArray(address)) {
+          for (const item of address) {
+            if (isPrivateOrReservedIp(item.address)) {
+              return callback(new Error(`Blocked: hostname "${hostname}" resolves to private/reserved IP "${item.address}"`), address, family);
+            }
+          }
+          return callback(null, address, family);
+        }
+        if (typeof address === 'string' && isPrivateOrReservedIp(address)) {
+          return callback(new Error(`Blocked: hostname "${hostname}" resolves to private/reserved IP "${address}"`), address, family);
+        }
+        return callback(null, address, family);
+      });
+    },
+  },
+});
+
+/**
  * SSRF-safe fetch that follows redirects MANUALLY, re-validating every hop
  * against assertSafeProxyTarget. Plain fetch() would silently follow a 3xx
  * from a public host to an internal address (cloud metadata, LAN service),
@@ -336,7 +385,11 @@ export async function fetchWithSsrfGuard(
   let currentUrl = rawUrl;
   for (let hop = 0; ; hop++) {
     await assertSafeProxyTarget(currentUrl);
-    const res = await fetch(currentUrl, { ...init, redirect: 'manual' });
+    const res = await fetch(currentUrl, {
+      ...init,
+      dispatcher: ssrfSafeAgent,
+      redirect: 'manual',
+    } as any);
     const location = res.headers.get('location');
     if (res.status >= 300 && res.status < 400 && location) {
       if (hop >= maxRedirects) {

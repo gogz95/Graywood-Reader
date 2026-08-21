@@ -167,3 +167,44 @@ _No active bugs._
 - **Auto-fix**: `ask`
 - **File(s)**: `server.ts`
 - **Fixed in**: 2026-08-11 — Extraction check strictly filters against disabled source IDs.
+
+### [BUG-033] SSRF DNS rebinding TOCTOU vulnerability
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/security.ts`, `tests/security.test.ts`
+- **Description**: `assertSafeProxyTarget` resolved DNS and validated IPs, but a subsequent `fetch()` executed its own independent DNS resolution, leaving a TOCTOU window for DNS rebinding attacks.
+- **Fixed in**: 2026-08-21 — Implemented custom Undici `Agent` (`ssrfSafeAgent`) with socket connection-level DNS lookup validation in `fetchWithSsrfGuard`.
+
+### [BUG-034] Local library full filesystem rescan and archive unzipping on every page request
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/routes/localLibrary.ts`, `tests/localLibrary.test.ts`
+- **Description**: `findArchive(id)` called `scanStorage()` on every page stream (`/api/local/library/:id/page/:n`), walking the entire directory tree and opening every CBZ in the library via AdmZip.
+- **Fixed in**: 2026-08-21 — Introduced in-memory archive caching with mtime/size change tracking, 60s TTL, O(1) ID lookups, and a `POST /api/local/library/rescan` endpoint.
+
+### [BUG-035] PII encryption failed open to plaintext on cipher errors
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/security.ts`, `tests/security.test.ts`
+- **Description**: `encryptPII` caught cipher errors and silently returned raw plaintext without error signaling.
+- **Fixed in**: 2026-08-21 — Updated `encryptPII` to throw an explicit `Error` on cipher failure to ensure GDPR compliance (fail-closed).
+
+### [BUG-036] AES key derivation truncated long encryption secrets
+- **Status**: `fixed`
+- **Priority**: `low`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/security.ts`, `tests/security.test.ts`
+- **Description**: `padEnd(32).slice(0, 32)` silently truncated secrets longer than 32 characters and null-padded short ones without cryptographic domain separation.
+- **Fixed in**: 2026-08-21 — Derived a 32-byte key via HKDF-SHA256 with seamless backward-compatible decryption for legacy ciphertexts.
+
+### [BUG-037] Duplicated scraper logic for Flame Comics and Asura Scans
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/scrapers/flameComics.ts`, `server/scrapers/asuraScans.ts`, `server.ts`
+- **Description**: Metadata refresh and chapter parsing logic for Flame Comics (Next.js buildId discovery) and Asura Scans (slug token normalization and chapter fetching) were duplicated in multiple places in `server.ts`.
+- **Fixed in**: 2026-08-21 — Centralized scraper operations into `server/scrapers/flameComics.ts` and `server/scrapers/asuraScans.ts`.
+
