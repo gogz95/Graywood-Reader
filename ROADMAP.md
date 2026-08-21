@@ -47,3 +47,45 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ### 🖊️ S Pen / Stylus & Hardware Page Turners
 - Pressure-sensitive annotations and Bluetooth page turner keybindings for tablet users.
+
+---
+
+## 🔧 Code Quality & Technical Debt
+
+Issues identified during the 2026-08-21 full code review, ordered by impact.
+
+### 🔴 Critical
+
+- **Fix MangaDex chapter feed cap** — `refreshSingleMangaMetadata` fetches the chapter feed with `limit=100`, silently truncating series with 100+ chapters and causing `latestChapter` to be under-reported. Switch to the `/manga/{id}/aggregate` endpoint (returns real totals without pagination).
+
+- **Continue router extraction from `server.ts`** — The file is ~7 800 lines. The router extraction pattern (`authRouter`, `adminRouter`, `settingsRouter`, etc.) needs to extend to the remaining inline route groups: `/api/manga`, `/api/reader`, `/api/explore`, and `/api/tracker`.
+
+- **Add row-level ownership check on manga write endpoints** — Authenticated `user`-role accounts can currently overwrite another user's series row. When `manga.userId` is set, `PATCH`/`PUT` handlers should reject writes from a different user unless the actor is `admin`.
+
+### 🟠 High Priority
+
+- **Fix `autoBackupService` unencrypted PII** — `createBackupNow()` serializes `userProfiles` (email addresses + scrypt password hashes) in plaintext into `./data/backups/*.json`. Replace with `buildEncryptedProfiles()` from `appState.ts`.
+
+- **Cache FlameComics `buildId`** — `fetchFlameSeriesContext()` fires an extra homepage HTTP request on every call to extract the Next.js `buildId`. Cache it in a module-level variable with a ~5-minute TTL to avoid N+1 fetches during auto-update scans.
+
+- **Replace `KOTATSU_SOURCES.find` with `SOURCE_MAP` in hot loop** — `isSeriesFromDisabledSource()` calls `KOTATSU_SOURCES.find(s => s.id === disabledId)` inside a double loop (disabled sources × manga list). `SOURCE_MAP` already provides O(1) lookup via `getSourceById()`.
+
+- **Optimize `calculateStringSimilarity` in Kotatsu merge engine** — The Levenshtein distance matrix is freshly allocated on every call. During `integrateKotatsuSourcesAndMerge()` this produces up to 400 000 matrix allocations for a 2 000-series library. Pre-build a normalized-title lookup map for O(1) exact matching; use the matrix only as a fallback.
+
+### 🟡 Medium Priority
+
+- **Fix `verifyAuthToken` base64url signature comparison** — `Buffer.from(sig)` decodes as UTF-8, not base64url, so `timingSafeEqual` compares mismatched byte encodings. Fix: decode both sides with `Buffer.from(sig, 'base64url')` before comparing.
+
+- **Fix `circuitBreaker.recordSuccess` resetting `tripCount` to 0** — A single successful HALF_OPEN probe resets the exponential backoff counter, meaning a flaky source always re-trips at 1× cooldown. Keep `tripCount` on success; reset only after N consecutive successes.
+
+- **Fix WeebCentral fake `totalCount`** — `scrapeWeebCentral()` always returns `totalCount = items.length * 100`, breaking pagination in the Browse view. Parse the real count from the response HTML or return `-1` to indicate unknown.
+
+- **`autoBackupService.listLocalBackups` reads every backup file on every list call** — Full JSON parse of every backup file just to extract `seriesCount`. Store the count in the filename suffix or a small `.meta` sidecar at creation time.
+
+- **Remove duplicate `manhuaplus` / `manhuaplusorg` source entries** — Both IDs resolve to `https://manhuaplus.org`, causing duplicate scrape results and double entries in the Source Health Dashboard.
+
+### 🟢 Low Priority / Style
+
+- **`sqlite-db.ts` uses `console.log` instead of structured logger** — SQLite init messages bypass the `data/logs/` rotation files. Switch to `logger.info()`.
+
+- **`logger.ts`: WARN writes to `stderr` instead of `stdout`** — Standard convention for log stream routing: WARN → stdout, ERROR → stderr. Update the `write()` function to route `LogLevel.WARN` to `process.stdout`.

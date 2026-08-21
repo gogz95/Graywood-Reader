@@ -11,11 +11,11 @@ COPY package*.json ./
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends python3 make g++ && \
-    npm ci && \
-    apt-get purge -y --auto-remove python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get upgrade -y && \
+  apt-get install -y --no-install-recommends python3 make g++ && \
+  npm ci && \
+  apt-get purge -y --auto-remove python3 make g++ && \
+  rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
@@ -32,11 +32,11 @@ ENV HOST=0.0.0.0
 COPY package*.json ./
 
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends python3 make g++ wget ca-certificates && \
-    npm ci --omit=dev && \
-    apt-get purge -y --auto-remove python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get upgrade -y && \
+  apt-get install -y --no-install-recommends python3 make g++ wget ca-certificates && \
+  npm ci --omit=dev && \
+  apt-get purge -y --auto-remove python3 make g++ && \
+  rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
