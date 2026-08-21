@@ -272,7 +272,7 @@
   {
     "id": "aquamanga",
     "name": "Aqua Manga",
-    "baseUrl": "https://aquareader.net",
+    "baseUrl": "https://aquareader.org",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -7958,7 +7958,7 @@
   {
     "id": "ravenscans",
     "name": "RavenScans",
-    "baseUrl": "https://ravenscans.com",
+    "baseUrl": "https://ravenscans.net",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,

@@ -57,14 +57,14 @@ try {
 // Filter sources
 let sources = catalog.filter((s) => s.reliable !== false);
 if (LANG) sources = sources.filter((s) => (s.lang || '').toLowerCase() === LANG.toLowerCase());
-if (ENGINE) sources = sources.filter((s) => (s.engine || '').toLowerCase() === ENGINE.toLowerCase());
+if (ENGINE) sources = sources.filter((s) => (s.engineType || s.engine || '').toLowerCase() === ENGINE.toLowerCase());
 
 // Sort to prioritize popular / curated English scanlation sources
 const topPriorityIds = new Set([
-  'asurascans', 'flamecomics', 'weebcentral', 'manhwa18', 'harimanga',
-  'manhuaplus', 'mangaread', 'kunmanga', 'ravenscans', 'demonicscans',
-  'allporncomic', 'bibimanga', 'toongod', 'hiperdex', 'zinmanga',
-  'coffeemanga', 'mangatx', 'manhuafast', 'nightcomic', 'dynasty'
+  'weebcentral', 'asurascans', 'flamecomics', 'mangaread', 'manhuaplusorg',
+  'ravenscans', 'manhwa18', 'manhwa18cc', 'aquamanga', 'hiperdex',
+  'kunmanga', 'toongod', 'allporncomic', 'demonicscans', 'harimanga',
+  'mangatx', 'manhuafast', 'bibimanga', 'zinmanga', 'dynasty'
 ]);
 
 sources.sort((a, b) => {
@@ -113,7 +113,7 @@ async function probeSource(source) {
     return {
       id: source.id,
       name: source.name,
-      engine: source.engine || 'custom',
+      engine: source.engineType || source.engine || 'custom',
       lang: source.lang || 'en',
       domain: source.domain,
       status: statusLabel,
@@ -127,7 +127,7 @@ async function probeSource(source) {
     return {
       id: source.id,
       name: source.name,
-      engine: source.engine || 'custom',
+      engine: source.engineType || source.engine || 'custom',
       lang: source.lang || 'en',
       domain: source.domain,
       status: `ERROR (${err.name === 'TimeoutError' ? 'Timeout' : err.code || err.message})`,

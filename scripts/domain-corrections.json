@@ -36,10 +36,10 @@
   },
   {
     "id": "aquamanga",
-    "baseUrl": "https://aquareader.net",
+    "baseUrl": "https://aquareader.org",
     "engineType": "madara",
     "name": "Aqua Manga",
-    "reason": "Canonical domain (aquamanga.com/.org -> aquareader.net per DOMAIN_MIRRORS)."
+    "reason": "Canonical domain (aquamanga.com/.org/aquareader.net -> aquareader.org per DOMAIN_MIRRORS)."
   },
   {
     "id": "komikindo_info",
