@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { UserProfile, UserRole } from '../types';
-import { apiFetch, clearAuthToken, getAuthToken } from '../utils/api';
+import { apiFetch, clearAuthToken, getAuthToken, logout } from '../utils/api';
 import { migrateClientSessionHistoryToUser } from './useReaderSession';
 
 export const GUEST_PROFILE: UserProfile = {
@@ -44,7 +44,22 @@ export function useAuth() {
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
 
-  const [activeProfileId, setActiveProfileId] = useState<string>('usr_admin');
+  const [activeProfileId, setActiveProfileIdState] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem(`graywood_${getDeviceId()}_active_profile`);
+      return cached || 'usr_admin';
+    } catch {
+      return 'usr_admin';
+    }
+  });
+
+  const setActiveProfileId = useCallback((id: string) => {
+    setActiveProfileIdState(id);
+    try {
+      localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, id);
+    } catch {}
+  }, []);
+
   const [isHostComputer, setIsHostComputer] = useState<boolean>(true);
 
   // Modal visibility states
@@ -72,7 +87,7 @@ export function useAuth() {
     } catch (err) {
       console.error('Fetch client context error:', err);
     }
-  }, []);
+  }, [setActiveProfileId]);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -104,28 +119,17 @@ export function useAuth() {
             }
             return [...prev, { ...data.user, password: undefined }];
           });
+        } else {
+          // Token is invalid or expired
+          clearAuthToken();
         }
       }
     } catch (err) {
       console.error('Fetch auth me error:', err);
     }
-  }, []);
+  }, [setActiveProfileId]);
 
-  const handleCreateProfile = (name: string, avatar: string) => {
-    const newProf: UserProfile = {
-      id: 'usr_' + Date.now(),
-      name,
-      username: name.toLowerCase().replace(/\s+/g, '_'),
-      email: `${name.toLowerCase().replace(/\s+/g, '_')}@manga.dev`,
-      avatar,
-      role: 'user',
-      createdAt: new Date().toISOString(),
-    };
-    setProfiles((prev) => [...prev, newProf]);
-    setActiveProfileId(newProf.id);
-  };
-
-  const handleRegisterUser = (newUser: UserProfile) => {
+  const handleRegisterUser = useCallback((newUser: UserProfile) => {
     setProfiles((prev) => {
       if (prev.some((p) => p.id === newUser.id)) {
         return prev.map((p) => (p.id === newUser.id ? { ...p, ...newUser, password: undefined } : p));
@@ -134,9 +138,47 @@ export function useAuth() {
     });
     setActiveProfileId(newUser.id);
     migrateClientSessionHistoryToUser(newUser.id);
-  };
+  }, [setActiveProfileId]);
 
-  const handlePromoteUser = async (userId: string, newRole: UserRole) => {
+  const handleLoginUser = useCallback((user: UserProfile) => {
+    setProfiles((prev) => {
+      if (prev.some((p) => p.id === user.id)) {
+        return prev.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p));
+      }
+      return [...prev, { ...user, password: undefined }];
+    });
+    setActiveProfileId(user.id);
+    migrateClientSessionHistoryToUser(user.id);
+    setAuthModalOpen(false);
+  }, [setActiveProfileId]);
+
+  const handleLogoutUser = useCallback(async () => {
+    await logout();
+    clearAuthToken();
+    const fallbackId = isHostComputer ? 'usr_admin' : 'usr_guest';
+    setActiveProfileId(fallbackId);
+  }, [isHostComputer, setActiveProfileId]);
+
+  const handleUpdateProfile = useCallback(async (updates: { name?: string; avatar?: string; email?: string }): Promise<boolean> => {
+    try {
+      const res = await apiFetch('/api/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updated = data.user as UserProfile;
+        setProfiles((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Update profile error:', err);
+      return false;
+    }
+  }, []);
+
+  const handlePromoteUser = useCallback(async (userId: string, newRole: UserRole) => {
     try {
       const res = await apiFetch('/api/admin/users/promote', {
         method: 'POST',
@@ -150,9 +192,9 @@ export function useAuth() {
     } catch (err) {
       console.error('Promote user error:', err);
     }
-  };
+  }, []);
 
-  const handleDeleteProfile = (profileId: string) => {
+  const handleDeleteProfile = useCallback((profileId: string) => {
     if (profiles.length <= 1) return;
     const remaining = profiles.filter((p) => p.id !== profileId);
     setProfiles(remaining);
@@ -160,19 +202,7 @@ export function useAuth() {
       setActiveProfileId(remaining[0]?.id || 'usr_guest');
       clearAuthToken();
     }
-  };
-
-  const handleLoginUser = (user: UserProfile) => {
-    setProfiles((prev) => {
-      if (prev.some((p) => p.id === user.id)) {
-        return prev.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p));
-      }
-      return [...prev, { ...user, password: undefined }];
-    });
-    setActiveProfileId(user.id);
-    migrateClientSessionHistoryToUser(user.id);
-    setAuthModalOpen(false);
-  };
+  }, [activeProfileId, profiles, setActiveProfileId]);
 
   return {
     profiles,
@@ -191,9 +221,10 @@ export function useAuth() {
     fetchClientContext,
     fetchProfiles,
     fetchAuthMe,
-    handleCreateProfile,
     handleRegisterUser,
     handleLoginUser,
+    handleLogoutUser,
+    handleUpdateProfile,
     handlePromoteUser,
     handleDeleteProfile,
   };

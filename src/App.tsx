@@ -71,13 +71,15 @@ export default function App() {
     fetchClientContext,
     fetchProfiles,
     fetchAuthMe,
-    handleCreateProfile,
     handleRegisterUser,
     handleLoginUser,
+    handleLogoutUser,
+    handleUpdateProfile,
     handlePromoteUser,
     handleDeleteProfile,
   } = useAuth();
 
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   // Manga Library Database State
@@ -1009,6 +1011,7 @@ export default function App() {
           onLogin={handleLoginUser}
           onRegister={handleRegisterUser}
           existingUsers={profiles}
+          initialMode={authModalMode}
           guestProfile={GUEST_PROFILE}
           onClose={() => setAuthModalOpen(false)}
         />
@@ -1024,7 +1027,12 @@ export default function App() {
             setActiveProfileId(id);
             setUserProfileModalOpen(false);
           }}
-          onCreateProfile={handleCreateProfile}
+          onOpenAuthModal={(mode) => {
+            setAuthModalMode(mode || 'login');
+            setAuthModalOpen(true);
+          }}
+          onUpdateProfile={handleUpdateProfile}
+          onLogout={handleLogoutUser}
           onDeleteProfile={handleDeleteProfile}
           onClose={() => setUserProfileModalOpen(false)}
         />

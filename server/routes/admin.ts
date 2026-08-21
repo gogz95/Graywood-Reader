@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { UserRole } from '../../src/types';
+import crypto from 'crypto';
+import { UserProfile, UserRole } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import { logger } from '../logger';
-import { toPublicUser, isHostRequest } from '../security';
+import { toPublicUser, isHostRequest, hashPassword } from '../security';
 import {
   userProfiles,
   setUserProfiles,
   reloadMangaFromSql,
   saveDatabaseToDisk,
+  flushStateNow,
 } from '../appState';
 
 // ============================================================================
@@ -48,9 +50,102 @@ adminRouter.post("/api/admin/users/promote", (req, res) => {
   if (idx === -1) return res.status(404).json({ error: "User not found" });
 
   userProfiles[idx].role = role as UserRole;
-  saveDatabaseToDisk();
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
   logger.info('Admin', `User ${userProfiles[idx].name} (${userId}) role updated to ${role}.`);
   res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
+});
+
+// Admin Reset User Password
+adminRouter.post("/api/admin/users/:userId/reset-password", (req, res) => {
+  const { userId } = req.params;
+  const { newPassword } = req.body || {};
+
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({
+      error: "Bad Request",
+      message: "New password must be at least 8 characters long.",
+    });
+  }
+
+  const user = userProfiles.find((u) => u.id === userId);
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  user.password = hashPassword(newPassword);
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+
+  logger.info('Admin', `Password reset by Admin for user "${user.username}" (${userId}).`);
+  res.json({
+    success: true,
+    message: `Password for user "${user.name}" (@${user.username}) was successfully reset.`,
+  });
+});
+
+// Admin Provision New User Account
+adminRouter.post("/api/admin/users/create", (req, res) => {
+  const { name, username, email, password, avatar, role } = req.body || {};
+
+  if (!name || !username || !email || !password) {
+    return res.status(400).json({
+      error: "Bad Request",
+      message: "Name, username, email, and password are required.",
+    });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({
+      error: "Bad Request",
+      message: "Password must be at least 8 characters long.",
+    });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  const cleanUsername = String(username).trim().toLowerCase();
+
+  const taken = userProfiles.some(
+    (u) =>
+      (u.username || '').toLowerCase() === cleanUsername ||
+      (u.email || '').toLowerCase() === cleanEmail
+  );
+  if (taken) {
+    return res.status(409).json({
+      error: "Conflict",
+      message: "Username or email is already registered.",
+    });
+  }
+
+  const newUser: UserProfile = {
+    id: 'usr_' + Date.now().toString(36) + '_' + crypto.randomBytes(4).toString('hex'),
+    name: String(name).trim(),
+    username: String(username).trim(),
+    email: cleanEmail,
+    password: hashPassword(password),
+    avatar: String(avatar || '🥷').trim() || '🥷',
+    role: (role === 'admin' ? 'admin' : 'user') as UserRole,
+    createdAt: new Date().toISOString(),
+  };
+
+  userProfiles.push(newUser);
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+
+  logger.info('Admin', `Provisioned new user "${newUser.username}" (${newUser.id}) with role=${newUser.role}`);
+  res.status(201).json({
+    success: true,
+    user: toPublicUser(newUser),
+  });
 });
 
 // Admin Delete User with MANDATORY Double Confirmation
@@ -79,7 +174,11 @@ adminRouter.delete("/api/admin/users/:userId", (req, res) => {
   const result = SqliteDb.purgeUserData(userId);
   setUserProfiles(userProfiles.filter((u) => u.id !== userId));
   reloadMangaFromSql();
-  saveDatabaseToDisk();
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
   logger.info('Admin', `User "${user.name}" (${userId}) permanently deleted after double-confirmation. (${result.mangaDeleted} library records purged from SQLite)`);
 
   res.json({

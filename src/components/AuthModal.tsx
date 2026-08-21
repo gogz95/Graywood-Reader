@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { User, Lock, Mail, UserPlus, LogIn, X, Eye, EyeOff, UserCheck } from 'lucide-react';
 import { apiFetch, setAuthToken, clearAuthToken, logout } from '../utils/api';
@@ -7,6 +7,7 @@ interface AuthModalProps {
   onLogin: (user: UserProfile) => void;
   onRegister: (newUser: UserProfile) => void;
   existingUsers: UserProfile[];
+  initialMode?: 'login' | 'register';
   onClose: () => void;
   guestProfile?: UserProfile;
 }
@@ -15,10 +16,16 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
   onLogin,
   onRegister,
   existingUsers,
+  initialMode = 'login',
   onClose,
   guestProfile,
 }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
+
   const [busy, setBusy] = useState(false);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -29,9 +36,9 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
-  const [regAvatar, setRegAvatar] = useState('\uD83E\uDD77');
+  const [regAvatar, setRegAvatar] = useState('🥷');
   const [regError, setRegError] = useState<string | null>(null);
-  const avatarOptions = ['\uD83E\uDD77', '\uD83E\uDD8A', '\uD83E\uDDB8\u200D\u2642\uFE0F', '\uD83E\uDDD9\u200D\u2642\uFE0F', '\uD83D\uDC09', '\u26A1', '\uD83D\uDC51', '\uD83D\uDD25', '\u2694\uFE0F', '\uD83E\uDD16'];
+  const avatarOptions = ['🥷', '🦊', '🦸‍♂️', '🧙‍♂️', '🐉', '⚡', '👑', '🔥', '⚔️', '🤖'];
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +65,6 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
   };
 
   const handleGuestQuickSignIn = () => {
-    // Revoke any previous session token server-side before dropping to guest.
     void logout();
     clearAuthToken();
     const guest: UserProfile =
@@ -68,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
         name: 'Guest Reader',
         username: 'guest',
         email: 'guest@graywood.app',
-        avatar: '\uD83D\uDC64',
+        avatar: '👤',
         role: 'user',
         createdAt: new Date().toISOString(),
       };
@@ -130,7 +136,7 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
             <p className="text-xs text-secondary">
               {mode === 'login'
                 ? 'Verify with your password. Tokens are stored only on this device.'
-                : 'Passwords are hashed on the server (scrypt). Never stored in plain text.'}
+                : 'Passwords are encrypted on the server (scrypt). Never stored in plain text.'}
             </p>
           </div>
           <div className="flex rounded-xl bg-app border border-edge p-1 gap-1">

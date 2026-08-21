@@ -136,6 +136,82 @@ describe('Authentication Lifecycle & Token Revocation', () => {
     expect(res.body.user.username).toBe(testUser.username);
   });
 
+  it('PUT /api/auth/profile updates profile details for authenticated user', async () => {
+    // Re-login to get a fresh valid token
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: testUser.username, password: testUser.password });
+    expect(loginRes.status).toBe(200);
+    authToken = loginRes.body.token;
+
+    const updateRes = await request(app)
+      .put('/api/auth/profile')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ name: 'Updated Test User', avatar: '🦊' });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.user.name).toBe('Updated Test User');
+    expect(updateRes.body.user.avatar).toBe('🦊');
+  });
+
+  it('POST /api/auth/change-password updates password and verifies with new password', async () => {
+    const newPass = 'BrandNewSuperPassword456!';
+    const changeRes = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ currentPassword: testUser.password, newPassword: newPass });
+    expect(changeRes.status).toBe(200);
+    expect(changeRes.body.success).toBe(true);
+
+    // Old password should now fail
+    const oldLoginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: testUser.username, password: testUser.password });
+    expect(oldLoginRes.status).toBe(401);
+
+    // New password should succeed
+    const newLoginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: testUser.username, password: newPass });
+    expect(newLoginRes.status).toBe(200);
+    authToken = newLoginRes.body.token;
+  });
+
+  it('POST /api/admin/users/:userId/reset-password allows host admin to reset a password', async () => {
+    const adminResetPass = 'AdminResetSecret789!';
+    // Fetch profile to get userId
+    const meRes = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${authToken}`);
+    const userId = meRes.body.user.id;
+
+    const resetRes = await request(app)
+      .post(`/api/admin/users/${userId}/reset-password`)
+      .send({ newPassword: adminResetPass });
+    expect(resetRes.status).toBe(200);
+    expect(resetRes.body.success).toBe(true);
+
+    // Login with admin-reset password should work
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: testUser.username, password: adminResetPass });
+    expect(loginRes.status).toBe(200);
+  });
+
+  it('POST /api/admin/users/create allows host admin to provision user accounts', async () => {
+    const provSuffix = Date.now().toString(36) + '_p';
+    const provRes = await request(app)
+      .post('/api/admin/users/create')
+      .send({
+        name: 'Provisioned User',
+        username: `prov_${provSuffix}`,
+        email: `prov_${provSuffix}@manga.dev`,
+        password: 'ProvisionPassword999!',
+        role: 'user',
+      });
+    expect(provRes.status).toBe(201);
+    expect(provRes.body.user.username).toBe(`prov_${provSuffix}`);
+  });
+
   it('POST /api/auth/logout revokes the token', async () => {
     const logoutRes = await request(app)
       .post('/api/auth/logout')

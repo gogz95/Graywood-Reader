@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { UserProfile, UserRole } from '../../src/types';
 import { logger } from '../logger';
 import {
@@ -21,7 +23,7 @@ import {
   recordAccountFailure,
   clearAccountFailures,
 } from '../rateLimit';
-import { userProfiles, saveDatabaseToDisk } from '../appState';
+import { userProfiles, saveDatabaseToDisk, flushStateNow } from '../appState';
 
 // ============================================================================
 // AUTHENTICATION & PROFILE ROUTES
@@ -43,9 +45,23 @@ authRouter.get("/api/auth/client-context", (req, res) => {
   });
 });
 
+// Admin Bootstrap Status Endpoint (Host-only)
+authRouter.get("/api/auth/admin-bootstrap-status", (req, res) => {
+  if (!isHostRequest(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: 'Host only endpoint.' });
+  }
+  const bootstrapPath = path.join(process.cwd(), 'data', '.admin-bootstrap-password');
+  const hasBootstrapFile = fs.existsSync(bootstrapPath);
+  res.json({
+    hasBootstrapPasswordFile: hasBootstrapFile,
+    adminUsername: 'admin',
+    message: hasBootstrapFile
+      ? 'An initial admin password was auto-generated in data/.admin-bootstrap-password'
+      : 'Admin password is configured in database / environment',
+  });
+});
+
 // Login: exchange a username/email + password for a signed token.
-// Available regardless of REQUIRE_AUTH (host can always mint tokens; remote
-// clients need this to gain access once auth is enabled).
 authRouter.post("/api/auth/login", async (req, res) => {
   const clientIp = (req.ip || req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
 
@@ -79,25 +95,35 @@ authRouter.post("/api/auth/login", async (req, res) => {
   }
 
   if (!identifier || !pass) {
-    return res.status(400).json({ error: 'Bad Request', message: 'username/email and password are required.' });
+    return res.status(400).json({ error: 'Bad Request', message: 'Username/email and password are required.' });
   }
 
   const user = userProfiles.find(
     (u) => (u.username || '').toLowerCase() === identifier || (u.email || '').toLowerCase() === identifier
   );
-  if (!user || !user.password) {
+  if (!user) {
     recordLoginFailure(clientIp);
     recordAccountFailure(identifier);
-    logger.warn('Auth', `Failed login attempt for "${identifier}" from ${clientIp}`);
-    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
+    logger.warn('Auth', `Failed login attempt (user not found: "${identifier}") from ${clientIp}`);
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid username/email or password.' });
+  }
+
+  if (!user.password) {
+    recordLoginFailure(clientIp);
+    recordAccountFailure(identifier);
+    logger.warn('Auth', `Failed login attempt for user "${user.username}" (no password configured) from ${clientIp}`);
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'This profile has no password configured. Please sign in with a registered account or use Guest mode.',
+    });
   }
 
   const ok = await verifyPasswordAsync(pass, user.password);
   if (!ok) {
     recordLoginFailure(clientIp);
     recordAccountFailure(identifier);
-    logger.warn('Auth', `Failed login attempt for "${user.username}" (bad password) from ${clientIp}`);
-    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
+    logger.warn('Auth', `Failed login attempt for "${user.username}" (incorrect password) from ${clientIp}`);
+    return res.status(401).json({ error: 'Unauthorized', message: 'Invalid username/email or password.' });
   }
 
   // Successful login — clear any prior failure records (IP + account)
@@ -140,7 +166,7 @@ authRouter.post("/api/auth/register", (req, res) => {
   if (!name || !username || !email || !password) {
     return res.status(400).json({
       error: 'Bad Request',
-      message: 'name, username, email, and password are required.',
+      message: 'Name, username, email, and password are required.',
     });
   }
   if (password.length < 8) {
@@ -182,7 +208,12 @@ authRouter.post("/api/auth/register", (req, res) => {
   };
 
   userProfiles.push(newUser);
-  saveDatabaseToDisk();
+  // Synchronous flush guarantees zero data-loss window on sudden restarts or crashes
+  try {
+    flushStateNow();
+  } catch (err) {
+    saveDatabaseToDisk();
+  }
 
   const regToken = signAuthToken({ sub: newUser.id, role: newUser.role });
   logger.info('Auth', `Registered user ${newUser.username} (${newUser.id}) role=${newUser.role}`);
@@ -193,9 +224,93 @@ authRouter.post("/api/auth/register", (req, res) => {
   });
 });
 
-// Public profile list (never includes password hashes). Emails are PII:
-// only the host or the profile's owner may see them — everyone else gets an
-// empty string instead of a full account enumeration surface.
+// Update Profile (Name, Avatar, Email) for Authenticated User
+authRouter.put("/api/auth/profile", (req, res) => {
+  const actor = (req as any).user as UserProfile | null;
+  const isHost = isHostRequest(req);
+  if (!actor && !isHost) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Sign in to update your profile.' });
+  }
+
+  const targetId = actor?.id || 'usr_admin';
+  const userIdx = userProfiles.findIndex((u) => u.id === targetId);
+  if (userIdx === -1) {
+    return res.status(404).json({ error: 'Not Found', message: 'User profile not found.' });
+  }
+
+  const { name, avatar, email } = req.body || {};
+  const current = userProfiles[userIdx];
+
+  if (name && typeof name === 'string' && name.trim()) {
+    current.name = name.trim();
+  }
+  if (avatar && typeof avatar === 'string' && avatar.trim()) {
+    current.avatar = avatar.trim();
+  }
+  if (email && typeof email === 'string' && email.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address.' });
+    }
+    const duplicate = userProfiles.some((u) => u.id !== targetId && (u.email || '').toLowerCase() === cleanEmail);
+    if (duplicate) {
+      return res.status(409).json({ error: 'Conflict', message: 'Email address is already in use.' });
+    }
+    current.email = cleanEmail;
+  }
+
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+
+  logger.info('Auth', `Profile updated for user "${current.username}" (${current.id})`);
+  res.json({ success: true, user: toPublicUser(current) });
+});
+
+// Change Password for Authenticated User
+authRouter.post("/api/auth/change-password", async (req, res) => {
+  const actor = (req as any).user as UserProfile | null;
+  const isHost = isHostRequest(req);
+  if (!actor && !isHost) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Sign in to change password.' });
+  }
+
+  const targetId = actor?.id || 'usr_admin';
+  const user = userProfiles.find((u) => u.id === targetId);
+  if (!user) {
+    return res.status(404).json({ error: 'Not Found', message: 'User profile not found.' });
+  }
+
+  const { currentPassword, newPassword } = req.body || {};
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Bad Request', message: 'New password must be at least 8 characters long.' });
+  }
+
+  // If user already has a password, verify current password (unless host admin modifying own session)
+  if (user.password && actor) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Current password is required.' });
+    }
+    const ok = await verifyPasswordAsync(String(currentPassword), user.password);
+    if (!ok) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Current password is incorrect.' });
+    }
+  }
+
+  user.password = hashPassword(newPassword);
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+
+  logger.info('Auth', `Password successfully changed for user "${user.username}" (${user.id})`);
+  res.json({ success: true, message: 'Password successfully updated.' });
+});
+
+// Public profile list (never includes password hashes).
 authRouter.get("/api/profiles", (req, res) => {
   const actor = (req as any).user as UserProfile | null;
   const hostCaller = isHostRequest(req);
