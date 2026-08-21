@@ -19,6 +19,7 @@ import {
   HOST_ONLY_PATHS,
 } from '../server/security';
 import { isImageProxyPath } from '../server/rateLimit';
+import { canModifyManga } from '../server/appState';
 
 describe('PII encryption (AES-256-GCM)', () => {
   it('round-trips plaintext and does not leak it in ciphertext', () => {
@@ -237,3 +238,37 @@ describe('fetchWithSsrfGuard (pre-flight validation)', () => {
     await expect(fetchWithSsrfGuard('http://10.0.0.5/internal')).rejects.toThrow();
   });
 });
+
+describe('canModifyManga (row-level authorization)', () => {
+  const sharedManga: any = { id: 'm1', title: 'Shared Series', userId: null };
+  const user1Manga: any = { id: 'm2', title: 'User 1 Series', userId: 'usr_1' };
+  const user2Manga: any = { id: 'm3', title: 'User 2 Series', userId: 'usr_2' };
+
+  it('allows host machine requests to modify any series', () => {
+    const hostReq: any = { ip: '127.0.0.1', connection: { remoteAddress: '127.0.0.1' }, socket: { remoteAddress: '127.0.0.1' }, headers: {} };
+    expect(canModifyManga(hostReq, user1Manga)).toBe(true);
+    expect(canModifyManga(hostReq, user2Manga)).toBe(true);
+    expect(canModifyManga(hostReq, sharedManga)).toBe(true);
+  });
+
+  it('allows admin users to modify any series', () => {
+    const adminReq: any = { ip: '10.200.0.5', headers: {}, user: { id: 'usr_admin', role: 'admin' } };
+    expect(canModifyManga(adminReq, user1Manga)).toBe(true);
+    expect(canModifyManga(adminReq, user2Manga)).toBe(true);
+    expect(canModifyManga(adminReq, sharedManga)).toBe(true);
+  });
+
+  it('allows regular users to modify only their own or unowned series', () => {
+    const user1Req: any = { ip: '10.200.0.5', headers: {}, user: { id: 'usr_1', role: 'user' } };
+    expect(canModifyManga(user1Req, user1Manga)).toBe(true);
+    expect(canModifyManga(user1Req, sharedManga)).toBe(true);
+    expect(canModifyManga(user1Req, user2Manga)).toBe(false);
+  });
+
+  it('rejects unauthenticated requests from remote IPs', () => {
+    const anonReq: any = { ip: '10.200.0.5', headers: {} };
+    expect(canModifyManga(anonReq, user1Manga)).toBe(false);
+    expect(canModifyManga(anonReq, sharedManga)).toBe(false);
+  });
+});
+

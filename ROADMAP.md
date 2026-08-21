@@ -56,25 +56,20 @@ Issues identified during the 2026-08-21 full code review, ordered by impact.
 
 ### 🔴 Critical
 
-- **Fix MangaDex chapter feed cap** — `refreshSingleMangaMetadata` fetches the chapter feed with `limit=100`, silently truncating series with 100+ chapters and causing `latestChapter` to be under-reported. Switch to the `/manga/{id}/aggregate` endpoint (returns real totals without pagination).
-
-- **Continue router extraction from `server.ts`** — The file is ~7 800 lines. The router extraction pattern (`authRouter`, `adminRouter`, `settingsRouter`, etc.) needs to extend to the remaining inline route groups: `/api/manga`, `/api/reader`, `/api/explore`, and `/api/tracker`.
-
-- **Add row-level ownership check on manga write endpoints** — Authenticated `user`-role accounts can currently overwrite another user's series row. When `manga.userId` is set, `PATCH`/`PUT` handlers should reject writes from a different user unless the actor is `admin`.
+- ✅ **Fix MangaDex chapter feed cap** — `refreshSingleMangaMetadata` upgraded to query the `/manga/{id}/aggregate` endpoint to obtain true total chapter numbers across all volumes without a 100-item pagination cap.
+- ✅ **Add row-level ownership check on manga write endpoints** — Authenticated `user`-role accounts can only modify series that are unowned or explicitly owned by their account (`canModifyManga`), while `admin` and host requests retain full permissions.
+- 🔄 **Continue router extraction from `server.ts`** — `server.ts` reduced from ~8,200 to ~6,680 lines with `categoriesRouter`, `metadataService`, and `mangaRouter` successfully extracted. Next phase: `/api/reader`, `/api/sources` / `/api/explore`, and `/api/ai`.
 
 ### 🟠 High Priority
 
 - **Fix `autoBackupService` unencrypted PII** — `createBackupNow()` serializes `userProfiles` (email addresses + scrypt password hashes) in plaintext into `./data/backups/*.json`. Replace with `buildEncryptedProfiles()` from `appState.ts`.
-
 - **Cache FlameComics `buildId`** — `fetchFlameSeriesContext()` fires an extra homepage HTTP request on every call to extract the Next.js `buildId`. Cache it in a module-level variable with a ~5-minute TTL to avoid N+1 fetches during auto-update scans.
-
 - **Replace `KOTATSU_SOURCES.find` with `SOURCE_MAP` in hot loop** — `isSeriesFromDisabledSource()` calls `KOTATSU_SOURCES.find(s => s.id === disabledId)` inside a double loop (disabled sources × manga list). `SOURCE_MAP` already provides O(1) lookup via `getSourceById()`.
-
 - **Optimize `calculateStringSimilarity` in Kotatsu merge engine** — The Levenshtein distance matrix is freshly allocated on every call. During `integrateKotatsuSourcesAndMerge()` this produces up to 400 000 matrix allocations for a 2 000-series library. Pre-build a normalized-title lookup map for O(1) exact matching; use the matrix only as a fallback.
 
 ### 🟡 Medium Priority
 
-- **Fix `verifyAuthToken` base64url signature comparison** — `Buffer.from(sig)` decodes as UTF-8, not base64url, so `timingSafeEqual` compares mismatched byte encodings. Fix: decode both sides with `Buffer.from(sig, 'base64url')` before comparing.
+- ✅ **Fix `verifyAuthToken` base64url signature comparison** — Decodes both signature sides with `Buffer.from(sig, 'base64url')` before executing `crypto.timingSafeEqual`.
 
 - **Fix `circuitBreaker.recordSuccess` resetting `tripCount` to 0** — A single successful HALF_OPEN probe resets the exponential backoff counter, meaning a flaky source always re-trips at 1× cooldown. Keep `tripCount` on success; reset only after N consecutive successes.
 

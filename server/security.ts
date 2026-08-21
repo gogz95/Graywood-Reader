@@ -222,7 +222,10 @@ export function verifyAuthToken(token: string): Record<string, unknown> | null {
   const body = token.slice(0, dot);
   const sig = token.slice(dot + 1);
   const expected = crypto.createHmac('sha256', AUTH_SIGNING_KEY).update(body).digest('base64url');
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  if (sig.length !== expected.length) return null;
+  const sigBuf = Buffer.from(sig, 'base64url');
+  const expBuf = Buffer.from(expected, 'base64url');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (typeof payload.exp === 'number' && payload.exp < Date.now()) return null;

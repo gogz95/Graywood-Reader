@@ -58,6 +58,20 @@ export function canWriteCatalog(req: express.Request): boolean {
   return isHostRequest(req) || !!(req as any).user;
 }
 
+/**
+ * Row-level ownership check on series modifications.
+ * Admins and Host requests can modify any series. Non-admin users can only
+ * modify series that are unowned (userId is null) or explicitly owned by their account.
+ */
+export function canModifyManga(req: express.Request, manga: MangaItem): boolean {
+  if (isHostRequest(req)) return true;
+  const user = (req as any).user as UserProfile | undefined;
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (manga.userId && manga.userId !== user.id) return false;
+  return true;
+}
+
 export function rejectCatalogWrite(res: express.Response): void {
   res.status(401).json({
     error: 'Unauthorized',
