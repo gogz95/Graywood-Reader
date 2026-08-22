@@ -648,3 +648,45 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
   }
   return res.json(enriched);
 });
+
+// ── Dynamic Source Extensions Lifecycle API ──────────────────────────────────
+import { extensionEngine } from '../sources/extensionEngine';
+
+sourcesRouter.get('/api/extensions/list', (_req, res) => {
+  res.json(extensionEngine.getExtensions());
+});
+
+sourcesRouter.post('/api/extensions/install', (req, res) => {
+  try {
+    const manifest = req.body;
+    const installed = extensionEngine.installExtension(manifest);
+    res.status(201).json({ success: true, extension: installed });
+  } catch (err: any) {
+    res.status(400).json({ error: "Failed to install extension", details: err.message });
+  }
+});
+
+sourcesRouter.post('/api/extensions/toggle/:id', (req, res) => {
+  const { id } = req.params;
+  const { enabled } = req.body || {};
+  const newStatus = extensionEngine.toggleExtension(id, enabled);
+  res.json({ success: true, id, enabled: newStatus });
+});
+
+sourcesRouter.delete('/api/extensions/:id', (req, res) => {
+  const { id } = req.params;
+  const success = extensionEngine.uninstallExtension(id);
+  res.json({ success });
+});
+
+sourcesRouter.post('/api/extensions/execute/:id', (req, res) => {
+  const { id } = req.params;
+  const { query } = req.body || {};
+  try {
+    const results = extensionEngine.executeExtensionSearch(id, query || '');
+    res.json({ success: true, results });
+  } catch (err: any) {
+    res.status(500).json({ error: "Extension execution failed", details: err.message });
+  }
+});
+

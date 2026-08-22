@@ -587,3 +587,204 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
   saveDatabaseToDisk();
   return { purgedCount, refreshedCount };
 }
+
+// ── Multi-Provider Metadata Aggregator Engine ────────────────────────────────
+export interface UnifiedMetadataResult {
+  provider: 'MangaDex' | 'AniList' | 'MangaUpdates' | 'MyAnimeList';
+  title: string;
+  altTitles: string[];
+  coverImage: string;
+  description: string;
+  genres: string[];
+  rating?: number;
+  status?: string;
+  publicationType?: string;
+  externalUrl?: string;
+  apiId?: string;
+}
+
+export async function fetchAniListMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  const graphqlQuery = `
+    query ($search: String) {
+      Page(page: 1, perPage: 3) {
+        media(search: $search, type: MANGA) {
+          id
+          title { romaji english native }
+          coverImage { extraLarge large }
+          description
+          genres
+          status
+          averageScore
+          countryOfOrigin
+          siteUrl
+        }
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ query: graphqlQuery, variables: { search: title } }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const media = json.data?.Page?.media?.[0];
+    if (!media) return null;
+
+    const engTitle = media.title?.english || media.title?.romaji || media.title?.native || title;
+    const altTitles = [media.title?.romaji, media.title?.native, media.title?.english].filter(Boolean) as string[];
+    const origin = media.countryOfOrigin;
+    const pubType = origin === 'KR' ? 'manhwa' : origin === 'CN' || origin === 'TW' ? 'manhua' : 'manga';
+
+    return {
+      provider: 'AniList',
+      title: engTitle,
+      altTitles: Array.from(new Set(altTitles)),
+      coverImage: media.coverImage?.extraLarge || media.coverImage?.large || '',
+      description: (media.description || '').replace(/<[^>]*>?/gm, '').trim(),
+      genres: media.genres || [],
+      rating: media.averageScore ? Number((media.averageScore / 10).toFixed(1)) : undefined,
+      status: media.status || 'FINISHED',
+      publicationType: pubType,
+      externalUrl: media.siteUrl || `https://anilist.co/manga/${media.id}`,
+      apiId: String(media.id),
+    };
+  } catch (err: any) {
+    console.warn(`[AniList Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
+
+export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  try {
+    const res = await fetch(`https://api.mangaupdates.com/v1/manga/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ search: title, page: 1, perpage: 3 }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const record = json.results?.[0]?.record;
+    if (!record) return null;
+
+    const altTitles = (record.associated || []).map((a: any) => a.title).filter(Boolean);
+    return {
+      provider: 'MangaUpdates',
+      title: record.title || title,
+      altTitles,
+      coverImage: record.image?.url?.original || record.image?.url?.thumb || '',
+      description: (record.description || '').replace(/<[^>]*>?/gm, '').trim(),
+      genres: (record.genres || []).map((g: any) => g.genre).filter(Boolean),
+      rating: record.bayesian_rating ? Number(record.bayesian_rating.toFixed(1)) : undefined,
+      status: record.completed ? 'COMPLETED' : 'RELEASING',
+      publicationType: record.type ? record.type.toLowerCase() : 'manga',
+      externalUrl: record.url || `https://www.mangaupdates.com/series.html?id=${record.series_id}`,
+      apiId: String(record.series_id),
+    };
+  } catch (err: any) {
+    console.warn(`[MangaUpdates Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
+
+export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  try {
+    const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(title)}&limit=1`, {
+      headers: { 'User-Agent': APP_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const item = json.data?.[0];
+    if (!item) return null;
+
+    const altTitles = [item.title_english, item.title_japanese, ...(item.titles || []).map((t: any) => t.title)].filter(Boolean);
+    return {
+      provider: 'MyAnimeList',
+      title: item.title_english || item.title || title,
+      altTitles: Array.from(new Set(altTitles)),
+      coverImage: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url || '',
+      description: (item.synopsis || '').trim(),
+      genres: (item.genres || []).map((g: any) => g.name).filter(Boolean),
+      rating: item.score ? Number(item.score.toFixed(1)) : undefined,
+      status: item.publishing ? 'RELEASING' : 'FINISHED',
+      publicationType: item.type ? item.type.toLowerCase() : 'manga',
+      externalUrl: item.url || `https://myanimelist.net/manga/${item.mal_id}`,
+      apiId: String(item.mal_id),
+    };
+  } catch (err: any) {
+    console.warn(`[MAL Jikan Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
+
+export async function aggregateMultiSourceMetadata(title: string): Promise<{
+  merged: Partial<UnifiedMetadataResult>;
+  sources: UnifiedMetadataResult[];
+}> {
+  const results = await Promise.allSettled([
+    getMangaDexMetadataByTitle(title).then((md) => md ? {
+      provider: 'MangaDex' as const,
+      title: title,
+      altTitles: md.altTitles || [],
+      coverImage: md.coverImage || '',
+      description: md.description || '',
+      genres: md.genres || [],
+      apiId: md.apiId || undefined,
+    } : null),
+    fetchAniListMetadata(title),
+    fetchMangaUpdatesMetadata(title),
+    fetchJikanMetadata(title),
+  ]);
+
+  const sources: UnifiedMetadataResult[] = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) {
+      sources.push(r.value);
+    }
+  }
+
+  if (sources.length === 0) {
+    return { merged: {}, sources: [] };
+  }
+
+  // Multi-provider merge strategy:
+  // - Pick highest quality cover (AniList or MangaDex or MAL)
+  // - Pick longest description
+  // - Dedupe & union genres and altTitles
+  // - Average ratings
+  const bestCover = sources.find((s) => s.coverImage && (s.provider === 'AniList' || s.provider === 'MangaDex'))?.coverImage || sources[0].coverImage;
+  const bestDesc = [...sources].sort((a, b) => (b.description?.length || 0) - (a.description?.length || 0))[0]?.description || '';
+  const allGenres = Array.from(new Set(sources.flatMap((s) => s.genres || [])));
+  const allAltTitles = Array.from(new Set(sources.flatMap((s) => s.altTitles || [])));
+
+  const validRatings = sources.map((s) => s.rating).filter((r): r is number => typeof r === 'number' && r > 0);
+  const avgRating = validRatings.length > 0
+    ? Number((validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1))
+    : undefined;
+
+  return {
+    merged: {
+      title: sources[0].title || title,
+      altTitles: allAltTitles,
+      coverImage: bestCover,
+      description: bestDesc,
+      genres: allGenres,
+      rating: avgRating,
+      status: sources.find((s) => s.status)?.status || 'RELEASING',
+      publicationType: sources.find((s) => s.publicationType)?.publicationType || 'manhwa',
+    },
+    sources,
+  };
+}
+

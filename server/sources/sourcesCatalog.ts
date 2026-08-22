@@ -193,9 +193,36 @@ syncDeadSourcesToDisabled();
 // Export alias KOTATSU_SOURCES for backwards compatibility across codebase
 export const KOTATSU_SOURCES = ALL_SOURCES_CATALOG;
 
+export function getAllSourcesWithExtensions(): SourceDefinition[] {
+  try {
+    const { extensionEngine } = require('./extensionEngine');
+    const dynamicSources = extensionEngine.toSourceDefinitions();
+    return [...ALL_SOURCES_CATALOG, ...dynamicSources];
+  } catch {
+    return ALL_SOURCES_CATALOG;
+  }
+}
+
 export function getSourceById(sourceId: string): SourceDefinition | undefined {
   if (!sourceId) return undefined;
-  return SOURCE_MAP.get(sourceId.toLowerCase());
+  const found = SOURCE_MAP.get(sourceId.toLowerCase());
+  if (found) return found;
+
+  try {
+    const { extensionEngine } = require('./extensionEngine');
+    const ext = extensionEngine.getExtensionById(sourceId);
+    if (ext && ext.enabled) {
+      return {
+        id: ext.id,
+        name: ext.name,
+        baseUrl: ext.baseUrl,
+        engineType: 'custom_html',
+        lang: ext.lang,
+        isNsfw: ext.isNsfw,
+      };
+    }
+  } catch {}
+  return undefined;
 }
 
 export function ensureSourceInRegistry(sourceId: string): SourceDefinition | null {

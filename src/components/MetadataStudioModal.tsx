@@ -199,6 +199,32 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
     }
   };
 
+  const handleMultiProviderEnrich = async () => {
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/metadata/enrich-manga/${manga.id}`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.manga) {
+          onUpdateManga(data.manga);
+          setCurrentCover(data.manga.coverImage);
+          setCurrentTitle(data.manga.title);
+          setCurrentDesc(data.manga.description || '');
+          setCurrentRating(data.manga.rating || 8.0);
+          setCurrentGenres(data.manga.genres || []);
+          setCurrentAltTitles(data.manga.altTitles || []);
+          setSuccessMsg(`Multi-Provider Aggregation complete! (AniList + MangaUpdates + MangaDex)`);
+          setTimeout(() => setSuccessMsg(null), 3000);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
   const handleSaveAll = async () => {
     setSaving(true);
     try {
@@ -290,12 +316,24 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleMultiProviderEnrich}
+              disabled={saving}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-accent/20 to-purple-500/20 text-accent border border-accent/40 hover:border-accent text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              title="Query AniList, MangaUpdates, MangaDex & MAL simultaneously to enrich genres, covers & description"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-accent animate-pulse" />
+              <span>Auto-Enrich (Multi-Provider)</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Navigation */}

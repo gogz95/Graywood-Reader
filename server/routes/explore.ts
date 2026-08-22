@@ -698,3 +698,50 @@ exploreRouter.post('/api/kotatsu/sync-database', (req, res) => {
     totalInDatabase: mangaDatabase.length,
   });
 });
+
+// ── Multi-Provider Metadata Provider Search & Enrichment API ─────────────────
+import { aggregateMultiSourceMetadata } from '../services/metadataService';
+
+exploreRouter.get('/api/metadata/search-providers', async (req, res) => {
+  const query = (req.query.q as string || '').trim();
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter q is required' });
+  }
+
+  try {
+    const data = await aggregateMultiSourceMetadata(query);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Multi-provider search failed', details: err.message });
+  }
+});
+
+exploreRouter.post('/api/metadata/enrich-manga/:id', async (req, res) => {
+  const { id } = req.params;
+  const manga = mangaDatabase.find((m) => m.id === id);
+  if (!manga) {
+    return res.status(404).json({ error: 'Manga item not found' });
+  }
+
+  try {
+    const { merged } = await aggregateMultiSourceMetadata(manga.title);
+    if (merged) {
+      if (merged.coverImage) manga.coverImage = merged.coverImage;
+      if (merged.description) manga.description = merged.description;
+      if (merged.genres && merged.genres.length > 0) {
+        manga.genres = Array.from(new Set([...(manga.genres || []), ...merged.genres]));
+      }
+      if (merged.altTitles && merged.altTitles.length > 0) {
+        manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...merged.altTitles]));
+      }
+      if (merged.rating) manga.rating = Math.max(manga.rating || 0, merged.rating);
+      manga.lastUpdated = new Date().toISOString();
+      syncAddOrUpdateManga(manga);
+      saveDatabaseToDisk();
+    }
+    res.json({ success: true, manga });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Enrichment failed', details: err.message });
+  }
+});
+
