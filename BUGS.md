@@ -27,27 +27,6 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
-### [BUG-038] [Other Fault] The Summer at Her House
-- **Status**: `open`
-- **Priority**: `low`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Darkmodes (2026-08-21)
-- **Description**: Flagged issue: Other Fault.
-
-Series: The Summer at Her House (manhwa18_49b4deb55cd3fa03759fa463)
-Source: Manhwa18
-Flag reason: Other Fault
-
-Loads wrong metadata for source
-- **Steps to Reproduce**:
-  1. 1. Open series "The Summer at Her House"
-2. Trigger reading / metadata load
-3. Observe: Other Fault
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
 _No active bugs._
 
 ---
@@ -55,6 +34,30 @@ _No active bugs._
 ## Fixed Bugs (Archive)
 
 > Bugs that have been resolved are moved here for historical reference.
+
+### [BUG-039] When refreshing metadata
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/routes/manga.ts`, `src/components/MangaDetailModal.tsx`
+- **Submitted-By**: Darkmodes (2026-08-21)
+- **Description**: When clicking the refresh metadata button on a series, it cleared the custom shelf selection (`categories`).
+- **Root cause**:
+  1. `POST /api/manga/:id/refresh-metadata` returned raw database items without applying `SqliteDb.applyUserOverlay([refreshed], uid)[0]`. Because shelf category assignments are stored per-user in SQLite table `manga_categories`, the response omitted `categories`.
+  2. `MangaDetailModal` applied the response directly to `onUpdateManga`, replacing the series state with `categories: undefined` and resetting active checkboxes.
+- **Fixed in**: 2026-08-22 — `POST /api/manga/:id/refresh-metadata` and `POST /api/manga/:id/pull-metadata-from-source` now resolve the request user and apply user shelf overlay; `MangaDetailModal` defensively preserves existing shelf categories during updates.
+
+### [BUG-038] [Other Fault] The Summer at Her House (Wrong metadata loaded on live sources)
+- **Status**: `fixed`
+- **Priority**: `low`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/services/metadataService.ts`, `server/routes/manga.ts`, `tests/engineParsers.test.ts`
+- **Submitted-By**: Darkmodes (2026-08-21)
+- **Description**: Series *The Summer at Her House* (`manhwa18_49b4deb55cd3fa03759fa463`) loaded wrong metadata from MangaDex instead of its Manhwa18 live source.
+- **Root cause**:
+  1. `refreshSingleMangaMetadata` executed a loose MangaDex fuzzy title search with a 60% similarity threshold whenever `mangaDexId` was unset, allowing unrelated MangaDex series to hijack live scraper series (Manhwa18, Madara, etc.).
+  2. The service lacked live HTML series metadata extraction for Manhwa18 and other generic live sources.
+- **Fixed in**: 2026-08-22 — Implemented `parseGenericLiveSeriesMetadata` and `fetchLiveSeriesMetadata` to extract real title, cover, synopsis, genres, and latest chapter directly from live source HTML pages; permanently disabled MangaDex fuzzy search hijacking on series with live reading URLs; tightened MangaDex standalone title matching threshold to $\ge 75\%$.
 
 ### [BUG-034] Server crashed at boot in production mode (httpServer TDZ ReferenceError)
 - **Status**: `fixed`

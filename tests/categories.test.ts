@@ -436,4 +436,72 @@ describe('User-Defined Categories & Custom Shelves', () => {
     // Clean up
     SqliteDb.deleteManga(testMangaId);
   });
+
+  it('preserves user shelf categories when POST /api/manga/:id/refresh-metadata is called (BUG-039)', async () => {
+    const user = { id: 'usr_shelf_refresh_test', username: 'shelf_refresher', role: 'user' as const };
+    const token = signAuthToken({ sub: user.id, ...user });
+    const mangaId = 'm_shelf_refresh_check';
+
+    // 1. Create a custom shelf category
+    const catRes = await request(app)
+      .post('/api/categories')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Reading Shelf', color: '#10b981', icon: 'Bookmark' });
+    expect(catRes.status).toBe(201);
+    const catId = catRes.body.id;
+
+    // 2. Add series to database
+    SqliteDb.upsertManga({
+      id: mangaId,
+      title: 'Shelf Preservation Test',
+      altTitles: [],
+      type: 'manhwa',
+      coverImage: 'https://example.com/cover.jpg',
+      description: 'Testing shelf preservation across refreshes.',
+      genres: ['Action'],
+      status: 'reading',
+      currentChapter: 5,
+      totalChapters: 10,
+      latestChapter: 10,
+      rating: 8.5,
+      sourceUrl: 'https://example.com/manga/shelf-preservation-test',
+      sourceName: 'Custom Scraper',
+      autoUpdateEnabled: true,
+      notes: '',
+      addedAt: new Date().toISOString(),
+      lastReadAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      metadataOverrides: [],
+      isFavorite: false,
+      isNsfw: false,
+    });
+
+    // 3. Assign the manga to the shelf
+    const assignRes = await request(app)
+      .post('/api/categories/assign')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ mangaId, categoryIds: [catId] });
+    expect(assignRes.status).toBe(200);
+    expect(assignRes.body.categories).toEqual([catId]);
+
+    // 4. Trigger metadata refresh endpoint
+    const refreshRes = await request(app)
+      .post(`/api/manga/${mangaId}/refresh-metadata`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.success).toBe(true);
+    expect(refreshRes.body.manga.categories).toBeDefined();
+    expect(refreshRes.body.manga.categories).toContain(catId);
+
+    // 5. Fetch library / single item endpoint -> verify categories array is intact
+    const getRes = await request(app)
+      .get(`/api/manga/${mangaId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.categories).toContain(catId);
+
+    // Clean up
+    SqliteDb.deleteCategory(catId, user.id);
+    SqliteDb.deleteManga(mangaId);
+  });
 });

@@ -129,7 +129,17 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
       const res = await apiFetch(`/api/manga/${manga.id}/refresh-metadata`, { method: 'POST' });
       const data = await res.json();
       if (data.success && data.manga) {
-        onUpdateManga(data.manga);
+        const updatedItem: MangaItem = {
+          ...data.manga,
+          categories:
+            Array.isArray(data.manga.categories) && data.manga.categories.length > 0
+              ? data.manga.categories
+              : (manga.categories || []),
+        };
+        onUpdateManga(updatedItem);
+        if (updatedItem.categories) {
+          setActiveCategoryIds(updatedItem.categories);
+        }
         setRefreshMsg('✓ Metadata updated!');
         setTimeout(() => setRefreshMsg(null), 3000);
       } else {
@@ -142,7 +152,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
     } finally {
       setIsRefreshingMetadata(false);
     }
-  }, [manga.id]);
+  }, [manga.id, manga.categories, onUpdateManga]);
 
   const [similarSeries, setSimilarSeries] = useState<{ title: string; type: string; reason: string }[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);

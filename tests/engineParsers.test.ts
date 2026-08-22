@@ -6,6 +6,7 @@ import {
   isValidPanelImageUrl,
   parseSrcsetCandidate,
   parseGenericChapterListFromHtml,
+  parseGenericLiveSeriesMetadata,
 } from '../server';
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -131,12 +132,66 @@ describe('Automated Engine Parser Test Harness', () => {
     });
   });
 
+  describe('Live Series Metadata Parser', () => {
+    it('extracts metadata from Manhwa18 series page HTML', () => {
+      const html = loadFixture('manhwa18-series.html');
+      const meta = parseGenericLiveSeriesMetadata(html, 'https://manhwa18.com/manga/secret-class');
+
+      expect(meta).not.toBeNull();
+      expect(meta?.title).toBe('Secret Class');
+      expect(meta?.latestChapter).toBe(210);
+    });
+
+    it('extracts metadata and chapter count from Madara series HTML', () => {
+      const html = loadFixture('madara-series.html');
+      const meta = parseGenericLiveSeriesMetadata(html, 'https://madarasource.example/manga/solo-leveling');
+
+      expect(meta).not.toBeNull();
+      expect(meta?.title).toBe('Solo Leveling');
+      expect(meta?.latestChapter).toBe(100);
+    });
+
+    it('extracts rich description, cover, and genres when available in HTML', () => {
+      const customHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>The Summer at Her House - Manhwa18</title>
+          <meta property="og:description" content="A summer vacation at an unexpected house turns exciting.">
+          <meta property="og:image" content="https://cdn.manhwa18.example/covers/summer-house.jpg">
+        </head>
+        <body>
+          <div class="post-title"><h1>The Summer at Her House</h1></div>
+          <div class="genres-content">
+            <a href="/genres/adult">Adult</a>
+            <a href="/genres/romance">Romance</a>
+          </div>
+          <div class="star-rating"><span class="rating-val">8.9</span></div>
+          <ul class="row-content-chapter">
+            <li class="a-h"><a class="chapter-name" href="https://manhwa18.example/manga/summer/ch-65">Chapter 65</a></li>
+            <li class="a-h"><a class="chapter-name" href="https://manhwa18.example/manga/summer/ch-1">Chapter 1</a></li>
+          </ul>
+        </body>
+        </html>
+      `;
+      const meta = parseGenericLiveSeriesMetadata(customHtml, 'https://manhwa18.com/manga/summer');
+      expect(meta).not.toBeNull();
+      expect(meta?.title).toBe('The Summer at Her House');
+      expect(meta?.description).toBe('A summer vacation at an unexpected house turns exciting.');
+      expect(meta?.coverImage).toBe('https://cdn.manhwa18.example/covers/summer-house.jpg');
+      expect(meta?.genres).toEqual(['Adult', 'Romance']);
+      expect(meta?.latestChapter).toBe(65);
+      expect(meta?.rating).toBe(8.9);
+    });
+  });
+
   describe('Resilience and Error Handling', () => {
     it('returns empty array on empty or invalid HTML strings', () => {
       expect(parseGenericChapterListFromHtml('', 'https://example.com')).toEqual([]);
       expect(parseGenericChapterListFromHtml('<html><body>No chapters here</body></html>', 'https://example.com')).toEqual([]);
       expect(extractPanelImages('', 'https://example.com')).toEqual([]);
       expect(extractPanelImages('<html><body>No images here</body></html>', 'https://example.com')).toEqual([]);
+      expect(parseGenericLiveSeriesMetadata('', 'https://example.com')).toBeNull();
     });
 
     it('handles relative image paths and constructs valid absolute URLs', () => {

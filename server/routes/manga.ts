@@ -19,6 +19,7 @@ import {
 import { isHostRequest } from '../security';
 import {
   refreshSingleMangaMetadata,
+  fetchLiveSeriesMetadata,
   fetchMangaDex,
   isMangaDexSourceLink,
 } from '../services/metadataService';
@@ -284,7 +285,9 @@ mangaRouter.post('/:id/refresh-metadata', async (req, res) => {
   try {
     console.log(`[Metadata Engine] Refreshing live metadata for '${existing.title}' (${id})...`);
     const refreshed = await refreshSingleMangaMetadata(existing);
-    res.json({ success: true, manga: refreshed, message: `Metadata refreshed for ${refreshed.title}` });
+    const uid = resolveRequestUserId(req);
+    const finalManga = uid ? SqliteDb.applyUserOverlay([refreshed], uid)[0] : refreshed;
+    res.json({ success: true, manga: finalManga, message: `Metadata refreshed for ${refreshed.title}` });
   } catch (err: any) {
     console.error(`[Metadata Engine] Failed to refresh metadata for ${id}:`, err);
     res.status(500).json({ error: 'Failed to refresh metadata', details: err.message });
@@ -362,8 +365,8 @@ mangaRouter.post('/:id/pull-metadata-from-source', async (req, res) => {
         }
       }
     } else {
-      const scraped = await fetchWeebCentralSeriesMetadata(sourceUrl).catch(() => null);
-      if (scraped) fetched = scraped as Partial<MangaItem>;
+      const live = await fetchLiveSeriesMetadata(sourceUrl, sourceName).catch(() => null);
+      if (live) fetched = live as Partial<MangaItem>;
     }
   } catch (err: any) {
     console.warn(`[pull-metadata-from-source] Scraper error for ${sourceUrl}:`, err.message);
@@ -418,9 +421,11 @@ mangaRouter.post('/:id/pull-metadata-from-source', async (req, res) => {
   saveDatabaseToDisk();
 
   console.log(`[pull-metadata-from-source] Applied [${appliedFields.join(', ')}] from '${sourceName}' for '${updated.title}'`);
+  const uid = resolveRequestUserId(req);
+  const finalManga = uid ? SqliteDb.applyUserOverlay([updated], uid)[0] : updated;
   res.json({
     success: true,
-    manga: updated,
+    manga: finalManga,
     appliedFields,
     message: `Applied ${appliedFields.join(', ')} from ${sourceName}`,
   });

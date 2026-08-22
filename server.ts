@@ -84,6 +84,8 @@ import {
   fetchMangaDex,
   calculateStringSimilarity,
   getMangaDexMetadataByTitle,
+  parseGenericLiveSeriesMetadata,
+  fetchLiveSeriesMetadata,
   purgeDisabledSourcesAndRefreshMetadata,
 } from "./server/services/metadataService";
 import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
@@ -210,6 +212,8 @@ export {
   updateDatabaseWithAllAvailableSeries,
   probeSourceSeriesCount,
   auditAndDisableEmptySources,
+  parseGenericLiveSeriesMetadata,
+  fetchLiveSeriesMetadata,
 };
 
 // Initialize Express
