@@ -11,6 +11,7 @@ import {
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
   isNsfwAccessAllowed,
+  appSettings,
 } from '../appState';
 import {
   KOTATSU_SOURCES,
@@ -792,5 +793,20 @@ exploreRouter.post('/api/metadata/enrich-manga/:id', async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: 'Enrichment failed', details: err.message });
   }
+// ── Multi-Provider Metadata Enricher Introspection API ───────────────────────
+exploreRouter.get('/api/metadata/providers', (_req, res) => {
+  const s = appSettings as any;
+  res.json({
+    providers: [
+      { id: 'MangaDex', enabled: s.mangadexConnected !== false && s.mangadexMetadataEnabled !== false, apiKeyRequired: false },
+      { id: 'AniList', enabled: s.anilistConnected !== false && s.anilistMetadataEnabled !== false, apiKeyRequired: false },
+      { id: 'MyAnimeList', enabled: s.malEnabled !== false, apiKeyRequired: false },
+      { id: 'Kitsu', enabled: s.kitsuMetadataEnabled !== false, apiKeyRequired: false, scrobbleEnabled: s.kitsuConnected === true },
+      { id: 'MangaUpdates', enabled: s.mangaUpdatesEnabled !== false, apiKeyRequired: Boolean(s.mangaUpdatesUsername && s.mangaUpdatesPassword) },
+      { id: 'OpenLibrary', enabled: s.openlibraryEnabled !== false, apiKeyRequired: false },
+      { id: 'GoogleBooks', enabled: s.googleBooksEnabled !== false, apiKeyRequired: false },
+    ],
+  });
+});
 });
 

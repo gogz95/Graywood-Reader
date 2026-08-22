@@ -211,6 +211,9 @@ export function buildEncryptedSettings() {
     captchaApiKey: appSettings.captchaApiKey && !appSettings.captchaApiKey.startsWith('enc:')
       ? encryptPII(appSettings.captchaApiKey)
       : (appSettings.captchaApiKey || ''),
+    mangaUpdatesPassword: appSettings.mangaUpdatesPassword && !appSettings.mangaUpdatesPassword.startsWith('enc:')
+      ? encryptPII(appSettings.mangaUpdatesPassword)
+      : (appSettings.mangaUpdatesPassword || ''),
     discordWebhookUrl: (appSettings as any).discordWebhookUrl && !(appSettings as any).discordWebhookUrl.startsWith('enc:')
       ? encryptPII((appSettings as any).discordWebhookUrl)
       : ((appSettings as any).discordWebhookUrl || ''),
@@ -593,6 +596,10 @@ export const SETTINGS_ALLOWED_KEYS = new Set<string>([
   'malConnected', 'malToken', 'malAutoSync',
   'kitsuConnected', 'kitsuToken', 'kitsuAutoSync',
   'mangadexConnected', 'privateModeEnabled', 'customUserAgent',
+  // Multi-provider metadata enrichers & toggles
+  'mangadexMetadataEnabled', 'anilistMetadataEnabled', 'malEnabled',
+  'kitsuMetadataEnabled', 'mangaUpdatesEnabled', 'mangaUpdatesUsername',
+  'mangaUpdatesPassword', 'openlibraryEnabled', 'googleBooksEnabled',
   'enableCloudflareBypass', 'flareSolverrUrl', 'captchaSolverEnabled',
   'captchaApiKey', 'stealthMode', 'preferredLanguage',
   'autoFormatReadingMode', 'defaultMangaMode', 'defaultManhwaMode',
@@ -644,6 +651,9 @@ export function sanitizeIncomingSettings(raw: any): Record<string, any> {
   if (clean.captchaApiKey === undefined || clean.captchaApiKey === '' || clean.captchaApiKey === MASKED_SECRET) {
     delete clean.captchaApiKey;
   }
+  if (clean.mangaUpdatesPassword === undefined || clean.mangaUpdatesPassword === '' || clean.mangaUpdatesPassword === MASKED_SECRET) {
+    delete clean.mangaUpdatesPassword;
+  }
   if (clean.discordWebhookUrl === undefined || clean.discordWebhookUrl === '' || clean.discordWebhookUrl === MASKED_SECRET) {
     delete clean.discordWebhookUrl;
   }
@@ -676,6 +686,16 @@ export let appSettings = {
   malAutoSync: false,
   kitsuConnected: false,
   kitsuAutoSync: false,
+  // Multi-provider metadata enrichers (all free / no-read-key APIs)
+  mangadexMetadataEnabled: true,
+  anilistMetadataEnabled: true,
+  malEnabled: true,
+  kitsuMetadataEnabled: true,
+  mangaUpdatesEnabled: true,
+  mangaUpdatesUsername: '',
+  mangaUpdatesPassword: '',
+  openlibraryEnabled: true,
+  googleBooksEnabled: true,
   privateModeEnabled: false,
   customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
   // Automated Cloudflare & Captcha Solver Config

@@ -10,7 +10,7 @@ A modern, high-performance self-hosted manga, manhwa, and manhua library tracker
 
 - 📚 **Smart Library Management** — Track reading statuses (`reading`, `completed`, `plan_to_read`, `on_hold`, `dropped`), unread chapter counters, favorites, flags, personal ratings, and custom tags.
 - 🗂️ **Multi-Select Bulk Actions** — Floating toolbar for batch status changes, bulk mark-as-read, and mass deletion.
-- 🔍 **Multi-Source Discovery** — MangaDex API v5, AniList search, and 1,100+ Kotatsu-parser sources (Madara, MangaThemesia, WPComics, FoolSlide, and custom HTML engines).
+- 🔍 **Multi-Source Discovery** — MangaDex API v5, AniList search, Jikan/MyAnimeList, Kitsu, MangaUpdates, OpenLibrary, and Google Books metadata enrichment, plus 1,100+ Kotatsu-parser sources (Madara, MangaThemesia, WPComics, FoolSlide, and custom HTML engines).
 - 📖 **Kotatsu-Inspired Reader**:
   - **Layouts**: Webtoon (Seamless 0px gap & Standard), Japanese Manga Right-to-Left (RTL), Left-to-Right (LTR), Single Page, and Double-Page Book Spread.
   - **Smart Guided Panel View**: Snap-to-panel keyboard/tap scrolling for long-strip webtoons.

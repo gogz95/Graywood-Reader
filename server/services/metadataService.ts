@@ -588,9 +588,68 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
   return { purgedCount, refreshedCount };
 }
 
+// ── Per-Provider Throttling & Enablement Engine ───────────────────────────────
+// Lightweight compliance layer that mirrors the MangaDex rate-limit pattern but
+// keeps independent pacing per external provider so a single aggregating title
+// lookup never overwhelms any one free API. All values are conservative.
+const PROVIDER_THROTTLE_MS: Record<string, number> = {
+  anilist: 350,       // AniList GraphQL ~3 req/s
+  mangadex: 260,      // MangaDex v5 (5 req/s rule, ~4.5 req/s enforced)
+  jikan: 400,         // Jikan (MAL) is ~3 req/s
+  kitsu: 400,         // Kitsu JSON:API public reads ~3 req/s
+  mangaupdates: 1200, // MangaUpdates free tier is aggressively rate-limited
+  openlibrary: 1200,  // OpenLibrary asks ~1 req/s
+  googlebooks: 500,   // Google Books public tier ~5 req/s
+};
+const lastProviderRequestAt: Record<string, number> = {};
+
+async function throttleProvider(key: string): Promise<void> {
+  const ms = PROVIDER_THROTTLE_MS[key] || 0;
+  if (ms <= 0) return;
+  const last = lastProviderRequestAt[key] || 0;
+  const wait = ms - (Date.now() - last);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastProviderRequestAt[key] = Date.now();
+}
+
+// ── Provider Response Cache (AUP: "employ caching mechanisms") ──────────────
+// Metadata is fairly static, so caching prevents repeated title lookups from
+// re-hitting external APIs (especially important for MangaUpdates, whose free
+// tier is rate-limited). Only successful (non-null) results are cached; null
+// results (e.g. transient network errors) are retried on the next call.
+const CACHE_TTL_MS: Record<string, number> = {
+  mangadex: 6 * 60 * 60 * 1000,
+  anilist: 6 * 60 * 60 * 1000,
+  mangaupdates: 6 * 60 * 60 * 1000,
+  jikan: 24 * 60 * 60 * 1000,
+  kitsu: 6 * 60 * 60 * 1000,
+  openlibrary: 24 * 60 * 60 * 1000,
+  googlebooks: 24 * 60 * 60 * 1000,
+};
+const metadataCache = new Map<string, { value: UnifiedMetadataResult | null; expires: number }>();
+
+async function cachedProviderResult<T extends UnifiedMetadataResult | null>(
+  key: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const providerKey = key.split(':')[0].toLowerCase();
+  const ttl = CACHE_TTL_MS[providerKey] || 60 * 60 * 1000;
+  const hit = metadataCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value as T;
+  const value = await fn();
+  if (value) {
+    metadataCache.set(key, { value, expires: Date.now() + ttl });
+  } else {
+    metadataCache.delete(key);
+  }
+  return value;
+}
+
+const cleanHtml = (raw: string): string => (raw || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+
 // ── Multi-Provider Metadata Aggregator Engine ────────────────────────────────
 export interface UnifiedMetadataResult {
-  provider: 'MangaDex' | 'AniList' | 'MangaUpdates' | 'MyAnimeList';
+  provider: 'MangaDex' | 'AniList' | 'MangaUpdates' | 'MyAnimeList' | 'Kitsu' | 'OpenLibrary' | 'GoogleBooks';
   title: string;
   altTitles: string[];
   coverImage: string;
@@ -601,6 +660,12 @@ export interface UnifiedMetadataResult {
   publicationType?: string;
   externalUrl?: string;
   apiId?: string;
+  authors?: string[];
+  categories?: string[];
+  /** Optional explicit credit line (per MangaUpdates AUP: acknowledge the source). */
+  attribution?: string;
+  /** Provider names that contributed to a merged result. */
+  dataSources?: string[];
 }
 
 export async function fetchAniListMetadata(title: string): Promise<UnifiedMetadataResult | null> {
@@ -624,6 +689,7 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
   `;
 
   try {
+    await throttleProvider('anilist');
     const res = await fetch("https://graphql.anilist.co", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -646,7 +712,7 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
       title: engTitle,
       altTitles: Array.from(new Set(altTitles)),
       coverImage: media.coverImage?.extraLarge || media.coverImage?.large || '',
-      description: (media.description || '').replace(/<[^>]*>?/gm, '').trim(),
+      description: cleanHtml(media.description || ''),
       genres: media.genres || [],
       rating: media.averageScore ? Number((media.averageScore / 10).toFixed(1)) : undefined,
       status: media.status || 'FINISHED',
@@ -662,32 +728,76 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
 
 export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedMetadataResult | null> {
   if (!title || title.length < 2) return null;
+  const mup = appSettings as any;
+  const username = mup.mangaUpdatesUsername || '';
+  const password = mup.mangaUpdatesPassword || '';
+  // MangaUpdates retired public search (HTTP 405); series lookup now requires an
+  // authenticated session. Without configured credentials we degrade gracefully.
+  if (!username || !password) {
+    console.warn('[MangaUpdates Meta] Credentials not configured — skipping lookup (public search retired).');
+    return null;
+  }
   try {
-    const res = await fetch(`https://api.mangaupdates.com/v1/manga/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ search: title, page: 1, perpage: 3 }),
-      signal: AbortSignal.timeout(8000),
-    });
+    await throttleProvider('mangaupdates');
 
-    if (!res.ok) return null;
-    const json = await res.json();
-    const record = json.results?.[0]?.record;
+    // 1) Authenticated login (PUT /v1/account/login)
+    const loginRes = await fetch('https://api.mangaupdates.com/v1/account/login', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': APP_USER_AGENT },
+      body: JSON.stringify({ username, password }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!loginRes.ok) {
+      console.warn(`[MangaUpdates Meta] Login failed (HTTP ${loginRes.status}) for ${title}.`);
+      return null;
+    }
+    const loginCookies = (loginRes.headers.get('set-cookie') || '')
+      .split(/,\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/).filter(Boolean);
+    const loginJson = await loginRes.json().catch(() => null);
+    const sessionToken = loginJson?.token || loginJson?.api_token || loginJson?.access_token || loginJson?.auth_token || '';
+
+    // 2) Authenticated series search (POST /v1/series)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': APP_USER_AGENT,
+    };
+    if (sessionToken) headers.Authorization = sessionToken.startsWith('Bearer ') ? sessionToken : `Bearer ${sessionToken}`;
+    if (loginCookies.length) headers.Cookie = loginCookies.join('; ');
+
+    const res = await fetch('https://api.mangaupdates.com/v1/series', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ search: title, page: 1, perpage: 3 }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.warn(`[MangaUpdates Meta] Series search failed (HTTP ${res.status}) for ${title}.`);
+      return null;
+    }
+    const json = await res.json().catch(() => null);
+    if (!json) return null;
+    const record = json.results?.[0]?.record || json.results?.[0];
     if (!record) return null;
 
-    const altTitles = (record.associated || []).map((a: any) => a.title).filter(Boolean);
+    const altTitles = (record.associated || [])
+      .flatMap((a: any) => [a?.title, a?.related_series_name].filter(Boolean))
+      .filter(Boolean);
     return {
       provider: 'MangaUpdates',
       title: record.title || title,
-      altTitles,
+      altTitles: Array.from(new Set(altTitles)),
       coverImage: record.image?.url?.original || record.image?.url?.thumb || '',
-      description: (record.description || '').replace(/<[^>]*>?/gm, '').trim(),
-      genres: (record.genres || []).map((g: any) => g.genre).filter(Boolean),
+      description: cleanHtml(record.description || ''),
+      genres: (record.genres || []).map((g: any) => g.genre || g).filter(Boolean),
       rating: record.bayesian_rating ? Number(record.bayesian_rating.toFixed(1)) : undefined,
       status: record.completed ? 'COMPLETED' : 'RELEASING',
-      publicationType: record.type ? record.type.toLowerCase() : 'manga',
+      publicationType: record.type ? String(record.type).toLowerCase() : 'manga',
       externalUrl: record.url || `https://www.mangaupdates.com/series.html?id=${record.series_id}`,
-      apiId: String(record.series_id),
+      apiId: record.series_id != null ? String(record.series_id) : undefined,
+      authors: (record.authors || []).flatMap((a: any) => [a?.name, a?.author_name].filter(Boolean)),
+      categories: (record.categories || []).map((c: any) => c.category || c).filter(Boolean),
+      attribution: 'Data via MangaUpdates API (mangaupdates.com)',
     };
   } catch (err: any) {
     console.warn(`[MangaUpdates Meta] Failed for ${title}:`, err.message);
@@ -698,6 +808,7 @@ export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedM
 export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadataResult | null> {
   if (!title || title.length < 2) return null;
   try {
+    await throttleProvider('jikan');
     const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(title)}&limit=1`, {
       headers: { 'User-Agent': APP_USER_AGENT },
       signal: AbortSignal.timeout(8000),
@@ -714,7 +825,7 @@ export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadata
       title: item.title_english || item.title || title,
       altTitles: Array.from(new Set(altTitles)),
       coverImage: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url || '',
-      description: (item.synopsis || '').trim(),
+      description: cleanHtml(item.synopsis || ''),
       genres: (item.genres || []).map((g: any) => g.name).filter(Boolean),
       rating: item.score ? Number(item.score.toFixed(1)) : undefined,
       status: item.publishing ? 'RELEASING' : 'FINISHED',
@@ -727,24 +838,163 @@ export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadata
     return null;
   }
 }
+export async function fetchKitsuMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  try {
+    await throttleProvider('kitsu');
+    const url = `https://kitsu.io/api/edge/manga?filter%5Btext%5D=${encodeURIComponent(title)}&page%5Blimit%5D=3`;
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': APP_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const item = json?.data?.[0];
+    if (!item) return null;
+    const attr = item.attributes || {};
+    const canonical = attr.canonicalTitle || attr.en_us || attr.en_jp || title;
+    const altTitles = [
+      ...Object.values(attr.titles || {}),
+      ...(attr.abbreviatedTitles || []),
+    ].filter((t): t is string => Boolean(t) && String(t) !== canonical);
+    const sub = String(attr.subtype || attr.mangaType || '').toLowerCase();
+    const pubType = sub.includes('manhwa') ? 'manhwa'
+      : sub.includes('manhua') ? 'manhua'
+      : sub.includes('novel') ? 'novel'
+      : 'manga';
+    const st = String(attr.status || '').toLowerCase().trim();
+    const status = (st === 'finished' || st === 'completed') ? 'FINISHED'
+      : (st === 'current' || st === 'upcoming' || st === 'releasing') ? 'RELEASING'
+      : undefined;
+    const rating = attr.averageRating ? Number((Number(attr.averageRating) / 10).toFixed(1)) : undefined;
+    const cover = attr.posterImage?.large || attr.posterImage?.original || attr.coverImage?.large || '';
+    return {
+      provider: 'Kitsu',
+      title: canonical,
+      altTitles: Array.from(new Set(altTitles)),
+      coverImage: cover,
+      description: cleanHtml(attr.synopsis || attr.description || ''),
+      genres: [],
+      rating,
+      status,
+      publicationType: pubType,
+      externalUrl: `https://kitsu.io/manga/${item.id}`,
+      apiId: String(item.id),
+      authors: [],
+      categories: [],
+    };
+  } catch (err: any) {
+    console.warn(`[Kitsu Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
+
+export async function fetchOpenLibraryMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  try {
+    await throttleProvider('openlibrary');
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(title)}&limit=5&fields=title,author_name,first_publish_year,cover_i,key,subject`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': APP_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const doc = json?.docs?.[0];
+    if (!doc) return null;
+    const genres = (doc.subject || []).filter((s: string) => !/^series:/i.test(s)).slice(0, 12);
+    const cover = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '';
+    return {
+      provider: 'OpenLibrary',
+      title: doc.title || title,
+      altTitles: [],
+      coverImage: cover,
+      description: '',
+      genres,
+      status: undefined,
+      publicationType: 'novel',
+      externalUrl: doc.key ? `https://openlibrary.org${doc.key}` : '',
+      apiId: doc.key || undefined,
+      authors: (doc.author_name || []).filter(Boolean),
+      categories: [],
+    };
+  } catch (err: any) {
+    console.warn(`[OpenLibrary Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
+
+export async function fetchGoogleBooksMetadata(title: string): Promise<UnifiedMetadataResult | null> {
+  if (!title || title.length < 2) return null;
+  try {
+    await throttleProvider('googlebooks');
+    const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title)}&maxResults=5`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': APP_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const item = json?.items?.[0];
+    if (!item) return null;
+    const vi = item.volumeInfo || {};
+    const thumb = vi.imageLinks?.thumbnail || vi.imageLinks?.smallThumbnail || '';
+    const cover = thumb ? thumb.replace(/^http:/, 'https:') : '';
+    const r5 = vi.averageRating ? Number(vi.averageRating) : undefined;
+    return {
+      provider: 'GoogleBooks',
+      title: vi.title || title,
+      altTitles: (vi.subtitle ? [vi.subtitle] : []).filter(Boolean),
+      coverImage: cover,
+      description: cleanHtml(vi.description || ''),
+      genres: (vi.categories || []).filter(Boolean),
+      rating: r5 != null ? Number((r5 * 2).toFixed(1)) : undefined,
+      status: undefined,
+      publicationType: 'novel',
+      externalUrl: vi.previewLink || vi.infoLink || '',
+      apiId: item.id || undefined,
+      authors: (vi.authors || []).filter(Boolean),
+      categories: [],
+    };
+  } catch (err: any) {
+    console.warn(`[GoogleBooks Meta] Failed for ${title}:`, err.message);
+    return null;
+  }
+}
 
 export async function aggregateMultiSourceMetadata(title: string): Promise<{
   merged: Partial<UnifiedMetadataResult>;
   sources: UnifiedMetadataResult[];
 }> {
+  const t = appSettings as any;
+  const enabled = {
+    mangadex: t.mangadexConnected !== false,
+    anilist: t.anilistConnected !== false,
+    mal: t.malEnabled !== false,
+    mangaupdates: t.mangaUpdatesEnabled !== false,
+    kitsu: t.kitsuMetadataEnabled !== false,
+    openlibrary: t.openlibraryEnabled !== false,
+    googlebooks: t.googleBooksEnabled !== false,
+  };
+
   const results = await Promise.allSettled([
-    getMangaDexMetadataByTitle(title).then((md) => md ? {
-      provider: 'MangaDex' as const,
-      title: title,
-      altTitles: md.altTitles || [],
-      coverImage: md.coverImage || '',
-      description: md.description || '',
-      genres: md.genres || [],
-      apiId: md.apiId || undefined,
-    } : null),
-    fetchAniListMetadata(title),
-    fetchMangaUpdatesMetadata(title),
-    fetchJikanMetadata(title),
+    cachedProviderResult('mangadex:' + title, () => enabled.mangadex
+      ? getMangaDexMetadataByTitle(title).then((md) => md ? {
+          provider: 'MangaDex' as const,
+          title: title,
+          altTitles: md.altTitles || [],
+          coverImage: md.coverImage || '',
+          description: md.description || '',
+          genres: md.genres || [],
+          apiId: md.apiId || undefined,
+        } : null)
+      : Promise.resolve(null)),
+    cachedProviderResult('anilist:' + title, () => enabled.anilist ? fetchAniListMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('mangaupdates:' + title, () => enabled.mangaupdates ? fetchMangaUpdatesMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('jikan:' + title, () => enabled.mal !== false ? fetchJikanMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('kitsu:' + title, () => enabled.kitsu ? fetchKitsuMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('openlibrary:' + title, () => enabled.openlibrary ? fetchOpenLibraryMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('googlebooks:' + title, () => enabled.googlebooks ? fetchGoogleBooksMetadata(title) : Promise.resolve(null)),
   ]);
 
   const sources: UnifiedMetadataResult[] = [];
@@ -767,6 +1017,8 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
   const bestDesc = [...sources].sort((a, b) => (b.description?.length || 0) - (a.description?.length || 0))[0]?.description || '';
   const allGenres = Array.from(new Set(sources.flatMap((s) => s.genres || [])));
   const allAltTitles = Array.from(new Set(sources.flatMap((s) => s.altTitles || [])));
+  const allAuthors = Array.from(new Set(sources.flatMap((s) => s.authors || [])));
+  const allCategories = Array.from(new Set(sources.flatMap((s) => s.categories || [])));
 
   const validRatings = sources.map((s) => s.rating).filter((r): r is number => typeof r === 'number' && r > 0);
   const avgRating = validRatings.length > 0
@@ -783,6 +1035,9 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
       rating: avgRating,
       status: sources.find((s) => s.status)?.status || 'RELEASING',
       publicationType: sources.find((s) => s.publicationType)?.publicationType || 'manhwa',
+      authors: allAuthors,
+      categories: allCategories,
+      dataSources: Array.from(new Set(sources.map((s) => s.provider))),
     },
     sources,
   };

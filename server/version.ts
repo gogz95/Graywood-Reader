@@ -54,6 +54,13 @@ export const BACKEND_COMPONENTS: Record<string, BackendComponentMeta> = {
     entrypoint: "server/sources/sourcesCatalog.ts",
     category: "crawler",
   },
+  metadata_enricher: {
+    name: "Multi-Provider Metadata Enricher",
+    version: "1.0.0",
+    description: "Aggregates free open metadata APIs — MangaDex, AniList, MyAnimeList/Jikan, MangaUpdates, Kitsu, OpenLibrary, and Google Books — with per-provider throttling, toggles, and credential brokering",
+    entrypoint: "server/services/metadataService.ts",
+    category: "integration",
+  },
   bot_defense: {
     name: "Anti-Bot & Captcha Bypass Pipeline",
     version: "1.0.0",

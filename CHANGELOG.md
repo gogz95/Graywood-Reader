@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Community Standard guidelines (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, issue & PR templates).
 - Formal backend component version tracking registry (`server/version.ts`) and `/api/version` endpoint.
+- **Multi-Provider Metadata Enricher expansion** (`metadata_enricher`):
+  - **MangaUpdates**: rebuilt on the authenticated `PUT /v1/account/login` + `POST /v1/series` flow (public search was retired → HTTP 405), enriching titles with authors, categories, alt-titles, and Bayesian ratings. Degrades gracefully when credentials are not configured.
+  - **Kitsu** backend metadata fetcher (JSON:API `/manga`), mapping rating `/100 → /10` and manhwa/manhua/novel subtypes.
+  - **OpenLibrary** enricher (`search.json`) with cover URL construction from `cover_i` and subject→genre mapping.
+  - **Google Books** enricher (`volumes/intitle:`) with `http→https` cover upgrade and 5-point→10-point rating conversion.
+  - Per-provider rate-limiter (mirrors the existing MangaDex compliance pattern) and per-provider enablement toggles in `AppSettings`.
+  - `GET /api/metadata/providers` introspection endpoint listing provider enablement and key-requirement status.
+  - **MangaUpdates Acceptable Use Policy compliance**: provider response TTL cache (6h) so repeated title lookups don't re-hit the API, >=1200ms request spacing, and required attribution (`attribution` + `dataSources` fields). Compliance posture documented in `.agents/rules/mangaupdates-api.md`.
 
 ---
 

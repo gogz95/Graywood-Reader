@@ -145,6 +145,16 @@ export interface AppSettings {
   kitsuToken?: string;
   kitsuAutoSync?: boolean;
   mangadexConnected: boolean;
+  // Multi-provider metadata enrichers (free / no-read-key open APIs)
+  mangadexMetadataEnabled?: boolean;
+  anilistMetadataEnabled?: boolean;
+  malEnabled?: boolean;
+  kitsuMetadataEnabled?: boolean;
+  mangaUpdatesEnabled?: boolean;
+  mangaUpdatesUsername?: string;
+  mangaUpdatesPassword?: string;
+  openlibraryEnabled?: boolean;
+  googleBooksEnabled?: boolean;
   privateModeEnabled?: boolean;
   customUserAgent: string;
   // Automated Cloudflare & Captcha Solver Properties
