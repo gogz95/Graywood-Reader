@@ -305,6 +305,8 @@ export const HOST_ONLY_PATHS = new Set<string>([
   // AI bulk (API key / load)
   '/api/ai/enrich-metadata',
   '/api/ai/find-similar',
+  // Admin operations
+  '/api/admin',
 ]);
 // GET requests to host-only paths are allowed (read-only config/health info),
 // except these sensitive exports which leak the full database.
