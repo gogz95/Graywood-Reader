@@ -5,7 +5,7 @@
 
 import crypto from 'node:crypto';
 import * as cheerio from 'cheerio';
-import { MangaItem } from '../../src/types';
+import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
   appSettings,
@@ -22,6 +22,8 @@ import {
   isMetadataOnlySource,
   isContentPath,
   isNavText,
+  getAllSourcesWithExtensions,
+  isSeriesFromDisabledSource,
 } from '../sources/sourcesCatalog';
 import {
   sourceCookieJar,
@@ -481,18 +483,97 @@ export function hostOf(url: string): string {
 }
 
 export function dedupeExploreItems(aggregated: any[]): any[] {
-  const seen = new Set<string>();
-  const deduped: any[] = [];
+  const seen = new Map<string, any>();
   for (const it of aggregated) {
-    const key = String(it.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    if (!it || !it.title) continue;
+    const key = String(it.title)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
     if (!key) continue;
-    if (!seen.has(key)) { seen.add(key); deduped.push(it); }
+
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, { ...it });
+    } else {
+      if (!existing.coverImage && it.coverImage) existing.coverImage = it.coverImage;
+      if ((!existing.description || existing.description.length < 20) && it.description) {
+        existing.description = it.description;
+      }
+      if (!existing.latestChapter || (it.latestChapter && it.latestChapter > existing.latestChapter)) {
+        existing.latestChapter = it.latestChapter;
+      }
+      if (Array.isArray(it.genres) && it.genres.length > 0) {
+        existing.genres = Array.from(new Set([...(existing.genres || []), ...it.genres]));
+      }
+      if ((!existing.__sourceId || existing.__sourceId === 'explore') && it.__sourceId && it.__sourceId !== 'explore') {
+        existing.__sourceId = it.__sourceId;
+        existing.__sourceName = it.__sourceName;
+      }
+      if (!existing.sourceUrl && it.sourceUrl) existing.sourceUrl = it.sourceUrl;
+      if (!existing.apiId && it.apiId) existing.apiId = it.apiId;
+    }
   }
-  return deduped;
+  return Array.from(seen.values());
+}
+
+export function buildDatabaseExploreItems(): any[] {
+  const allManga = SqliteDb.getAllManga();
+  const activeSources = getAllSourcesWithExtensions().filter(
+    (s) => !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+  );
+
+  const items: any[] = [];
+  for (const m of allManga) {
+    if (isSeriesFromDisabledSource(m)) continue;
+
+    const sName = (m.sourceName || '').toLowerCase();
+    const sUrl = (m.sourceUrl || '').toLowerCase();
+
+    const matchedSrc = activeSources.find((s) => {
+      const idL = s.id.toLowerCase();
+      const nameL = s.name.toLowerCase();
+      const domain = s.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+      return (
+        sName.includes(idL) ||
+        idL.includes(sName) ||
+        sName.includes(nameL) ||
+        nameL.includes(sName) ||
+        (sUrl && domain && sUrl.includes(domain))
+      );
+    });
+
+    const sourceId = matchedSrc
+      ? matchedSrc.id
+      : m.sourceName
+      ? m.sourceName.toLowerCase().replace(/[^a-z0-9]/g, '')
+      : 'explore';
+    const sourceName = matchedSrc ? matchedSrc.name : (m.sourceName || 'Explore');
+
+    items.push({
+      id: m.id,
+      title: m.title,
+      sourceUrl: m.sourceUrl,
+      coverImage: m.coverImage || '',
+      sourceName,
+      __sourceId: sourceId,
+      __sourceName: sourceName,
+      apiId: m.apiId || null,
+      description: m.description || '',
+      genres: Array.isArray(m.genres) && m.genres.length > 0 ? m.genres : ['Action'],
+      latestChapter: Number(m.latestChapter) || 1,
+      type: m.type || 'manhwa',
+      rating: m.rating || 9.0,
+      isNsfw: isNsfwManga(m),
+    });
+  }
+
+  return items;
 }
 
 export function getEligibleExploreSources(): SourceDefinition[] {
-  return KOTATSU_SOURCES.filter(
+  return getAllSourcesWithExtensions().filter(
     (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
   );
 }
@@ -529,10 +610,17 @@ export function throttleExploreDomain(host: string): Promise<void> {
 }
 
 export async function buildExploreBuffer(): Promise<ExploreBufferEntry | null> {
+  const dbItems = buildDatabaseExploreItems();
   const sources = defaultExploreSources();
-  if (sources.length === 0) return null;
-  const aggregated: any[] = [];
+  const aggregated: any[] = [...dbItems];
+  const sourceIdsSet = new Set<string>();
+
+  for (const it of dbItems) {
+    if (it.__sourceId) sourceIdsSet.add(it.__sourceId);
+  }
+
   for (const src of sources) {
+    sourceIdsSet.add(src.id);
     const domain = hostOf(src.baseUrl);
     await throttleExploreDomain(domain);
     lastExploreDomainRequest.set(domain, Date.now());
@@ -557,7 +645,7 @@ export async function buildExploreBuffer(): Promise<ExploreBufferEntry | null> {
 
   return {
     items: deduped,
-    sourceIds: sources.map((s) => s.id),
+    sourceIds: Array.from(sourceIdsSet),
     builtAt: Date.now(),
     expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS,
     lastError: null,
@@ -573,7 +661,7 @@ export async function refreshExploreCatalog(force = false): Promise<void> {
       exploreBufferRef.current = built;
       try { SqliteDb.setExploreBuffer(built); } catch (e: any) { console.error('[Explore Buffer] Persist failed:', e?.message); }
       console.log(
-        `[Explore Buffer] Catalog ${force ? 'warmed' : 'refreshed'}: ${built.items.length} series across ${built.sourceIds.length} source(s) [${built.sourceIds.join(', ')}]`
+        `[Explore Buffer] Catalog ${force ? 'warmed' : 'refreshed'}: ${built.items.length} series across ${built.sourceIds.length} source(s) [${built.sourceIds.slice(0, 10).join(', ')}...]`
       );
     } else if (force) {
       console.warn('[Explore Buffer] Warm-up produced no items; will retry on next interval.');
@@ -589,15 +677,33 @@ export async function refreshExploreCatalog(force = false): Promise<void> {
 export function scheduleExploreRefresher(): void {
   try {
     const saved = SqliteDb.getExploreBuffer();
+    const dbItems = buildDatabaseExploreItems();
     if (saved && Array.isArray(saved.items) && saved.items.length > 0) {
+      const merged = dedupeExploreItems([...dbItems, ...saved.items]);
+      const sourceIds = Array.from(
+        new Set([
+          ...(Array.isArray(saved.sourceIds) ? saved.sourceIds : []),
+          ...merged.map((m: any) => m.__sourceId).filter(Boolean),
+        ])
+      );
       exploreBufferRef.current = {
-        items: saved.items,
-        sourceIds: Array.isArray(saved.sourceIds) ? saved.sourceIds : [],
+        items: merged,
+        sourceIds,
         builtAt: Number(saved.builtAt) || Date.now(),
         expiresAt: saved.expiresAt ?? Date.now() + EXPLORE_CACHE_TTL_MS,
         lastError: saved.lastError ?? null,
       };
-      console.log(`[Explore Buffer] Loaded persisted catalog: ${saved.items.length} series from SQLite.`);
+      console.log(`[Explore Buffer] Loaded persisted catalog: ${merged.length} series across ${sourceIds.length} sources.`);
+    } else {
+      const sourceIds = Array.from(new Set(dbItems.map((m: any) => m.__sourceId).filter(Boolean)));
+      exploreBufferRef.current = {
+        items: dbItems,
+        sourceIds,
+        builtAt: Date.now(),
+        expiresAt: Date.now() + EXPLORE_CACHE_TTL_MS,
+        lastError: null,
+      };
+      console.log(`[Explore Buffer] Initialized cold catalog: ${dbItems.length} series from SQLite DB across ${sourceIds.length} sources.`);
     }
   } catch (e: any) {
     console.warn('[Explore Buffer] Could not load persisted catalog:', e?.message);

@@ -745,6 +745,29 @@ export const SqliteDb = {
     }
   },
 
+  // ── Persistent Library Cache ───────────────────────────────────────────────
+  // A persistent snapshot of the library index built on first boot and updated weekly.
+  getLibraryCache(): any | null {
+    try {
+      const raw = stmtGetSetting.get('persistent_library_cache_v1') as { value: string } | undefined;
+      if (!raw || !raw.value) return null;
+      const parsed = JSON.parse(raw.value);
+      if (!parsed || !Array.isArray(parsed.series)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  },
+
+  setLibraryCache(entry: any) {
+    try {
+      if (!entry) return;
+      stmtSetSetting.run({ key: 'persistent_library_cache_v1', value: JSON.stringify(entry) });
+    } catch (err) {
+      console.error('[SQLite Engine] Error persisting library cache:', err);
+    }
+  },
+
   // ── Profiles ───────────────────────────────────────────────────────────────
   getAllProfiles(): any[] {
     return stmtGetAllProfiles.all();

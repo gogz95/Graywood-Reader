@@ -120,6 +120,10 @@ import {
   auditAndDisableEmptySources,
 } from "./server/services/exploreService";
 import {
+  initLibraryCache,
+  startWeeklyLibraryCacheScheduler,
+} from "./server/services/libraryCacheService";
+import {
   APP_VERSION,
   APP_USER_AGENT,
   getSystemVersionReport,
@@ -459,8 +463,10 @@ async function startServer() {
     logger.info('Startup', `SQLite database ready (${mangaDatabase.length} series, ${userProfiles.length} users)`);
   });
 
+  initLibraryCache();
   scheduleBackgroundAutoUpdater();
   scheduleExploreRefresher();
+  startWeeklyLibraryCacheScheduler(1);
   startAutoBackupScheduler(30);
 }
 

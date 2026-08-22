@@ -186,8 +186,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [metaLoaded, setMetaLoaded] = useState(false);
+
+  // Tri-State Genre Filter map: 'include' | 'exclude'
+  const [tagStates, setTagStates] = useState<Map<string, 'include' | 'exclude'>>(new Map());
 
   // Device-aware items-per-page — computed once on mount.
   const limitRef = useRef(computeLimit());
@@ -222,6 +224,19 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       });
       if (selectedSource !== 'all') params.set('sourceId', selectedSource);
       if (query.trim()) params.set('q', query.trim());
+      if (typeFilter !== 'all') params.set('type', typeFilter);
+
+      if (tagStates.size > 0) {
+        const inc: string[] = [];
+        const exc: string[] = [];
+        for (const [tag, mode] of tagStates.entries()) {
+          if (mode === 'include') inc.push(tag);
+          else if (mode === 'exclude') exc.push(tag);
+        }
+        if (inc.length > 0) params.set('includeTags', inc.join(','));
+        if (exc.length > 0) params.set('excludeTags', exc.join(','));
+      }
+
       const res = await apiFetch(`/api/explore?${params.toString()}`);
       if (!res.ok) throw new Error(`Browse feed returned ${res.status}`);
       const data = await res.json();
@@ -239,7 +254,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [selectedSource, query, page, limit, isGuest]);
+  }, [selectedSource, query, typeFilter, tagStates, page, limit, isGuest]);
 
   useEffect(() => { fetchBrowse(); }, [fetchBrowse]);
 
@@ -271,7 +286,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
 
   // Seed search from the navbar search box when it changes.
   useEffect(() => {
-    if (seedSearch !== undefined) setQuery(seedSearch);
+    if (seedSearch !== undefined) {
+      setQuery(seedSearch);
+      setPage(1);
+    }
   }, [seedSearch]);
 
   // Tags visible in the current page — used as fallback when meta isn't loaded yet.
@@ -290,34 +308,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // Use full-catalog genres from meta when available, else fall back to page genres.
   const displayGenres = metaLoaded && meta.genres.length > 0 ? meta.genres : pageGenres;
 
-  // Tri-State Genre Filter map: 'include' | 'exclude'
-  const [tagStates, setTagStates] = useState<Map<string, 'include' | 'exclude'>>(new Map());
-
-  // Reset tag filters when source/query/type changes
-  useEffect(() => {
-    setPage(1);
-    setTagStates(new Map());
-  }, [selectedSource, query, typeFilter]);
-
-  // Client-side post-filter for type and tri-state tags
-  const visible = useMemo(
-    () =>
-      results.filter((r) => {
-        if (typeFilter !== 'all' && (r.type || 'manga').toLowerCase() !== typeFilter) return false;
-        if (tagStates.size > 0) {
-          const rGenres = (r.genres || []).map((g) => g.toLowerCase());
-          for (const [t, mode] of tagStates.entries()) {
-            const normTag = t.toLowerCase();
-            if (mode === 'include' && !rGenres.includes(normTag)) return false;
-            if (mode === 'exclude' && rGenres.includes(normTag)) return false;
-          }
-        }
-        return true;
-      }),
-    [results, typeFilter, tagStates]
-  );
-
   const toggleTag = (tag: string) => {
+    setPage(1);
     setTagStates((prev) => {
       const next = new Map(prev);
       const current = next.get(tag);
@@ -332,6 +324,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     });
   };
 
+  const clearTags = () => {
+    setPage(1);
+    setTagStates(new Map());
+  };
 
   const toManga = (r: ExploreItem, forReader: boolean): MangaItem => ({
     id: r.id || `browse_${Date.now()}`,
@@ -402,15 +398,18 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             {/* Source selector — full list from server meta */}
             <select
               value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
+              onChange={(e) => {
+                setSelectedSource(e.target.value);
+                setPage(1);
+              }}
               className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/40 sm:w-52"
             >
               <option value="all">
-                All Sources{meta.sources.length > 0 ? ` (${meta.sources.length})` : ''}
+                All Sources{meta.totalItems ? ` (${meta.totalItems.toLocaleString()})` : ''}
               </option>
-              {meta.sources.map((s) => (
+              {meta.sources.map((s: any) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.name}{s.count ? ` (${s.count.toLocaleString()})` : ''}
                 </option>
               ))}
             </select>
@@ -418,7 +417,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             {/* Type selector — dynamic from catalog meta */}
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setPage(1);
+              }}
               className="bg-app border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent/40 sm:w-40"
             >
               <option value="all">All Types</option>
@@ -434,7 +436,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search live sources…"
                 className="w-full bg-app border border-edge rounded-xl pl-9 pr-3 py-2 text-sm text-primary placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
               />
@@ -474,7 +479,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tri-State Filters</span>
             {tagStates.size > 0 && (
               <button
-                onClick={() => setTagStates(new Map())}
+                onClick={clearTags}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-danger/15 text-danger border-danger/30 hover:bg-danger/25 transition-all"
               >
                 <X className="w-3 h-3" /> Clear
@@ -515,7 +520,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           <Sparkles className="w-8 h-8 text-accent mx-auto" />
           <p className="text-sm text-secondary">{error}</p>
         </div>
-      ) : visible.length === 0 ? (
+      ) : results.length === 0 ? (
         <div className="bg-surface/60 border border-edge rounded-2xl p-16 text-center text-secondary">
           <p className="text-sm font-semibold">No series found.</p>
           <p className="text-xs mt-1">Try a different source, type, or clear your tag selection.</p>
@@ -523,7 +528,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-            {visible.map((r) => {
+            {results.map((r) => {
               const isTracked = trackedKeys.has(String(r.title).trim().toLowerCase());
               return (
                 <BrowseCard

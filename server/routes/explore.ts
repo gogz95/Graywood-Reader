@@ -17,6 +17,7 @@ import {
   disabledSourceIds,
   isSourceAlive,
   SourceDefinition,
+  getAllSourcesWithExtensions,
 } from '../sources/sourcesCatalog';
 import {
   exploreBufferRef,
@@ -24,6 +25,7 @@ import {
   defaultExploreSources,
   getSourcePopularSeries,
   dedupeExploreItems,
+  buildDatabaseExploreItems,
   scrapeAsuraScans,
   scrapeFlameComics,
   scrapeManhwa18,
@@ -146,18 +148,16 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
 // ── GET /api/explore/meta ───────────────────────────────────────────────────
 exploreRouter.get('/api/explore/meta', (req: Request, res: Response) => {
   const buf = exploreBufferRef.current;
-  if (!buf || buf.items.length === 0) {
-    return res.json({ genres: [], types: [], sources: [] });
-  }
+  const rawItems = buf && buf.items && buf.items.length > 0 ? buf.items : buildDatabaseExploreItems();
 
   const isNsfwAllowed = isNsfwAccessAllowed(req);
   const genreCounts = new Map<string, number>();
   const typeSet = new Set<string>();
-  const sourceMap = new Map<string, string>();
+  const sourceCountMap = new Map<string, number>();
 
-  const rawItems = isNsfwAllowed ? buf.items : buf.items.filter((it) => !isNsfwManga(it));
+  const filteredItems = isNsfwAllowed ? rawItems : rawItems.filter((it) => !isNsfwManga(it));
 
-  for (const it of rawItems) {
+  for (const it of filteredItems) {
     for (const g of (it.genres || [])) {
       if (typeof g === 'string' && g.trim()) {
         const normalized = g.trim();
@@ -169,7 +169,9 @@ exploreRouter.get('/api/explore/meta', (req: Request, res: Response) => {
       }
     }
     if (it.type) typeSet.add(String(it.type).toLowerCase());
-    if (it.__sourceId && it.__sourceName) sourceMap.set(it.__sourceId, it.__sourceName);
+    if (it.__sourceId) {
+      sourceCountMap.set(it.__sourceId, (sourceCountMap.get(it.__sourceId) || 0) + 1);
+    }
   }
 
   const genres = [...genreCounts.entries()]
@@ -178,22 +180,43 @@ exploreRouter.get('/api/explore/meta', (req: Request, res: Response) => {
 
   const types = [...typeSet].sort();
 
-  let allActiveSources = KOTATSU_SOURCES
+  let allActiveSources = getAllSourcesWithExtensions()
     .filter((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id));
 
   if (!isNsfwAllowed) {
     allActiveSources = allActiveSources.filter((s) => !s.isNsfw);
   }
 
-  const mappedSources = allActiveSources.map((s) => ({ id: s.id, name: s.name }));
+  // Sort sources: sources with indexed series first (by count DESC), then alphabetically
+  allActiveSources.sort((a, b) => {
+    const countA = sourceCountMap.get(a.id) || 0;
+    const countB = sourceCountMap.get(b.id) || 0;
+    if (countA !== countB) return countB - countA;
+    return a.name.localeCompare(b.name);
+  });
 
-  return res.json({ genres, types, sources: mappedSources, totalItems: rawItems.length, builtAt: buf.builtAt });
+  const mappedSources = allActiveSources.map((s) => ({
+    id: s.id,
+    name: s.name,
+    count: sourceCountMap.get(s.id) || undefined,
+  }));
+
+  return res.json({
+    genres,
+    types,
+    sources: mappedSources,
+    totalItems: filteredItems.length,
+    builtAt: buf?.builtAt || Date.now(),
+  });
 });
 
 // ── GET /api/explore ─────────────────────────────────────────────────────────
 exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
   const rawSourceId = ((req.query.sourceId as string) || '').trim();
   const q = ((req.query.q as string) || '').trim();
+  const typeFilter = ((req.query.type as string) || '').trim().toLowerCase();
+  const includeTagsRaw = ((req.query.includeTags as string) || '').trim();
+  const excludeTagsRaw = ((req.query.excludeTags as string) || '').trim();
   const page = Math.max(1, Number(req.query.page) || 1);
 
   let limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
@@ -224,85 +247,108 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
   const buf = exploreBufferRef.current;
   const bufferReady = !!buf && buf.items.length > 0;
   const bufferFresh = bufferReady && Date.now() < buf!.expiresAt;
-  const sourceInBuffer = bufferReady && !!buf && (rawSourceId === 'all' || rawSourceId === '' || buf.sourceIds.includes(rawSourceId));
 
-  if (sourceInBuffer) {
-    if (!bufferFresh) refreshExploreCatalog(false).catch(() => {});
-    let list: any[] = buf!.items;
-    if (!isNsfwAllowed) {
-      list = list.filter((it) => !isNsfwManga(it));
-    }
-    if (rawSourceId && rawSourceId !== 'all') {
-      list = list.filter((it) => it.__sourceId === rawSourceId);
-    }
-    if (q) {
-      const needle = q.toLowerCase();
-      list = list.filter((it) =>
-        (it.title || '').toLowerCase().includes(needle) ||
-        (it.description || '').toLowerCase().includes(needle)
-      );
-    }
-    const offset = (page - 1) * limit;
-    const paged = list.slice(offset, offset + limit);
-    const totalPages = Math.max(1, Math.ceil(list.length / limit));
-    res.setHeader('X-Total-Count', String(list.length));
-    res.setHeader('X-Total-Pages', String(totalPages));
-    return res.json({ items: paged, totalCount: list.length, totalPages, cached: true });
+  if (bufferReady && !bufferFresh) {
+    refreshExploreCatalog(false).catch(() => {});
   }
 
-  const sourcesToBrowse: SourceDefinition[] = [];
+  let catalog: any[] = bufferReady ? [...buf!.items] : buildDatabaseExploreItems();
+
+  // On-demand source live scraping when browsing a specific source that has few items
   if (rawSourceId && rawSourceId !== 'all') {
-    const found = KOTATSU_SOURCES.find(
+    const sourceDef = getAllSourcesWithExtensions().find(
       (s) => s.id === rawSourceId && s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
     );
-    if (found && (isNsfwAllowed || !found.isNsfw)) sourcesToBrowse.push(found);
-  } else {
-    const defs = isNsfwAllowed ? defaultExploreSources() : defaultExploreSources().filter((s) => !s.isNsfw);
-    sourcesToBrowse.push(...defs);
+
+    const existingCountForSource = catalog.filter((it) => it.__sourceId === rawSourceId).length;
+    if (sourceDef && existingCountForSource < page * limit && page <= 5) {
+      try {
+        const liveResult = await getSourcePopularSeries(sourceDef, page, limit);
+        const liveItems = Array.isArray(liveResult) ? liveResult : (liveResult?.items || []);
+        if (liveItems.length > 0) {
+          const tagged = liveItems.map((it) => ({
+            ...it,
+            __sourceId: sourceDef.id,
+            __sourceName: sourceDef.name,
+          }));
+          catalog = dedupeExploreItems([...catalog, ...tagged]);
+          if (exploreBufferRef.current) {
+            exploreBufferRef.current.items = catalog;
+            if (!exploreBufferRef.current.sourceIds.includes(sourceDef.id)) {
+              exploreBufferRef.current.sourceIds.push(sourceDef.id);
+            }
+          }
+        }
+      } catch (liveErr: any) {
+        console.warn(`[Explore] Live on-demand fetch notice for ${rawSourceId}:`, liveErr?.message);
+      }
+    }
   }
 
-  if (sourcesToBrowse.length === 0) {
-    return res.json({ items: [], totalCount: 0, totalPages: 0, cached: false });
+  let list: any[] = catalog;
+
+  // 1. Source filter
+  if (rawSourceId && rawSourceId !== 'all') {
+    list = list.filter((it) => it.__sourceId === rawSourceId);
   }
 
-  try {
-    const aggregated: any[] = [];
-    const perSourceLimit = Math.max(6, Math.ceil(limit / sourcesToBrowse.length));
+  // 2. NSFW filter
+  if (!isNsfwAllowed) {
+    list = list.filter((it) => !isNsfwManga(it));
+  }
 
-    await Promise.all(
-      sourcesToBrowse.map(async (src) => {
-        try {
-          const result = await getSourcePopularSeries(src, page, perSourceLimit);
-          const items = Array.isArray(result) ? result : (result?.items || []);
-          for (const item of items) aggregated.push({ ...item, __sourceId: src.id, __sourceName: src.name });
-        } catch {}
-      })
+  // 3. Type filter
+  if (typeFilter && typeFilter !== 'all') {
+    list = list.filter((it) => (it.type || 'manhwa').toLowerCase() === typeFilter);
+  }
+
+  // 4. Tri-State Include Tags
+  if (includeTagsRaw) {
+    const incTags = includeTagsRaw
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (incTags.length > 0) {
+      list = list.filter((it) => {
+        const rGenres = (it.genres || []).map((g: string) => String(g).toLowerCase());
+        return incTags.every((t) => rGenres.includes(t));
+      });
+    }
+  }
+
+  // 5. Tri-State Exclude Tags
+  if (excludeTagsRaw) {
+    const excTags = excludeTagsRaw
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (excTags.length > 0) {
+      list = list.filter((it) => {
+        const rGenres = (it.genres || []).map((g: string) => String(g).toLowerCase());
+        return !excTags.some((t) => rGenres.includes(t));
+      });
+    }
+  }
+
+  // 6. Search query
+  if (q) {
+    const needle = q.toLowerCase();
+    list = list.filter((it) =>
+      (it.title || '').toLowerCase().includes(needle) ||
+      (it.description || '').toLowerCase().includes(needle) ||
+      (Array.isArray(it.altTitles) && it.altTitles.some((a: string) => String(a).toLowerCase().includes(needle))) ||
+      (it.__sourceName || it.sourceName || '').toLowerCase().includes(needle)
     );
-
-    let unique = aggregated;
-    if (!isNsfwAllowed) {
-      unique = unique.filter((it) => !isNsfwManga(it));
-    }
-    if (q) {
-      const needle = q.toLowerCase();
-      unique = unique.filter((it) =>
-        (it.title || '').toLowerCase().includes(needle) ||
-        (it.description || '').toLowerCase().includes(needle)
-      );
-    }
-
-    const deduped = dedupeExploreItems(unique);
-    const offset = (page - 1) * limit;
-    const paged = deduped.slice(offset, offset + limit);
-    const totalPages = Math.max(1, Math.ceil(deduped.length / limit));
-
-    res.setHeader('X-Total-Count', String(deduped.length));
-    res.setHeader('X-Total-Pages', String(totalPages));
-    return res.json({ items: paged, totalCount: deduped.length, totalPages, cached: false });
-  } catch (e: any) {
-    console.error('[Explore] Failed to aggregate live feed:', e.message);
-    return res.json({ items: [], totalCount: 0, totalPages: 0, cached: false });
   }
+
+  const totalCount = list.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const offset = (page - 1) * limit;
+  const paged = list.slice(offset, offset + limit);
+
+  res.setHeader('X-Total-Count', String(totalCount));
+  res.setHeader('X-Total-Pages', String(totalPages));
+  return res.json({ items: paged, totalCount, totalPages, cached: true });
 });
 
 // ── GET /api/kotatsu/explore/featured ────────────────────────────────────────

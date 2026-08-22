@@ -33,6 +33,7 @@ import {
   rebuildDeadSourcesSet,
   syncDeadSourcesToDisabled,
 } from "./sources/sourcesCatalog";
+import { notifyLibraryItemChanged } from "./services/libraryCacheService";
 
 // ============================================================================
 // REQUEST IDENTITY & WRITE-GATE HELPERS
@@ -287,6 +288,7 @@ export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
   }
   syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
+  try { notifyLibraryItemChanged(item); } catch {}
   return item;
 }
 
@@ -304,6 +306,7 @@ export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
       idxMap.set(item.id, mangaDatabase.length);
       mangaDatabase.push(item);
     }
+    try { notifyLibraryItemChanged(item); } catch {}
   }
   syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
@@ -314,6 +317,7 @@ export function syncDeleteManga(id: string) {
   mangaDatabase = mangaDatabase.filter((m) => m.id !== id);
   syncConfig.totalTracked = mangaDatabase.length;
   saveDatabaseToDisk();
+  try { notifyLibraryItemChanged({ id }); } catch {}
 }
 
 export function syncResetManga(items: MangaItem[]) {

@@ -30,6 +30,10 @@ import { searchWeebCentral, fetchWeebCentralSeriesMetadata } from '../scrapers/w
 import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive, isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { APP_USER_AGENT } from '../version';
+import {
+  getLibraryCacheStatus,
+  refreshLibraryCache,
+} from '../services/libraryCacheService';
 
 export const mangaRouter = Router();
 
@@ -1134,3 +1138,20 @@ mangaRouter.delete('/:id', (req, res) => {
   syncDeleteManga(id);
   res.json({ success: true, message: 'Deleted successfully from SQLite and persistent database' });
 });
+
+// ── GET /api/manga/cache/status - Library Cache Status ────────────────────────
+mangaRouter.get('/cache/status', (_req, res) => {
+  res.json(getLibraryCacheStatus());
+});
+
+// ── POST /api/manga/cache/refresh - Force Library Cache Rebuild ──────────────
+mangaRouter.post('/cache/refresh', (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+  const refreshed = refreshLibraryCache(true);
+  res.json({
+    success: true,
+    message: `Library cache refreshed successfully (${refreshed.totalCount} series).`,
+    status: getLibraryCacheStatus(),
+  });
+});
+
