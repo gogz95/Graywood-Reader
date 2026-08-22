@@ -15,7 +15,7 @@ export const localLibraryRouter = Router();
 // ============================================================================
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
-const ARCHIVE_EXT = /\.(cbz|zip|cbr|rar|pdf)$/i;
+const ARCHIVE_EXT = /\.(cbz|zip|cbr|rar|pdf|epub)$/i;
 
 function resolveStorageRoot(): string {
   const raw = (process.env.STORAGE_PATH || '').trim() || path.join(process.cwd(), 'data', 'storage');
@@ -27,10 +27,12 @@ export interface LocalArchive {
   title: string;
   fileName: string;
   filePath: string;
-  type: 'cbz' | 'cbr' | 'pdf' | 'other';
-  pageCount: number;    // 0 when not determinable (cbr/pdf)
+  type: 'cbz' | 'cbr' | 'pdf' | 'epub' | 'other';
+  pageCount: number;    // 0 when not determinable (cbr/pdf) or chapter count for EPUB
   sizeBytes: number;
   coverDataUrl?: string;
+  isTextNovel?: boolean;
+  toc?: { index: number; title: string; href: string }[];
 }
 
 export interface CachedArchiveEntry {
@@ -38,6 +40,9 @@ export interface CachedArchiveEntry {
   imageEntries: string[];
   mtimeMs: number;
   sizeBytes: number;
+  epubSpine?: string[];
+  epubManifest?: Map<string, { href: string; mediaType: string }>;
+  epubBasePath?: string;
 }
 
 // In-memory cache for scanned comic archives
@@ -50,6 +55,7 @@ function detectType(fileName: string): LocalArchive['type'] {
   if (ext === '.cbz' || ext === '.zip') return 'cbz';
   if (ext === '.cbr' || ext === '.rar') return 'cbr';
   if (ext === '.pdf') return 'pdf';
+  if (ext === '.epub') return 'epub';
   return 'other';
 }
 
@@ -85,6 +91,10 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
 
     let imageEntries: string[] = [];
     let coverDataUrl: string | undefined;
+    let epubSpine: string[] = [];
+    let epubManifest = new Map<string, { href: string; mediaType: string }>();
+    let epubBasePath = '';
+    let epubToc: { index: number; title: string; href: string }[] = [];
 
     if (type === 'cbz' || type === 'cbr' || type === 'other') {
       try {
@@ -99,6 +109,68 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
         }
       } catch {
         // Fallback for non-zip CBR / RAR
+      }
+    } else if (type === 'epub') {
+      try {
+        const zip = new AdmZip(filePath);
+        // Locate root .opf package file
+        const containerEntry = zip.getEntry('META-INF/container.xml');
+        let opfPath = '';
+        if (containerEntry) {
+          const containerXml = containerEntry.getData().toString('utf-8');
+          const rootfileMatch = containerXml.match(/full-path=["']([^"']+\.opf)["']/i);
+          if (rootfileMatch) opfPath = rootfileMatch[1];
+        }
+        if (!opfPath) {
+          const allEntries = zip.getEntries();
+          const opf = allEntries.find((e) => e.entryName.endsWith('.opf'));
+          if (opf) opfPath = opf.entryName;
+        }
+
+        if (opfPath) {
+          epubBasePath = path.posix.dirname(opfPath);
+          if (epubBasePath === '.') epubBasePath = '';
+          const opfEntry = zip.getEntry(opfPath);
+          if (opfEntry) {
+            const opfXml = opfEntry.getData().toString('utf-8');
+            const itemRegex = /<item\s+[^>]*id=["']([^"']+)["'][^>]*href=["']([^"']+)["'][^>]*media-type=["']([^"']+)["'][^>]*\/?>/gi;
+            let mMatch;
+            while ((mMatch = itemRegex.exec(opfXml)) !== null) {
+              const id = mMatch[1];
+              const href = mMatch[2];
+              const mediaType = mMatch[3];
+              const resolvedHref = epubBasePath ? path.posix.join(epubBasePath, href) : href;
+              epubManifest.set(id, { href: resolvedHref, mediaType });
+              if (!coverDataUrl && (id.toLowerCase().includes('cover') || mediaType.startsWith('image/'))) {
+                const imgEntry = zip.getEntry(resolvedHref);
+                if (imgEntry) {
+                  const buf = imgEntry.getData();
+                  coverDataUrl = `data:${mediaType};base64,${buf.toString('base64')}`;
+                }
+              }
+            }
+
+            const spineRegex = /<itemref\s+[^>]*idref=["']([^"']+)["'][^>]*\/?>/gi;
+            let sMatch;
+            let sIdx = 0;
+            while ((sMatch = spineRegex.exec(opfXml)) !== null) {
+              const idref = sMatch[1];
+              const manifestItem = epubManifest.get(idref);
+              if (manifestItem && (manifestItem.mediaType.includes('xhtml') || manifestItem.mediaType.includes('html') || manifestItem.mediaType.includes('xml'))) {
+                epubSpine.push(manifestItem.href);
+                epubToc.push({
+                  index: sIdx,
+                  title: `Chapter ${sIdx + 1}`,
+                  href: manifestItem.href,
+                });
+                sIdx++;
+              }
+            }
+          }
+        }
+        imageEntries = epubSpine;
+      } catch (err: any) {
+        console.warn('[EPUB Parser] Failed to parse EPUB archive:', err.message);
       }
     } else if (type === 'pdf') {
       try {
@@ -144,14 +216,21 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
       pageCount: imageEntries.length,
       sizeBytes: stat.size,
       coverDataUrl,
+      isTextNovel: type === 'epub',
+      toc: epubToc.length > 0 ? epubToc : undefined,
     };
 
-    return {
+    const entry: CachedArchiveEntry = {
       archive,
       imageEntries,
       mtimeMs: stat.mtimeMs,
       sizeBytes: stat.size,
+      epubSpine,
+      epubManifest,
+      epubBasePath,
     };
+    archiveCache.set(id, entry);
+    return entry;
   } catch (err) {
     console.warn('[Local Library] Failed to scan', filePath, err);
     return null;
@@ -386,4 +465,95 @@ localLibraryRouter.post('/api/local/library/:id/add', (req: Request, res: Respon
     res.status(500).json({ error: 'Failed to add local archive', details: err.message });
   }
 });
+
+// GET /api/local/library/:id/epub/toc - Get Table of Contents for an EPUB
+localLibraryRouter.get('/api/local/library/:id/epub/toc', (req: Request, res: Response) => {
+  try {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry) return res.status(404).json({ error: 'Archive not found' });
+    res.json({
+      id: entry.archive.id,
+      title: entry.archive.title,
+      totalChapters: entry.imageEntries.length,
+      toc: entry.archive.toc || [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read TOC', details: err.message });
+  }
+});
+
+// GET /api/local/library/:id/epub/chapter/:index - Get chapter HTML content
+localLibraryRouter.get('/api/local/library/:id/epub/chapter/:index', (req: Request, res: Response) => {
+  try {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry) return res.status(404).json({ error: 'Archive not found' });
+    const idx = Number(req.params.index);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= entry.imageEntries.length) {
+      return res.status(400).json({ error: 'Invalid chapter index' });
+    }
+
+    const chapterHref = entry.imageEntries[idx];
+    const zip = new AdmZip(entry.archive.filePath);
+    const chapterEntry = zip.getEntry(chapterHref);
+    if (!chapterEntry) return res.status(404).json({ error: 'Chapter entry not found in EPUB' });
+
+    let rawHtml = chapterEntry.getData().toString('utf-8');
+    const chapterDir = path.posix.dirname(chapterHref);
+
+    // Rewrite relative image srcs to use EPUB resource endpoint
+    rawHtml = rawHtml.replace(/<img\s+([^>]*?)src=["']([^"']+)["']([^>]*)>/gi, (_, before, src, after) => {
+      if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+        return `<img ${before}src="${src}"${after}>`;
+      }
+      const resolvedPath = chapterDir && chapterDir !== '.' ? path.posix.join(chapterDir, src) : src;
+      const proxyUrl = `/api/local/library/${entry.archive.id}/epub/resource?path=${encodeURIComponent(resolvedPath)}`;
+      return `<img ${before}src="${proxyUrl}"${after}>`;
+    });
+
+    // Strip dangerous script tags
+    rawHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+    res.json({
+      id: entry.archive.id,
+      index: idx,
+      title: entry.archive.toc?.[idx]?.title || `Chapter ${idx + 1}`,
+      href: chapterHref,
+      html: rawHtml,
+      totalChapters: entry.imageEntries.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read chapter', details: err.message });
+  }
+});
+
+// GET /api/local/library/:id/epub/resource - Stream embedded EPUB image or style resource
+localLibraryRouter.get('/api/local/library/:id/epub/resource', (req: Request, res: Response) => {
+  try {
+    const entry = getArchiveEntry(String(req.params.id));
+    if (!entry) return res.status(404).json({ error: 'Archive not found' });
+    const targetPath = String(req.query.path || '').trim();
+    if (!targetPath) return res.status(400).json({ error: 'Resource path is required' });
+
+    const zip = new AdmZip(entry.archive.filePath);
+    const resEntry = zip.getEntry(targetPath) || zip.getEntry(decodeURIComponent(targetPath));
+    if (!resEntry) return res.status(404).json({ error: 'Resource not found' });
+
+    const buf = resEntry.getData();
+    const ext = path.extname(targetPath).toLowerCase().replace('.', '');
+    const mime =
+      ext === 'png' ? 'image/png' :
+      ext === 'webp' ? 'image/webp' :
+      ext === 'gif' ? 'image/gif' :
+      ext === 'css' ? 'text/css' :
+      ext === 'svg' ? 'image/svg+xml' :
+      'image/jpeg';
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.send(buf);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch resource', details: err.message });
+  }
+});
+
 

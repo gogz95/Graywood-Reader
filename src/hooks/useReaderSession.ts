@@ -1,4 +1,5 @@
-import { apiFetch } from '../utils/api';
+import { useEffect, useRef } from 'react';
+import { apiFetch, getApiBaseUrl } from '../utils/api';
 
 const CLIENT_SESSION_STORAGE_KEY = 'graywood_client_session_reading_history';
 
@@ -8,6 +9,16 @@ export interface ClientSessionHistoryEntry {
 }
 
 export type ClientSessionHistory = Record<string, ClientSessionHistoryEntry>;
+
+export interface RemoteProgressUpdate {
+  userId: string;
+  mangaId: string;
+  chapterNumber: number;
+  pageIndex?: number;
+  pageCount?: number;
+  percent?: number;
+  timestamp: string;
+}
 
 export function getClientSessionHistory(): ClientSessionHistory {
   try {
@@ -52,3 +63,61 @@ export async function migrateClientSessionHistoryToUser(targetUserId: string): P
     localStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
   } catch (_) {}
 }
+
+/**
+ * React Hook that subscribes to real-time Server-Sent Events (SSE) reading progress updates
+ * broadcast by other tabs, devices, or mobile thin clients for seamless continuity.
+ */
+export function useLiveReadingSessionSync(
+  onRemoteProgress?: (update: RemoteProgressUpdate) => void
+): void {
+  const callbackRef = useRef(onRemoteProgress);
+  callbackRef.current = onRemoteProgress;
+
+  useEffect(() => {
+    let evtSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let isMounted = true;
+
+    const connect = () => {
+      if (!isMounted) return;
+      try {
+        const baseUrl = getApiBaseUrl();
+        const url = `${baseUrl}/api/reader/sync/events`;
+        evtSource = new EventSource(url);
+
+        evtSource.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data?.type === 'progress_update') {
+              callbackRef.current?.(data);
+            }
+          } catch (_) {}
+        };
+
+        evtSource.onerror = () => {
+          if (evtSource) {
+            evtSource.close();
+            evtSource = null;
+          }
+          if (isMounted) {
+            reconnectTimeout = setTimeout(connect, 5000);
+          }
+        };
+      } catch (err) {
+        if (isMounted) {
+          reconnectTimeout = setTimeout(connect, 10000);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (evtSource) evtSource.close();
+    };
+  }, []);
+}
+

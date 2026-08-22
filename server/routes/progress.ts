@@ -12,6 +12,63 @@ import { resolveRequestUserId, mangaDatabase } from '../appState';
 
 export const progressRouter = Router();
 
+// ── SSE Live Reading Session Sync Engine ─────────────────────────────────────
+interface SseSessionClient {
+  userId: string;
+  res: any;
+}
+const sseClients = new Set<SseSessionClient>();
+
+export function broadcastProgressSync(event: {
+  userId: string;
+  mangaId: string;
+  chapterNumber: number;
+  pageIndex?: number;
+  pageCount?: number;
+  percent?: number;
+}): void {
+  const payload = `data: ${JSON.stringify({ type: 'progress_update', ...event, timestamp: new Date().toISOString() })}\n\n`;
+  for (const client of sseClients) {
+    if (client.userId === event.userId || client.userId === 'usr_guest') {
+      try {
+        client.res.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
+}
+
+// GET /api/reader/sync/events - Real-time SSE channel for live cross-device session synchronization
+progressRouter.get("/api/reader/sync/events", (req, res) => {
+  const userId = resolveProgressUserId(req);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const client: SseSessionClient = { userId, res };
+  sseClients.add(client);
+
+  res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
+
+  // 25-second keep-alive heartbeat ping
+  const pingInterval = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n');
+    } catch {
+      clearInterval(pingInterval);
+      sseClients.delete(client);
+    }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(pingInterval);
+    sseClients.delete(client);
+  });
+});
+
 // ------------------------------------------------------------
 // GET /api/reader/progress?sourceId=...&slug=...
 // Returns reading progress for a specific manga identified by its source ID and slug.
@@ -66,6 +123,20 @@ progressRouter.post("/api/reader/progress", (req, res) => {
     SqliteDb.setUserFavorite(userId, String(mangaId), true);
   } catch (err) {
     console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
+  }
+
+  // Broadcast real-time SSE progress update to all active devices & tabs
+  try {
+    broadcastProgressSync({
+      userId,
+      mangaId: String(mangaId),
+      chapterNumber: Number(chapterNumber) || 0,
+      pageIndex: Number(pageIndex),
+      pageCount: Number(pageCount),
+      percent: Number(percent),
+    });
+  } catch (err) {
+    console.error('[SSE Sync Engine] Broadcast failed:', err);
   }
 
   res.json({ success: true });

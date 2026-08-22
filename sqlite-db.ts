@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { MangaItem, UserProfile, AppSettings, AutoUpdateLog, PageStickyNote, UserCategory, isNsfwManga } from './src/types';
+import { logger } from './server/logger';
 
 // Ensure data directory exists (cwd-relative so bundled/Docker entrypoints share ./data)
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -12,7 +13,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const DB_PATH = path.join(DATA_DIR, 'manga.db');
 
-console.log(`[SQLite Engine] Initializing SQLite database at ${DB_PATH}...`);
+logger.info('[SQLite Engine] Initializing SQLite database', { dbPath: DB_PATH });
 const db = new Database(DB_PATH);
 
 // Enable WAL Mode for high concurrency and sub-millisecond writes
@@ -95,7 +96,10 @@ db.exec(`
     color TEXT,
     icon TEXT,
     sort_order INTEGER DEFAULT 0,
-    created_at TEXT
+    created_at TEXT,
+    is_dynamic INTEGER DEFAULT 0,
+    rule_type TEXT,
+    rule_value TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_categories_user_sort ON categories(user_id, sort_order);
@@ -112,6 +116,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_manga_categories_cat ON manga_categories(category_id);
   CREATE INDEX IF NOT EXISTS idx_manga_categories_composite ON manga_categories(user_id, category_id, manga_id);
 `);
+
+try { db.exec('ALTER TABLE categories ADD COLUMN is_dynamic INTEGER DEFAULT 0'); } catch (e) { }
+try { db.exec('ALTER TABLE categories ADD COLUMN rule_type TEXT'); } catch (e) { }
+try { db.exec('ALTER TABLE categories ADD COLUMN rule_value TEXT'); } catch (e) { }
 
 try {
   db.exec(`
@@ -445,11 +453,11 @@ const stmtGetCategoryCountsForUser = db.prepare(`
 `);
 const stmtGetCategoryByIdAndUser = db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?');
 const stmtInsertCategory = db.prepare(`
-  INSERT INTO categories (id, user_id, name, description, color, icon, sort_order, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO categories (id, user_id, name, description, color, icon, sort_order, created_at, is_dynamic, rule_type, rule_value)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const stmtUpdateCategory = db.prepare(`
-  UPDATE categories SET name = ?, description = ?, color = ?, icon = ?, sort_order = ?
+  UPDATE categories SET name = ?, description = ?, color = ?, icon = ?, sort_order = ?, is_dynamic = ?, rule_type = ?, rule_value = ?
   WHERE id = ? AND user_id = ?
 `);
 const stmtDeleteCategoryMangaLinks = db.prepare('DELETE FROM manga_categories WHERE category_id = ? AND user_id = ?');
@@ -1016,6 +1024,9 @@ export const SqliteDb = {
       userId: r.user_id,
       createdAt: r.created_at,
       seriesCount: countMap.get(r.id) || 0,
+      isDynamic: Boolean(r.is_dynamic),
+      ruleType: r.rule_type || undefined,
+      ruleValue: r.rule_value || undefined,
     }));
   },
 
@@ -1028,7 +1039,10 @@ export const SqliteDb = {
       category.color || '#f59e0b',
       category.icon || 'Bookmark',
       category.sortOrder || 0,
-      category.createdAt || new Date().toISOString()
+      category.createdAt || new Date().toISOString(),
+      category.isDynamic ? 1 : 0,
+      category.ruleType || null,
+      category.ruleValue ? String(category.ruleValue) : null
     );
     return category;
   },
@@ -1041,8 +1055,11 @@ export const SqliteDb = {
     const color = updates.color !== undefined ? updates.color : existing.color;
     const icon = updates.icon !== undefined ? updates.icon : existing.icon;
     const sortOrder = updates.sortOrder !== undefined ? updates.sortOrder : existing.sort_order;
+    const isDynamic = updates.isDynamic !== undefined ? (updates.isDynamic ? 1 : 0) : existing.is_dynamic;
+    const ruleType = updates.ruleType !== undefined ? updates.ruleType : existing.rule_type;
+    const ruleValue = updates.ruleValue !== undefined ? String(updates.ruleValue) : existing.rule_value;
 
-    stmtUpdateCategory.run(name, description, color, icon, sortOrder, id, userId);
+    stmtUpdateCategory.run(name, description, color, icon, sortOrder, isDynamic, ruleType, ruleValue, id, userId);
 
     return {
       id,
@@ -1053,6 +1070,9 @@ export const SqliteDb = {
       sortOrder,
       userId,
       createdAt: existing.created_at,
+      isDynamic: Boolean(isDynamic),
+      ruleType,
+      ruleValue,
     };
   },
 

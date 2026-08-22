@@ -20,7 +20,7 @@ categoriesRouter.post('/', (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Authentication required to create custom shelves' });
   }
-  const { name, description, color, icon, sortOrder } = req.body || {};
+  const { name, description, color, icon, sortOrder, isDynamic, ruleType, ruleValue } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'Category name is required' });
   }
@@ -35,6 +35,9 @@ categoriesRouter.post('/', (req, res) => {
     sortOrder: Number(sortOrder) || 0,
     userId,
     createdAt: new Date().toISOString(),
+    isDynamic: Boolean(isDynamic),
+    ruleType: ruleType || undefined,
+    ruleValue: ruleValue || undefined,
   });
 
   res.status(201).json(newCat);

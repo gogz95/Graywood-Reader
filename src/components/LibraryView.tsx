@@ -386,6 +386,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Tri-State Genre Filter States: 'include' (+Tag) | 'exclude' (-Tag) | neutral
+  const [genreStates, setGenreStates] = useState<Map<string, 'include' | 'exclude'>>(new Map());
+  const [isGenreFilterOpen, setIsGenreFilterOpen] = useState<boolean>(false);
+
   // Virtualized Chunked Loading for Smooth 60 FPS Scrolling
   const [visibleLimit, setVisibleLimit] = useState<number>(36);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
@@ -411,6 +415,35 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return hasWorkingReaderSource(manga);
   };
 
+  // Extract all distinct library genres
+  const libraryGenres = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of mangaList) {
+      for (const g of m.genres || []) {
+        if (g && g.trim()) {
+          counts.set(g.trim(), (counts.get(g.trim()) || 0) + 1);
+        }
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag]) => tag);
+  }, [mangaList]);
+
+  const toggleGenreTag = (tag: string) => {
+    setGenreStates((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(tag);
+      if (!cur) next.set(tag, 'include');
+      else if (cur === 'include') next.set(tag, 'exclude');
+      else next.delete(tag);
+      return next;
+    });
+  };
+
+  const clearGenreTags = () => {
+    setGenreStates(new Map());
+  };
 
   // Filter & Search Logic (Memoized to prevent blocking renders on menu/modal toggles)
   const filteredList = React.useMemo(() => {
@@ -420,15 +453,38 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       if (statusFilter === 'flagged' && !item.isFlagged) return false;
       if (statusFilter !== 'all' && statusFilter !== 'favorites' && statusFilter !== 'flagged' && item.status !== statusFilter) return false;
 
-      // Category / Custom Shelf Filter
+      // Category / Custom Shelf Filter (Handles both manual assignment and smart dynamic rules)
       if (activeCategory) {
         const activeCatObj = categories.find((c) => c.id === activeCategory);
-        const activeName = activeCatObj?.name?.toLowerCase().trim();
-        const hasCat = item.categories?.some((c) => {
-          const cStr = String(c).trim();
-          return cStr === activeCategory || (activeName && cStr.toLowerCase() === activeName);
-        });
-        if (!hasCat) return false;
+        if (activeCatObj?.isDynamic && activeCatObj.ruleType) {
+          if (activeCatObj.ruleType === 'unread' && (item.latestChapter - item.currentChapter <= 0)) return false;
+          if (activeCatObj.ruleType === 'in_progress' && (item.status !== 'reading' || item.currentChapter <= 0)) return false;
+          if (activeCatObj.ruleType === 'completed' && item.status !== 'completed') return false;
+          if (activeCatObj.ruleType === 'rating' && item.rating < (Number(activeCatObj.ruleValue) || 9.0)) return false;
+          if (activeCatObj.ruleType === 'favorites' && !item.isFavorite) return false;
+          if (activeCatObj.ruleType === 'updated_recently') {
+            const daysDiff = (Date.now() - new Date(item.lastUpdated || 0).getTime()) / (1000 * 3600 * 24);
+            if (daysDiff > 7) return false;
+          }
+        } else {
+          const activeName = activeCatObj?.name?.toLowerCase().trim();
+          const hasCat = item.categories?.some((c) => {
+            const cStr = String(c).trim();
+            return cStr === activeCategory || (activeName && cStr.toLowerCase() === activeName);
+          });
+          if (!hasCat) return false;
+        }
+      }
+
+      // Tri-State Genre Filtering (+Include / -Exclude / Ignore)
+      if (genreStates.size > 0) {
+        const itemGenres = (item.genres || []).map((g) => g.toLowerCase());
+        for (const [tag, mode] of genreStates.entries()) {
+          const tagNorm = tag.toLowerCase();
+          const hasTag = itemGenres.some((g) => g === tagNorm || g.includes(tagNorm));
+          if (mode === 'include' && !hasTag) return false;
+          if (mode === 'exclude' && hasTag) return false;
+        }
       }
 
       // Origin Type Filter
@@ -451,7 +507,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       return true;
     });
-  }, [mangaList, statusFilter, activeCategory, categories, typeFilter, isGuest, nsfwFilter, searchQuery]);
+  }, [mangaList, statusFilter, activeCategory, categories, genreStates, typeFilter, isGuest, nsfwFilter, searchQuery]);
 
   // Sort Logic (Memoized)
   const sortedList = React.useMemo(() => {
@@ -859,12 +915,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
         </div>
 
-        {/* Row 3: Secondary Filter Bar (Origin Type & 18+ Filter) */}
+        {/* Row 3: Secondary Filter Bar (Origin Type, 18+ Filter & Tri-State Genres) */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/60 pt-2.5 min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             {/* Origin Type Filter */}
             <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5">
               <button
+                type="button"
                 onClick={() => setTypeFilter('all')}
                 className={`px-2.5 py-1 rounded-lg transition-all font-bold ${
                   typeFilter === 'all'
@@ -875,6 +932,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 All Formats
               </button>
               <button
+                type="button"
                 onClick={() => setTypeFilter('manhwa')}
                 className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
                   typeFilter === 'manhwa'
@@ -885,6 +943,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <span>🇰🇷</span> Manhwa
               </button>
               <button
+                type="button"
+                onClick={() => setTypeFilter('manga')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
+                  typeFilter === 'manga'
+                    ? 'bg-elevated text-primary shadow-xs'
+                    : 'text-secondary hover:text-primary'
+                }`}
+              >
+                <span>🇯🇵</span> Manga
+              </button>
+              <button
+                type="button"
                 onClick={() => setTypeFilter('manhua')}
                 className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
                   typeFilter === 'manhua'
@@ -895,6 +965,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <span>🇨🇳</span> Manhua
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setIsGenreFilterOpen(!isGenreFilterOpen)}
+              className={`px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 transition-all border ${
+                genreStates.size > 0
+                  ? 'bg-accent/20 border-accent text-accent shadow-xs'
+                  : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Genre Filters {genreStates.size > 0 ? `(${genreStates.size})` : ''}</span>
+            </button>
+          </div>
 
             {/* 18+ NSFW Content Toggle */}
             <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5 shadow-inner">
@@ -961,7 +1045,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </button>
               )}
             </div>
-          </div>
 
           {autoTagToast && (
             <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
@@ -987,6 +1070,54 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* Row 4: Tri-State Genre Filtering Panel */}
+        {isGenreFilterOpen && (
+          <div className="pt-3 border-t border-edge/60 space-y-2 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-bold text-secondary flex items-center gap-2">
+                <span>Tri-State Filter (Click: <strong>+Include</strong> &rarr; <strong>-Exclude</strong> &rarr; <strong>Neutral</strong>):</span>
+                {genreStates.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearGenreTags}
+                    className="text-[10px] text-danger hover:underline font-bold"
+                  >
+                    Clear All ({genreStates.size})
+                  </button>
+                )}
+              </div>
+              <span className="text-[10px] text-muted">{libraryGenres.length} tags in library</span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto no-scrollbar p-1 bg-app/50 border border-edge/50 rounded-xl">
+              {libraryGenres.map((tag) => {
+                const state = genreStates.get(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleGenreTag(tag)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                      state === 'include'
+                        ? 'bg-success text-black shadow-xs font-black'
+                        : state === 'exclude'
+                        ? 'bg-danger text-white shadow-xs font-black'
+                        : 'bg-surface hover:bg-elevated text-secondary hover:text-primary border border-edge'
+                    }`}
+                  >
+                    {state === 'include' && <span>+</span>}
+                    {state === 'exclude' && <span>&minus;</span>}
+                    <span>{tag}</span>
+                  </button>
+                );
+              })}
+              {libraryGenres.length === 0 && (
+                <span className="text-xs text-muted p-2 italic">No genre tags found in library</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Manga List */}

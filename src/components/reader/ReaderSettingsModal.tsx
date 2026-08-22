@@ -230,8 +230,21 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
           </div>
         </div>
 
-        {/* 5. GUIDED PANEL VIEW & PREFETCH TOGGLES */}
+        {/* 5. ADVANCED READING ASSISTS (SPREAD SPLIT, GUIDED PANEL, PRELOAD) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+            <div>
+              <div className="text-xs font-bold text-primary">Split Double-Page Spreads</div>
+              <div className="text-[10px] text-secondary">Auto-cut landscape pages into portrait (Mihon-style)</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.splitLandscapeSpreads !== false}
+              onChange={(e) => onSaveSettings({ ...settings, splitLandscapeSpreads: e.target.checked })}
+              className="w-4 h-4 accent-accent"
+            />
+          </label>
+
           <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
             <div>
               <div className="text-xs font-bold text-primary">Guided Panel View</div>
@@ -254,6 +267,19 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
               type="checkbox"
               checked={settings.prefetchNextChapter !== false}
               onChange={(e) => onSaveSettings({ ...settings, prefetchNextChapter: e.target.checked })}
+              className="w-4 h-4 accent-accent"
+            />
+          </label>
+
+          <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+            <div>
+              <div className="text-xs font-bold text-primary">E-Ink High Contrast Mode</div>
+              <div className="text-[10px] text-secondary">Zero animations & 1-bit dithering for e-readers</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.imageFilter === 'e-ink'}
+              onChange={(e) => onSaveSettings({ ...settings, imageFilter: e.target.checked ? 'e-ink' : 'normal' })}
               className="w-4 h-4 accent-accent"
             />
           </label>

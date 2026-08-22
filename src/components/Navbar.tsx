@@ -16,6 +16,7 @@ import {
   EyeOff,
   ShieldAlert,
   Trophy,
+  Puzzle,
 } from 'lucide-react';
 
 import { AppNavTab, UserProfile } from '../types';
@@ -44,6 +45,7 @@ interface NavbarProps {
   onOpenAuthModal: () => void;
   onOpenAdminPanel: () => void;
   onOpenSubmitBugModal?: () => void;
+  onOpenExtensionManager?: () => void;
 }
 
 /** Small count pill used on tabs / nav items */
@@ -78,6 +80,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onOpenAuthModal,
   onOpenAdminPanel,
   onOpenSubmitBugModal,
+  onOpenExtensionManager,
 }) => {
   const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -236,6 +239,18 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   <span className="w-4 h-4 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center">
                     {pendingChallengesCount}
                   </span>
+                </button>
+              )}
+
+              {onOpenExtensionManager && (
+                <button
+                  type="button"
+                  onClick={onOpenExtensionManager}
+                  title="Community Extension Store & Live Scraper Studio"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-all"
+                >
+                  <Puzzle className="w-4 h-4 text-accent" />
+                  <span>Extensions</span>
                 </button>
               )}
 

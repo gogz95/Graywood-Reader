@@ -471,3 +471,115 @@ export class KotatsuImageLoader {
     return null;
   }
 }
+
+/**
+ * Mihon-style Canvas Double-Page Spread Auto-Splitting.
+ * Detects landscape spreads (width > height * 1.25) and splits them into 2 sequential portrait pages.
+ * In RTL (Manga), the right slice is Page 1, left slice is Page 2.
+ * In LTR (Comics), the left slice is Page 1, right slice is Page 2.
+ */
+export async function splitDoublePageSpread(
+  imageSource: string | HTMLImageElement,
+  isRtl: boolean = true
+): Promise<[string, string] | null> {
+  let img: HTMLImageElement;
+
+  if (typeof imageSource === 'string') {
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    const loaded = new Promise<boolean>((resolve) => {
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+    });
+    img.src = imageSource;
+    const success = await loaded;
+    if (!success) return null;
+  } else {
+    img = imageSource;
+  }
+
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  if (!w || !h || w <= h * 1.25) {
+    return null; // Not a double-page landscape spread
+  }
+
+  const halfWidth = Math.floor(w / 2);
+
+  // Canvas 1: Left Slice
+  const canvasLeft = document.createElement('canvas');
+  canvasLeft.width = halfWidth;
+  canvasLeft.height = h;
+  const ctxL = canvasLeft.getContext('2d');
+  if (!ctxL) return null;
+  ctxL.drawImage(img, 0, 0, halfWidth, h, 0, 0, halfWidth, h);
+
+  // Canvas 2: Right Slice
+  const rightWidth = w - halfWidth;
+  const canvasRight = document.createElement('canvas');
+  canvasRight.width = rightWidth;
+  canvasRight.height = h;
+  const ctxR = canvasRight.getContext('2d');
+  if (!ctxR) return null;
+  ctxR.drawImage(img, halfWidth, 0, rightWidth, h, 0, 0, rightWidth, h);
+
+  const leftData = canvasLeft.toDataURL('image/jpeg', 0.92);
+  const rightData = canvasRight.toDataURL('image/jpeg', 0.92);
+
+  // In RTL mode: Right page comes first, then Left page
+  // In LTR mode: Left page comes first, then Right page
+  return isRtl ? [rightData, leftData] : [leftData, rightData];
+}
+
+/**
+ * 1-bit Floyd-Steinberg Error Diffusion Dithering for E-Ink Displays.
+ * Transforms an image or canvas into high-contrast monochrome 1-bit pixels.
+ */
+export function applyFloydSteinbergDithering(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const w = canvas.width;
+  const h = canvas.height;
+  if (w === 0 || h === 0) return;
+
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+
+  // Working luminance buffer (grayscale floating point)
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    lum[i / 4] = 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      const oldVal = lum[idx];
+      const newVal = oldVal < 128 ? 0 : 255;
+      lum[idx] = newVal;
+      const error = oldVal - newVal;
+
+      if (x + 1 < w) lum[idx + 1] += error * (7 / 16);
+      if (x - 1 >= 0 && y + 1 < h) lum[idx + w - 1] += error * (3 / 16);
+      if (y + 1 < h) lum[idx + w] += error * (5 / 16);
+      if (x + 1 < w && y + 1 < h) lum[idx + w + 1] += error * (1 / 16);
+    }
+  }
+
+  // Copy back to ImageData
+  for (let i = 0; i < lum.length; i++) {
+    const pixelVal = lum[i] <= 128 ? 0 : 255;
+    const baseIdx = i * 4;
+    data[baseIdx] = pixelVal;
+    data[baseIdx + 1] = pixelVal;
+    data[baseIdx + 2] = pixelVal;
+    // preserve alpha
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+

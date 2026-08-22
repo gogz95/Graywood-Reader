@@ -1,8 +1,8 @@
-export type ReaderViewMode = 'webtoon' | 'webtoon-seamless' | 'single' | 'double' | 'rtl' | 'ltr' | 'vertical-paged';
+export type ReaderViewMode = 'webtoon' | 'webtoon-seamless' | 'single' | 'double' | 'rtl' | 'ltr' | 'vertical-paged' | 'reflowable-text';
 export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
 export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'invert' | 'brightness' | 'oled' | 'e-ink' | 'sharpener' | 'high-contrast';
 export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk';
-export type MangaType = 'manga' | 'manhwa' | 'manhua';
+export type MangaType = 'manga' | 'manhwa' | 'manhua' | 'novel';
 export type AppNavTab = 'library' | 'browse' | 'sources' | 'settings' | 'autoupdate' | 'duplicates' | 'openapi';
 
 
@@ -72,6 +72,10 @@ export interface ChapterData {
   totalChapters: number;
   nextChapterNumber: number | null;
   prevChapterNumber: number | null;
+  /** True when the chapter is a reflowable text/EPUB novel chapter */
+  isTextChapter?: boolean;
+  /** HTML or plain text body for reflowable EPUB/light novel viewer */
+  textContent?: string;
   /** True when the server could not extract live pages */
   isPlaceholder?: boolean;
   /** Human-readable reason when isPlaceholder is true */
@@ -103,6 +107,11 @@ export interface ReaderSettings {
   guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
   prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
   splitLandscapeSpreads?: boolean; // Canvas-based landscape double-page auto-splitting (Mihon-style)
+  // Reflowable EPUB / Light Novel Typography Settings
+  epubFontFamily?: 'serif' | 'sans' | 'dyslexic' | 'mono';
+  epubFontSize?: number; // px, default 18
+  epubLineHeight?: number; // multiplier, e.g. 1.6
+  epubTextAlign?: 'left' | 'justify' | 'center';
 }
 
 export interface PageStickyNote {
@@ -225,6 +234,8 @@ export interface MangaItem {
   isNsfw?: boolean;
 }
 
+export type DynamicShelfRuleType = 'unread' | 'completed' | 'rating' | 'updated_recently' | 'in_progress' | 'favorites' | 'genre';
+
 export interface UserCategory {
   id: string;
   name: string;
@@ -236,7 +247,20 @@ export interface UserCategory {
   createdAt?: string;
   seriesCount?: number;
   unreadCount?: number;
+  isDynamic?: boolean;
+  ruleType?: DynamicShelfRuleType;
+  ruleValue?: string | number;
 }
+
+export interface OidcProviderConfig {
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret?: string;
+  buttonLabel?: string;
+  autoRegister?: boolean;
+}
+
 
 export interface DuplicateCandidate {
   id: string;

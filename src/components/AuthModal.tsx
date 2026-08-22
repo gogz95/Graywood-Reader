@@ -119,6 +119,43 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
     }
   };
 
+  const [oidcConfig, setOidcConfig] = useState<{ enabled: boolean; buttonLabel: string } | null>(null);
+
+  useEffect(() => {
+    apiFetch('/api/auth/oidc/config')
+      .then((res) => res.json())
+      .then((data) => setOidcConfig(data))
+      .catch(() => {});
+  }, []);
+
+  const handleOidcLogin = async () => {
+    setBusy(true);
+    try {
+      const email = prompt('Enter your SSO / Authentik User Email:');
+      if (!email) {
+        setBusy(false);
+        return;
+      }
+      const res = await apiFetch('/api/auth/oidc/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), username: email.split('@')[0] }),
+      });
+      const data = await res.json();
+      if (res.ok && data.user) {
+        if (typeof data.token === 'string') setAuthToken(data.token);
+        onLogin(data.user);
+        onClose();
+      } else {
+        setLoginError(data.error || 'SSO authentication failed');
+      }
+    } catch (err: any) {
+      setLoginError(err.message || 'SSO failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div
       onClick={(e) => {
@@ -135,7 +172,7 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
             <h2 className="text-xl font-black text-primary">{mode === 'login' ? 'Sign In' : 'Create Account'}</h2>
             <p className="text-xs text-secondary">
               {mode === 'login'
-                ? 'Verify with your password. Tokens are stored only on this device.'
+                ? 'Verify with your password or homelab SSO provider.'
                 : 'Passwords are encrypted on the server (scrypt). Never stored in plain text.'}
             </p>
           </div>
@@ -164,6 +201,20 @@ export const AuthModal: React.FC<AuthModalProps> = React.memo(({
               <button type="submit" disabled={busy} className="w-full py-3 sm:py-3.5 rounded-xl bg-gradient-to-r from-accent to-accent-bright text-accent-fg font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
                 <LogIn className="w-4 h-4 sm:w-5 sm:h-5" />{busy ? 'Signing in...' : 'Sign In'}
               </button>
+
+              {/* OIDC / Authentik Single Sign-On Button */}
+              {oidcConfig?.enabled && (
+                <button
+                  type="button"
+                  onClick={handleOidcLogin}
+                  disabled={busy}
+                  className="w-full py-2.5 sm:py-3 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-900/80 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md"
+                >
+                  <Lock className="w-4 h-4 text-indigo-400" />
+                  <span>{oidcConfig.buttonLabel || 'Sign in with SSO / Authentik'}</span>
+                </button>
+              )}
+
               <button type="button" onClick={handleGuestQuickSignIn} className="w-full py-2.5 sm:py-3 rounded-xl bg-elevated border border-edge text-secondary hover:text-primary font-bold text-xs sm:text-sm flex items-center justify-center gap-2">
                 <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />Continue as Guest
               </button>

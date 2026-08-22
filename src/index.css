@@ -400,3 +400,36 @@ img[loading="lazy"] {
 .card-interactive:active {
   transform: translateY(-1px) scale(0.995);
 }
+
+/* ── E-Ink E-Reader Hardware Display Mode ─────────────────────────────────── */
+body.e-ink-mode,
+.e-ink-mode {
+  --bg-app: #ffffff !important;
+  --bg-surface: #ffffff !important;
+  --bg-elevated: #f0f0f0 !important;
+  --bg-inset: #ffffff !important;
+  --edge: #000000 !important;
+  --edge-strong: #000000 !important;
+  --text-1: #000000 !important;
+  --text-2: #111111 !important;
+  --text-3: #333333 !important;
+  --accent: #000000 !important;
+  --accent-fg: #ffffff !important;
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+body.e-ink-mode *,
+.e-ink-mode * {
+  animation: none !important;
+  transition: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.e-ink-image {
+  filter: grayscale(100%) contrast(150%) !important;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+

@@ -239,11 +239,11 @@ export async function fetchWeebCentralChapterList(seriesUrl: string): Promise<Re
         slug: chapterId,
         title: rawText.split('\n')[0]?.trim() || `Chapter ${num}`,
         url: fullHref,
-        pageCount: 16,
+        pageCount: 0,
       });
     });
 
-    return chapters;
+    return chapters.sort((a, b) => a.number - b.number);
   } catch (err: any) {
     console.warn('[WeebCentral Scraper] fetchChapterList error:', err.message);
     return [];

@@ -114,3 +114,49 @@ export class SourceCookieJar {
 }
 
 export const sourceCookieJar = new SourceCookieJar();
+
+// ── Automatic Domain Migration Resolver ──────────────────────────────────────
+const KNOWN_SOURCE_MIRRORS: Record<string, string[]> = {
+  asurascans: ['https://asuracomic.net', 'https://asura.gg', 'https://asurascans.com', 'https://asura.nacm.cc'],
+  flamecomics: ['https://flamecomics.xyz', 'https://flamecomics.me', 'https://flamescans.org'],
+  reaperscans: ['https://reaperscans.com', 'https://reaperscans.to', 'https://reapercomics.com'],
+  weebcentral: ['https://weebcentral.com', 'https://weebcentral.net'],
+};
+
+/**
+ * Automatically probes known mirrors when a source experiences consecutive network/DNS failures,
+ * and updates SQLite database source URLs on successful mirror discovery.
+ */
+export async function attemptAutoDomainMigration(sourceId: string, currentUrl: string): Promise<string | null> {
+  const mirrors = KNOWN_SOURCE_MIRRORS[sourceId.toLowerCase()];
+  if (!mirrors || mirrors.length === 0) return null;
+
+  for (const mirror of mirrors) {
+    try {
+      const probe = await fetch(mirror, {
+        method: 'HEAD',
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (probe.ok || probe.status === 403) { // 403 means server exists and is alive
+        console.log(`[Domain Resolver] Successfully discovered active mirror for "${sourceId}": ${mirror}`);
+        // Automatically batch migrate database items with old domain
+        try {
+          const allManga = SqliteDb.getAllManga();
+          const oldDomainMatch = currentUrl.match(/^https?:\/\/[^/]+/i)?.[0];
+          if (oldDomainMatch) {
+            for (const m of allManga) {
+              if (m.sourceUrl?.startsWith(oldDomainMatch)) {
+                const migratedUrl = m.sourceUrl.replace(oldDomainMatch, mirror);
+                SqliteDb.updateManga(m.id, { sourceUrl: migratedUrl });
+              }
+            }
+          }
+        } catch (_) {}
+        return mirror;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+

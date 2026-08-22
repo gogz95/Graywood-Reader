@@ -56,6 +56,10 @@ export async function testServerConnection(url: string): Promise<{ success: bool
   }
 }
 
+export function getApiBaseUrl(): string {
+  return getServerUrl() || '';
+}
+
 export function resolveApiUrl(input: string): string {
   const base = getServerUrl();
   if (base && input.startsWith('/api/')) {

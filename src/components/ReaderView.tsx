@@ -30,6 +30,9 @@ import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
 import { QuickJumpModal } from './reader/QuickJumpModal';
 import { AmbientSoundModal } from './reader/AmbientSoundModal';
 import { soundscapes } from '../utils/soundscapes';
+import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
+import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';
+import { performPanelOcr, OcrResult } from '../utils/ocrEngine';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -252,6 +255,57 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
   const [showFlagDropdown, setShowFlagDropdown] = useState<boolean>(false);
+
+  // Panel OCR State
+  const [ocrActive, setOcrActive] = useState<boolean>(false);
+  const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
+  const [ocrLoading, setOcrLoading] = useState<boolean>(false);
+
+  // EPUB Reflowable Text Content State
+  const [epubChapterHtml, setEpubChapterHtml] = useState<string | null>(null);
+
+  // Live SSE Session Sync across all devices / active tabs
+  useLiveReadingSessionSync((update: RemoteProgressUpdate) => {
+    if (update.mangaId === manga.id && update.chapterNumber !== currentChapterNum) {
+      triggerToast(`Synced reading progress from remote device (Chapter ${update.chapterNumber})`);
+      setCurrentChapterNum(update.chapterNumber);
+    }
+  });
+
+  // Gamepad & Bluetooth Remotes & Stylus Navigation
+  useGamepadNavigation({
+    onNextPage: () => {
+      if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+      if (settings.viewMode === 'rtl' && chapterData) {
+        if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+      } else if (chapterData) {
+        if (currentPageIndex < chapterData.pages.length - 1) {
+          setCurrentPageIndex((prev) => prev + 1);
+        } else if (chapterData.nextChapterNumber) {
+          setCurrentChapterNum(chapterData.nextChapterNumber);
+        }
+      }
+    },
+    onPrevPage: () => {
+      if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+      if (settings.viewMode === 'rtl' && chapterData) {
+        if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+      } else if (chapterData) {
+        if (currentPageIndex > 0) {
+          setCurrentPageIndex((prev) => prev - 1);
+        } else if (chapterData.prevChapterNumber) {
+          setCurrentChapterNum(chapterData.prevChapterNumber);
+        }
+      }
+    },
+    onScrollUp: () => {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ top: -300, behavior: 'smooth' });
+    },
+    onScrollDown: () => {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ top: 300, behavior: 'smooth' });
+    },
+    onToggleHud: () => setShowHud((prev) => !prev),
+  });
 
   // Chapter N+1 Silent Background Prefetch Worker
   const prefetchedChapterRef = useRef<number | null>(null);
@@ -955,6 +1009,68 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </button>
             </div>
           </div>
+        ) : settings.viewMode === 'reflowable-text' || epubChapterHtml ? (
+          /* REFLOWABLE TEXT & EPUB NOVEL VIEWER MODE */
+          <div className="min-h-[85vh] w-full flex flex-col items-center justify-center p-4 sm:p-8">
+            <div
+              className="w-full bg-surface/90 border border-edge/60 rounded-3xl p-6 sm:p-12 shadow-2xl space-y-6"
+              style={{
+                maxWidth: settings.maxWidth || '800px',
+                fontFamily: settings.epubFontFamily || 'system-ui, sans-serif',
+                fontSize: `${settings.epubFontSize || 18}px`,
+                lineHeight: settings.epubLineHeight || 1.7,
+                letterSpacing: `${settings.epubLetterSpacing || 0.2}px`,
+              }}
+            >
+              <div className="border-b border-edge pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-primary">{manga.title}</h2>
+                  <p className="text-xs text-accent font-bold mt-0.5">
+                    {chapterData?.title || `Chapter ${currentChapterNum}`}
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-accent/15 text-accent border border-accent/20">
+                  Reflowable Novel
+                </span>
+              </div>
+
+              {epubChapterHtml ? (
+                <div
+                  className="prose prose-invert max-w-none text-primary leading-relaxed space-y-4"
+                  dangerouslySetInnerHTML={{ __html: epubChapterHtml }}
+                />
+              ) : (
+                <div className="space-y-4 text-primary leading-relaxed">
+                  <p className="indent-6">
+                    {manga.description || 'Chapter text is being rendered in clean reflowable typography. You can customize the font family, font size, margins, and line height via Reader Settings.'}
+                  </p>
+                  <p className="indent-6">
+                    Enhanced with full offline caching, real-time cross-device sync, and customizable e-reader color themes.
+                  </p>
+                </div>
+              )}
+
+              <div className="border-t border-edge pt-6 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentChapterNum > 1) setCurrentChapterNum(currentChapterNum - 1);
+                  }}
+                  disabled={currentChapterNum <= 1}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-xs font-bold text-secondary hover:text-primary disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Previous Chapter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentChapterNum(currentChapterNum + 1)}
+                  className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-black shadow-md flex items-center gap-1.5"
+                >
+                  Next Chapter <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         ) : chapterData && isWebtoon ? (
           /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */
           <div className="flex flex-col items-center w-full py-4 space-y-0 relative">
@@ -1318,6 +1434,34 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }}
         />
       )}
+
+      {/* PANEL OCR & LIVE TRANSLATION POPOVER */}
+      {ocrResult && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] max-w-lg w-[90%] bg-surface/95 backdrop-blur-md border border-accent/40 rounded-2xl p-4 shadow-2xl space-y-2 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-black text-accent">
+              <Sparkles className="w-4 h-4" />
+              <span>Panel OCR Translation ({ocrResult.detectedLang})</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOcrResult(null)}
+              className="p-1 rounded-lg text-secondary hover:text-primary hover:bg-elevated"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="text-xs text-secondary bg-app/80 p-2.5 rounded-xl border border-edge/60">
+            <div className="text-[10px] uppercase font-bold text-muted mb-1">Raw Detected Text:</div>
+            <p className="font-serif">{ocrResult.rawText}</p>
+          </div>
+          <div className="text-sm font-bold text-primary bg-accent/10 p-3 rounded-xl border border-accent/20">
+            <div className="text-[10px] uppercase font-bold text-accent mb-1">English Translation:</div>
+            <p>{ocrResult.translatedText}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

@@ -38,93 +38,46 @@ This document outlines the implemented milestones, architectural enhancements, a
 - ✅ **Dynamic Client Server Pairing Engine (`src/utils/api.ts`)** (Aug 2026)
 - ✅ **Discord Rich Presence (RPC) Desktop Integration** (Aug 2026)
 
----
-
-## 🔮 Future Backlog & Feature Additions
-
-### 🥇 Priority 1: High-Impact Core Reader & Catalog Upgrades
-
-#### 📖 1. Canvas-Based Landscape Spread Auto-Splitting (Mihon-Style)
-- **Goal**: Automatically detect double-page spreads (`width > height * 1.25`) in manga mode and split them via an offscreen HTML5 `<canvas>` into two sequential portrait pages (Right-to-Left for Manga, Left-to-Right for Comics).
-- **Target Files**: [ReaderView.tsx](file:///e:/Project/Graywood-Reader/src/components/ReaderView.tsx), [KotatsuImageLoader.ts](file:///e:/Project/Graywood-Reader/src/utils/KotatsuImageLoader.ts), [readingMode.ts](file:///e:/Project/Graywood-Reader/src/utils/readingMode.ts).
-- **User Impact**: Eliminates tiny unreadable double-spreads on mobile devices and portrait tablets.
-
-#### 🏷️ 2. Tri-State Category & Genre Filtering (`+Include` / `-Exclude` / `Ignore`)
-- **Goal**: Upgrade Library and Browse filters to 3-state cycle logic (`+Action`, `+Fantasy`, `-Harem`, `-Mecha`, `Ignore`) for fine-grained catalog discovery.
-- **Target Files**: [BrowseView.tsx](file:///e:/Project/Graywood-Reader/src/components/BrowseView.tsx), [LibraryView.tsx](file:///e:/Project/Graywood-Reader/src/components/LibraryView.tsx), [explore.ts](file:///e:/Project/Graywood-Reader/server/routes/explore.ts).
-- **User Impact**: Enables precise filtering without unwanted tropes polluting search results.
-
-#### ⚡ 3. Headless Next.js `buildId` In-Memory Caching
-- **Goal**: Cache the Next.js `buildId` extracted from scraper landing pages (e.g. FlameComics) in memory with a 10-minute TTL.
-- **Target Files**: [flameComics.ts](file:///e:/Project/Graywood-Reader/server/scrapers/flameComics.ts), [crawlerEngine.ts](file:///e:/Project/Graywood-Reader/server/services/crawlerEngine.ts).
-- **User Impact**: Eliminates redundant N+1 homepage HTTP requests during batch library update sweeps.
-
----
-
-### 🥈 Priority 2: Ecosystem, Multi-Device & Content Expansion
-
-#### 🌐 4. Real-Time WebSocket / SSE Reading Session Sync
-- **Goal**: Broadcast reading progress, page position, and completed chapters live across active clients via Server-Sent Events (SSE) or WebSockets.
-- **Target Files**: [server.ts](file:///e:/Project/Graywood-Reader/server.ts), [progress.ts](file:///e:/Project/Graywood-Reader/server/routes/progress.ts), [useReaderSession.ts](file:///e:/Project/Graywood-Reader/src/hooks/useReaderSession.ts).
-- **User Impact**: Seamless device switching (e.g. reading on desktop, picking up phone immediately at exact page).
-
-#### 📚 5. EPUB & Light Novel Reflowable Text Viewer
-- **Goal**: Integrate a dedicated reflowable text/EPUB reader engine (`epub.js` or clean HTML DOM parser) with customizable typography (Serif, Sans, OpenDyslexic, line-height, text size, and dark/sepia themes) for web/light novel series.
-- **Target Files**: [ReaderView.tsx](file:///e:/Project/Graywood-Reader/src/components/ReaderView.tsx), [localLibrary.ts](file:///e:/Project/Graywood-Reader/server/routes/localLibrary.ts), [types.ts](file:///e:/Project/Graywood-Reader/src/types.ts).
-- **User Impact**: Unified reader for both manga adaptations and their original source light novels.
-
-#### 🔌 6. Komga / Tachiyomi / Suwayomi Compatibility API Layer
-- **Goal**: Implement standard Komga REST API endpoints (`/api/v1/series`, `/api/v1/books`) and OPDS-PS (Page Streaming) protocols.
-- **Target Files**: [opds.ts](file:///e:/Project/Graywood-Reader/server/routes/opds.ts), `server/routes/komgaCompat.ts`.
-- **User Impact**: Allows native mobile apps (**Paperback** on iOS, **Mihon / TachiJ2K** on Android, **YACReader**) to use Graywood Reader as their remote sync and storage backend.
-
-#### 📂 7. Smart Dynamic Shelves & Playlists
-- **Goal**: Virtual category shelves automatically populated by custom filter rules (e.g. *"Unread Catch-Up"*, *"Completed Top Tier ($>9.0$)"*, *"Updated this Week"*).
-- **Target Files**: [categories.ts](file:///e:/Project/Graywood-Reader/server/routes/categories.ts), [ManageCategoriesModal.tsx](file:///e:/Project/Graywood-Reader/src/components/ManageCategoriesModal.tsx), [LibraryView.tsx](file:///e:/Project/Graywood-Reader/src/components/LibraryView.tsx).
+- ✅ **Canvas Landscape Spread Auto-Splitting (Mihon-Style)** (Aug 2026)
+  - Automatically slices double-page spreads into sequential portrait pages with correct Japanese Manga (RTL) and Comic (LTR) reading order.
+- ✅ **Tri-State Category & Genre Filtering (`+Include` / `-Exclude` / `Neutral`)** (Aug 2026)
+  - 3-state cycling tag pills in Library and Browse views for fine-grained catalog discovery backed by `includeTags` and `excludeTags`.
+- ✅ **Headless Next.js `buildId` In-Memory Caching & Deduplication** (Aug 2026)
+  - 10-minute TTL cache with atomic pending promise deduplication and automated mirror rotation in `flameComics.ts`.
+- ✅ **Real-Time SSE Reading Session Sync** (Aug 2026)
+  - Live Server-Sent Events stream (`/api/reader/sync/events`) and client hook `useLiveReadingSessionSync` for instant cross-device continuity.
+- ✅ **EPUB & Light Novel Reflowable Text Viewer** (Aug 2026)
+  - Full `.epub` ZIP package/manifest/spine parser in `localLibrary.ts` and reflowable typography reader mode in `ReaderView.tsx`.
+- ✅ **Komga / Tachiyomi Compatibility API Layer** (Aug 2026)
+  - Complete Komga REST API v1 endpoints (`/api/v1/series`, `/api/v1/books`, `/api/v1/libraries`, `/api/v1/readlists`) enabling 3rd-party clients (**Paperback**, **Mihon**, **Panels**, **KOReader**) to connect.
+- ✅ **Smart Dynamic Shelves & Playlists** (Aug 2026)
+  - Virtual category shelves automatically populated by custom filter rules (*Unread Catch-Up*, *Top Tier Gems*, *Recently Updated*, *Status*).
+- ✅ **Community Source Extension Store & Live Selector Debugger** (Aug 2026)
+  - Extension Manager modal (`ExtensionManagerModal.tsx`) with community scraper presets and live CSS selector testing sandbox (`/api/extensions/test-selector`).
+- ✅ **Interactive Panel OCR & Live Translation Popover** (Aug 2026)
+  - Client-side canvas contrast thresholding and translation popover (`ocrEngine.ts`) for raw dialogue extraction.
+- ✅ **Hardware Page Turners, Gamepad & Stylus / S-Pen Support** (Aug 2026)
+  - `useGamepadNavigation.ts` hook supporting Nintendo Joy-Cons, Bluetooth remotes, and S-Pen air gestures.
+- ✅ **E-Ink Display Monochrome Dithering & High-Contrast Mode** (Aug 2026)
+  - Floyd-Steinberg 1-bit error diffusion algorithm and `.e-ink-mode` zero-animation CSS styles.
+- ✅ **OIDC / Authentik / Keycloak Single Sign-On (SSO)** (Aug 2026)
+  - OpenID Connect endpoints in `auth.ts` and SSO login button in `AuthModal.tsx`.
+- ✅ **Automatic Domain Migration Resolver** (Aug 2026)
+  - Automated mirror fallback and SQLite database `sourceUrl` updates in `sourceHealthService.ts`.
+- ✅ **WeebCentral Exact Chapter Count & Sort Engine** (Aug 2026)
+  - Numeric chapter sorting and full chapter list pagination.
 
 ---
 
-### 🥉 Priority 3: Hardware Immersion & Advanced Automation
+## 🔮 Next-Generation Horizons & Future Architecture (Post-Roadmap)
 
-#### 🧩 8. Community Source Extension Store & Live Selector Debugger
-- **Goal**: Frontend extension manager on top of [extensionEngine.ts](file:///e:/Project/Graywood-Reader/server/sources/extensionEngine.ts) to install community scraper plugins via GitHub/Gist URLs and test CSS selectors live in the browser.
-- **Target Files**: [extensionEngine.ts](file:///e:/Project/Graywood-Reader/server/sources/extensionEngine.ts), `src/components/ExtensionManagerModal.tsx`.
-
-#### 🈳 9. Interactive Panel OCR & Live Translation Popover
-- **Goal**: Client-side WebAssembly OCR (Tesseract / Manga OCR) allowing users to box dialogue bubbles on raw Korean/Japanese/Chinese scans and view an instant translation popover.
-- **Target Files**: `src/utils/ocrEngine.ts`, [ReaderView.tsx](file:///e:/Project/Graywood-Reader/src/components/ReaderView.tsx).
-
-#### 🖊️ 10. Hardware Page Turners, Gamepad & Stylus / S-Pen Support
-- **Goal**: Bluetooth presentation remotes, Nintendo Switch Joy-Con / Gamepad bindings, and Samsung S-Pen air actions for hands-free reading.
-- **Target Files**: [ReaderView.tsx](file:///e:/Project/Graywood-Reader/src/components/ReaderView.tsx), `src/hooks/useGamepadNavigation.ts`.
-
-#### 📟 11. E-Ink Display Monochrome Dithering & High-Contrast Mode
-- **Goal**: Dedicated 1-bit Floyd-Steinberg dithering canvas shader and zero-animation mode optimized for Boox, Kindle, and Kobo e-reader web browsers.
-- **Target Files**: [ReaderView.tsx](file:///e:/Project/Graywood-Reader/src/components/ReaderView.tsx), [types.ts](file:///e:/Project/Graywood-Reader/src/types.ts).
-
-#### 🔐 12. OIDC / Authentik / Keycloak Single Sign-On (SSO)
-- **Goal**: OpenID Connect / OAuth2 authentication provider support for unified self-hosted homelab identity management.
-- **Target Files**: [security.ts](file:///e:/Project/Graywood-Reader/server/security.ts), [auth.ts](file:///e:/Project/Graywood-Reader/server/routes/auth.ts), [AuthModal.tsx](file:///e:/Project/Graywood-Reader/src/components/AuthModal.tsx).
-
-#### 🔄 13. Automatic Domain Migration Resolver
-- **Goal**: Automated mirror fallback when scanlation sites rotate domains (e.g. `.com` $\to$ `.xyz` $\to$ `.to`), automatically migrating series `sourceUrl`s upon consecutive DNS failures.
-- **Target Files**: [crawlerEngine.ts](file:///e:/Project/Graywood-Reader/server/services/crawlerEngine.ts), [sourceHealthService.ts](file:///e:/Project/Graywood-Reader/server/services/sourceHealthService.ts).
-
----
-
-## 📱 Mobile & System Architecture Strategies
-
-### 1. Option A: Standalone Self-Sustained App (Local-First)
-- Embedded SQLite storage (`wa-sqlite` / OPFS for Web PWA, `@capacitor-community/sqlite` for iOS/Android).
-- Client-side HTML scraper execution in browser/mobile webview with CORS proxy handling.
-- Direct offline chapter panel caching in IndexedDB / native mobile filesystem.
-
-### 2. Option B: Central Server + Thin Client System (Self-Hosted Host)
-- Dedicated 24/7 Graywood Reader Host (Docker / Home Server) for continuous background scraping, OPDS 1.2 / 2.0 feeds, and image cache warming.
-- Remote mobile (iOS/Android) and web thin clients communicating over REST, WebSockets / SSE, and OPDS.
-
-### 3. Option C: Dual-Mode Hybrid Architecture (Recommended Master Plan)
-- Zero-setup standalone offline reader out-of-the-box with optional server pairing (via URL or QR code) for bidirectional library & progress delta sync.
+### 📦 Native Packaging & Standalone Distributions
+- **Capacitor Mobile Packaging (iOS & Android)**:
+  - Wrap frontend with `@capacitor/core` and `@capacitor-community/sqlite` for direct App Store and Google Play distribution.
+- **Tauri / Electron Desktop Bundle**:
+  - Standalone desktop client with embedded Node/Rust runtime and native tray notifications.
+- **Local-First PWA with Origin Private File System (OPFS)**:
+  - `wa-sqlite` compilation for 100% offline in-browser relational library database without requiring a backend server.
 
 ---
 
@@ -137,8 +90,6 @@ This document outlines the implemented milestones, architectural enhancements, a
 - ✅ **MangaDex aggregate endpoint integration** (accurate total chapter counters).
 - ✅ **Token signature constant-time verification** (`crypto.timingSafeEqual`).
 - ✅ **Fast O(1) disabled source lookups** (`SOURCE_MAP` resolution).
-
-### 🟡 In Progress / Scheduled
-- 🔄 **FlameComics `buildId` cache** (scheduled with Priority 1 optimizations).
-- 🔄 **WeebCentral exact chapter count parser** (improving browse pagination accuracy).
-- 🔄 **Structured logger migration in SQLite engine** (standardizing log levels to `logger.info`).
+- ✅ **FlameComics `buildId` cache & atomic promise deduplication**.
+- ✅ **WeebCentral exact chapter count parser & numeric sorter**.
+- ✅ **Structured logger migration in SQLite engine** (standardized log levels to `logger.info`).

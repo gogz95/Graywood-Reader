@@ -651,6 +651,7 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
 
 // ── Dynamic Source Extensions Lifecycle API ──────────────────────────────────
 import { extensionEngine } from '../sources/extensionEngine';
+import * as cheerio from 'cheerio';
 
 sourcesRouter.get('/api/extensions/list', (_req, res) => {
   res.json(extensionEngine.getExtensions());
@@ -663,6 +664,22 @@ sourcesRouter.post('/api/extensions/install', (req, res) => {
     res.status(201).json({ success: true, extension: installed });
   } catch (err: any) {
     res.status(400).json({ error: "Failed to install extension", details: err.message });
+  }
+});
+
+sourcesRouter.post('/api/extensions/install-url', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: "Manifest URL is required" });
+    }
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status} fetching manifest`);
+    const manifest = await response.json();
+    const installed = extensionEngine.installExtension(manifest);
+    res.status(201).json({ success: true, extension: installed });
+  } catch (err: any) {
+    res.status(400).json({ error: "Failed to import extension from URL", details: err.message });
   }
 });
 
@@ -689,4 +706,50 @@ sourcesRouter.post('/api/extensions/execute/:id', (req, res) => {
     res.status(500).json({ error: "Extension execution failed", details: err.message });
   }
 });
+
+// POST /api/extensions/test-selector - Live CSS Selector Sandbox Debugger
+sourcesRouter.post('/api/extensions/test-selector', async (req, res) => {
+  try {
+    const { targetUrl, listSelector, titleSelector, linkSelector, coverSelector } = req.body || {};
+    if (!targetUrl) return res.status(400).json({ error: "targetUrl is required" });
+
+    const fetchRes = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!fetchRes.ok) {
+      return res.status(400).json({ error: `Target URL returned HTTP ${fetchRes.status}` });
+    }
+
+    const html = await fetchRes.text();
+    const $ = cheerio.load(html);
+
+    const matches: any[] = [];
+    const elements = listSelector ? $(listSelector) : $('article, .manga-item, .bsx, .listupd .bs');
+
+    elements.slice(0, 10).each((_, el) => {
+      const title = titleSelector ? $(el).find(titleSelector).first().text().trim() : $(el).find('h3, h2, .tt, .title, a').first().text().trim();
+      const link = linkSelector ? $(el).find(linkSelector).first().attr('href') : $(el).find('a').first().attr('href');
+      const cover = coverSelector ? $(el).find(coverSelector).first().attr('src') || $(el).find(coverSelector).first().attr('data-src') : $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+
+      matches.push({
+        title: title || 'Untitled',
+        url: link || '',
+        coverImage: cover || '',
+      });
+    });
+
+    res.json({
+      success: true,
+      totalMatched: elements.length,
+      sampleResults: matches,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Selector test failed", details: err.message });
+  }
+});
+
 

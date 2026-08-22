@@ -24,6 +24,7 @@ const ChapterListModal = lazy(() => import('./components/ChapterListModal').then
 const UserProfileModal = lazy(() => import('./components/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
 const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
 const SubmitBugModal = lazy(() => import('./components/SubmitBugModal').then(m => ({ default: m.SubmitBugModal })));
+const ExtensionManagerModal = lazy(() => import('./components/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal })));
 const AppLockOverlay = lazy(() => import('./components/AppLockOverlay').then(m => ({ default: m.AppLockOverlay })));
 import type { BugReportInitialData } from './components/SubmitBugModal';
 import { FlagCategory } from './components/FlagIssueModal';
@@ -115,6 +116,7 @@ export default function App() {
     onConfirm: () => {},
   });
 
+  const [isExtensionManagerOpen, setIsExtensionManagerOpen] = useState(false);
   const closeConfirmModal = () => setConfirmModal((prev) => ({ ...prev, isOpen: false }));
 
   const showConfirm = (
@@ -967,6 +969,7 @@ export default function App() {
         onOpenAuthModal={handleOpenAuthModal}
         onOpenAdminPanel={handleOpenAdminPanel}
         onOpenSubmitBugModal={handleOpenSubmitBug}
+        onOpenExtensionManager={() => setIsExtensionManagerOpen(true)}
       />
 
       {/* Main View Container */}
@@ -1246,6 +1249,16 @@ export default function App() {
             isOpen={achievementsOpen}
             onClose={() => setAchievementsOpen(false)}
             mangaList={displayMangaList}
+          />
+        </Suspense>
+      )}
+
+      {/* Community Extension Store & Scraper Studio Modal */}
+      {isExtensionManagerOpen && (
+        <Suspense fallback={null}>
+          <ExtensionManagerModal
+            isOpen={isExtensionManagerOpen}
+            onClose={() => setIsExtensionManagerOpen(false)}
           />
         </Suspense>
       )}

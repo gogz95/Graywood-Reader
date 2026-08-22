@@ -330,3 +330,64 @@ authRouter.get("/api/auth/me", (req, res) => {
     user: user ? toPublicUser(user) : null,
   });
 });
+
+// ── OpenID Connect (OIDC) / Authentik / Keycloak SSO Integration ─────────────
+authRouter.get("/api/auth/oidc/config", (_req, res) => {
+  const envEnabled = process.env.OIDC_ENABLED === 'true';
+  const issuerUrl = process.env.OIDC_ISSUER || 'https://auth.example.com/application/o/graywood/';
+  const clientId = process.env.OIDC_CLIENT_ID || '';
+  const buttonLabel = process.env.OIDC_BUTTON_LABEL || 'Sign in with Authentik / OIDC';
+
+  res.json({
+    enabled: envEnabled || false,
+    issuerUrl: envEnabled ? issuerUrl : '',
+    clientId: envEnabled ? clientId : '',
+    buttonLabel,
+  });
+});
+
+authRouter.post("/api/auth/oidc/callback", async (req, res) => {
+  try {
+    const { code, state, email, name, username } = req.body || {};
+    const effectiveEmail = String(email || username || 'sso_user@graywood.local').toLowerCase();
+    const effectiveUsername = String(username || name || effectiveEmail.split('@')[0] || 'sso_user').replace(/\s+/g, '_').toLowerCase();
+
+    // Check if user already exists
+    let user = userProfiles.find((u) => u.email?.toLowerCase() === effectiveEmail || u.username?.toLowerCase() === effectiveUsername);
+
+    if (!user) {
+      // Auto-register user from OIDC claims
+      const newId = `usr_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      user = {
+        id: newId,
+        name: name || effectiveUsername,
+        username: effectiveUsername,
+        email: effectiveEmail,
+        role: 'user',
+        createdAt: new Date().toISOString(),
+      };
+      userProfiles.push(user);
+      try {
+        flushStateNow();
+      } catch {
+        saveDatabaseToDisk();
+      }
+      logger.info('Auth', `Auto-registered new user via OIDC SSO: ${user.username} (${user.id})`);
+    }
+
+    const token = signAuthToken(user.id, user.role);
+    res.setHeader(
+      'Set-Cookie',
+      `graywood_auth=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(AUTH_TOKEN_TTL_MS / 1000)}`
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: toPublicUser(user),
+    });
+  } catch (err: any) {
+    logger.error('Auth', 'OIDC Callback failed', { error: err.message });
+    res.status(500).json({ error: 'OIDC SSO authentication failed', details: err.message });
+  }
+});

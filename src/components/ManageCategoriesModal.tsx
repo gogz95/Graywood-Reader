@@ -84,6 +84,9 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
   const [description, setDescription] = useState('');
   const [selectedColor, setSelectedColor] = useState(SHELF_COLORS[0].hex);
   const [selectedIcon, setSelectedIcon] = useState('Bookmark');
+  const [isDynamic, setIsDynamic] = useState(false);
+  const [ruleType, setRuleType] = useState<UserCategory['ruleType']>('unread');
+  const [ruleValue, setRuleValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -92,6 +95,9 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
     setDescription('');
     setSelectedColor(SHELF_COLORS[0].hex);
     setSelectedIcon('Bookmark');
+    setIsDynamic(false);
+    setRuleType('unread');
+    setRuleValue('');
     setIsCreating(false);
     setEditingId(null);
     setErrorMsg(null);
@@ -103,8 +109,22 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
     setDescription(cat.description || '');
     setSelectedColor(cat.color || SHELF_COLORS[0].hex);
     setSelectedIcon(cat.icon || 'Bookmark');
+    setIsDynamic(Boolean(cat.isDynamic));
+    setRuleType(cat.ruleType || 'unread');
+    setRuleValue(cat.ruleValue !== undefined ? String(cat.ruleValue) : '');
     setIsCreating(false);
     setErrorMsg(null);
+  };
+
+  const handleApplyPreset = (presetName: string, icon: string, color: string, rType: UserCategory['ruleType'], rVal: string = '') => {
+    setName(presetName);
+    setDescription(`Smart Dynamic Shelf: ${presetName}`);
+    setSelectedIcon(icon);
+    setSelectedColor(color);
+    setIsDynamic(true);
+    setRuleType(rType);
+    setRuleValue(rVal);
+    setIsCreating(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -128,6 +148,9 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
             description: description.trim() || undefined,
             color: selectedColor,
             icon: selectedIcon,
+            isDynamic,
+            ruleType: isDynamic ? ruleType : undefined,
+            ruleValue: isDynamic && ruleValue ? ruleValue : undefined,
           }),
         });
 
@@ -151,6 +174,9 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
             color: selectedColor,
             icon: selectedIcon,
             sortOrder: categories.length,
+            isDynamic,
+            ruleType: isDynamic ? ruleType : undefined,
+            ruleValue: isDynamic && ruleValue ? ruleValue : undefined,
           }),
         });
 
@@ -342,6 +368,47 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
                 </div>
               </div>
 
+              {/* Smart Dynamic Shelf Toggle & Rules */}
+              <div className="p-3 bg-surface/90 border border-edge rounded-xl space-y-3">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-accent" />
+                      Smart Dynamic Shelf (Auto-Filter Rule)
+                    </div>
+                    <div className="text-[10px] text-secondary">
+                      Automatically populates series based on rules rather than manual assignment
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isDynamic}
+                    onChange={(e) => setIsDynamic(e.target.checked)}
+                    className="w-4 h-4 accent-accent"
+                  />
+                </label>
+
+                {isDynamic && (
+                  <div className="pt-2 border-t border-edge space-y-2">
+                    <label className="block text-xs font-bold text-secondary">
+                      Filter Rule
+                    </label>
+                    <select
+                      value={ruleType}
+                      onChange={(e) => setRuleType(e.target.value as any)}
+                      className="w-full bg-app border border-edge rounded-xl px-3 py-2 text-xs text-primary focus:outline-none focus:border-accent"
+                    >
+                      <option value="unread">⚡ Unread Catch-Up (Chapters Ahead &gt; 0)</option>
+                      <option value="in_progress">📖 In Progress (Currently Reading &amp; Ch &gt; 0)</option>
+                      <option value="completed">🏆 Completed Masterpieces (Status = Completed)</option>
+                      <option value="rating">⭐ Top Tier Series (Rating &gt;= 9.0)</option>
+                      <option value="updated_recently">🔥 Updated This Week (Active in past 7 days)</option>
+                      <option value="favorites">💖 Star Favorites</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-edge">
                 <button
                   type="button"
@@ -361,17 +428,57 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
               </div>
             </form>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                resetForm();
-                setIsCreating(true);
-              }}
-              className="w-full py-3 rounded-2xl border-2 border-dashed border-edge hover:border-accent/50 text-secondary hover:text-accent font-bold text-xs flex items-center justify-center gap-2 transition-all bg-app/40 hover:bg-app/80"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Custom Shelf</span>
-            </button>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setIsCreating(true);
+                }}
+                className="w-full py-3 rounded-2xl border-2 border-dashed border-edge hover:border-accent/50 text-secondary hover:text-accent font-bold text-xs flex items-center justify-center gap-2 transition-all bg-app/40 hover:bg-app/80"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Custom Shelf</span>
+              </button>
+
+              {/* Quick Preset Generators */}
+              <div className="p-3 bg-app/60 border border-edge rounded-2xl space-y-2">
+                <div className="text-[11px] font-bold text-secondary flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  Quick-Add Smart Dynamic Shelves:
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('Unread Catch-Up', 'Zap', '#f97316', 'unread')}
+                    className="px-2.5 py-1 rounded-lg bg-surface border border-edge hover:border-accent/40 text-primary hover:text-accent font-semibold transition-all flex items-center gap-1"
+                  >
+                    <Zap className="w-3 h-3 text-accent" /> Unread Catch-Up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('Top Tier Gems', 'Star', '#f59e0b', 'rating', '9.0')}
+                    className="px-2.5 py-1 rounded-lg bg-surface border border-edge hover:border-accent/40 text-primary hover:text-accent font-semibold transition-all flex items-center gap-1"
+                  >
+                    <Star className="w-3 h-3 text-amber-400" /> Top Tier (&gt;=9.0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('Updated This Week', 'Flame', '#ef4444', 'updated_recently')}
+                    className="px-2.5 py-1 rounded-lg bg-surface border border-edge hover:border-accent/40 text-primary hover:text-accent font-semibold transition-all flex items-center gap-1"
+                  >
+                    <Flame className="w-3 h-3 text-red-400" /> Updated This Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset('Completed Archive', 'Trophy', '#10b981', 'completed')}
+                    className="px-2.5 py-1 rounded-lg bg-surface border border-edge hover:border-accent/40 text-primary hover:text-accent font-semibold transition-all flex items-center gap-1"
+                  >
+                    <Trophy className="w-3 h-3 text-emerald-400" /> Completed
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Shelves List */}

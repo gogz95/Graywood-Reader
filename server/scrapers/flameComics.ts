@@ -22,7 +22,14 @@ export interface ResolvedScraperChapter {
 
 let cachedBuildId: string | null = null;
 let cachedBuildIdTime = 0;
-const FLAME_BUILD_ID_TTL = 5 * 60 * 1000; // 5 minutes
+let pendingBuildIdPromise: Promise<string | null> | null = null;
+const FLAME_BUILD_ID_TTL = 10 * 60 * 1000; // 10 minutes TTL
+
+const FLAME_DOMAINS = [
+  'https://flamecomics.xyz',
+  'https://flamecomics.me',
+  'https://flamescans.org',
+];
 
 export async function fetchFlameComicsBuildId(forceRefresh = false): Promise<string | null> {
   const now = Date.now();
@@ -30,25 +37,35 @@ export async function fetchFlameComicsBuildId(forceRefresh = false): Promise<str
     return cachedBuildId;
   }
 
-  try {
-    const homeRes = await fetch('https://flamecomics.xyz/', {
-      headers: UA_HEADERS,
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!homeRes.ok) {
-      return cachedBuildId; // fallback to stale cache if network fails
-    }
-    const homeHtml = await homeRes.text();
-    const buildIdMatch = homeHtml.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
-    if (buildIdMatch?.[1]) {
-      cachedBuildId = buildIdMatch[1];
-      cachedBuildIdTime = now;
-      return cachedBuildId;
-    }
-    return cachedBuildId;
-  } catch {
-    return cachedBuildId;
+  if (pendingBuildIdPromise && !forceRefresh) {
+    return pendingBuildIdPromise;
   }
+
+  pendingBuildIdPromise = (async () => {
+    for (const base of FLAME_DOMAINS) {
+      try {
+        const homeRes = await fetch(`${base}/`, {
+          headers: UA_HEADERS,
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!homeRes.ok) continue;
+        const homeHtml = await homeRes.text();
+        const buildIdMatch = homeHtml.match(/\/_next\/static\/([^/]+)\/_buildManifest\.js/);
+        if (buildIdMatch?.[1]) {
+          cachedBuildId = buildIdMatch[1];
+          cachedBuildIdTime = Date.now();
+          return cachedBuildId;
+        }
+      } catch {
+        // try next fallback domain
+      }
+    }
+    return cachedBuildId;
+  })().finally(() => {
+    pendingBuildIdPromise = null;
+  });
+
+  return pendingBuildIdPromise;
 }
 
 export async function fetchFlameSeriesContext(targetUrl: string): Promise<FlameSeriesContext | null> {
