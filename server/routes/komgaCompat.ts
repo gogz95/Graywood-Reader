@@ -160,14 +160,14 @@ komgaCompatRouter.get('/api/v1/series', (req: Request, res: Response) => {
 
 // GET /api/v1/series/:id - Single Komga Series
 komgaCompatRouter.get('/api/v1/series/:id', (req: Request, res: Response) => {
-  const manga = SqliteDb.getMangaById(req.params.id);
+  const manga = SqliteDb.getMangaById(String(req.params.id));
   if (!manga) return res.status(404).json({ error: 'Series not found' });
   res.json(toKomgaSeriesDto(manga));
 });
 
 // GET /api/v1/series/:id/books - Books for a Series
 komgaCompatRouter.get('/api/v1/series/:id/books', (req: Request, res: Response) => {
-  const manga = SqliteDb.getMangaById(req.params.id);
+  const manga = SqliteDb.getMangaById(String(req.params.id));
   if (!manga) return res.status(404).json({ error: 'Series not found' });
 
   const total = Math.max(1, manga.totalChapters || manga.latestChapter || 1);
@@ -214,7 +214,7 @@ komgaCompatRouter.get('/api/v1/books', (req: Request, res: Response) => {
 
 // GET /api/v1/books/:id - Single Book Details
 komgaCompatRouter.get('/api/v1/books/:id', (req: Request, res: Response) => {
-  const rawId = req.params.id;
+  const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
   const chNum = Number(parts[1]) || 1;
@@ -226,7 +226,7 @@ komgaCompatRouter.get('/api/v1/books/:id', (req: Request, res: Response) => {
 
 // GET /api/v1/books/:id/thumbnail - Book Cover / Thumbnail
 komgaCompatRouter.get('/api/v1/books/:id/thumbnail', (req: Request, res: Response) => {
-  const rawId = req.params.id;
+  const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
 
@@ -243,7 +243,7 @@ komgaCompatRouter.get('/api/v1/books/:id/thumbnail', (req: Request, res: Respons
 
 // GET /api/v1/series/:id/thumbnail - Series Cover
 komgaCompatRouter.get('/api/v1/series/:id/thumbnail', (req: Request, res: Response) => {
-  const manga = SqliteDb.getMangaById(req.params.id);
+  const manga = SqliteDb.getMangaById(String(req.params.id));
   if (!manga || !manga.coverImage) {
     return res.status(404).json({ error: 'Cover not found' });
   }
@@ -255,7 +255,7 @@ komgaCompatRouter.get('/api/v1/series/:id/thumbnail', (req: Request, res: Respon
 
 // GET /api/v1/books/:id/pages - Komga Page Streaming Manifest
 komgaCompatRouter.get('/api/v1/books/:id/pages', (req: Request, res: Response) => {
-  const rawId = req.params.id;
+  const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
   const chNum = Number(parts[1]) || 1;
@@ -291,7 +291,7 @@ komgaCompatRouter.get('/api/v1/books/:id/pages', (req: Request, res: Response) =
 
 // GET /api/v1/books/:id/pages/:pageNumber - Komga Stream Single Page
 komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', (req: Request, res: Response) => {
-  const rawId = req.params.id;
+  const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
   const pageNum = Number(req.params.pageNumber) || 1;

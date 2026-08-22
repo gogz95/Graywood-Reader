@@ -363,6 +363,7 @@ authRouter.post("/api/auth/oidc/callback", async (req, res) => {
         name: name || effectiveUsername,
         username: effectiveUsername,
         email: effectiveEmail,
+        avatar: '👤',
         role: 'user',
         createdAt: new Date().toISOString(),
       };
@@ -375,7 +376,7 @@ authRouter.post("/api/auth/oidc/callback", async (req, res) => {
       logger.info('Auth', `Auto-registered new user via OIDC SSO: ${user.username} (${user.id})`);
     }
 
-    const token = signAuthToken(user.id, user.role);
+    const token = signAuthToken({ sub: user.id, username: user.username, role: user.role });
     res.setHeader(
       'Set-Cookie',
       `graywood_auth=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(AUTH_TOKEN_TTL_MS / 1000)}`

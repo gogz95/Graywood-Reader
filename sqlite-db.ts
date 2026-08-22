@@ -13,7 +13,7 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const DB_PATH = path.join(DATA_DIR, 'manga.db');
 
-logger.info('[SQLite Engine] Initializing SQLite database', { dbPath: DB_PATH });
+logger.info('SQLite', 'Initializing SQLite database', { dbPath: DB_PATH });
 const db = new Database(DB_PATH);
 
 // Enable WAL Mode for high concurrency and sub-millisecond writes

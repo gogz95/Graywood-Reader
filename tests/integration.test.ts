@@ -320,6 +320,9 @@ describe('Live Source Feeds & Progress Endpoints', () => {
     expect(attachRes.body.manga.sourceUrl).toBe('https://asurascans.com/comics/solo-leveling');
     expect(attachRes.body.manga.isFlagged).toBe(false);
     expect(attachRes.body.manga.availableSources).toHaveLength(1);
+
+    // Clean up created test manga
+    await request(app).delete(`/api/manga/${createdId}`);
   });
 
   it('GET /api/sources/dashboard returns summary and top monitored sources', async () => {
@@ -409,6 +412,10 @@ describe('Guest 18+ / NSFW Access Restriction Policy', () => {
     expect(guestSources.status).toBe(200);
     const nsfwSources = guestSources.body.filter((s: any) => s.isNsfw === true);
     expect(nsfwSources).toHaveLength(0);
+
+    // Clean up created test items
+    await request(app).delete(`/api/manga/${safeRes.body.id}`);
+    await request(app).delete(`/api/manga/${nsfwRes.body.id}`);
   });
 });
 

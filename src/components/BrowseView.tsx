@@ -111,18 +111,16 @@ const BrowseCard = React.memo<BrowseCardProps>(({
             <BookOpen className="w-10 h-10 text-accent-2/40" />
           </div>
         )}
-        <div className="absolute top-2 left-2">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm bg-app/70 text-secondary">
+        <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none z-10">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm bg-app/80 text-secondary truncate max-w-[65%]">
             {r.__sourceName || r.sourceName}
           </span>
-        </div>
-        {r.type && (
-          <div className="absolute top-2 right-2">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-app/80 text-secondary border border-edge">
+          {r.type && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-app/90 text-secondary border border-edge shrink-0 uppercase">
               {r.type}
             </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="p-3 flex flex-col gap-2 flex-1">
@@ -179,6 +177,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [query, setQuery] = useState<string>(seedSearch || '');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -225,6 +224,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       if (selectedSource !== 'all') params.set('sourceId', selectedSource);
       if (query.trim()) params.set('q', query.trim());
       if (typeFilter !== 'all') params.set('type', typeFilter);
+      if (nsfwFilter !== 'all') params.set('nsfw', nsfwFilter);
 
       if (tagStates.size > 0) {
         const inc: string[] = [];
@@ -241,7 +241,12 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       if (!res.ok) throw new Error(`Browse feed returned ${res.status}`);
       const data = await res.json();
       const rawItems = Array.isArray(data.items) ? data.items : [];
-      const safeItems = isGuest ? rawItems.filter((it: any) => !isNsfwManga(it)) : rawItems;
+      let safeItems = isGuest ? rawItems.filter((it: any) => !isNsfwManga(it)) : rawItems;
+      if (nsfwFilter === 'safe') {
+        safeItems = safeItems.filter((it: any) => !isNsfwManga(it));
+      } else if (nsfwFilter === '18+') {
+        safeItems = safeItems.filter((it: any) => isNsfwManga(it));
+      }
       setResults(safeItems);
       setTotalPages(Number(data.totalPages) || 0);
       setTotalCount(Number(data.totalCount) || 0);
@@ -254,7 +259,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [selectedSource, query, typeFilter, tagStates, page, limit, isGuest]);
+  }, [selectedSource, query, typeFilter, nsfwFilter, tagStates, page, limit, isGuest]);
 
   useEffect(() => { fetchBrowse(); }, [fetchBrowse]);
 
@@ -448,29 +453,87 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         </div>
 
         {/* Actions row */}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => setFiltersOpen((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border text-xs sm:text-sm ${
-              filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
-            }`}
-            title={filtersOpen ? 'Hide tags' : 'Show tags'}
-          >
-            <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
-            {tagStates.size > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-accent-2 text-white text-[10px] font-black leading-none">
-                {tagStates.size}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
-            title="Refresh the live feed"
-          >
-            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Refresh
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* 18+ NSFW Content Segment Filter */}
+          <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5 shadow-inner">
+            <button
+              type="button"
+              onClick={() => {
+                setNsfwFilter('all');
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs ${
+                nsfwFilter === 'all'
+                  ? 'bg-elevated text-primary shadow-xs'
+                  : 'text-muted hover:text-secondary'
+              }`}
+              title="Show all content"
+            >
+              All Content
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNsfwFilter('safe');
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs ${
+                nsfwFilter === 'safe'
+                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                  : 'text-muted hover:text-secondary'
+              }`}
+              title="Hide 18+ / Adult series"
+            >
+              Safe
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (isGuest) {
+                  onOpenAuthModal?.();
+                } else {
+                  setNsfwFilter('18+');
+                  setPage(1);
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 ${
+                !isGuest && nsfwFilter === '18+'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-500/50 shadow-xs'
+                  : 'text-muted hover:text-rose-400'
+              }`}
+              title={isGuest ? 'Sign in to access 18+ content' : 'Show only 18+ / Mature series'}
+            >
+              <span>🔞 18+</span>
+              {isGuest && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-edge-strong text-muted flex items-center gap-0.5">🔒 Login</span>
+              )}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated font-bold transition-all border text-xs sm:text-sm ${
+                filtersOpen ? 'text-accent border-accent/30' : 'text-secondary border-edge'
+              }`}
+              title={filtersOpen ? 'Hide tags' : 'Show tags'}
+            >
+              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
+              {tagStates.size > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-accent-2 text-white text-[10px] font-black leading-none">
+                  {tagStates.size}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
+              title="Refresh the live feed"
+            >
+              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Refresh
+            </button>
+          </div>
         </div>
 
         {/* Tag chips — genres with Tri-State (+Include / -Exclude / Ignore) */}

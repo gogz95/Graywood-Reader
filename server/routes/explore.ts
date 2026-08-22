@@ -217,6 +217,7 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
   const typeFilter = ((req.query.type as string) || '').trim().toLowerCase();
   const includeTagsRaw = ((req.query.includeTags as string) || '').trim();
   const excludeTagsRaw = ((req.query.excludeTags as string) || '').trim();
+  const nsfwFilter = ((req.query.nsfw as string) || 'all').trim().toLowerCase();
   const page = Math.max(1, Number(req.query.page) || 1);
 
   let limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
@@ -293,8 +294,10 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
   }
 
   // 2. NSFW filter
-  if (!isNsfwAllowed) {
+  if (!isNsfwAllowed || nsfwFilter === 'safe') {
     list = list.filter((it) => !isNsfwManga(it));
+  } else if (nsfwFilter === '18+') {
+    list = list.filter((it) => isNsfwManga(it));
   }
 
   // 3. Type filter

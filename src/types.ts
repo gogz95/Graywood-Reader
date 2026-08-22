@@ -111,6 +111,7 @@ export interface ReaderSettings {
   epubFontFamily?: 'serif' | 'sans' | 'dyslexic' | 'mono';
   epubFontSize?: number; // px, default 18
   epubLineHeight?: number; // multiplier, e.g. 1.6
+  epubLetterSpacing?: number; // px, default 0.2
   epubTextAlign?: 'left' | 'justify' | 'center';
 }
 

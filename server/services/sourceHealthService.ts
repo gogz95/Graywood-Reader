@@ -148,7 +148,7 @@ export async function attemptAutoDomainMigration(sourceId: string, currentUrl: s
             for (const m of allManga) {
               if (m.sourceUrl?.startsWith(oldDomainMatch)) {
                 const migratedUrl = m.sourceUrl.replace(oldDomainMatch, mirror);
-                SqliteDb.updateManga(m.id, { sourceUrl: migratedUrl });
+                SqliteDb.upsertManga({ ...m, sourceUrl: migratedUrl });
               }
             }
           }

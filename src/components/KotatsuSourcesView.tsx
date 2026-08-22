@@ -630,18 +630,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               <BookOpen className="w-10 h-10 text-accent-2/40" />
             </div>
           )}
-          <div className="absolute top-2 left-2">
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm ${ENGINE_META[selectedSource?.engineType || 'mangadex']?.color}`}>
+          <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none z-10">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm truncate max-w-[65%] ${ENGINE_META[selectedSource?.engineType || 'mangadex']?.color}`}>
               {selectedSource?.name}
             </span>
-          </div>
-          {r.type && (
-            <div className="absolute top-2 right-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-app/80 text-secondary border border-edge-strong/80 backdrop-blur-sm">
+            {r.type && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-app/90 text-secondary border border-edge-strong/80 backdrop-blur-sm shrink-0">
                 {r.type === 'manhwa' ? '🇰🇷' : r.type === 'manhua' ? '🇨🇳' : '🇯🇵'} {r.type}
               </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Info */}
