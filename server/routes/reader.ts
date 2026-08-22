@@ -769,3 +769,19 @@ readerRouter.post('/api/reader/mark-read', (req, res) => {
     message: `Marked Chapter ${newChapterNum} as read`,
   });
 });
+
+// ── Discord Rich Presence (RPC) Endpoint ──────────────────────────────────────
+import { updateDiscordPresence } from '../services/discordRpcService';
+
+readerRouter.post('/api/reader/discord-presence', (req, res) => {
+  const { mangaTitle, chapterNumber, totalChapters, coverImage, isReading } = req.body || {};
+  const result = updateDiscordPresence({
+    mangaTitle,
+    chapterNumber: Number(chapterNumber) || 1,
+    totalChapters: totalChapters ? Number(totalChapters) : null,
+    coverImage,
+    isReading: Boolean(isReading),
+  });
+  res.json(result);
+});
+

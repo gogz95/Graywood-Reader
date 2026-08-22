@@ -160,8 +160,8 @@ export class ExtensionEngine {
     `;
 
     try {
-      const script = new vm.Script(code, { timeout: 3000 });
-      script.runInContext(context);
+      const script = new vm.Script(code);
+      script.runInContext(context, { timeout: 3000 });
       return Array.isArray(sandbox.results) ? sandbox.results : [];
     } catch (err: any) {
       console.error(`[Extension VM Sandbox Error] Source ${id}:`, err.message);
@@ -174,7 +174,7 @@ export class ExtensionEngine {
       id: ext.id,
       name: ext.name,
       baseUrl: ext.baseUrl,
-      engine: 'custom_html', // maps to generic engine
+      engineType: 'custom_html', // maps to generic engine
       lang: ext.lang,
       isNsfw: ext.isNsfw,
       supportsPopular: true,

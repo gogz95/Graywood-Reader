@@ -147,11 +147,6 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     }
   }, [selectedSource, query, page, limit, isGuest]);
 
-  useEffect(() => {
-    setPage(1);
-    setSelectedTags(new Set());
-  }, [selectedSource, query, typeFilter]);
-
   useEffect(() => { fetchBrowse(); }, [fetchBrowse]);
 
   const handleTrack = (item: ExploreItem) => {
@@ -201,29 +196,48 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // Use full-catalog genres from meta when available, else fall back to page genres.
   const displayGenres = metaLoaded && meta.genres.length > 0 ? meta.genres : pageGenres;
 
-  // Client-side post-filter for type and selected tags (server handles source/query).
+  // Tri-State Genre Filter map: 'include' | 'exclude'
+  const [tagStates, setTagStates] = useState<Map<string, 'include' | 'exclude'>>(new Map());
+
+  // Reset tag filters when source/query/type changes
+  useEffect(() => {
+    setPage(1);
+    setTagStates(new Map());
+  }, [selectedSource, query, typeFilter]);
+
+  // Client-side post-filter for type and tri-state tags
   const visible = useMemo(
     () =>
       results.filter((r) => {
         if (typeFilter !== 'all' && (r.type || 'manga').toLowerCase() !== typeFilter) return false;
-        if (selectedTags.size > 0) {
+        if (tagStates.size > 0) {
           const rGenres = (r.genres || []).map((g) => g.toLowerCase());
-          for (const t of selectedTags) {
-            if (!rGenres.includes(t.toLowerCase())) return false;
+          for (const [t, mode] of tagStates.entries()) {
+            const normTag = t.toLowerCase();
+            if (mode === 'include' && !rGenres.includes(normTag)) return false;
+            if (mode === 'exclude' && rGenres.includes(normTag)) return false;
           }
         }
         return true;
       }),
-    [results, typeFilter, selectedTags]
+    [results, typeFilter, tagStates]
   );
 
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) => {
-      const next = new Set(prev);
-      next.has(tag) ? next.delete(tag) : next.add(tag);
+    setTagStates((prev) => {
+      const next = new Map(prev);
+      const current = next.get(tag);
+      if (!current) {
+        next.set(tag, 'include');
+      } else if (current === 'include') {
+        next.set(tag, 'exclude');
+      } else {
+        next.delete(tag);
+      }
       return next;
     });
   };
+
 
   const toManga = (r: ExploreItem, forReader: boolean): MangaItem => ({
     id: r.id || `browse_${Date.now()}`,
@@ -345,9 +359,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           >
             <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">{filtersOpen ? 'Hide Tags' : 'Show Tags'}</span>
-            {selectedTags.size > 0 && (
+            {tagStates.size > 0 && (
               <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-accent-2 text-white text-[10px] font-black leading-none">
-                {selectedTags.size}
+                {tagStates.size}
               </span>
             )}
           </button>
@@ -360,31 +374,39 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           </button>
         </div>
 
-        {/* Tag chips — genres from the full catalog buffer */}
+        {/* Tag chips — genres with Tri-State (+Include / -Exclude / Ignore) */}
         {filtersOpen && displayGenres.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tags</span>
-            {selectedTags.size > 0 && (
+            <span className="text-[10px] font-black uppercase tracking-wider text-secondary">Tri-State Filters</span>
+            {tagStates.size > 0 && (
               <button
-                onClick={() => setSelectedTags(new Set())}
+                onClick={() => setTagStates(new Map())}
                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-danger/15 text-danger border-danger/30 hover:bg-danger/25 transition-all"
               >
                 <X className="w-3 h-3" /> Clear
               </button>
             )}
-            {displayGenres.slice(0, 32).map((tag) => (
-              <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all ${
-                  selectedTags.has(tag)
-                    ? 'bg-accent-2 text-white border-accent-2 shadow-sm'
-                    : 'bg-elevated text-secondary border-edge hover:text-primary hover:border-accent-2/40'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
+            {displayGenres.slice(0, 32).map((tag) => {
+              const state = tagStates.get(tag);
+              const isInc = state === 'include';
+              const isExc = state === 'exclude';
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold border transition-all flex items-center gap-1 ${
+                    isInc
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                      : isExc
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm'
+                      : 'bg-elevated text-secondary border-edge hover:text-primary hover:border-accent-2/40'
+                  }`}
+                  title={isInc ? 'Included (+) - click to exclude (-)' : isExc ? 'Excluded (-) - click to clear' : 'Click to include (+)'}
+                >
+                  <span>{isInc ? `+ ${tag}` : isExc ? `- ${tag}` : tag}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

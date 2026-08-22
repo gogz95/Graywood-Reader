@@ -102,6 +102,7 @@ export interface ReaderSettings {
   rememberPerSeries?: boolean; // Persist last selected layout per individual series
   guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
   prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
+  splitLandscapeSpreads?: boolean; // Canvas-based landscape double-page auto-splitting (Mihon-style)
 }
 
 export interface PageStickyNote {
