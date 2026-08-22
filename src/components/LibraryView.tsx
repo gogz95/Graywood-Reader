@@ -152,11 +152,11 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
                 : 'bg-purple-950/80 text-accent-2 border-accent-2/30'
             }`}
           >
-            {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+            {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
           </span>
 
           {hasNewChapter && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md animate-pulse">
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md">
               +{manga.latestChapter - manga.currentChapter} New
             </span>
           )}
@@ -1239,10 +1239,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             manga.type === 'manhwa'
                               ? 'bg-blue-950 text-info border border-info/20'
-                              : 'bg-red-950 text-danger border border-danger/20'
+                              : manga.type === 'manhua'
+                              ? 'bg-red-950 text-danger border border-danger/20'
+                              : 'bg-purple-950 text-accent-2 border border-accent-2/20'
                           }`}
                         >
-                          {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+                          {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
                         </span>
                       </td>
                       <td className="py-3 px-4 capitalize">

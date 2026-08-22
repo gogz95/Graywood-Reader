@@ -82,6 +82,8 @@ export const DOMAIN_MIRRORS: Record<string, string> = {
   'manhwa18.cc': 'manhwa18.cc',
   'mangatx.to': 'mangatx.com',
   'mangatx.unblockit.ch': 'mangatx.com',
+  'manhuaplus.org': 'manhuaplus.top',
+  'manhuaplus.com': 'manhuaplus.top',
 };
 
 export const UA_HEADERS = {
@@ -96,8 +98,8 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
     madaraSelectTestAsync: 'ul.row-content-chapter', madaraSelectChapter: 'li.a-h', madaraSelectBodyPage: 'div.read-content',
   },
   { id: 'aquamanga', name: 'Aqua Manga', domain: 'aquareader.org', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.org', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.org', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.me', engine: 'madara', lang: 'en', isNsfw: false, madaraPageSize: 10 },
   { id: 'anisascans', name: 'Anisa Scans', domain: 'anisascans.in', engine: 'madara', lang: 'en', isNsfw: false, madaraDatePattern: 'dd MMM, yyyy' },
   { id: 'adultwebtoon', name: 'Adult Webtoon', domain: 'adultwebtoon.com', engine: 'madara', lang: 'en', isNsfw: true },

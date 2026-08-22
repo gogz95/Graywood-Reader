@@ -109,7 +109,7 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
             <span>•</span>
             <span className="truncate">{selectedScanGroup}</span>
             <span className="hidden sm:inline text-xs text-info font-semibold bg-info/10 px-1.5 py-0.5 rounded border border-info/20">
-              {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Webtoon' : '🇨🇳 Manhua'}
+              {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Webtoon' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
             </span>
           </div>
         </div>

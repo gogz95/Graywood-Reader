@@ -134,7 +134,7 @@ export const AutoUpdateView: React.FC<AutoUpdateViewProps> = ({
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-primary">{log.mangaTitle}</h4>
                         <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-elevated text-secondary">
-                          {log.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+                          {log.type === 'manga' ? '🇯🇵 Manga' : log.type === 'manhwa' ? '🇰🇷 Manhwa' : log.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-secondary mt-0.5">

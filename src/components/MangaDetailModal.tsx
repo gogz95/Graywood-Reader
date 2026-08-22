@@ -236,10 +236,12 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                   className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase ${
                     manga.type === 'manhwa'
                       ? 'bg-blue-950 text-info border border-info/30'
-                      : 'bg-red-950 text-danger border border-danger/30'
+                      : manga.type === 'manhua'
+                      ? 'bg-red-950 text-danger border border-danger/30'
+                      : 'bg-purple-950 text-accent-2 border border-accent-2/30'
                   }`}
                 >
-                  {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+                  {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
                 </span>
 
                 <button

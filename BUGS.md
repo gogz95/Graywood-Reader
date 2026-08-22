@@ -35,6 +35,33 @@ _No active bugs._
 
 > Bugs that have been resolved are moved here for historical reference.
 
+### [BUG-042] Notifications on series with new chapters
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `src/components/LibraryView.tsx`
+- **Submitted-By**: Darkmodes (2026-08-22)
+- **Description**: All series in the library with new chapters showed a blinking (`animate-pulse`) "+N New" badge, causing constant CSS animation repaints across many cards and a performance hit.
+- **Fixed in**: 2026-08-22 — Removed `animate-pulse` from the new-chapter badge in the library grid card (static badge now).
+
+### [BUG-041] Everything is labeled manhua cn
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `src/components/LibraryView.tsx`, `src/components/MangaDetailModal.tsx`, `src/components/ChapterListModal.tsx`, `src/components/AutoUpdateView.tsx`, `src/components/OpenApiFinderView.tsx`, `src/components/reader/ReaderHeader.tsx`
+- **Submitted-By**: Darkmodes (2026-08-22)
+- **Description**: Type badges used two-way ternaries (`type === 'manhwa' ? 'Manhwa' : 'Manhua CN'`), so every non-manhwa series (including Japanese `manga` and `novel`) was labeled 🇨🇳 Manhua.
+- **Fixed in**: 2026-08-22 — All type badges updated to four-way labels: 🇯🇵 Manga / 🇰🇷 Manhwa / 🇨🇳 Manhua / 📖 Novel, with matching badge colors.
+
+### [BUG-040] [Other Fault] Solo Backup Leveling
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `database.json`, SQLite `data/manga.db`
+- **Submitted-By**: Darkmodes (2026-08-22)
+- **Description**: Series "Solo Backup Leveling" (test_backup_series_1) was a leftover test fixture pointing at a non-existent Asura Scans URL (`/comics/solo-backup-leveling`), flagged "Other Fault".
+- **Fixed in**: 2026-08-22 — Removed the test fixture entry from both database.json and the canonical SQLite database.
+
 ### [BUG-039] When refreshing metadata
 - **Status**: `fixed`
 - **Priority**: `medium`

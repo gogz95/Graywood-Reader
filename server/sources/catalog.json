@@ -6032,7 +6032,7 @@
   {
     "id": "manhuaplus",
     "name": "Manhua Plus",
-    "baseUrl": "https://manhuaplus.com",
+    "baseUrl": "https://manhuaplus.top",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -6041,8 +6041,8 @@
   {
     "id": "manhuaplusorg",
     "name": "ManhuaPlus.org",
-    "baseUrl": "https://manhuaplusorg.com",
-    "engineType": "custom_html",
+    "baseUrl": "https://manhuaplus.top",
+    "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
     "baseUrlReliable": true

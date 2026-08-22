@@ -176,10 +176,12 @@ export const OpenApiFinderView: React.FC<OpenApiFinderViewProps> = ({
                       className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase backdrop-blur-md ${
                         manga.type === 'manhwa'
                           ? 'bg-blue-950/80 text-info border border-info/30'
-                          : 'bg-red-950/80 text-danger border border-danger/30'
+                          : manga.type === 'manhua'
+                          ? 'bg-red-950/80 text-danger border border-danger/30'
+                          : 'bg-purple-950/80 text-accent-2 border border-accent-2/30'
                       }`}
                     >
-                      {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+                      {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
                     </span>
 
                     <span className="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded text-[10px] font-bold bg-app/80 text-info border border-edge">

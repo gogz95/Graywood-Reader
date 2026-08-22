@@ -71,10 +71,17 @@
   },
   {
     "id": "manhuaplus",
-    "baseUrl": "https://manhuaplus.com",
+    "baseUrl": "https://manhuaplus.top",
     "engineType": "madara",
     "name": "Manhua Plus",
-    "reason": "Canonical domain from curated engine registry."
+    "reason": "Canonical domain (manhuaplus.org/.com -> manhuaplus.top per DOMAIN_MIRRORS; .top is the live working mirror as of 2026-08)."
+  },
+  {
+    "id": "manhuaplusorg",
+    "baseUrl": "https://manhuaplus.top",
+    "engineType": "madara",
+    "name": "ManhuaPlus.org",
+    "reason": "Same site as manhuaplus, migrated to working mirror manhuaplus.top (manhuaplusorg.com stale)."
   },
   {
     "id": "harimanga",

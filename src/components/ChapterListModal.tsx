@@ -129,7 +129,7 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-accent/10 text-accent border border-accent/20">
-                  {manga.type === 'manhwa' ? '🇰🇷 Manhwa' : '🇨🇳 Manhua'}
+                  {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
                 </span>
                 <span className="text-xs text-secondary font-mono">
                   Current Read: Ch. {manga.currentChapter}
