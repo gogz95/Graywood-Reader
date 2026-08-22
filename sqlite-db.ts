@@ -463,7 +463,11 @@ const stmtDeleteMangaCategoriesForManga = db.prepare('DELETE FROM manga_categori
 
 // Helper Serializers & Deserializers
 function mapRowToMangaItem(row: any): MangaItem {
-  return {
+  const metadataOverrides: string[] = row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [];
+  const isOverrideSet = metadataOverrides.includes('isNsfw');
+  const dbIsNsfw = row.isNsfw !== undefined && row.isNsfw !== null ? Boolean(row.isNsfw) : false;
+
+  const item: MangaItem = {
     ...row,
     altTitles: row.altTitles ? JSON.parse(row.altTitles) : [],
     genres: row.genres ? JSON.parse(row.genres) : [],
@@ -473,15 +477,18 @@ function mapRowToMangaItem(row: any): MangaItem {
     isFlagged: Boolean(row.isFlagged),
     flagReason: row.flagReason || undefined,
     flaggedAt: row.flaggedAt || undefined,
-    metadataOverrides: row.metadataOverrides ? JSON.parse(row.metadataOverrides) : [],
+    metadataOverrides,
     customTags: row.customTags ? JSON.parse(row.customTags) : [],
     categories: row.categories ? JSON.parse(row.categories) : [],
-    isNsfw: row.isNsfw !== undefined && row.isNsfw !== null ? Boolean(row.isNsfw) : isNsfwManga(row),
+    isNsfw: false,
     currentChapter: Number(row.currentChapter) || 0,
     latestChapter: Number(row.latestChapter) || 1,
     totalChapters: row.totalChapters ? Number(row.totalChapters) : null,
     rating: Number(row.rating) || 9.0,
   };
+
+  item.isNsfw = isOverrideSet ? dbIsNsfw : (dbIsNsfw || isNsfwManga(item));
+  return item;
 }
 
 export function purgeReaperScans(): number {
@@ -494,6 +501,10 @@ export function purgeReaperScans(): number {
 }
 
 function mapMangaItemToRow(item: MangaItem) {
+  const metadataOverrides = Array.isArray(item.metadataOverrides) ? item.metadataOverrides : [];
+  const isOverrideSet = metadataOverrides.includes('isNsfw');
+  const effectiveIsNsfw = isOverrideSet ? Boolean(item.isNsfw) : (Boolean(item.isNsfw) || isNsfwManga(item));
+
   return {
     id: item.id,
     title: item.title || 'Untitled Series',
@@ -525,7 +536,7 @@ function mapMangaItemToRow(item: MangaItem) {
     metadataOverrides: JSON.stringify(item.metadataOverrides || []),
     customTags: JSON.stringify(item.customTags || []),
     categories: '[]',
-    isNsfw: item.isNsfw !== undefined ? (item.isNsfw ? 1 : 0) : (isNsfwManga(item) ? 1 : 0),
+    isNsfw: effectiveIsNsfw ? 1 : 0,
   };
 }
 

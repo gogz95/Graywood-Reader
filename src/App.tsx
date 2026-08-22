@@ -955,6 +955,7 @@ export default function App() {
               onOpenChapters={handleOpenChapters}
               onBulkUpdateStatus={handleBulkUpdateStatus}
               onBulkDelete={handleBulkDelete}
+              onRefreshLibrary={fetchMangaList}
             />
           )}
 

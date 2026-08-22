@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import * as cheerio from 'cheerio';
-import { MangaItem, isNsfwManga } from '../../src/types';
+import { MangaItem, isNsfwManga, getNsfwDetectionReason } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
   mangaDatabase,
@@ -1085,6 +1085,42 @@ mangaRouter.post('/toggle-flag', (req, res) => {
   }
 
   res.json({ success: true, manga: existing });
+});
+
+// ── POST /api/manga/auto-tag-nsfw - Batch Scan & Auto-Tag NSFW Series ─────────
+mangaRouter.post('/auto-tag-nsfw', (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+
+  const allManga = SqliteDb.getAllManga();
+  const newlyTagged: Array<{ id: string; title: string; reason: string }> = [];
+
+  for (const manga of allManga) {
+    const overrides = Array.isArray(manga.metadataOverrides) ? manga.metadataOverrides : [];
+    // Skip if user explicitly locked isNsfw in metadataOverrides
+    if (overrides.includes('isNsfw')) continue;
+
+    const reason = getNsfwDetectionReason(manga);
+    if (reason && (!manga.isNsfw || !manga.genres?.some((g) => g.toLowerCase().includes('18+')))) {
+      const updatedItem: MangaItem = {
+        ...manga,
+        isNsfw: true,
+        lastUpdated: new Date().toISOString(),
+      };
+      syncAddOrUpdateManga(updatedItem);
+      newlyTagged.push({
+        id: manga.id,
+        title: manga.title,
+        reason,
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    scanned: allManga.length,
+    newlyTaggedCount: newlyTagged.length,
+    newlyTagged,
+  });
 });
 
 // ── DELETE /api/manga/:id - Delete Series From Library ─────────────────────────

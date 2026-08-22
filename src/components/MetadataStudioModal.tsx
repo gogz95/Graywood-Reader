@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../utils/api';
-import { MangaItem, isNsfwManga } from '../types';
+import { MangaItem, isNsfwManga, getNsfwDetectionReason } from '../types';
 import {
   X,
   Image as ImageIcon,
@@ -855,6 +855,13 @@ export const MetadataStudioModal: React.FC<MetadataStudioModalProps> = ({
                       />
                     </button>
                   </div>
+
+                  {getNsfwDetectionReason(manga) && (
+                    <div className="p-2.5 rounded-xl bg-app border border-rose-500/30 text-rose-300 text-[11px] font-medium flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <span><strong>Auto-Detection Engine:</strong> {getNsfwDetectionReason(manga)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

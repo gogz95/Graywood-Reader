@@ -57,6 +57,7 @@ interface LibraryViewProps {
   onBulkDelete?: (ids: string[]) => void;
   isGuest?: boolean;
   onOpenAuthModal?: () => void;
+  onRefreshLibrary?: () => void;
 }
 
 /** Memoized Shimmer Placeholder Card for smooth loading */
@@ -292,12 +293,36 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onBulkDelete,
   isGuest = false,
   onOpenAuthModal,
+  onRefreshLibrary,
 }) => {
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
   const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
-  const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'title' | 'rating' | 'chapter'>('updated');
+  const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'title' | 'rating' | 'chapter' | 'nsfwFirst' | 'sfwFirst'>('updated');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  const [isAutoTagging, setIsAutoTagging] = useState<boolean>(false);
+  const [autoTagToast, setAutoTagToast] = useState<string | null>(null);
+
+  const handleAutoTagNsfw = async () => {
+    setIsAutoTagging(true);
+    setAutoTagToast(null);
+    try {
+      const res = await apiFetch('/api/manga/auto-tag-nsfw', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAutoTagToast(`Auto-tagged ${data.newlyTaggedCount} adult series as 18+ NSFW.`);
+        onRefreshLibrary?.();
+      } else {
+        setAutoTagToast('Failed to auto-tag series.');
+      }
+    } catch (e: any) {
+      setAutoTagToast('Error running auto-tagger: ' + e.message);
+    } finally {
+      setIsAutoTagging(false);
+      setTimeout(() => setAutoTagToast(null), 5000);
+    }
+  };
 
   // Categories & Custom Shelves
   const [categories, setCategories] = useState<UserCategory[]>([]);
@@ -447,6 +472,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
     if (sortBy === 'rating') {
       return b.rating - a.rating;
+    }
+    if (sortBy === 'nsfwFirst') {
+      const aNsfw = isNsfwManga(a) ? 1 : 0;
+      const bNsfw = isNsfwManga(b) ? 1 : 0;
+      if (bNsfw !== aNsfw) return bNsfw - aNsfw;
+      return a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'sfwFirst') {
+      const aNsfw = isNsfwManga(a) ? 1 : 0;
+      const bNsfw = isNsfwManga(b) ? 1 : 0;
+      if (aNsfw !== bNsfw) return aNsfw - bNsfw;
+      return a.title.localeCompare(b.title);
     }
     return 0;
   });
@@ -632,6 +669,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <option value="title">🔤 Title A-Z</option>
                 <option value="rating">★ Highest Rating</option>
                 <option value="chapter">📊 Progress</option>
+                <option value="nsfwFirst">🔞 Adult (18+) First</option>
+                <option value="sfwFirst">🛡️ Safe (SFW) First</option>
               </select>
             </div>
 
@@ -902,8 +941,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   </span>
                 )}
               </button>
+
+              {!isGuest && (
+                <button
+                  type="button"
+                  onClick={handleAutoTagNsfw}
+                  disabled={isAutoTagging}
+                  className="px-2 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-500/40 shadow-xs ml-1 disabled:opacity-50"
+                  title="Scan library and auto-tag untagged 18+ NSFW series based on source, genres, and title keywords"
+                >
+                  <Sparkles className={`w-3 h-3 text-amber-400 ${isAutoTagging ? 'animate-spin' : ''}`} />
+                  <span>{isAutoTagging ? 'Scanning...' : 'Auto-Tag 18+'}</span>
+                </button>
+              )}
             </div>
           </div>
+
+          {autoTagToast && (
+            <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{autoTagToast}</span>
+            </div>
+          )}
 
           {activeCategory && (
             <div className="flex items-center gap-1.5 text-xs text-secondary bg-elevated/80 border border-edge/80 px-2.5 py-1 rounded-xl">

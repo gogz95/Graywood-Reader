@@ -353,17 +353,32 @@ describe('User-Defined Categories & Custom Shelves', () => {
   });
 
   it('correctly detects 18+ / NSFW manga for library toggle', async () => {
-    const { isNsfwManga } = await import('../src/types');
+    const { isNsfwManga, getNsfwDetectionReason } = await import('../src/types');
 
     expect(isNsfwManga({ genres: ['Action', 'Fantasy'] })).toBe(false);
+    expect(getNsfwDetectionReason({ genres: ['Action', 'Fantasy'] })).toBeNull();
+
     expect(isNsfwManga({ isNsfw: true, genres: ['Action'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Action', '18+', 'Drama'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Smut', 'Romance'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Adult', 'Psychological'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Erotica'] })).toBe(true);
     expect(isNsfwManga({ genres: ['Hentai'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['NTR', 'Romance'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['BDSM', 'Drama'] })).toBe(true);
+    expect(isNsfwManga({ genres: ['Netorare'] })).toBe(true);
     expect(isNsfwManga({ title: 'Secret Class [18+]' })).toBe(true);
     expect(isNsfwManga({ title: 'Regular Title', notes: 'Imported uncensored [nsfw]' })).toBe(true);
+
+    // Source Origin & Domain Auto-Recognition
+    expect(isNsfwManga({ title: 'Untagged Series', sourceName: 'Manhwa18' })).toBe(true);
+    expect(getNsfwDetectionReason({ title: 'Untagged Series', sourceName: 'Manhwa18' })).toContain('Manhwa18');
+    expect(isNsfwManga({ title: 'Untagged Series', sourceUrl: 'https://adultwebtoon.com/manga/sample' })).toBe(true);
+    expect(getNsfwDetectionReason({ title: 'Untagged Series', sourceUrl: 'https://adultwebtoon.com/manga/sample' })).toContain('adultwebtoon');
+
+    // Description Disclaimer Auto-Recognition
+    expect(isNsfwManga({ title: 'Clean Title', description: 'This story contains explicit adult content for 18+ readers only.' })).toBe(true);
+    expect(getNsfwDetectionReason({ title: 'Clean Title', description: 'This story contains explicit adult content for 18+ readers only.' })).toContain('Description contains explicit adult content');
   });
 
   it('persists isNsfw flag and protects it via metadataOverrides across DB and refresh cycles', async () => {
