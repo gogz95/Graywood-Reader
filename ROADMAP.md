@@ -36,10 +36,23 @@ This document outlines the implemented milestones, architectural enhancements, a
 - ✅ **AniList, MyAnimeList & Kitsu Live Scrobblers** (Aug 2026)
 - ✅ **Automated Cloudflare Turnstile & 2Captcha Bypass Engine** (Aug 2026)
 - ✅ **Smart Guided Panel View & Snap-to-Panel** (Aug 2026)
+- ✅ **OPDS 2.0 JSON Feed Protocol (`/api/opds/v2/catalog.json`)** (Aug 2026)
+- ✅ **Dynamic Client Server Pairing Engine (`src/utils/api.ts`)** (Aug 2026)
 
 ---
 
 ## 🔮 Future Backlog
+
+### 📱 Mobile & System Architecture Options (Self-Sustained App vs. Central Server)
+- **Option A: Standalone Self-Sustained App (Local-First)**
+  - Embedded SQLite storage (`wa-sqlite` / OPFS for Web PWA, `@capacitor-community/sqlite` for iOS/Android).
+  - Client-side HTML scraper execution in browser/mobile webview with CORS proxy handling.
+  - Direct offline chapter panel caching in IndexedDB / native mobile filesystem.
+- **Option B: Central Server + Thin Client System (Self-Hosted Host)**
+  - Dedicated 24/7 Graywood Reader Host (Docker / Home Server) for continuous background scraping, OPDS 1.2 / 2.0 feeds, and image cache warming.
+  - Remote mobile (iOS/Android) and web thin clients communicating over REST, WebSockets / SSE, and OPDS.
+- **Option C: Dual-Mode Hybrid Architecture (Recommended Master Plan)**
+  - Zero-setup standalone offline reader out-of-the-box with optional server pairing (via URL or QR code) for bidirectional library & progress delta sync.
 
 ### 📖 Canvas-Based Landscape Spread Auto-Splitting (Mihon-Style)
 - Automatically detect wide landscape double-page scans (`width > height * 1.2`) in manga/webtoon mode and split them into two sequential portrait pages for comfortable mobile viewing.
