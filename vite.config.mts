@@ -50,6 +50,15 @@ export default defineConfig(() => {
             if (id.includes('src/components/AchievementsModal')) {
               return 'achievements-modal';
             }
+            if (id.includes('src/components/MangaDetailModal')) {
+              return 'manga-detail-modal';
+            }
+            if (id.includes('src/components/AddEditModal')) {
+              return 'add-edit-modal';
+            }
+            if (id.includes('src/components/CoverArtPickerModal')) {
+              return 'cover-picker-modal';
+            }
             if (id.includes('src/components/AdminPanelModal')) {
               return 'admin-panel-modal';
             }

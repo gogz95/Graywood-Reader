@@ -54,7 +54,7 @@ const Badge: React.FC<{ count: number }> = ({ count }) =>
     </span>
   ) : null;
 
-export const Navbar: React.FC<NavbarProps> = ({
+export const Navbar: React.FC<NavbarProps> = React.memo(({
   activeTab,
   setActiveTab,
   subdomain,
@@ -516,4 +516,4 @@ export const Navbar: React.FC<NavbarProps> = ({
       </nav>
     </>
   );
-};
+});

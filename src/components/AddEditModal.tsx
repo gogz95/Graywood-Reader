@@ -15,7 +15,7 @@ import {
   Flame,
   ShieldAlert,
 } from 'lucide-react';
-import { CoverArtPickerModal } from './CoverArtPickerModal';
+const CoverArtPickerModal = React.lazy(() => import('./CoverArtPickerModal').then(m => ({ default: m.CoverArtPickerModal })));
 
 interface AddEditModalProps {
   initialManga?: MangaItem | null;
@@ -470,17 +470,21 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
       </div>
 
       {/* Cover Art Picker Modal */}
-      <CoverArtPickerModal
-        isOpen={isCoverPickerOpen}
-        onClose={() => setIsCoverPickerOpen(false)}
-        currentCoverUrl={coverImage}
-        mangaId={initialManga?.id}
-        mangaTitle={title || initialManga?.title || 'Unknown'}
-        availableSources={initialManga?.availableSources}
-        onSelectCover={(newCoverUrl) => {
-          setCoverImage(newCoverUrl);
-        }}
-      />
+      {isCoverPickerOpen && (
+        <React.Suspense fallback={null}>
+          <CoverArtPickerModal
+            isOpen={isCoverPickerOpen}
+            onClose={() => setIsCoverPickerOpen(false)}
+            currentCoverUrl={coverImage}
+            mangaId={initialManga?.id}
+            mangaTitle={title || initialManga?.title || 'Unknown'}
+            availableSources={initialManga?.availableSources}
+            onSelectCover={(newCoverUrl) => {
+              setCoverImage(newCoverUrl);
+            }}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 });

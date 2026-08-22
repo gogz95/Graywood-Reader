@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../utils/api';
 import {
   Globe,
@@ -57,6 +57,93 @@ const ENGINE_META: Record<SourceEngineType, { label: string; color: string; icon
   wpcomics:      { label: 'WP Comics',     color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',          icon: '🔷' }, // NO-THEME
   custom_html:   { label: 'Custom HTML',   color: 'bg-amber-500/20 text-amber-300 border-amber-500/30',       icon: '🟡' }, // NO-THEME
 };
+
+interface SourceRowProps {
+  source: SourceDefinition;
+  isSelected: boolean;
+  isPinned: boolean;
+  isDisabled: boolean;
+  onSelect: (s: SourceDefinition) => void;
+  onToggleEnabled: (id: string, name: string, e: React.MouseEvent) => void;
+  onTogglePin: (id: string, e: React.MouseEvent) => void;
+}
+
+const SourceRow = React.memo<SourceRowProps>(({
+  source: s,
+  isSelected,
+  isPinned,
+  isDisabled,
+  onSelect,
+  onToggleEnabled,
+  onTogglePin,
+}) => {
+  const meta = ENGINE_META[s.engineType] || { label: s.engineType, color: 'bg-elevated text-secondary', icon: '🌐' };
+
+  return (
+    <div
+      onClick={() => onSelect(s)}
+      className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
+        isDisabled
+          ? 'bg-app/30 border-edge opacity-60 grayscale'
+          : isSelected
+          ? 'bg-purple-950/40 border-accent-2/60 shadow-lg shadow-accent-2/10'
+          : 'bg-app/60 border-edge/80 hover:bg-surface hover:border-edge-strong'
+      }`}
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="text-base">{meta.icon}</span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`font-bold text-xs truncate ${isDisabled ? 'text-muted line-through' : isSelected ? 'text-accent-2' : 'text-primary'}`}>
+              {s.name}
+            </span>
+            {isPinned && <Pin className="w-3 h-3 text-accent fill-accent shrink-0" />}
+            {isDisabled && (
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
+                DISABLED
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${meta.color}`}>
+              {meta.label}
+            </span>
+            <span className="text-[9px] text-muted uppercase font-mono">{s.lang}</span>
+            {s.isNsfw && (
+              <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
+                18+
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        {/* Enable/Disable Toggle Button */}
+        <button
+          onClick={(e) => onToggleEnabled(s.id, s.name, e)}
+          title={isDisabled ? 'Click to Enable source' : 'Click to Disable source'}
+          className={`p-1 rounded-lg transition-all ${
+            isDisabled
+              ? 'text-muted hover:text-success'
+              : 'text-success hover:text-danger'
+          }`}
+        >
+          <Power className={`w-4 h-4 ${isDisabled ? 'text-muted' : 'text-success fill-success/20'}`} />
+        </button>
+
+        {/* Pin Button */}
+        <button
+          onClick={(e) => onTogglePin(s.id, e)}
+          title={isPinned ? 'Unpin source' : 'Pin source to top'}
+          className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-elevated text-secondary hover:text-accent transition-all"
+        >
+          <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-accent text-accent' : ''}`} />
+        </button>
+      </div>
+    </div>
+  );
+});
 
 type ViewSection = 'all' | 'popular' | 'latest' | 'search' | 'expanded';
 type StatusFilter = 'all' | 'enabled' | 'disabled';
@@ -435,42 +522,86 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
 
   const [selectedLangFilter, setSelectedLangFilter] = useState<string>('en');
 
+  // Progressive Chunking for Smooth 60 FPS Scrolling across 1,187+ sources
+  const [visibleSourceCount, setVisibleSourceCount] = useState<number>(40);
+  const sourceSentinelRef = useRef<HTMLDivElement>(null);
+
   // SORTING FUNCTIONALITY: Enabled sources stay on top, disabled move down to bottom
-  const filteredSources = sources.filter(s => {
-    if ((isGuest || !nsfwVisible) && s.isNsfw) return false;
-    if (engineFilter !== 'all' && s.engineType !== engineFilter) return false;
-    if (selectedLangFilter !== 'all' && (s.lang || 'en').toLowerCase() !== selectedLangFilter) return false;
+  const filteredSources = useMemo(() => {
+    return sources.filter(s => {
+      if ((isGuest || !nsfwVisible) && s.isNsfw) return false;
+      if (engineFilter !== 'all' && s.engineType !== engineFilter) return false;
+      if (selectedLangFilter !== 'all' && (s.lang || 'en').toLowerCase() !== selectedLangFilter) return false;
 
-    if (sourceFilterQuery.trim()) {
-      const q = sourceFilterQuery.toLowerCase();
-      if (!s.name.toLowerCase().includes(q) && !s.id.toLowerCase().includes(q) && !s.baseUrl.toLowerCase().includes(q)) {
-        return false;
+      if (sourceFilterQuery.trim()) {
+        const q = sourceFilterQuery.toLowerCase();
+        if (!s.name.toLowerCase().includes(q) && !s.id.toLowerCase().includes(q) && !s.baseUrl.toLowerCase().includes(q)) {
+          return false;
+        }
       }
-    }
 
-    const isDisabled = disabledSourceIds.has(s.id);
-    if (statusFilter === 'enabled' && isDisabled) return false;
-    if (statusFilter === 'disabled' && !isDisabled) return false;
+      const isDisabled = disabledSourceIds.has(s.id);
+      if (statusFilter === 'enabled' && isDisabled) return false;
+      if (statusFilter === 'disabled' && !isDisabled) return false;
 
-    return true;
-  }).sort((a, b) => {
-    // 1. Pinned sources stay on absolute top
-    const aPinned = pinnedSourceIds.has(a.id);
-    const bPinned = pinnedSourceIds.has(b.id);
-    if (aPinned && !bPinned) return -1;
-    if (!aPinned && bPinned) return 1;
+      return true;
+    }).sort((a, b) => {
+      // 1. Pinned sources stay on absolute top
+      const aPinned = pinnedSourceIds.has(a.id);
+      const bPinned = pinnedSourceIds.has(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
 
-    // 2. Active (Enabled) sources stay on top, Disabled move down to bottom
-    const aDisabled = disabledSourceIds.has(a.id);
-    const bDisabled = disabledSourceIds.has(b.id);
-    if (!aDisabled && bDisabled) return -1;
-    if (aDisabled && !bDisabled) return 1;
+      // 2. Active (Enabled) sources stay on top, Disabled move down to bottom
+      const aDisabled = disabledSourceIds.has(a.id);
+      const bDisabled = disabledSourceIds.has(b.id);
+      if (!aDisabled && bDisabled) return -1;
+      if (aDisabled && !bDisabled) return 1;
 
-    // 3. Alphabetical tie-break
-    return a.name.localeCompare(b.name);
-  });
+      // 3. Alphabetical tie-break
+      return a.name.localeCompare(b.name);
+    });
+  }, [
+    sources,
+    isGuest,
+    nsfwVisible,
+    engineFilter,
+    selectedLangFilter,
+    sourceFilterQuery,
+    disabledSourceIds,
+    statusFilter,
+    pinnedSourceIds,
+  ]);
 
-  const enabledCount = sources.filter(s => !disabledSourceIds.has(s.id)).length;
+  // Reset visible limit on filter changes
+  useEffect(() => {
+    setVisibleSourceCount(40);
+  }, [sourceFilterQuery, statusFilter, engineFilter, selectedLangFilter, nsfwVisible]);
+
+  // IntersectionObserver to incrementally load more sources on scroll
+  useEffect(() => {
+    if (!sourceSentinelRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleSourceCount((prev) => Math.min(prev + 40, filteredSources.length));
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(sourceSentinelRef.current);
+    return () => observer.disconnect();
+  }, [filteredSources.length]);
+
+  const visibleSources = useMemo(
+    () => filteredSources.slice(0, visibleSourceCount),
+    [filteredSources, visibleSourceCount]
+  );
+
+  const enabledCount = useMemo(
+    () => sources.filter(s => !disabledSourceIds.has(s.id)).length,
+    [sources, disabledSourceIds]
+  );
   const disabledCount = disabledSourceIds.size;
 
   const renderSeriesCard = (r: KotatsuSourceResult) => {
@@ -753,78 +884,24 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[600px] md:max-h-none">
-              {filteredSources.map(s => {
-                const isSelected = selectedSource?.id === s.id;
-                const isPinned = pinnedSourceIds.has(s.id);
-                const isDisabled = disabledSourceIds.has(s.id);
-                const meta = ENGINE_META[s.engineType] || { label: s.engineType, color: 'bg-elevated text-secondary', icon: '🌐' };
-
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => setSelectedSource(s)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
-                      isDisabled
-                        ? 'bg-app/30 border-edge opacity-60 grayscale'
-                        : isSelected
-                        ? 'bg-purple-950/40 border-accent-2/60 shadow-lg shadow-accent-2/10'
-                        : 'bg-app/60 border-edge/80 hover:bg-surface hover:border-edge-strong'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-base">{meta.icon}</span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-bold text-xs truncate ${isDisabled ? 'text-muted line-through' : isSelected ? 'text-accent-2' : 'text-primary'}`}>
-                            {s.name}
-                          </span>
-                          {isPinned && <Pin className="w-3 h-3 text-accent fill-accent shrink-0" />}
-                          {isDisabled && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
-                              DISABLED
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${meta.color}`}>
-                            {meta.label}
-                          </span>
-                          <span className="text-[9px] text-muted uppercase font-mono">{s.lang}</span>
-                          {s.isNsfw && (
-                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
-                              18+
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      {/* Enable/Disable Toggle Button */}
-                      <button
-                        onClick={(e) => toggleSourceEnabled(s.id, s.name, e)}
-                        title={isDisabled ? 'Click to Enable source' : 'Click to Disable source'}
-                        className={`p-1 rounded-lg transition-all ${
-                          isDisabled
-                            ? 'text-muted hover:text-success'
-                            : 'text-success hover:text-danger'
-                        }`}
-                      >
-                        <Power className={`w-4 h-4 ${isDisabled ? 'text-muted' : 'text-success fill-success/20'}`} />
-                      </button>
-
-                      {/* Pin Button */}
-                      <button
-                        onClick={(e) => togglePinSource(s.id, e)}
-                        title={isPinned ? 'Unpin source' : 'Pin source to top'}
-                        className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-elevated text-secondary hover:text-accent transition-all"
-                      >
-                        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-accent text-accent' : ''}`} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              {visibleSources.map((s) => (
+                <SourceRow
+                  key={s.id}
+                  source={s}
+                  isSelected={selectedSource?.id === s.id}
+                  isPinned={pinnedSourceIds.has(s.id)}
+                  isDisabled={disabledSourceIds.has(s.id)}
+                  onSelect={setSelectedSource}
+                  onToggleEnabled={toggleSourceEnabled}
+                  onTogglePin={togglePinSource}
+                />
+              ))}
+              {visibleSources.length < filteredSources.length && (
+                <div ref={sourceSentinelRef} className="py-2 text-center text-[10px] text-muted flex items-center justify-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-2" />
+                  <span>Loading more sources ({visibleSources.length} of {filteredSources.length})...</span>
+                </div>
+              )}
             </div>
           )}
         </div>

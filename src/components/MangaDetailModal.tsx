@@ -26,10 +26,11 @@ import {
   Palette,
 } from 'lucide-react';
 import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
-import { SourceFinderModal } from './SourceFinderModal';
-import { MetadataStudioModal } from './MetadataStudioModal';
-import { MetadataPersonalizerPanel } from './MetadataPersonalizerPanel';
-import { CoverArtPickerModal } from './CoverArtPickerModal';
+
+const SourceFinderModal = React.lazy(() => import('./SourceFinderModal').then(m => ({ default: m.SourceFinderModal })));
+const MetadataStudioModal = React.lazy(() => import('./MetadataStudioModal').then(m => ({ default: m.MetadataStudioModal })));
+const MetadataPersonalizerPanel = React.lazy(() => import('./MetadataPersonalizerPanel').then(m => ({ default: m.MetadataPersonalizerPanel })));
+const CoverArtPickerModal = React.lazy(() => import('./CoverArtPickerModal').then(m => ({ default: m.CoverArtPickerModal })));
 
 interface MangaDetailModalProps {
   manga: MangaItem;
@@ -533,11 +534,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
           )}
 
           {/* Metadata Personalizer & Source Options */}
-          <MetadataPersonalizerPanel
-            manga={manga}
-            onUpdateManga={onUpdateManga}
-            onOpenStudio={() => setIsMetadataStudioOpen(true)}
-          />
+          <React.Suspense fallback={null}>
+            <MetadataPersonalizerPanel
+              manga={manga}
+              onUpdateManga={onUpdateManga}
+              onOpenStudio={() => setIsMetadataStudioOpen(true)}
+            />
+          </React.Suspense>
 
           {/* Synopsis */}
           <div className="space-y-1.5">
@@ -670,35 +673,47 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
       </div>
 
       {/* Alternative Sources Finder Modal */}
-      <SourceFinderModal
-        manga={manga}
-        isOpen={isSourceFinderOpen}
-        onClose={() => setIsSourceFinderOpen(false)}
-        onSourceAttached={(updated) => {
-          setIsFlagged(Boolean(updated.isFlagged));
-          setFlagReason(updated.flagReason || '');
-          onUpdateManga(updated);
-        }}
-      />
+      {isSourceFinderOpen && (
+        <React.Suspense fallback={null}>
+          <SourceFinderModal
+            manga={manga}
+            isOpen={isSourceFinderOpen}
+            onClose={() => setIsSourceFinderOpen(false)}
+            onSourceAttached={(updated) => {
+              setIsFlagged(Boolean(updated.isFlagged));
+              setFlagReason(updated.flagReason || '');
+              onUpdateManga(updated);
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* Jellyfin & Plex Style Poster & Metadata Studio Modal */}
-      <MetadataStudioModal
-        manga={manga}
-        isOpen={isMetadataStudioOpen}
-        onClose={() => setIsMetadataStudioOpen(false)}
-        onUpdateManga={onUpdateManga}
-      />
+      {isMetadataStudioOpen && (
+        <React.Suspense fallback={null}>
+          <MetadataStudioModal
+            manga={manga}
+            isOpen={isMetadataStudioOpen}
+            onClose={() => setIsMetadataStudioOpen(false)}
+            onUpdateManga={onUpdateManga}
+          />
+        </React.Suspense>
+      )}
 
       {/* Interactive Multi-Source Cover Art Picker */}
-      <CoverArtPickerModal
-        isOpen={isCoverPickerOpen}
-        onClose={() => setIsCoverPickerOpen(false)}
-        currentCoverUrl={manga.coverImage}
-        mangaId={manga.id}
-        mangaTitle={manga.title}
-        availableSources={manga.availableSources}
-        onSelectCover={handleSelectCoverArt}
-      />
+      {isCoverPickerOpen && (
+        <React.Suspense fallback={null}>
+          <CoverArtPickerModal
+            isOpen={isCoverPickerOpen}
+            onClose={() => setIsCoverPickerOpen(false)}
+            currentCoverUrl={manga.coverImage}
+            mangaId={manga.id}
+            mangaTitle={manga.title}
+            availableSources={manga.availableSources}
+            onSelectCover={handleSelectCoverArt}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 });

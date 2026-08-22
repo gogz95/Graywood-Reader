@@ -412,81 +412,85 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
 
-  // Filter & Search Logic
-  const filteredList = mangaList.filter((item) => {
-    // Status Filter
-    if (statusFilter === 'favorites' && !item.isFavorite) return false;
-    if (statusFilter === 'flagged' && !item.isFlagged) return false;
-    if (statusFilter !== 'all' && statusFilter !== 'favorites' && statusFilter !== 'flagged' && item.status !== statusFilter) return false;
+  // Filter & Search Logic (Memoized to prevent blocking renders on menu/modal toggles)
+  const filteredList = React.useMemo(() => {
+    return mangaList.filter((item) => {
+      // Status Filter
+      if (statusFilter === 'favorites' && !item.isFavorite) return false;
+      if (statusFilter === 'flagged' && !item.isFlagged) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'favorites' && statusFilter !== 'flagged' && item.status !== statusFilter) return false;
 
-    // Category / Custom Shelf Filter
-    if (activeCategory) {
-      const activeCatObj = categories.find((c) => c.id === activeCategory);
-      const activeName = activeCatObj?.name?.toLowerCase().trim();
-      const hasCat = item.categories?.some((c) => {
-        const cStr = String(c).trim();
-        return cStr === activeCategory || (activeName && cStr.toLowerCase() === activeName);
-      });
-      if (!hasCat) return false;
-    }
+      // Category / Custom Shelf Filter
+      if (activeCategory) {
+        const activeCatObj = categories.find((c) => c.id === activeCategory);
+        const activeName = activeCatObj?.name?.toLowerCase().trim();
+        const hasCat = item.categories?.some((c) => {
+          const cStr = String(c).trim();
+          return cStr === activeCategory || (activeName && cStr.toLowerCase() === activeName);
+        });
+        if (!hasCat) return false;
+      }
 
-    // Origin Type Filter
-    if (typeFilter !== 'all' && item.type !== typeFilter) return false;
+      // Origin Type Filter
+      if (typeFilter !== 'all' && item.type !== typeFilter) return false;
 
-    // 18+ / NSFW Content Filter (Guests never have access to NSFW items)
-    if (isGuest && isNsfwManga(item)) return false;
-    if (nsfwFilter === 'safe' && isNsfwManga(item)) return false;
-    if (nsfwFilter === '18+' && !isNsfwManga(item)) return false;
+      // 18+ / NSFW Content Filter (Guests never have access to NSFW items)
+      if (isGuest && isNsfwManga(item)) return false;
+      if (nsfwFilter === 'safe' && isNsfwManga(item)) return false;
+      if (nsfwFilter === '18+' && !isNsfwManga(item)) return false;
 
-    // Search Query
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const titleMatch = item.title.toLowerCase().includes(q);
-      const altMatch = item.altTitles.some((alt) => alt.toLowerCase().includes(q));
-      const tagMatch = item.genres.some((g) => g.toLowerCase().includes(q));
-      const sourceMatch = item.sourceName.toLowerCase().includes(q);
-      if (!titleMatch && !altMatch && !tagMatch && !sourceMatch) return false;
-    }
+      // Search Query
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const titleMatch = item.title.toLowerCase().includes(q);
+        const altMatch = item.altTitles.some((alt) => alt.toLowerCase().includes(q));
+        const tagMatch = item.genres.some((g) => g.toLowerCase().includes(q));
+        const sourceMatch = item.sourceName.toLowerCase().includes(q);
+        if (!titleMatch && !altMatch && !tagMatch && !sourceMatch) return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [mangaList, statusFilter, activeCategory, categories, typeFilter, isGuest, nsfwFilter, searchQuery]);
 
-  // Sort Logic
-  const sortedList = [...filteredList].sort((a, b) => {
-    if (sortBy === 'unread') {
-      const unreadA = Math.max(0, a.latestChapter - a.currentChapter);
-      const unreadB = Math.max(0, b.latestChapter - b.currentChapter);
-      return unreadB - unreadA;
-    }
-    if (sortBy === 'lastRead') {
-      return new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime();
-    }
-    if (sortBy === 'updated') {
-      return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-    }
-    if (sortBy === 'title') {
-      return a.title.localeCompare(b.title);
-    }
-    if (sortBy === 'chapter') {
-      return b.currentChapter - a.currentChapter;
-    }
-    if (sortBy === 'rating') {
-      return b.rating - a.rating;
-    }
-    if (sortBy === 'nsfwFirst') {
-      const aNsfw = isNsfwManga(a) ? 1 : 0;
-      const bNsfw = isNsfwManga(b) ? 1 : 0;
-      if (bNsfw !== aNsfw) return bNsfw - aNsfw;
-      return a.title.localeCompare(b.title);
-    }
-    if (sortBy === 'sfwFirst') {
-      const aNsfw = isNsfwManga(a) ? 1 : 0;
-      const bNsfw = isNsfwManga(b) ? 1 : 0;
-      if (aNsfw !== bNsfw) return aNsfw - bNsfw;
-      return a.title.localeCompare(b.title);
-    }
-    return 0;
-  });
+  // Sort Logic (Memoized)
+  const sortedList = React.useMemo(() => {
+    return [...filteredList].sort((a, b) => {
+      if (sortBy === 'unread') {
+        const unreadA = Math.max(0, a.latestChapter - a.currentChapter);
+        const unreadB = Math.max(0, b.latestChapter - b.currentChapter);
+        return unreadB - unreadA;
+      }
+      if (sortBy === 'lastRead') {
+        return new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime();
+      }
+      if (sortBy === 'updated') {
+        return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+      }
+      if (sortBy === 'title') {
+        return a.title.localeCompare(b.title);
+      }
+      if (sortBy === 'chapter') {
+        return b.currentChapter - a.currentChapter;
+      }
+      if (sortBy === 'rating') {
+        return b.rating - a.rating;
+      }
+      if (sortBy === 'nsfwFirst') {
+        const aNsfw = isNsfwManga(a) ? 1 : 0;
+        const bNsfw = isNsfwManga(b) ? 1 : 0;
+        if (bNsfw !== aNsfw) return bNsfw - aNsfw;
+        return a.title.localeCompare(b.title);
+      }
+      if (sortBy === 'sfwFirst') {
+        const aNsfw = isNsfwManga(a) ? 1 : 0;
+        const bNsfw = isNsfwManga(b) ? 1 : 0;
+        if (aNsfw !== bNsfw) return aNsfw - bNsfw;
+        return a.title.localeCompare(b.title);
+      }
+      return 0;
+    });
+  }, [filteredList, sortBy]);
 
   // Reset visible limit on filter changes
   React.useEffect(() => {
@@ -510,13 +514,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const visibleList = React.useMemo(() => sortedList.slice(0, visibleLimit), [sortedList, visibleLimit]);
 
-  // Stats Counters
-  const totalReading = mangaList.filter((m) => m.status === 'reading').length;
-  const totalCompleted = mangaList.filter((m) => m.status === 'completed').length;
-  const totalUnreadChapters = mangaList.reduce((acc, m) => {
-    const diff = m.latestChapter - m.currentChapter;
-    return acc + (diff > 0 ? diff : 0);
-  }, 0);
+  // Stats Counters (Memoized)
+  const totalReading = React.useMemo(() => mangaList.filter((m) => m.status === 'reading').length, [mangaList]);
+  const totalCompleted = React.useMemo(() => mangaList.filter((m) => m.status === 'completed').length, [mangaList]);
+  const totalUnreadChapters = React.useMemo(() => {
+    return mangaList.reduce((acc, m) => {
+      const diff = m.latestChapter - m.currentChapter;
+      return acc + (diff > 0 ? diff : 0);
+    }, 0);
+  }, [mangaList]);
 
   return (
     <div className="space-y-6">

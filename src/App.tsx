@@ -1,9 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 
 import { Navbar } from './components/Navbar';
-import { MangaDetailModal } from './components/MangaDetailModal';
-import { AddEditModal } from './components/AddEditModal';
-import { ChapterListModal } from './components/ChapterListModal';
 import { ConfirmModal } from './components/ConfirmModal';
 
 // Lazy-loaded tab views — only the active tab's JS is fetched & rendered
@@ -20,11 +17,15 @@ const AchievementsModal = lazy(() => import('./components/AchievementsModal').th
 const AdminPanelModal = lazy(() => import('./components/AdminPanelModal').then(m => ({ default: m.AdminPanelModal })));
 const ChallengeNotificationModal = lazy(() => import('./components/ChallengeNotificationModal').then(m => ({ default: m.ChallengeNotificationModal })));
 
-// Lightweight modals remain eager (tiny bundles)
-import { UserProfileModal } from './components/UserProfileModal';
-import { AuthModal } from './components/AuthModal';
-import { SubmitBugModal, BugReportInitialData } from './components/SubmitBugModal';
-import { AppLockOverlay } from './components/AppLockOverlay';
+// Lazy-loaded modals for fast initial load & lag-free menu entrance
+const MangaDetailModal = lazy(() => import('./components/MangaDetailModal').then(m => ({ default: m.MangaDetailModal })));
+const AddEditModal = lazy(() => import('./components/AddEditModal').then(m => ({ default: m.AddEditModal })));
+const ChapterListModal = lazy(() => import('./components/ChapterListModal').then(m => ({ default: m.ChapterListModal })));
+const UserProfileModal = lazy(() => import('./components/UserProfileModal').then(m => ({ default: m.UserProfileModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const SubmitBugModal = lazy(() => import('./components/SubmitBugModal').then(m => ({ default: m.SubmitBugModal })));
+const AppLockOverlay = lazy(() => import('./components/AppLockOverlay').then(m => ({ default: m.AppLockOverlay })));
+import type { BugReportInitialData } from './components/SubmitBugModal';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
   MangaItem,
@@ -149,14 +150,16 @@ export default function App() {
 
   const isGuestClient = activeProfile.id === 'usr_guest';
 
-  // Per-User Privacy Isolation Filter
+  // Per-User Privacy Isolation Filter (Memoized to prevent cascading re-renders)
   // Admin sees ALL series across the server; Standard User sees only their own private library!
   // Guest users NEVER have access to 18+ / NSFW titles without logging in!
-  const displayMangaList = mangaList.filter((item) => {
-    if (isGuestClient && isNsfwManga(item)) return false;
-    if (activeProfile.role === 'admin') return true;
-    return !item.userId || item.userId === activeProfile.id;
-  });
+  const displayMangaList = useMemo(() => {
+    return mangaList.filter((item) => {
+      if (isGuestClient && isNsfwManga(item)) return false;
+      if (activeProfile.role === 'admin') return true;
+      return !item.userId || item.userId === activeProfile.id;
+    });
+  }, [mangaList, isGuestClient, activeProfile.role, activeProfile.id]);
 
   // Strict My Library Filter: Never auto-adds API/synced series to My Library
   const myLibraryList = useMemo(() => {
@@ -894,7 +897,48 @@ export default function App() {
     );
   };
 
-  const unreadCount = myLibraryList.filter((m) => m.latestChapter > m.currentChapter).length;
+  const unreadCount = useMemo(() => {
+    return myLibraryList.filter((m) => m.latestChapter > m.currentChapter).length;
+  }, [myLibraryList]);
+
+  // Memoized handlers for Navbar to avoid re-rendering entire navigation on state changes
+  const handleOpenAddModal = useCallback(() => {
+    setEditingManga(null);
+    setAddModalOpen(true);
+  }, []);
+
+  const handleOpenSettingsModal = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+
+  const handleToggleIncognito = useCallback(() => {
+    setIsIncognito((prev) => !prev);
+  }, []);
+
+  const handleOpenAnalytics = useCallback(() => {
+    setAnalyticsOpen(true);
+  }, []);
+
+  const handleOpenAchievements = useCallback(() => {
+    setAchievementsOpen(true);
+  }, []);
+
+  const handleOpenChallengesModal = useCallback(() => {
+    setChallengeModalOpen(true);
+  }, []);
+
+  const handleOpenProfileModal = useCallback(() => {
+    setUserProfileModalOpen(true);
+  }, []);
+
+  const handleOpenAuthModal = useCallback(() => {
+    setAuthModalMode('login');
+    setAuthModalOpen(true);
+  }, []);
+
+  const handleOpenAdminPanel = useCallback(() => {
+    setAdminPanelOpen(true);
+  }, []);
 
   return (
     <div className="min-h-screen bg-app text-primary font-sans antialiased flex flex-col">
@@ -908,23 +952,20 @@ export default function App() {
         unreadCount={unreadCount}
         duplicateCount={duplicates.length}
         pendingChallengesCount={pendingChallengesCount}
-        onOpenAddModal={() => {
-          setEditingManga(null);
-          setAddModalOpen(true);
-        }}
+        onOpenAddModal={handleOpenAddModal}
         onRunAutoUpdate={handleRunAutoUpdate}
         isUpdating={isUpdating}
-        onOpenSettingsModal={() => setIsSettingsOpen(true)}
+        onOpenSettingsModal={handleOpenSettingsModal}
         isIncognito={isIncognito}
-        onToggleIncognito={() => setIsIncognito(!isIncognito)}
-        onOpenAnalytics={() => setAnalyticsOpen(true)}
-        onOpenAchievements={() => setAchievementsOpen(true)}
-        onOpenChallengesModal={() => setChallengeModalOpen(true)}
+        onToggleIncognito={handleToggleIncognito}
+        onOpenAnalytics={handleOpenAnalytics}
+        onOpenAchievements={handleOpenAchievements}
+        onOpenChallengesModal={handleOpenChallengesModal}
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
-        onOpenProfileModal={() => setUserProfileModalOpen(true)}
-        onOpenAuthModal={() => setAuthModalOpen(true)}
-        onOpenAdminPanel={() => setAdminPanelOpen(true)}
+        onOpenProfileModal={handleOpenProfileModal}
+        onOpenAuthModal={handleOpenAuthModal}
+        onOpenAdminPanel={handleOpenAdminPanel}
         onOpenSubmitBugModal={handleOpenSubmitBug}
       />
 
@@ -947,10 +988,7 @@ export default function App() {
                 setAddModalOpen(true);
               }}
               onDeleteManga={handleDeleteManga}
-              onAddNew={() => {
-                setEditingManga(null);
-                setAddModalOpen(true);
-              }}
+              onAddNew={handleOpenAddModal}
               onOpenReader={handleOpenReader}
               onOpenChapters={handleOpenChapters}
               onBulkUpdateStatus={handleBulkUpdateStatus}
@@ -969,7 +1007,7 @@ export default function App() {
               }}
               onSelectManga={handleSelectMangaDetail}
               onOpenReader={handleOpenReader}
-              onTrack={handleSaveManga}
+              onTrack={handleAddFromOpenApi}
             />
           )}
 
@@ -980,7 +1018,7 @@ export default function App() {
                 setAuthModalMode('login');
                 setAuthModalOpen(true);
               }}
-              onAddToTracker={handleSaveManga}
+              onAddToTracker={handleAddFromOpenApi}
               onOpenReader={handleOpenReader}
               onSelectManga={handleSelectMangaDetail}
             />
@@ -993,8 +1031,6 @@ export default function App() {
               mangaList={displayMangaList}
               onRunAutoUpdate={handleRunAutoUpdate}
               isUpdating={isUpdating}
-              isAdmin={activeProfile.role === 'admin'}
-              onOpenReader={handleOpenReader}
             />
           )}
 
@@ -1020,39 +1056,43 @@ export default function App() {
 
       {/* Detail Drawer Modal */}
       {selectedMangaDetail && (
-        <MangaDetailModal
-          manga={selectedMangaDetail}
-          isGuest={isGuestClient}
-          onOpenAuthModal={() => {
-            setAuthModalMode('login');
-            setAuthModalOpen(true);
-          }}
-          onClose={() => handleSelectMangaDetail(null)}
-          onUpdateManga={(updated) => {
-            handleSaveManga(updated);
-            setSelectedMangaDetail(updated);
-          }}
-          onDeleteManga={handleDeleteManga}
-          onEditManga={(m) => {
-            setEditingManga(m);
-            setAddModalOpen(true);
-          }}
-          onOpenReader={handleOpenReader}
-          onOpenChapters={handleOpenChapters}
-          onReport={handleReportMangaIssue}
-        />
+        <Suspense fallback={null}>
+          <MangaDetailModal
+            manga={selectedMangaDetail}
+            isGuest={isGuestClient}
+            onOpenAuthModal={() => {
+              setAuthModalMode('login');
+              setAuthModalOpen(true);
+            }}
+            onClose={() => handleSelectMangaDetail(null)}
+            onUpdateManga={(updated) => {
+              handleSaveManga(updated);
+              setSelectedMangaDetail(updated);
+            }}
+            onDeleteManga={handleDeleteManga}
+            onEditManga={(m) => {
+              setEditingManga(m);
+              setAddModalOpen(true);
+            }}
+            onOpenReader={handleOpenReader}
+            onOpenChapters={handleOpenChapters}
+            onReport={handleReportMangaIssue}
+          />
+        </Suspense>
       )}
 
       {/* Add/Edit Series Modal */}
       {addModalOpen && (
-        <AddEditModal
-          initialManga={editingManga}
-          onClose={() => {
-            setAddModalOpen(false);
-            setEditingManga(null);
-          }}
-          onSave={handleSaveManga}
-        />
+        <Suspense fallback={null}>
+          <AddEditModal
+            initialManga={editingManga}
+            onClose={() => {
+              setAddModalOpen(false);
+              setEditingManga(null);
+            }}
+            onSave={handleSaveManga}
+          />
+        </Suspense>
       )}
 
       {/* Fullscreen Kotatsu Reader Mode View */}
@@ -1081,12 +1121,14 @@ export default function App() {
 
       {/* Chapter List Modal */}
       {chapterListTarget && (
-        <ChapterListModal
-          manga={chapterListTarget}
-          onClose={() => setChapterListTarget(null)}
-          onOpenReader={(chNum, chId) => handleOpenReader(chapterListTarget, chNum, chId)}
-          onMarkRead={(chNum) => handleMarkChapterRead(chapterListTarget.id, chNum)}
-        />
+        <Suspense fallback={null}>
+          <ChapterListModal
+            manga={chapterListTarget}
+            onClose={() => setChapterListTarget(null)}
+            onOpenReader={(chNum, chId) => handleOpenReader(chapterListTarget, chNum, chId)}
+            onMarkRead={(chNum) => handleMarkChapterRead(chapterListTarget.id, chNum)}
+          />
+        </Suspense>
       )}
 
       {/* Kotatsu Settings Modal (Contains Duplicates Merger & DB Sync) */}
@@ -1123,35 +1165,39 @@ export default function App() {
 
       {/* User Registration & Sign In Auth Modal */}
       {authModalOpen && (
-        <AuthModal
-          onLogin={handleLoginUser}
-          onRegister={handleRegisterUser}
-          existingUsers={profiles}
-          initialMode={authModalMode}
-          guestProfile={GUEST_PROFILE}
-          onClose={() => setAuthModalOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <AuthModal
+            onLogin={handleLoginUser}
+            onRegister={handleRegisterUser}
+            existingUsers={profiles}
+            initialMode={authModalMode}
+            guestProfile={GUEST_PROFILE}
+            onClose={() => setAuthModalOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* User Profiles Selector Modal */}
       {userProfileModalOpen && (
-        <UserProfileModal
-          profiles={profiles}
-          activeProfileId={activeProfileId}
-          isHostComputer={isHostComputer}
-          onSelectProfile={(id) => {
-            setActiveProfileId(id);
-            setUserProfileModalOpen(false);
-          }}
-          onOpenAuthModal={(mode) => {
-            setAuthModalMode(mode || 'login');
-            setAuthModalOpen(true);
-          }}
-          onUpdateProfile={handleUpdateProfile}
-          onLogout={handleLogoutUser}
-          onDeleteProfile={handleDeleteProfile}
-          onClose={() => setUserProfileModalOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <UserProfileModal
+            profiles={profiles}
+            activeProfileId={activeProfileId}
+            isHostComputer={isHostComputer}
+            onSelectProfile={(id) => {
+              setActiveProfileId(id);
+              setUserProfileModalOpen(false);
+            }}
+            onOpenAuthModal={(mode) => {
+              setAuthModalMode(mode || 'login');
+              setAuthModalOpen(true);
+            }}
+            onUpdateProfile={handleUpdateProfile}
+            onLogout={handleLogoutUser}
+            onDeleteProfile={handleDeleteProfile}
+            onClose={() => setUserProfileModalOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Host / Administrator Command Panel */}
@@ -1174,11 +1220,13 @@ export default function App() {
 
       {/* Submit Bug Tracker Modal */}
       {submitBugModalOpen && (
-        <SubmitBugModal
-          currentUser={activeProfile}
-          initialData={bugModalInitialData}
-          onClose={() => setSubmitBugModalOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <SubmitBugModal
+            currentUser={activeProfile}
+            initialData={bugModalInitialData}
+            onClose={() => setSubmitBugModalOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Analytics Modal */}
@@ -1224,12 +1272,14 @@ export default function App() {
 
       {/* Glassmorphic Application Lock Overlay */}
       {appSettings.appLockEnabled && (
-        <AppLockOverlay
-          isLocked={isAppLocked}
-          pinHash={appSettings.appLockPinHash || ''}
-          lockType={appSettings.appLockType || 'pin'}
-          onUnlock={() => setIsAppLocked(false)}
-        />
+        <Suspense fallback={null}>
+          <AppLockOverlay
+            isLocked={isAppLocked}
+            pinHash={appSettings.appLockPinHash || ''}
+            lockType={appSettings.appLockType || 'pin'}
+            onUnlock={() => setIsAppLocked(false)}
+          />
+        </Suspense>
       )}
 
       {/* Footer */}

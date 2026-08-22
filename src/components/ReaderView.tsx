@@ -1250,55 +1250,59 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       )}
 
       {/* STICKY NOTES DRAWER & MODAL */}
-      <StickyNotesDrawer
-        showDrawer={showNotesDrawer}
-        stickyNotes={stickyNotes}
-        currentChapterNum={currentChapterNum}
-        currentPageIndex={currentPageIndex}
-        activeNoteModal={activeNoteModal}
-        noteInputText={noteInputText}
-        noteInputColor={noteInputColor}
-        onCloseDrawer={() => setShowNotesDrawer(false)}
-        onOpenAddModal={(pageIdx) => {
-          setNoteInputText('');
-          setNoteInputColor('yellow');
-          setActiveNoteModal({ pageIndex: pageIdx });
-        }}
-        onOpenEditModal={(note) => {
-          setNoteInputText(note.noteText);
-          setNoteInputColor(note.color || 'yellow');
-          setActiveNoteModal({
-            pageIndex: note.pageIndex,
-            noteId: note.id,
-            initialText: note.noteText,
-            color: note.color,
-          });
-        }}
-        onCloseModal={() => setActiveNoteModal(null)}
-        onChangeNoteText={setNoteInputText}
-        onChangeNoteColor={setNoteInputColor}
-        onSaveNote={handleSaveNote}
-        onDeleteNote={handleDeleteNote}
-        onJumpToNote={(note) => {
-          if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
-            setCurrentChapterNum(note.chapterNumber);
-          }
-          setCurrentPageIndex(note.pageIndex);
-          setShowNotesDrawer(false);
-          if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
-            const totalH = scrollContainerRef.current.scrollHeight;
-            scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
-          }
-        }}
-      />
+      {(showNotesDrawer || activeNoteModal) && (
+        <StickyNotesDrawer
+          showDrawer={showNotesDrawer}
+          stickyNotes={stickyNotes}
+          currentChapterNum={currentChapterNum}
+          currentPageIndex={currentPageIndex}
+          activeNoteModal={activeNoteModal}
+          noteInputText={noteInputText}
+          noteInputColor={noteInputColor}
+          onCloseDrawer={() => setShowNotesDrawer(false)}
+          onOpenAddModal={(pageIdx) => {
+            setNoteInputText('');
+            setNoteInputColor('yellow');
+            setActiveNoteModal({ pageIndex: pageIdx });
+          }}
+          onOpenEditModal={(note) => {
+            setNoteInputText(note.noteText);
+            setNoteInputColor(note.color || 'yellow');
+            setActiveNoteModal({
+              pageIndex: note.pageIndex,
+              noteId: note.id,
+              initialText: note.noteText,
+              color: note.color,
+            });
+          }}
+          onCloseModal={() => setActiveNoteModal(null)}
+          onChangeNoteText={setNoteInputText}
+          onChangeNoteColor={setNoteInputColor}
+          onSaveNote={handleSaveNote}
+          onDeleteNote={handleDeleteNote}
+          onJumpToNote={(note) => {
+            if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
+              setCurrentChapterNum(note.chapterNumber);
+            }
+            setCurrentPageIndex(note.pageIndex);
+            setShowNotesDrawer(false);
+            if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
+            }
+          }}
+        />
+      )}
 
       {/* AMBIENT SOUNDSCAPE & SFX MODAL */}
-      <AmbientSoundModal
-        isOpen={showAmbientModal}
-        onClose={() => setShowAmbientModal(false)}
-        pageTurnSfxEnabled={pageTurnSfxEnabled}
-        onTogglePageTurnSfx={setPageTurnSfxEnabled}
-      />
+      {showAmbientModal && (
+        <AmbientSoundModal
+          isOpen={showAmbientModal}
+          onClose={() => setShowAmbientModal(false)}
+          pageTurnSfxEnabled={pageTurnSfxEnabled}
+          onTogglePageTurnSfx={setPageTurnSfxEnabled}
+        />
+      )}
 
       {/* FLOATING CIRCULAR PANEL MAGNIFIER / LOUPE LENS */}
       {isLoupeActive && loupeData && (

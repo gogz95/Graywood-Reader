@@ -29,6 +29,7 @@ export const AmbientSoundModal: React.FC<AmbientSoundModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen) return;
     const timer = setInterval(() => {
       setRemainingTime(soundscapes.getRemainingSleepMinutes());
       if (soundscapes.getCurrentPreset() !== currentPreset) {
@@ -36,7 +37,7 @@ export const AmbientSoundModal: React.FC<AmbientSoundModalProps> = ({
       }
     }, 5000);
     return () => clearInterval(timer);
-  }, [currentPreset]);
+  }, [isOpen, currentPreset]);
 
   if (!isOpen) return null;
 

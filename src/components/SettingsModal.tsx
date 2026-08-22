@@ -49,7 +49,7 @@ import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyom
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
 import { AutoUpdateView } from './AutoUpdateView';
 import { AutoUpdateLog, UserProfile } from '../types';
-import { hashPin } from './AppLockOverlay';
+import { hashPin } from '../utils/pinHash';
 
 interface SettingsModalProps {
   settings: AppSettings;

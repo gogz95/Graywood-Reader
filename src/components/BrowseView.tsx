@@ -72,6 +72,100 @@ function computeLimit(): number {
   return 84;                 // 4K+
 }
 
+interface BrowseCardProps {
+  item: ExploreItem;
+  isTracked: boolean;
+  onSelect: () => void;
+  onTrack: () => void;
+  onRead: () => void;
+}
+
+const BrowseCard = React.memo<BrowseCardProps>(({
+  item: r,
+  isTracked,
+  onSelect,
+  onTrack,
+  onRead,
+}) => {
+  const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
+
+  return (
+    <div
+      onClick={onSelect}
+      className="group bg-app border border-edge rounded-2xl overflow-hidden hover:border-accent-2/60 hover:shadow-xl transition-all flex flex-col cursor-pointer card-interactive"
+    >
+      <div className="relative aspect-[3/4] bg-surface overflow-hidden">
+        {r.coverImage ? (
+          <img
+            src={r.coverImage}
+            alt={r.title}
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = FALLBACK_COVER;
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-surface">
+            <BookOpen className="w-10 h-10 text-accent-2/40" />
+          </div>
+        )}
+        <div className="absolute top-2 left-2">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm bg-app/70 text-secondary">
+            {r.__sourceName || r.sourceName}
+          </span>
+        </div>
+        {r.type && (
+          <div className="absolute top-2 right-2">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-app/80 text-secondary border border-edge">
+              {r.type}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 flex flex-col gap-2 flex-1">
+        <p className="font-bold text-primary text-sm leading-tight line-clamp-2 group-hover:text-accent-2 transition-colors">
+          {r.title}
+        </p>
+        {r.latestChapter ? (
+          <div className="text-[11px] text-secondary flex items-center gap-1">
+            <Layers className="w-3 h-3 text-accent" /> Ch. {r.latestChapter}+
+          </div>
+        ) : null}
+        <div className="flex gap-2 mt-auto pt-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrack();
+            }}
+            disabled={isTracked}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              isTracked
+                ? 'bg-success/20 text-success border border-success/30 cursor-default'
+                : 'bg-accent-2/20 hover:bg-accent-2/40 text-accent-2 border border-accent-2/30'
+            }`}
+          >
+            {isTracked ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+            {isTracked ? 'Tracked' : 'Track'}
+          </button>
+          <button
+            title={readable ? 'Read now' : 'View info'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRead();
+            }}
+            className="flex items-center justify-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-accent border border-edge font-bold transition-all"
+          >
+            {readable ? <Play className="w-3.5 h-3.5 fill-accent" /> : <Star className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export const BrowseView: React.FC<BrowseViewProps> = ({
   searchQuery: seedSearch,
   onSelectManga,
@@ -429,84 +523,21 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
-          {visible.map((r) => {
+            {visible.map((r) => {
               const isTracked = trackedKeys.has(String(r.title).trim().toLowerCase());
-              const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
               return (
-                <div
+                <BrowseCard
                   key={r.id || r.title}
-                  onClick={() => onSelectManga(toManga(r, false))}
-                  className="group bg-app border border-edge rounded-2xl overflow-hidden hover:border-accent-2/60 hover:shadow-xl transition-all flex flex-col cursor-pointer"
-                >
-                  <div className="relative aspect-[3/4] bg-surface overflow-hidden">
-                    {r.coverImage ? (
-                      <img
-                        src={r.coverImage}
-                        alt={r.title}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-surface">
-                        <BookOpen className="w-10 h-10 text-accent-2/40" />
-                      </div>
-                    )}
-                    <div className="absolute top-2 left-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm bg-app/70 text-secondary">
-                        {r.__sourceName || r.sourceName}
-                      </span>
-                    </div>
-                    {r.type && (
-                      <div className="absolute top-2 right-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-app/80 text-secondary border border-edge">
-                          {r.type}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-3 flex flex-col gap-2 flex-1">
-                    <p className="font-bold text-primary text-sm leading-tight line-clamp-2 group-hover:text-accent-2 transition-colors">
-                      {r.title}
-                    </p>
-                    {r.latestChapter ? (
-                      <div className="text-[11px] text-secondary flex items-center gap-1">
-                        <Layers className="w-3 h-3 text-accent" /> Ch. {r.latestChapter}+
-                      </div>
-                    ) : null}
-                    <div className="flex gap-2 mt-auto pt-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTrack(r);
-                        }}
-                        disabled={isTracked}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                          isTracked
-                            ? 'bg-success/20 text-success border border-success/30 cursor-default'
-                            : 'bg-accent-2/20 hover:bg-accent-2/40 text-accent-2 border border-accent-2/30'
-                        }`}
-                      >
-                        {isTracked ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                        {isTracked ? 'Tracked' : 'Track'}
-                      </button>
-                      <button
-                        title={readable ? 'Read now' : 'View info'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (readable) onOpenReader(toManga(r, true), 1);
-                          else onSelectManga(toManga(r, false));
-                        }}
-                        className="flex items-center justify-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-accent border border-edge font-bold transition-all"
-                      >
-                        {readable ? <Play className="w-3.5 h-3.5 fill-accent" /> : <Star className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  item={r}
+                  isTracked={isTracked}
+                  onSelect={() => onSelectManga(toManga(r, false))}
+                  onTrack={() => handleTrack(r)}
+                  onRead={() => {
+                    const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
+                    if (readable) onOpenReader(toManga(r, true), 1);
+                    else onSelectManga(toManga(r, false));
+                  }}
+                />
               );
             })}
           </div>

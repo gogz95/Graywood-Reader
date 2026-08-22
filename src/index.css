@@ -317,25 +317,30 @@ img[loading="lazy"] {
 
 /* ── Modern Glassmorphism & Micro-Interaction Utility Tokens ──────────────── */
 .glass-panel {
-  background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
   border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent);
+  transform: translateZ(0);
 }
 
 .glass-modal {
-  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   border: 1px solid color-mix(in srgb, var(--edge-strong) 60%, transparent);
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 .glass-dropdown {
-  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--edge);
   box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 .glow-accent {
@@ -344,6 +349,20 @@ img[loading="lazy"] {
 
 .glow-accent-sm {
   box-shadow: 0 0 10px -2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* ── Hardware Accelerated Shakes & Animations ─────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 }
 
 /* ── Shimmer Skeleton Loader ──────────────────────────────────────────────── */
@@ -370,6 +389,7 @@ img[loading="lazy"] {
 /* Card hover lift & active press micro-animations */
 .card-interactive {
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  transform: translateZ(0);
 }
 
 .card-interactive:hover {

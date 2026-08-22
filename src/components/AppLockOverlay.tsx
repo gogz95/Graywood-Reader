@@ -1,20 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, Fingerprint, KeyRound, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Lock, Unlock, Fingerprint, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { hashPin } from '../utils/pinHash';
+
+export { hashPin };
 
 interface AppLockOverlayProps {
   isLocked: boolean;
   pinHash: string;
   lockType?: 'pin' | 'password' | 'biometric';
   onUnlock: () => void;
-}
-
-export async function hashPin(pin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin + '_graywood_salt_2026');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
@@ -90,7 +84,6 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
 
   const handleBiometricAuth = async () => {
     try {
-      // Prompt platform authenticator
       if (!window.PublicKeyCredential) {
         setErrorMessage('Biometrics unavailable');
         return;
@@ -102,11 +95,11 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl select-none">
-      <motion.div
-        animate={errorShake ? { x: [-10, 10, -10, 10, 0] } : {}}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-sm p-8 mx-4 rounded-3xl bg-slate-900/90 border border-slate-800/80 shadow-2xl shadow-indigo-950/40 text-center flex flex-col items-center"
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-slate-950/95 backdrop-blur-md select-none animate-in fade-in duration-200">
+      <div
+        className={`w-full max-w-sm p-8 mx-4 rounded-3xl bg-slate-900/90 border border-slate-800/80 shadow-2xl shadow-indigo-950/40 text-center flex flex-col items-center transition-transform ${
+          errorShake ? 'animate-shake' : ''
+        }`}
       >
         {/* Lock Icon */}
         <div className="w-16 h-16 mb-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shadow-inner">
@@ -211,7 +204,7 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
             </div>
           </>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };
