@@ -222,3 +222,54 @@ opdsRouter.get('/api/opds/local/:id', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/opds/v2/catalog.json - OPDS 2.0 JSON Catalog Feed
+opdsRouter.get('/api/opds/v2/catalog.json', (req: Request, res: Response) => {
+  try {
+    const allManga = SqliteDb.getAllManga();
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const filtered = q ? allManga.filter((m) => (m.title || '').toLowerCase().includes(q)) : allManga;
+
+    const publications = filtered.map((m) => ({
+      metadata: {
+        '@type': 'http://schema.org/ComicStory',
+        title: m.title,
+        identifier: `urn:uuid:graywood-series-${m.id}`,
+        modified: m.lastUpdated || new Date().toISOString(),
+        description: m.description || `Reading progress: Chapter ${m.currentChapter} / ${m.latestChapter}`,
+        readingProgress: {
+          currentChapter: m.currentChapter,
+          latestChapter: m.latestChapter,
+        },
+      },
+      images: m.coverImage ? [{ href: proxiedCover(m.coverImage), type: 'image/jpeg' }] : [],
+      links: [
+        {
+          rel: 'http://opds-spec.org/acquisition',
+          href: `/reader/${encodeURIComponent(m.id)}/1`,
+          type: 'text/html',
+        },
+        {
+          rel: 'self',
+          href: `/api/opds/v2/series/${encodeURIComponent(m.id)}.json`,
+          type: 'application/opds+json',
+        },
+      ],
+    }));
+
+    res.setHeader('Content-Type', 'application/opds+json;charset=utf-8');
+    res.json({
+      metadata: {
+        title: 'Graywood Reader Catalog (OPDS 2.0)',
+        numberOfItems: filtered.length,
+      },
+      links: [
+        { rel: 'self', href: '/api/opds/v2/catalog.json', type: 'application/opds+json' },
+      ],
+      publications,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to generate OPDS 2.0 feed', details: err.message });
+  }
+});
+
+
