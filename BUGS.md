@@ -27,6 +27,28 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-044] [Other Fault] ChristinaSiemone Cam Model: Free Live Sex Show & Chat
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Darkmodes (2026-08-23)
+- **Description**: Flagged issue: Other Fault.
+
+Series: ChristinaSiemone Cam Model: Free Live Sex Show & Chat (kotatsu_1787348359960_598_nottobemissed)
+Source: MangaHentai
+Flag reason: Other Fault
+
+
+This is a popup ad
+- **Steps to Reproduce**:
+  1. 1. Open series "ChristinaSiemone Cam Model: Free Live Sex Show & Chat"
+2. Trigger reading / metadata load
+3. Observe: Other Fault
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 _No active bugs._
 
 ---

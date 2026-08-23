@@ -134,9 +134,11 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
       />
 
       {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/60 backdrop-blur-xs text-accent gap-2">
+        <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2">
           <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-[11px] font-mono font-bold text-secondary">Loading Page {idx + 1}...</span>
+          <span className="text-[11px] font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-edge/60">
+            Loading Page {idx + 1}...
+          </span>
         </div>
       )}
 
@@ -707,6 +709,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setShowQuickJumpModal((prev) => !prev);
       } else if (e.key === '?' || e.key === 'h' || e.key === 'H') {
         setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === '+' || e.key === '=') {
+        const nextSpeed = Math.min(5.0, Number((settings.autoScrollSpeed + 0.5).toFixed(1)));
+        setSettings({ ...settings, autoScrollSpeed: nextSpeed });
+        triggerToast(`Auto-Scroll Speed: ${nextSpeed}x`);
+      } else if (e.key === '-' || e.key === '_') {
+        const nextSpeed = Math.max(0.5, Number((settings.autoScrollSpeed - 0.5).toFixed(1)));
+        setSettings({ ...settings, autoScrollSpeed: nextSpeed });
+        triggerToast(`Auto-Scroll Speed: ${nextSpeed}x`);
       } else if (e.key === 'b' || e.key === 'B') {
         toggleBookmarkPage(currentPageIndex);
       } else if (e.key === 's' || e.key === 'S') {
@@ -810,11 +820,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return 'bg-app text-primary';
   }, [settings.bgColor]);
 
-  // CSS Image Filters Mapping (Including OLED pitch black, E-Ink and Line-Art Sharpener)
+  // CSS Image Filters Mapping (Including OLED pitch black, Warm Amber, E-Ink and Line-Art Sharpener)
   const imageFilterStyle = useMemo(() => {
-    if (settings.imageFilter === 'oled') return { filter: 'contrast(130%) brightness(90%)' };
+    if (settings.imageFilter === 'warm-amber') return { filter: 'sepia(45%) hue-rotate(-20deg) contrast(98%) brightness(95%)' };
+    if (settings.imageFilter === 'oled') return { filter: 'contrast(135%) brightness(90%)' };
     if (settings.imageFilter === 'grayscale') return { filter: 'grayscale(100%)' };
-    if (settings.imageFilter === 'sepia') return { filter: 'sepia(70%) contrast(105%)' };
+    if (settings.imageFilter === 'sepia') return { filter: 'sepia(75%) contrast(100%) brightness(95%)' };
     if (settings.imageFilter === 'invert') return { filter: 'invert(100%) hue-rotate(180deg)' };
     if (settings.imageFilter === 'brightness') return { filter: 'contrast(120%) brightness(110%)' };
     if (settings.imageFilter === 'e-ink') return { filter: 'grayscale(100%) contrast(175%) brightness(105%)' };
@@ -1314,9 +1325,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       />
 
                       {isLoading && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/70 backdrop-blur-xs text-accent gap-2 rounded-xl">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2 rounded-xl">
                           <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-                          <span className="text-xs font-mono font-bold text-primary">Loading Page {currentPageIndex + 1}...</span>
+                          <span className="text-xs font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-edge/60">
+                            Loading Page {currentPageIndex + 1}...
+                          </span>
                         </div>
                       )}
 

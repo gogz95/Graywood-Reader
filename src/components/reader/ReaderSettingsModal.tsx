@@ -202,11 +202,12 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
           <div className="grid grid-cols-3 gap-2 text-xs">
             {[
               { id: 'normal', name: 'Normal Original' },
+              { id: 'warm-amber', name: '🕯️ Warm Amber (Night)' },
               { id: 'sharpener', name: '✨ Line-Art Sharpener' },
-              { id: 'e-ink', name: '📖 E-Ink E-Paper' },
               { id: 'oled', name: '🌑 OLED Ultra-Dark' },
+              { id: 'sepia', name: '📜 Parchment Sepia' },
+              { id: 'e-ink', name: '📖 E-Ink E-Paper' },
               { id: 'high-contrast', name: '⚡ High Contrast' },
-              { id: 'sepia', name: '📜 Warm Sepia' },
               { id: 'grayscale', name: '🔘 Monochrome B&W' },
               { id: 'invert', name: '🔄 Invert Colors' },
               { id: 'brightness', name: '☀️ Bright Boost' },

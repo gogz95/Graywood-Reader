@@ -26,6 +26,7 @@ const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ defau
 const SubmitBugModal = lazy(() => import('./components/SubmitBugModal').then(m => ({ default: m.SubmitBugModal })));
 const ExtensionManagerModal = lazy(() => import('./components/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal })));
 const AppLockOverlay = lazy(() => import('./components/AppLockOverlay').then(m => ({ default: m.AppLockOverlay })));
+const CommandPaletteModal = lazy(() => import('./components/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
 import type { BugReportInitialData } from './components/SubmitBugModal';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
@@ -100,6 +101,7 @@ export default function App() {
   const [challengeModalOpen, setChallengeModalOpen] = useState(false);
   const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -979,6 +981,7 @@ export default function App() {
         onOpenAdminPanel={handleOpenAdminPanel}
         onOpenSubmitBugModal={handleOpenSubmitBug}
         onOpenExtensionManager={() => setIsExtensionManagerOpen(true)}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
 
       {/* Main View Container */}
@@ -1268,6 +1271,30 @@ export default function App() {
           <ExtensionManagerModal
             isOpen={isExtensionManagerOpen}
             onClose={() => setIsExtensionManagerOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Global Cmd+K Command Palette & Spotlight Search Modal */}
+      {commandPaletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPaletteModal
+            isOpen={commandPaletteOpen}
+            onClose={() => setCommandPaletteOpen(false)}
+            mangaList={displayMangaList}
+            activeTab={activeTab}
+            setActiveTab={handleTabChange}
+            isIncognito={isIncognito}
+            onToggleIncognito={handleToggleIncognito}
+            onOpenAddModal={handleOpenAddModal}
+            onRunAutoUpdate={handleRunAutoUpdate}
+            onOpenSettingsModal={handleOpenSettingsModal}
+            onOpenAnalytics={handleOpenAnalytics}
+            onOpenAchievements={handleOpenAchievements}
+            onOpenExtensionManager={() => setIsExtensionManagerOpen(true)}
+            onOpenSubmitBugModal={handleOpenSubmitBug}
+            onSelectManga={handleSelectMangaDetail}
+            onOpenReader={handleOpenReader}
           />
         </Suspense>
       )}

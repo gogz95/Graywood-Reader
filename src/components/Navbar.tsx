@@ -46,6 +46,7 @@ interface NavbarProps {
   onOpenAdminPanel: () => void;
   onOpenSubmitBugModal?: () => void;
   onOpenExtensionManager?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 /** Small count pill used on tabs / nav items */
@@ -81,17 +82,22 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onOpenAdminPanel,
   onOpenSubmitBugModal,
   onOpenExtensionManager,
+  onOpenCommandPalette,
 }) => {
   const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Focus search on Ctrl+K, Cmd+K, or pressing '/' when not in an input
+      // Trigger command palette on Ctrl+K, Cmd+K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        if (onOpenCommandPalette) {
+          onOpenCommandPalette();
+        } else {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }
       } else if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
         e.preventDefault();
         searchInputRef.current?.focus();
@@ -99,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onOpenCommandPalette]);
 
   const isGuest = activeProfile.id === 'usr_guest';
   const showAdmin = activeProfile.role === 'admin' && isHostComputer;
@@ -145,9 +151,14 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           Clear
         </button>
       ) : (
-        <kbd className="hidden sm:flex items-center gap-0.5 absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-elevated/70 border border-edge/60 pointer-events-none">
+        <button
+          type="button"
+          onClick={() => onOpenCommandPalette?.()}
+          title="Open Quick Command & Search Spotlight (⌘K)"
+          className="hidden sm:flex items-center gap-0.5 absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-elevated/70 border border-edge/60 hover:bg-elevated hover:text-accent transition-colors"
+        >
           <span className="text-[11px]">⌘</span>K
-        </kbd>
+        </button>
       )}
     </div>
   );

@@ -785,3 +785,39 @@ readerRouter.post('/api/reader/discord-presence', (req, res) => {
   res.json(result);
 });
 
+// ── GET /api/reader/prefetch-chapter - Speculative pre-warming endpoint ───────
+readerRouter.get('/api/reader/prefetch-chapter', async (req, res) => {
+  const mangaId = req.query.mangaId as string;
+  const chapterNumber = Number(req.query.chapterNumber) || 1;
+
+  if (!mangaId) {
+    return res.status(400).json({ error: 'Missing mangaId query parameter' });
+  }
+
+  const manga = resolveManga(mangaId);
+  if (!manga) {
+    return res.status(404).json({ error: 'Series not found' });
+  }
+
+  // Preload in the background without blocking response
+  setImmediate(async () => {
+    try {
+      if (manga.sourceUrl) {
+        const matched = matchLiveDomain(manga.sourceUrl);
+        const domainId = matched ? matched.id : 'generic';
+        await fetchLiveChapterList(manga.sourceUrl, domainId);
+      }
+    } catch {
+      // Best-effort prefetch
+    }
+  });
+
+  return res.json({
+    success: true,
+    mangaId,
+    chapterNumber,
+    prefetched: true,
+  });
+});
+
+
