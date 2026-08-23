@@ -194,10 +194,21 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
         {/* Header / Hero Cover Bar */}
-        <div className="relative p-6 bg-gradient-to-r from-app via-surface to-app border-b border-edge/80">
+        <div className="relative p-6 bg-gradient-to-r from-app via-surface to-app border-b border-edge/80 overflow-hidden">
+          {/* Blurred ambient backdrop art */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <img
+              src={manga.coverImage}
+              alt=""
+              className="w-full h-full object-cover blur-3xl opacity-25 scale-150 transition-opacity duration-700"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
+            <div className="hero-ambient-glow absolute inset-0" />
+          </div>
+
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
+            className="absolute top-4 right-4 z-20 p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

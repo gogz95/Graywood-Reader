@@ -1362,18 +1362,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
             <div className="flex items-center bg-app border border-edge rounded-xl p-0.5">
               <button
+                onClick={() => setViewMode('shelves')}
+                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
+                  viewMode === 'shelves' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'
+                }`}
+                title="Cinematic Shelves & Spotlight Hub"
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Cinematic</span>
+              </button>
+              <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'}`}
+                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
+                  viewMode === 'grid' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'
+                }`}
                 title="Grid View"
               >
                 <Layers className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Grid</span>
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary hover:text-primary'}`}
+                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
+                  viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary hover:text-primary'
+                }`}
                 title="Table View"
               >
                 <BookOpen className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px]">Table</span>
               </button>
             </div>
           </div>
@@ -1772,8 +1788,81 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             Add New Series
           </button>
         </div>
+      ) : viewMode === 'shelves' ? (
+        /* CINEMATIC SHELVES & SPOTLIGHT VIEW */
+        <div className="space-y-8 animate-fadeIn">
+          {/* Hero Spotlight Carousel */}
+          {!searchQuery && activeCategory === null && statusFilter === 'all' && spotlightItems.length > 0 && (
+            <HeroSpotlightBanner
+              items={spotlightItems}
+              onOpenReader={onOpenReader}
+              onSelectManga={onSelectManga}
+            />
+          )}
+
+          {/* Jump Back In Shelf */}
+          {!searchQuery && jumpBackInItems.length > 0 && (
+            <JumpBackInShelf
+              items={jumpBackInItems}
+              onOpenReader={onOpenReader}
+              onSelectManga={onSelectManga}
+            />
+          )}
+
+          {/* Fresh Releases Shelf */}
+          {!searchQuery && freshReleasesItems.length > 0 && (
+            <FreshReleasesShelf
+              items={freshReleasesItems}
+              onOpenReader={onOpenReader}
+              onSelectManga={onSelectManga}
+            />
+          )}
+
+          {/* Complete Library Grid Section */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between border-b border-edge/60 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-primary tracking-tight">
+                    {activeCategory
+                      ? `${categories.find((c) => c.id === activeCategory)?.name || 'Custom Shelf'} (${sortedList.length})`
+                      : `All Series & Shelves (${sortedList.length})`}
+                  </h3>
+                  <p className="text-[11px] text-secondary">Browse your full library and custom categories</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
+              {visibleList.map((manga) => (
+                <MangaGridCard
+                  key={manga.id}
+                  manga={manga}
+                  isSelectMode={isSelectMode}
+                  isSelected={selectedIds.has(manga.id)}
+                  isReaderAvailable={isReaderAvailable(manga)}
+                  onToggleSelect={toggleSelect}
+                  onSelectManga={onSelectManga}
+                  onOpenReader={onOpenReader}
+                  onOpenChapters={onOpenChapters}
+                  onIncrementChapter={onIncrementChapter}
+                  onQuickEdit={onQuickEdit}
+                />
+              ))}
+            </div>
+
+            {visibleLimit < sortedList.length && (
+              <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary">
+                Loading more series ({visibleLimit} of {sortedList.length})...
+              </div>
+            )}
+          </div>
+        </div>
       ) : viewMode === 'grid' ? (
-        /* GRID VIEW */
+        /* STANDARD GRID VIEW */
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
             {visibleList.map((manga) => (
