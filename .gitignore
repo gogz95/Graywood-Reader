@@ -7,18 +7,33 @@ coverage/
 .env*
 !.env.example
 
-# Runtime state (SQLite is the canonical store; JSON snapshot is a backup artifact)
+# Host Runtime State & Persistent Data (SQLite, caches, secrets, uploads)
 /data/
 /logs/
+/scratch/
 /database.json
-/database.json.tmp
+/database.json*
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
+
+# Local Backup & Migration Packages (Host only)
+/backups/
+*.migration.zip
+*.migration.json
+graywood_backup_*.json
+graywood_migration_*.zip
+graywood_migration_*.json
+
+# Secrets & Credentials (Strictly host-tied)
+.encryption-secret*
+data/.encryption-secret*
+.admin-bootstrap-password*
+data/.admin-bootstrap-password*
 
 dist-server/
-
-data/.admin-bootstrap-password
 
 # Runtime artifacts
 *.pid
@@ -27,3 +42,4 @@ data/.admin-bootstrap-password
 kotatsu-app/
 kotatsu-parsers/
 kotatsu-parsers-redo/
+

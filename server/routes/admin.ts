@@ -188,3 +188,58 @@ adminRouter.delete("/api/admin/users/:userId", (req, res) => {
     remainingUsers: userProfiles.map(toPublicUser),
   });
 });
+
+// ============================================================================
+// SERVER MIGRATION & DISASTER RECOVERY ENGINE (Host / Admin Only)
+// ============================================================================
+
+// GET /api/admin/migration/export - Export complete standalone migration package (.zip)
+adminRouter.get("/api/admin/migration/export", async (req, res) => {
+  try {
+    const { createMigrationPackage } = await import('../services/migrationService');
+    const label = typeof req.query?.label === 'string' ? req.query.label : 'server_migration';
+    const pkg = await createMigrationPackage({ customLabel: label });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${pkg.filename}"`);
+    res.setHeader('X-Migration-Format-Version', String(pkg.manifest.formatVersion));
+    res.setHeader('X-Migration-Series-Count', String(pkg.manifest.tableCounts.manga));
+    res.send(pkg.buffer);
+  } catch (err: any) {
+    logger.error('Admin', 'Failed to export migration package', { error: err.message });
+    res.status(500).json({ error: `Migration export failed: ${err.message}` });
+  }
+});
+
+// POST /api/admin/migration/restore - Restore server from migration package (.zip or .json)
+adminRouter.post("/api/admin/migration/restore", async (req, res) => {
+  try {
+    const { restoreMigrationPackage } = await import('../services/migrationService');
+    let payload: Buffer | string;
+
+    if (Buffer.isBuffer(req.body)) {
+      payload = req.body;
+    } else if (req.body?.data && typeof req.body.data === 'string') {
+      // Base64 encoded payload
+      payload = Buffer.from(req.body.data, 'base64');
+    } else if (typeof req.body === 'object' && req.body !== null) {
+      payload = Buffer.from(JSON.stringify(req.body), 'utf8');
+    } else if (typeof req.body === 'string') {
+      payload = Buffer.from(req.body, 'utf8');
+    } else {
+      return res.status(400).json({ error: "Invalid request: No migration package payload provided." });
+    }
+
+    const mode = req.query?.mode === 'merge' ? 'merge' : 'replace';
+    const result = await restoreMigrationPackage(payload, { mode });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Admin', 'Failed to restore migration package', { error: err.message });
+    res.status(500).json({ error: `Migration restore failed: ${err.message}` });
+  }
+});

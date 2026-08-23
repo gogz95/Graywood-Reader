@@ -248,7 +248,8 @@ app.set('trust proxy', (ip: string) => {
   return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost';
 });
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.raw({ type: ['application/zip', 'application/octet-stream', 'application/x-zip-compressed'], limit: "100mb" }));
 app.use(compression());
 
 app.use((_req, res, next) => {

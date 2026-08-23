@@ -10,6 +10,7 @@ import {
   getBackupsDirectory,
 } from '../server/services/autoBackupService';
 import { appSettings, mangaDatabase, replaceMangaDatabase } from '../server/appState';
+import { SqliteDb } from '../sqlite-db';
 
 describe('Auto Backup Service', () => {
   const backupDir = getBackupsDirectory();
@@ -67,6 +68,8 @@ describe('Auto Backup Service', () => {
       genres: ['Action', 'Fantasy'],
       type: 'manhwa' as const,
     };
+    // Seed item to SQLite and in-memory DB
+    SqliteDb.bulkUpsertManga([testItem as any]);
     replaceMangaDatabase([testItem as any]);
 
     const created = createBackupNow('restore_test');
@@ -81,8 +84,9 @@ describe('Auto Backup Service', () => {
     if (created.filename) {
       const restored = restoreLocalBackup(created.filename);
       expect(restored.success).toBe(true);
-      expect(mangaDatabase.length).toBe(1);
-      expect(mangaDatabase[0].title).toBe('Solo Backup Leveling');
+      expect(mangaDatabase.some((m) => m.id === 'test_backup_series_1')).toBe(true);
+      const found = mangaDatabase.find((m) => m.id === 'test_backup_series_1');
+      expect(found?.title).toBe('Solo Backup Leveling');
     }
   });
 

@@ -193,13 +193,42 @@ export function applyOverrides(
 // ---------------------------------------------------------------------------
 
 /**
- * Ensure that every core field has a non-empty value.
- * Missing fields receive a generated placeholder so downstream code never
- * has to handle `undefined`/empty strings for fundamental display data.
- * (Mirrors Jellyfin's placeholder strategy in purgeDisabledSourcesAndRefreshMetadata.)
+ * Ensure all core fields required by MangaItem are populated with valid defaults.
  */
-export function ensureCoreFields(item: MangaItem): MangaItem {
-  const out = { ...item };
+export function ensureCoreFields(item: Partial<MangaItem>): MangaItem {
+  const out: MangaItem = {
+    id: item.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+    title: item.title || '',
+    altTitles: item.altTitles || [],
+    type: item.type || 'manhwa',
+    coverImage: item.coverImage || '',
+    description: item.description || '',
+    genres: item.genres && item.genres.length > 0 ? item.genres : ['Action', 'Fantasy'],
+    status: item.status || 'plan_to_read',
+    currentChapter: item.currentChapter || 0,
+    latestChapter: item.latestChapter || 1,
+    totalChapters: item.totalChapters,
+    lastUpdated: item.lastUpdated || new Date().toISOString(),
+    rating: item.rating !== undefined ? item.rating : 9.0,
+    sourceUrl: item.sourceUrl || '',
+    sourceName: item.sourceName || 'Unknown Source',
+    autoUpdateEnabled: item.autoUpdateEnabled !== undefined ? item.autoUpdateEnabled : true,
+    notes: item.notes,
+    addedAt: item.addedAt || new Date().toISOString(),
+    lastReadAt: item.lastReadAt,
+    syncedFromApi: item.syncedFromApi,
+    apiId: item.apiId,
+    userId: item.userId,
+    isFavorite: item.isFavorite,
+    isFlagged: item.isFlagged,
+    flagReason: item.flagReason,
+    flaggedAt: item.flaggedAt,
+    availableSources: item.availableSources,
+    metadataOverrides: item.metadataOverrides,
+    customTags: item.customTags,
+    categories: item.categories,
+    isNsfw: item.isNsfw,
+  };
 
   if (!out.title || out.title.trim() === '') {
     out.title = `Untitled ${out.id}`;
@@ -212,10 +241,6 @@ export function ensureCoreFields(item: MangaItem): MangaItem {
   if (!out.coverImage || out.coverImage.trim() === '') {
     out.coverImage =
       '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
-  }
-
-  if (!out.genres || out.genres.length === 0) {
-    out.genres = ['Action', 'Fantasy'];
   }
 
   return out;

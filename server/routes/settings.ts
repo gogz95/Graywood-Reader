@@ -208,3 +208,37 @@ settingsRouter.get("/api/backups/:filename/download", async (req, res) => {
   }
   res.download(fullPath, safeName);
 });
+
+// POST /api/backups/upload - Upload and register a backup or migration snapshot
+settingsRouter.post("/api/backups/upload", async (req, res) => {
+  try {
+    const path = await import('path');
+    const fs = await import('fs');
+    const { getBackupsDirectory } = await import('../services/autoBackupService');
+    const { filename, content, data } = req.body || {};
+
+    if (!filename || typeof filename !== 'string') {
+      return res.status(400).json({ error: "Filename is required" });
+    }
+
+    const safeName = path.basename(filename).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    if (!safeName.endsWith('.json') && !safeName.endsWith('.zip')) {
+      return res.status(400).json({ error: "Only .json and .zip backup archives are accepted" });
+    }
+
+    const targetPath = path.join(getBackupsDirectory(), safeName);
+    if (data && typeof data === 'string') {
+      // Base64 encoded payload
+      fs.writeFileSync(targetPath, Buffer.from(data, 'base64'));
+    } else if (content) {
+      const text = typeof content === 'object' ? JSON.stringify(content, null, 2) : String(content);
+      fs.writeFileSync(targetPath, text, 'utf8');
+    } else {
+      return res.status(400).json({ error: "No backup data or content provided" });
+    }
+
+    res.json({ success: true, filename: safeName, message: `Backup file ${safeName} uploaded successfully.` });
+  } catch (err: any) {
+    res.status(500).json({ error: `Upload failed: ${err.message}` });
+  }
+});

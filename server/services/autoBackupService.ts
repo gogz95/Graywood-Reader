@@ -15,6 +15,7 @@ import {
   buildEncryptedSettings,
   saveDatabaseToDisk,
   replaceMangaDatabase,
+  reloadMangaFromSql,
 } from '../appState';
 import { SqliteDb } from '../../sqlite-db';
 
@@ -88,7 +89,8 @@ export function createBackupNow(customLabel = ''): { success: boolean; filename?
     const filename = `graywood_backup_${stamp}${suffix}.json`;
     const fullPath = path.join(dir, filename);
 
-    // Build complete export snapshot with encrypted PII and settings
+    // Build complete export snapshot with full SQLite tables and encrypted PII
+    const fullDump = SqliteDb.exportFullDatabaseDump();
     const payload = {
       version: 2,
       gdprEncrypted: true,
@@ -96,9 +98,16 @@ export function createBackupNow(customLabel = ''): { success: boolean; filename?
       generator: 'Graywood-Reader Auto-Backup',
       totalSeries: mangaDatabase.length,
       mangaDatabase,
+      categories: fullDump.categories,
+      mangaCategories: fullDump.mangaCategories,
       userProfiles: buildEncryptedProfiles(),
       appSettings: buildEncryptedSettings(),
       syncConfig,
+      readingProgress: fullDump.readingProgress,
+      readingActivity: fullDump.readingActivity,
+      userFavorites: fullDump.userFavorites,
+      userLibraryState: fullDump.userLibraryState,
+      pageStickyNotes: fullDump.pageStickyNotes,
       autoUpdateLogs: autoUpdateLogs.slice(0, 100),
     };
 
@@ -118,7 +127,7 @@ export function createBackupNow(customLabel = ''): { success: boolean; filename?
       }
     }
 
-    console.log(`[Auto Backup] Created snapshot ${filename} (${(payload.totalSeries)} series)`);
+    console.log(`[Auto Backup] Created snapshot ${filename} (${payload.totalSeries} series)`);
     return { success: true, filename };
   } catch (err: any) {
     console.error('[Auto Backup] Creation error:', err.message);
@@ -140,6 +149,8 @@ export function restoreLocalBackup(filename: string): { success: boolean; messag
     let itemsToRestore: any[] = [];
     if (Array.isArray(parsed?.mangaDatabase)) {
       itemsToRestore = parsed.mangaDatabase;
+    } else if (Array.isArray(parsed?.manga)) {
+      itemsToRestore = parsed.manga;
     } else if (Array.isArray(parsed?.data)) {
       itemsToRestore = parsed.data;
     } else if (Array.isArray(parsed)) {
@@ -148,11 +159,16 @@ export function restoreLocalBackup(filename: string): { success: boolean; messag
       return { success: false, message: 'Invalid backup structure: No manga database array found.' };
     }
 
-    // Replace in-memory database
-    replaceMangaDatabase(itemsToRestore);
+    // If backup contains full tables, import all tables atomically
+    if (parsed.categories || parsed.readingProgress || parsed.pageStickyNotes) {
+      SqliteDb.importFullDatabaseDump(parsed, { mode: 'merge' });
+    } else {
+      // Legacy snapshot: restore series
+      SqliteDb.bulkUpsertManga(itemsToRestore);
+    }
 
-    // Save to SQLite
-    SqliteDb.bulkUpsertManga(itemsToRestore);
+    // Refresh in-memory database
+    reloadMangaFromSql();
 
     // Save legacy JSON backup if configured
     saveDatabaseToDisk();

@@ -16,9 +16,7 @@ import {
   Play,
   Filter,
   X,
-  Database,
 } from 'lucide-react';
-import { BulkScrapeModal } from './BulkScrapeModal';
 
 // A single series coming from the LIVE browse feed (never the local library).
 export interface ExploreItem {
@@ -188,7 +186,6 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [metaLoaded, setMetaLoaded] = useState(false);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   // Tri-State Genre Filter map: 'include' | 'exclude'
   const [tagStates, setTagStates] = useState<Map<string, 'include' | 'exclude'>>(new Map());
@@ -530,14 +527,6 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               )}
             </button>
             <button
-              onClick={() => setBulkModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 font-bold transition-all text-xs sm:text-sm"
-              title="Bulk crawl sources to populate your library"
-            >
-              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Build Library</span>
-            </button>
-            <button
               onClick={handleRefresh}
               className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-elevated hover:bg-elevated text-accent border border-accent/20 font-bold transition-all text-xs sm:text-sm"
               title="Refresh the live feed"
@@ -646,15 +635,6 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
           )}
         </>
-      )}
-
-      {bulkModalOpen && (
-        <BulkScrapeModal
-          isOpen={bulkModalOpen}
-          onClose={() => setBulkModalOpen(false)}
-          initialSourceId={selectedSource !== 'all' ? selectedSource : undefined}
-          sourceList={meta.sources}
-        />
       )}
     </div>
   );

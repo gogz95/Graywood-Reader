@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, UserRole, MangaItem } from '../types';
-import { Shield, User, Key, Trash2, Check, Plus, X, AlertTriangle } from 'lucide-react';
+import { Shield, User, Key, Trash2, Check, Plus, X, AlertTriangle, Download } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
 interface AdminPanelModalProps {
@@ -188,6 +188,27 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = React.memo(({
             <div className="text-secondary font-bold">Privacy Enforcement</div>
             <div className="text-xl font-black text-info font-mono">Active RBAC</div>
           </div>
+        </div>
+
+        {/* Server Migration Quick Action */}
+        <div className="p-4 bg-app rounded-2xl border border-accent/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+          <div className="space-y-0.5">
+            <div className="font-extrabold text-primary flex items-center gap-2">
+              <Download className="w-4 h-4 text-accent" />
+              <span>Server Migration & Full SQLite Backup</span>
+            </div>
+            <p className="text-secondary text-[11px]">
+              Export all database tables, user accounts, and reading progress as a portable .zip package for server migration.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.open('/api/admin/migration/export', '_blank')}
+            className="px-3.5 py-2 rounded-xl bg-accent text-accent-fg font-black flex items-center gap-1.5 shadow-sm shrink-0 active:scale-95 transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Migration Package</span>
+          </button>
         </div>
 
         {/* User Account Management Table */}

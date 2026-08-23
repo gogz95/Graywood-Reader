@@ -27,6 +27,8 @@ const SubmitBugModal = lazy(() => import('./components/SubmitBugModal').then(m =
 const ExtensionManagerModal = lazy(() => import('./components/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal })));
 const AppLockOverlay = lazy(() => import('./components/AppLockOverlay').then(m => ({ default: m.AppLockOverlay })));
 const CommandPaletteModal = lazy(() => import('./components/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
+const InitialSetupWizard = lazy(() => import('./components/InitialSetupWizard').then(m => ({ default: m.InitialSetupWizard })));
+const BulkScrapeModal = lazy(() => import('./components/BulkScrapeModal').then(m => ({ default: m.BulkScrapeModal })));
 import type { BugReportInitialData } from './components/SubmitBugModal';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
@@ -102,6 +104,8 @@ export default function App() {
   const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+  const [bulkScrapeModalOpen, setBulkScrapeModalOpen] = useState(false);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -310,6 +314,16 @@ export default function App() {
     const interval = setInterval(fetchChallengeCount, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Initial Setup Wizard First-Run Trigger (Host Administrator)
+  useEffect(() => {
+    try {
+      const isCompleted = localStorage.getItem('graywood_setup_completed');
+      if (!isCompleted && isHostComputer) {
+        setSetupWizardOpen(true);
+      }
+    } catch (_) {}
+  }, [isHostComputer]);
 
   // App Lock Lifecycle & Inactivity Timeout
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
@@ -1174,6 +1188,7 @@ export default function App() {
             mangaList={mangaList}
             onRunAutoUpdate={handleRunAutoUpdate}
             isUpdating={isUpdating}
+            onOpenSetupWizard={() => setSetupWizardOpen(true)}
           />
         </Suspense>
       )}
@@ -1327,6 +1342,39 @@ export default function App() {
             pinHash={appSettings.appLockPinHash || ''}
             lockType={appSettings.appLockType || 'pin'}
             onUnlock={() => setIsAppLocked(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Initial Setup Wizard Modal (First-Run & Admin Reconfiguration) */}
+      {setupWizardOpen && (
+        <Suspense fallback={null}>
+          <InitialSetupWizard
+            isOpen={setupWizardOpen}
+            onComplete={() => {
+              setSetupWizardOpen(false);
+              fetchSettings();
+              fetchMangaList();
+            }}
+            onClose={() => setSetupWizardOpen(false)}
+            isHostComputer={isHostComputer}
+            activeProfile={activeProfile}
+            appSettings={appSettings}
+            onSaveSettings={handleSaveSettings}
+            onOpenBulkScrapeModal={() => setBulkScrapeModalOpen(true)}
+          />
+        </Suspense>
+      )}
+
+      {/* Global Bulk Scraper Harvester Modal */}
+      {bulkScrapeModalOpen && (
+        <Suspense fallback={null}>
+          <BulkScrapeModal
+            isOpen={bulkScrapeModalOpen}
+            onClose={() => {
+              setBulkScrapeModalOpen(false);
+              fetchMangaList();
+            }}
           />
         </Suspense>
       )}

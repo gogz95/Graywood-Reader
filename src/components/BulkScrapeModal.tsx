@@ -68,6 +68,23 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
     }
   };
 
+  const [localSources, setLocalSources] = useState<{ id: string; name: string }[]>(sourceList);
+
+  useEffect(() => {
+    if (sourceList && sourceList.length > 0) {
+      setLocalSources(sourceList);
+    } else if (isOpen) {
+      apiFetch('/api/kotatsu/sources')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: any[]) => {
+          if (Array.isArray(list) && list.length > 0) {
+            setLocalSources(list.filter((s) => s.isEnabled !== false).map((s) => ({ id: s.id, name: s.name })));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [sourceList, isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
@@ -135,7 +152,9 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
     ? Math.round((completedSourcesCount / totalSourcesCount) * 100)
     : 0;
 
-  const safeSourceList = Array.isArray(sourceList) ? sourceList : [];
+  const safeSourceList = Array.isArray(localSources) && localSources.length > 0
+    ? localSources
+    : (Array.isArray(sourceList) ? sourceList : []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">

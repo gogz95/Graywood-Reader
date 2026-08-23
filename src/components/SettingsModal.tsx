@@ -44,10 +44,12 @@ import {
   Fingerprint,
   Volume2,
   Clock,
+  Database,
 } from 'lucide-react';
 import { parseTachiyomiBackup, exportToTachiyomiBackup } from '../utils/tachiyomiImporter';
 import { parseKotatsuBackup, exportToKotatsuBackup } from '../utils/kotatsuImporter';
 import { AutoUpdateView } from './AutoUpdateView';
+import { BulkScrapeModal } from './BulkScrapeModal';
 import { AutoUpdateLog, UserProfile } from '../types';
 import { hashPin } from '../utils/pinHash';
 
@@ -81,6 +83,7 @@ interface SettingsModalProps {
   mangaList?: MangaItem[];
   onRunAutoUpdate?: () => void;
   isUpdating?: boolean;
+  onOpenSetupWizard?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
@@ -103,10 +106,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   mangaList = [],
   onRunAutoUpdate = () => {},
   isUpdating = false,
+  onOpenSetupWizard,
 }) => {
   const [activeSection, setActiveSection] = useState<
     'reader' | 'appearance' | 'autoupdate' | 'sources' | 'webhooks' | 'security' | 'duplicates' | 'subdomain' | 'restore' | 'backup'
   >('reader');
+  const [bulkScrapeModalOpen, setBulkScrapeModalOpen] = useState(false);
   const isAdmin = activeProfile?.role === 'admin';
 
   const renderAdminLockNotice = (featureName: string) => (
@@ -366,6 +371,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
       }
     } catch (err: any) {
       showToast(`❌ Delete failed: ${err.message}`);
+    }
+  };
+
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  const handleExportMigration = () => {
+    window.open('/api/admin/migration/export', '_blank');
+    showToast('📦 Server migration package (.zip) download started!');
+  };
+
+  const handleRestoreMigrationFile = async (file: File) => {
+    if (!window.confirm(`⚠️ RESTORE SERVER FROM MIGRATION PACKAGE:\n\nAre you sure you want to restore "${file.name}"?\nAn emergency safety snapshot will be created automatically before database state is restored.`)) {
+      return;
+    }
+
+    setIsMigrating(true);
+    showToast(`⏳ Restoring server from "${file.name}"...`);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Data = window.btoa(binary);
+
+      const res = await apiFetch('/api/admin/migration/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: base64Data }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        showToast(`✓ ${result.message}`);
+        onRefreshData();
+        fetchLocalBackups();
+      } else {
+        showToast(`❌ Migration failed: ${result.error || result.message}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Migration error: ${err.message}`);
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
+  const handleUploadBackupFile = async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Data = window.btoa(binary);
+
+      const res = await apiFetch('/api/backups/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          data: base64Data,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ Backup "${file.name}" uploaded to server!`);
+        fetchLocalBackups();
+      } else {
+        showToast(`❌ Upload failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Upload failed: ${err.message}`);
     }
   };
 
@@ -1182,6 +1265,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
           {activeSection === 'sources' && (
             isAdmin ? (
               <div className="space-y-6 text-xs sm:text-sm">
+                {/* Multi-Source Bulk Library Harvester */}
+                <div className="p-5 bg-app rounded-2xl border border-accent-2/30 space-y-3 shadow-sm">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-primary flex items-center gap-2 text-sm sm:text-base">
+                          <Database className="w-4 h-4 text-accent-2" />
+                          Multi-Source Bulk Library Harvester
+                        </h4>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-accent-2/15 text-accent-2 border border-accent-2/30">
+                          Admin Harvester
+                        </span>
+                      </div>
+                      <p className="text-xs text-secondary">
+                        Crawl, scrape, and populate your library in bulk across all enabled Kotatsu sources with automated metadata enrichment and duplicate merging.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBulkScrapeModalOpen(true)}
+                      className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:opacity-95 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-accent/20 transition-all whitespace-nowrap active:scale-95"
+                    >
+                      <Database className="w-4 h-4" />
+                      <span>Build Library from Sources</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Metadata Sync */}
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-3">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -2123,6 +2234,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                   </div>
                 </div>
 
+                {/* Server Migration & Disaster Recovery Card */}
+                <div className="p-5 bg-gradient-to-br from-surface via-app to-surface rounded-2xl border-2 border-accent/30 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="font-extrabold text-primary text-sm flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-accent/20 text-accent">
+                        <HardDrive className="w-4 h-4" />
+                      </div>
+                      <span>Server Migration & Disaster Recovery</span>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-accent text-accent-fg uppercase tracking-wider">
+                      Migration Engine v2
+                    </span>
+                  </div>
+
+                  <p className="text-secondary text-xs leading-relaxed">
+                    Migrate this entire Graywood Reader instance to a new server or container with zero data loss. Includes the full SQLite database (<code className="text-accent">manga.db</code>), reading progress/history, user profiles, categories, sticky notes, extensions, and server configurations.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleExportMigration}
+                      className="px-4 py-2.5 rounded-xl bg-accent text-accent-fg hover:opacity-90 font-black flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export Server Migration Package (.zip)</span>
+                    </button>
+
+                    <label className={`px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated/80 text-primary font-bold border border-edge flex items-center gap-2 transition-all cursor-pointer shadow-sm ${isMigrating ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
+                      <Download className="w-4 h-4 rotate-180 text-accent" />
+                      <span>{isMigrating ? 'Restoring Server...' : 'Restore Server from Package (.zip / .json)'}</span>
+                      <input
+                        type="file"
+                        accept=".zip,.json"
+                        disabled={isMigrating}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleRestoreMigrationFile(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Initial Setup Wizard Re-run Card */}
+                {onOpenSetupWizard && (
+                  <div className="p-5 bg-app rounded-2xl border border-accent/20 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-primary flex items-center gap-2 text-sm">
+                            <Sparkles className="w-4 h-4 text-accent" />
+                            Initial Setup & Onboarding Wizard
+                          </h4>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-accent/20 text-accent border border-accent/30">
+                            Setup Sequence
+                          </span>
+                        </div>
+                        <p className="text-xs text-secondary">
+                          Re-run the initial app creation and setup sequence to reconfigure host credentials, default reading modes, and library seeding.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onOpenSetupWizard}
+                        className="px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-accent font-bold text-xs border border-accent/30 flex items-center gap-2 shadow-sm transition-all whitespace-nowrap active:scale-95"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>Rerun Setup Wizard</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Automated Scheduled Backups Card */}
                 <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
                   <div className="flex items-center justify-between">
@@ -2174,16 +2361,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-edge">
-                    <button
-                      type="button"
-                      onClick={handleTriggerBackup}
-                      disabled={isTriggeringBackup}
-                      className="px-3.5 py-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent font-bold text-xs border border-accent/30 flex items-center gap-1.5 transition-all shadow-sm"
-                    >
-                      <Zap className={`w-3.5 h-3.5 ${isTriggeringBackup ? 'animate-spin' : ''}`} />
-                      <span>{isTriggeringBackup ? 'Creating Snapshot...' : 'Create Snapshot Now'}</span>
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-edge">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTriggerBackup}
+                        disabled={isTriggeringBackup}
+                        className="px-3.5 py-2 rounded-xl bg-accent/20 hover:bg-accent/30 text-accent font-bold text-xs border border-accent/30 flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <Zap className={`w-3.5 h-3.5 ${isTriggeringBackup ? 'animate-spin' : ''}`} />
+                        <span>{isTriggeringBackup ? 'Creating Snapshot...' : 'Create Snapshot Now'}</span>
+                      </button>
+
+                      <label className="px-3.5 py-2 rounded-xl bg-elevated hover:bg-elevated/80 text-secondary hover:text-primary font-bold text-xs border border-edge flex items-center gap-1.5 transition-all cursor-pointer shadow-sm">
+                        <Download className="w-3.5 h-3.5 rotate-180 text-accent" />
+                        <span>Upload Backup (.json/.zip)</span>
+                        <input
+                          type="file"
+                          accept=".json,.zip"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBackupFile(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
 
                     <button
                       type="button"
@@ -2341,6 +2545,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {/* Bulk Scrape Harvester Modal */}
+        {bulkScrapeModalOpen && (
+          <BulkScrapeModal
+            isOpen={bulkScrapeModalOpen}
+            onClose={() => {
+              setBulkScrapeModalOpen(false);
+              onRefreshData();
+            }}
+          />
         )}
       </div>
     </div>

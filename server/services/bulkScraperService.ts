@@ -23,6 +23,7 @@ import {
   getEligibleExploreSources,
 } from './exploreService';
 import { enrichWithMangaDexMetadata } from './metadataService';
+import { ensureCoreFields } from '../../src/utils/metadataHelpers';
 import { isAdSeries } from '../adFilter';
 
 export interface BulkScrapeOptions {
@@ -262,11 +263,9 @@ class BulkScraperService {
       const exactMatch = titleMap.get(normTitle);
 
       if (exactMatch) {
-        if (!exactMatch.availableSources) exactMatch.availableSources = [];
         if (item.sourceName && item.sourceUrl) {
-          const exists = exactMatch.availableSources.some(
-            (s) => s.sourceName === item.sourceName || s.sourceUrl === item.sourceUrl
-          );
+          exactMatch.availableSources = exactMatch.availableSources || [];
+          const exists = exactMatch.availableSources.some((s) => s.sourceName === item.sourceName || s.sourceUrl === item.sourceUrl);
           if (!exists) {
             exactMatch.availableSources.push({
               sourceName: item.sourceName,
@@ -290,7 +289,7 @@ class BulkScraperService {
         syncAddOrUpdateManga(exactMatch);
         mergedCount++;
       } else {
-        const newManga: MangaItem = {
+        const newManga = ensureCoreFields({
           id: item.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
           title: item.title,
           sourceUrl: item.sourceUrl || '',
@@ -301,11 +300,10 @@ class BulkScraperService {
           latestChapter: item.latestChapter || 1,
           type: (item.type as any) || 'manhwa',
           rating: item.rating || 9.0,
-          status: 'unread',
+          status: 'plan_to_read',
           altTitles: item.altTitles || [],
           availableSources: item.sourceName && item.sourceUrl ? [{ sourceName: item.sourceName, sourceUrl: item.sourceUrl }] : [],
-          unreadCount: item.latestChapter || 1,
-        };
+        });
 
         syncAddOrUpdateManga(newManga);
         titleMap.set(normTitle, newManga);

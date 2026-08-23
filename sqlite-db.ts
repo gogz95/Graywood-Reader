@@ -1306,6 +1306,313 @@ export const SqliteDb = {
       return 0;
     }
   },
+
+  /**
+   * Complete unified database dump for server migration and automated backups.
+   */
+  exportFullDatabaseDump(): {
+    version: number;
+    exportedAt: string;
+    manga: MangaItem[];
+    categories: any[];
+    mangaCategories: any[];
+    profiles: any[];
+    settings: Record<string, string>;
+    readingProgress: any[];
+    readingActivity: any[];
+    userFavorites: any[];
+    userLibraryState: any[];
+    pageStickyNotes: any[];
+    logs: any[];
+  } {
+    const mangaRows = stmtGetAllManga.all();
+    const categories = db.prepare('SELECT * FROM categories').all();
+    const mangaCategories = db.prepare('SELECT * FROM manga_categories').all();
+    const profiles = db.prepare('SELECT * FROM profiles').all();
+    const settingRows = db.prepare('SELECT * FROM settings').all() as Array<{ key: string; value: string }>;
+    const readingProgress = db.prepare('SELECT * FROM reading_progress').all();
+    const readingActivity = db.prepare('SELECT * FROM reading_activity').all();
+    const userFavorites = db.prepare('SELECT * FROM user_favorites').all();
+    const userLibraryState = db.prepare('SELECT * FROM user_library_state').all();
+    const pageStickyNotes = db.prepare('SELECT * FROM page_sticky_notes').all();
+    const logs = db.prepare('SELECT * FROM logs').all();
+
+    const settings: Record<string, string> = {};
+    for (const row of settingRows) {
+      settings[row.key] = row.value;
+    }
+
+    return {
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      manga: mangaRows.map(mapRowToMangaItem),
+      categories,
+      mangaCategories,
+      profiles,
+      settings,
+      readingProgress,
+      readingActivity,
+      userFavorites,
+      userLibraryState,
+      pageStickyNotes,
+      logs,
+    };
+  },
+
+  /**
+   * Atomically restores all database tables from a migration dump.
+   */
+  importFullDatabaseDump(dump: any, options: { mode?: 'replace' | 'merge' } = { mode: 'replace' }): {
+    mangaCount: number;
+    categoriesCount: number;
+    profilesCount: number;
+    progressCount: number;
+    notesCount: number;
+  } {
+    _mangaCache = null;
+    const mode = options.mode || 'replace';
+
+    const tx = db.transaction(() => {
+      if (mode === 'replace') {
+        db.exec(`
+          DELETE FROM manga_categories;
+          DELETE FROM categories;
+          DELETE FROM reading_progress;
+          DELETE FROM reading_activity;
+          DELETE FROM user_favorites;
+          DELETE FROM user_library_state;
+          DELETE FROM page_sticky_notes;
+          DELETE FROM logs;
+          DELETE FROM manga;
+        `);
+      }
+
+      let mangaCount = 0;
+      let categoriesCount = 0;
+      let profilesCount = 0;
+      let progressCount = 0;
+      let notesCount = 0;
+
+      // 1. Manga series
+      const mangaList = Array.isArray(dump.manga)
+        ? dump.manga
+        : Array.isArray(dump.mangaDatabase)
+        ? dump.mangaDatabase
+        : Array.isArray(dump.data)
+        ? dump.data
+        : [];
+
+      for (const item of mangaList) {
+        if (item && item.id) {
+          stmtUpsertManga.run(mapMangaItemToRow(item));
+          mangaCount++;
+        }
+      }
+
+      // 2. Categories
+      if (Array.isArray(dump.categories)) {
+        const stmtCat = db.prepare(`
+          INSERT OR REPLACE INTO categories (id, user_id, name, description, color, icon, sort_order, created_at, is_dynamic, rule_type, rule_value)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const cat of dump.categories) {
+          if (cat && cat.id) {
+            stmtCat.run(
+              cat.id,
+              cat.user_id || cat.userId || 'usr_admin',
+              cat.name || 'Category',
+              cat.description || null,
+              cat.color || null,
+              cat.icon || null,
+              Number(cat.sort_order ?? cat.sortOrder) || 0,
+              cat.created_at || cat.createdAt || new Date().toISOString(),
+              cat.is_dynamic ? 1 : 0,
+              cat.rule_type || cat.ruleType || null,
+              cat.rule_value || cat.ruleValue || null
+            );
+            categoriesCount++;
+          }
+        }
+      }
+
+      // 3. Manga Categories Junction
+      if (Array.isArray(dump.mangaCategories)) {
+        const stmtMC = db.prepare(`
+          INSERT OR REPLACE INTO manga_categories (manga_id, category_id, user_id)
+          VALUES (?, ?, ?)
+        `);
+        for (const mc of dump.mangaCategories) {
+          if (mc && mc.manga_id && mc.category_id) {
+            stmtMC.run(mc.manga_id, mc.category_id, mc.user_id || 'usr_admin');
+          }
+        }
+      }
+
+      // 4. Profiles
+      if (Array.isArray(dump.profiles)) {
+        const stmtProf = db.prepare(`
+          INSERT OR REPLACE INTO profiles (id, name, username, email, avatar, role, password, storageFolderPath, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const p of dump.profiles) {
+          if (p && p.id) {
+            stmtProf.run(
+              p.id,
+              p.name || p.username || 'User',
+              p.username || p.name || 'user',
+              p.email || '',
+              p.avatar || '🥷',
+              p.role || 'user',
+              p.password || '',
+              p.storageFolderPath || '',
+              p.createdAt || new Date().toISOString()
+            );
+            profilesCount++;
+          }
+        }
+      }
+
+      // 5. Settings
+      if (dump.settings && typeof dump.settings === 'object') {
+        const stmtSet = db.prepare(`
+          INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+        `);
+        for (const [k, v] of Object.entries(dump.settings)) {
+          if (typeof v === 'string') {
+            stmtSet.run(k, v);
+          } else if (v !== undefined && v !== null) {
+            stmtSet.run(k, JSON.stringify(v));
+          }
+        }
+      }
+
+      // 6. Reading Progress
+      if (Array.isArray(dump.readingProgress)) {
+        const stmtProg = db.prepare(`
+          INSERT OR REPLACE INTO reading_progress (manga_id, user_id, chapter_number, page_index, page_count, percent, last_read_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const r of dump.readingProgress) {
+          if (r && r.manga_id && r.user_id) {
+            stmtProg.run(
+              r.manga_id,
+              r.user_id,
+              Number(r.chapter_number) || 0,
+              Number(r.page_index) || 0,
+              Number(r.page_count) || 0,
+              Number(r.percent) || 0,
+              r.last_read_at || new Date().toISOString()
+            );
+            progressCount++;
+          }
+        }
+      }
+
+      // 7. Reading Activity
+      if (Array.isArray(dump.readingActivity)) {
+        const stmtAct = db.prepare(`
+          INSERT OR REPLACE INTO reading_activity (date, user_id, chapters_read, minutes_spent)
+          VALUES (?, ?, ?, ?)
+        `);
+        for (const a of dump.readingActivity) {
+          if (a && a.date && a.user_id) {
+            stmtAct.run(
+              a.date,
+              a.user_id,
+              Number(a.chapters_read) || 0,
+              Number(a.minutes_spent) || 0
+            );
+          }
+        }
+      }
+
+      // 8. User Favorites
+      if (Array.isArray(dump.userFavorites)) {
+        const stmtFav = db.prepare(`
+          INSERT OR REPLACE INTO user_favorites (user_id, manga_id, is_favorite, updated_at)
+          VALUES (?, ?, ?, ?)
+        `);
+        for (const f of dump.userFavorites) {
+          if (f && f.user_id && f.manga_id) {
+            stmtFav.run(
+              f.user_id,
+              f.manga_id,
+              Number(f.is_favorite) ? 1 : 0,
+              f.updated_at || new Date().toISOString()
+            );
+          }
+        }
+      }
+
+      // 9. User Library State
+      if (Array.isArray(dump.userLibraryState)) {
+        const stmtLib = db.prepare(`
+          INSERT OR REPLACE INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        for (const s of dump.userLibraryState) {
+          if (s && s.user_id && s.manga_id) {
+            stmtLib.run(
+              s.user_id,
+              s.manga_id,
+              Number(s.current_chapter) || 0,
+              s.last_read_at || new Date().toISOString(),
+              s.status || null
+            );
+          }
+        }
+      }
+
+      // 10. Sticky Notes
+      if (Array.isArray(dump.pageStickyNotes)) {
+        const stmtNote = db.prepare(`
+          INSERT OR REPLACE INTO page_sticky_notes (id, manga_id, chapter_number, page_index, note_text, color, created_at, updated_at, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const n of dump.pageStickyNotes) {
+          if (n && n.id && n.manga_id) {
+            stmtNote.run(
+              n.id,
+              n.manga_id,
+              Number(n.chapter_number ?? n.chapterNumber) || 0,
+              Number(n.page_index ?? n.pageIndex) || 0,
+              n.note_text || n.noteText || '',
+              n.color || 'yellow',
+              n.created_at || n.createdAt || new Date().toISOString(),
+              n.updated_at || n.updatedAt || new Date().toISOString(),
+              n.user_id || n.userId || 'usr_admin'
+            );
+            notesCount++;
+          }
+        }
+      }
+
+      return {
+        mangaCount,
+        categoriesCount,
+        profilesCount,
+        progressCount,
+        notesCount,
+      };
+    });
+
+    return tx();
+  },
+
+  /**
+   * Point-in-time binary SQLite database backup file creation.
+   */
+  async createLiveDatabaseBackup(destPath: string): Promise<void> {
+    const parentDir = path.dirname(destPath);
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    if (fs.existsSync(destPath)) {
+      fs.unlinkSync(destPath);
+    }
+    // Use native better-sqlite3 asynchronous online backup
+    await db.backup(destPath);
+  },
 };
 
 /**

@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-server
 .git
 .gitignore
 .gemini
@@ -11,18 +12,31 @@ coverage
 # Local runtime state — never bake into images
 data/
 logs/
-database.json
+scratch/
+backups/
+database.json*
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
+*.migration.zip
+*.migration.json
+graywood_backup_*.json
+graywood_migration_*.zip
+graywood_migration_*.json
+.encryption-secret*
+.admin-bootstrap-password*
 .env
 .env.*
 
 # Vendored reference repos (not part of the Node app image)
 kotatsu-app/
 kotatsu-parsers/
+kotatsu-parsers-redo/
 
 # Editor / agent metadata
 .vscode/
 .agents/
 .antigravity/
+
