@@ -29,6 +29,8 @@ const AppLockOverlay = lazy(() => import('./components/AppLockOverlay').then(m =
 const CommandPaletteModal = lazy(() => import('./components/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
 const InitialSetupWizard = lazy(() => import('./components/InitialSetupWizard').then(m => ({ default: m.InitialSetupWizard })));
 const BulkScrapeModal = lazy(() => import('./components/BulkScrapeModal').then(m => ({ default: m.BulkScrapeModal })));
+const DownloadManagerModal = lazy(() => import('./components/DownloadManagerModal').then(m => ({ default: m.DownloadManagerModal })));
+const ReadlistsModal = lazy(() => import('./components/ReadlistsModal').then(m => ({ default: m.ReadlistsModal })));
 import type { BugReportInitialData } from './components/SubmitBugModal';
 import { FlagCategory } from './components/FlagIssueModal';
 import {
@@ -106,6 +108,9 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const [bulkScrapeModalOpen, setBulkScrapeModalOpen] = useState(false);
+  const [downloadManagerOpen, setDownloadManagerOpen] = useState(false);
+  const [readlistsOpen, setReadlistsOpen] = useState(false);
+  const [activeDownloadsCount, setActiveDownloadsCount] = useState(0);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -309,10 +314,30 @@ export default function App() {
     }
   };
 
+  const fetchDownloadsCount = async () => {
+    try {
+      const res = await apiFetch('/api/downloads/queue');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.jobs)) {
+          const active = data.jobs.filter((j: any) => j.status === 'downloading' || j.status === 'packaging' || j.status === 'queued').length;
+          setActiveDownloadsCount(active);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     fetchChallengeCount();
-    const interval = setInterval(fetchChallengeCount, 30000);
-    return () => clearInterval(interval);
+    fetchDownloadsCount();
+    const intervalChallenges = setInterval(fetchChallengeCount, 30000);
+    const intervalDownloads = setInterval(fetchDownloadsCount, 5000);
+    return () => {
+      clearInterval(intervalChallenges);
+      clearInterval(intervalDownloads);
+    };
   }, []);
 
   // Initial Setup Wizard First-Run Trigger (Host Administrator)
@@ -994,6 +1019,9 @@ export default function App() {
         onOpenAnalytics={handleOpenAnalytics}
         onOpenAchievements={handleOpenAchievements}
         onOpenChallengesModal={handleOpenChallengesModal}
+        onOpenDownloadManager={() => setDownloadManagerOpen(true)}
+        onOpenReadlists={() => setReadlistsOpen(true)}
+        activeDownloadsCount={activeDownloadsCount}
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
         onOpenProfileModal={handleOpenProfileModal}
@@ -1380,6 +1408,64 @@ export default function App() {
             onClose={() => {
               setBulkScrapeModalOpen(false);
               fetchMangaList();
+            }}
+          />
+        </Suspense>
+      )}
+
+      {/* Download Manager & Offline CBZ Vault Modal */}
+      {downloadManagerOpen && (
+        <Suspense fallback={null}>
+          <DownloadManagerModal
+            isOpen={downloadManagerOpen}
+            onClose={() => setDownloadManagerOpen(false)}
+            mangaList={mangaList}
+            onOpenReader={(manga, chNum) => handleOpenReader(manga, chNum)}
+          />
+        </Suspense>
+      )}
+
+      {/* Cross-Series Story Arcs & Custom Readlists Modal */}
+      {readlistsOpen && (
+        <Suspense fallback={null}>
+          <ReadlistsModal
+            isOpen={readlistsOpen}
+            onClose={() => setReadlistsOpen(false)}
+            mangaList={mangaList}
+            onOpenReaderPlaylist={(readlist, startIndex = 0) => {
+              setReadlistsOpen(false);
+              const items = readlist.items || [];
+              const startItem = items[startIndex] || items[0];
+              if (startItem) {
+                const targetManga = mangaList.find((m) => m.id === startItem.mangaId) || {
+                  id: startItem.mangaId,
+                  title: startItem.mangaTitle || 'Untitled Series',
+                  altTitles: [],
+                  type: 'manhwa' as const,
+                  coverImage: startItem.mangaCover || '',
+                  description: '',
+                  genres: [],
+                  status: 'reading' as const,
+                  currentChapter: startItem.chapterNumber - 1,
+                  latestChapter: startItem.chapterNumber,
+                  totalChapters: null,
+                  lastUpdated: new Date().toISOString(),
+                  rating: 9.0,
+                  sourceUrl: startItem.mangaSourceUrl || '',
+                  sourceName: startItem.mangaSourceName || '',
+                  autoUpdateEnabled: true,
+                  isFavorite: true,
+                  isFlagged: false,
+                  notes: '',
+                  addedAt: new Date().toISOString(),
+                  lastReadAt: new Date().toISOString(),
+                  metadataOverrides: [],
+                  customTags: [],
+                  categories: [],
+                  isNsfw: false,
+                };
+                setReaderTarget({ manga: targetManga, chapterNumber: startItem.chapterNumber });
+              }
             }}
           />
         </Suspense>

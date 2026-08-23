@@ -633,14 +633,37 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       if (activeCategory) {
         const activeCatObj = categories.find((c) => c.id === activeCategory);
         if (activeCatObj?.isDynamic && activeCatObj.ruleType) {
-          if (activeCatObj.ruleType === 'unread' && (item.latestChapter - item.currentChapter <= 0)) return false;
-          if (activeCatObj.ruleType === 'in_progress' && (item.status !== 'reading' || item.currentChapter <= 0)) return false;
-          if (activeCatObj.ruleType === 'completed' && item.status !== 'completed') return false;
-          if (activeCatObj.ruleType === 'rating' && item.rating < (Number(activeCatObj.ruleValue) || 9.0)) return false;
-          if (activeCatObj.ruleType === 'favorites' && !item.isFavorite) return false;
-          if (activeCatObj.ruleType === 'updated_recently') {
+          const rType = activeCatObj.ruleType;
+          const rVal = String(activeCatObj.ruleValue || '');
+
+          if (rType === 'unread') {
+            const minUnread = Number(rVal) || 1;
+            if (item.latestChapter - item.currentChapter < minUnread) return false;
+          } else if (rType === 'in_progress') {
+            if (item.status !== 'reading' || item.currentChapter <= 0) return false;
+          } else if (rType === 'completed') {
+            if (item.status !== 'completed') return false;
+          } else if (rType === 'rating' || rType === 'min_rating') {
+            const min = Number(rVal) || 9.0;
+            if (item.rating < min) return false;
+          } else if (rType === 'favorites') {
+            if (!item.isFavorite) return false;
+          } else if (rType === 'completed_gems') {
+            const min = Number(rVal) || 8.5;
+            if (item.status !== 'completed' || item.rating < min) return false;
+          } else if (rType === 'updated_recently') {
             const daysDiff = (Date.now() - new Date(item.lastUpdated || 0).getTime()) / (1000 * 3600 * 24);
-            if (daysDiff > 7) return false;
+            if (daysDiff > (Number(rVal) || 7)) return false;
+          } else if (rType === 'compound_json') {
+            try {
+              const rule = JSON.parse(rVal);
+              if (rule.minRating !== undefined && item.rating < Number(rule.minRating)) return false;
+              if (rule.status && Array.isArray(rule.status) && rule.status.length > 0 && !rule.status.includes(item.status)) return false;
+              if (rule.type && Array.isArray(rule.type) && rule.type.length > 0 && !rule.type.includes(item.type)) return false;
+              if (rule.minUnread !== undefined && (item.latestChapter - item.currentChapter < Number(rule.minUnread))) return false;
+            } catch {
+              // ignore json parse error
+            }
           }
         } else {
           const activeName = activeCatObj?.name?.toLowerCase().trim();

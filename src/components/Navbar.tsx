@@ -17,6 +17,8 @@ import {
   ShieldAlert,
   Trophy,
   Puzzle,
+  Download,
+  ListOrdered,
 } from 'lucide-react';
 
 import { AppNavTab, UserProfile } from '../types';
@@ -30,6 +32,7 @@ interface NavbarProps {
   unreadCount: number;
   duplicateCount: number;
   pendingChallengesCount?: number;
+  activeDownloadsCount?: number;
   onOpenAddModal: () => void;
   onRunAutoUpdate: () => void;
   isUpdating: boolean;
@@ -39,6 +42,8 @@ interface NavbarProps {
   onOpenAnalytics: () => void;
   onOpenAchievements?: () => void;
   onOpenChallengesModal?: () => void;
+  onOpenDownloadManager?: () => void;
+  onOpenReadlists?: () => void;
   activeProfile: UserProfile;
   isHostComputer?: boolean;
   onOpenProfileModal: () => void;
@@ -75,6 +80,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onOpenAnalytics,
   onOpenAchievements,
   onOpenChallengesModal,
+  onOpenDownloadManager,
+  onOpenReadlists,
+  activeDownloadsCount = 0,
   activeProfile,
   isHostComputer = true,
   onOpenProfileModal,
@@ -276,6 +284,34 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 </button>
               )}
 
+              {onOpenReadlists && (
+                <button
+                  type="button"
+                  onClick={onOpenReadlists}
+                  title="Cross-Series Story Arcs & Custom Readlists"
+                  className="hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl bg-accent-2/15 text-accent-2 border border-accent-2/30 hover:bg-accent-2/25 transition-all"
+                >
+                  <ListOrdered className="w-4 h-4" />
+                  <span>Readlists</span>
+                </button>
+              )}
+
+              {onOpenDownloadManager && (
+                <button
+                  type="button"
+                  onClick={onOpenDownloadManager}
+                  title="Offline Download Manager & CBZ Vault"
+                  className="relative p-2.5 rounded-xl bg-elevated/70 hover:bg-elevated text-secondary hover:text-accent border border-edge-strong/60 transition-all"
+                >
+                  <Download className="w-4 h-4 text-accent" />
+                  {activeDownloadsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-accent text-accent-fg text-[10px] font-black flex items-center justify-center leading-none animate-pulse">
+                      {activeDownloadsCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
               <button
                 onClick={onRunAutoUpdate}
                 disabled={isUpdating}
@@ -336,7 +372,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           <div className="md:hidden pb-2.5">{searchInput}</div>
         </div>
 
-        {/* â”€â”€ Mobile quick-action drawer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Mobile quick-action drawer ─────────────────────────────────── */}
         {mobileQuickMenuOpen && (
           <div className="md:hidden p-3 bg-app border-b border-edge grid grid-cols-2 gap-2 text-xs font-bold">
             <button
@@ -350,6 +386,26 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               <EyeOff className="w-4 h-4" />
               <span>{isIncognito ? 'Incognito ON' : 'Incognito OFF'}</span>
             </button>
+
+            {onOpenDownloadManager && (
+              <button
+                onClick={() => closeQuickMenu(onOpenDownloadManager)}
+                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2"
+              >
+                <Download className="w-4 h-4 text-accent" />
+                <span>Downloads {activeDownloadsCount > 0 ? `(${activeDownloadsCount})` : ''}</span>
+              </button>
+            )}
+
+            {onOpenReadlists && (
+              <button
+                onClick={() => closeQuickMenu(onOpenReadlists)}
+                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2"
+              >
+                <ListOrdered className="w-4 h-4 text-accent-2" />
+                <span>Readlists</span>
+              </button>
+            )}
 
             <button
               onClick={() => closeQuickMenu(onOpenAnalytics)}

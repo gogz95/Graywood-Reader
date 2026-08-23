@@ -82,21 +82,21 @@ This document outlines the implemented milestones, architectural enhancements, a
 ---
 
 ### 🛡️ Track 2: Source Reliability & Resilient Server Download Manager (Completed 🟢)
-- **Dedicated Background Server Download Manager**:
-  - Priority queue with auto-retries, progress tracking, and packaging into standard `.cbz` archives on disk.
-- **Universal `ComicInfo.xml` Standard Compliance**:
+- ✅ **Dedicated Background Server Download Manager & UI**:
+  - Priority queue with auto-retries, progress tracking, and packaging into standard `.cbz` archives on disk with [DownloadManagerModal.tsx](file:///e:/Project/Graywood-Reader/src/components/DownloadManagerModal.tsx).
+- ✅ **Universal `ComicInfo.xml` Standard Compliance**:
   - Automatic bidirectional reading and writing of `ComicInfo.xml` metadata inside local and downloaded `.cbz` archives for 100% interoperability with Komga, Kavita, and Mihon.
-- **Per-Domain Leaky-Bucket Rate Limiting**:
+- ✅ **Per-Domain Leaky-Bucket Rate Limiting**:
   - Dynamic host request scheduling (`DomainRateLimiter`) with token buckets and exponential backoff on HTTP 429/503.
 
 ---
 
-### 📚 Track 3: Smart Dynamic Shelves & Custom Readlists (Upcoming 🟡)
-- **Rule-Based Dynamic Virtual Shelves**:
-  - Auto-updating smart collections (*"Unread Catch-Up"*, *"High Priority"*, *"Ongoing Manhwa"*, *"Completed Gems"*) backed by custom query criteria.
-- **Cross-Series Story Arcs & Readlists**:
-  - Chronological multi-series playlists and crossover reading lists with custom chapter order.
-- **Granular Multi-User Permissions & Age Ratings**:
+### 📚 Track 3: Smart Dynamic Shelves & Custom Readlists (Completed 🟢)
+- ✅ **Rule-Based Dynamic Virtual Shelves**:
+  - Auto-updating smart collections (*"Unread Catch-Up"*, *"High Priority"*, *"Ongoing Manhwa"*, *"Completed Gems"*) backed by compound query criteria in [ManageCategoriesModal.tsx](file:///e:/Project/Graywood-Reader/src/components/ManageCategoriesModal.tsx) and [LibraryView.tsx](file:///e:/Project/Graywood-Reader/src/components/LibraryView.tsx).
+- ✅ **Cross-Series Story Arcs & Readlists**:
+  - Chronological multi-series playlists and crossover reading lists with custom chapter order in [ReadlistsModal.tsx](file:///e:/Project/Graywood-Reader/src/components/ReadlistsModal.tsx) and [readlists.ts](file:///e:/Project/Graywood-Reader/server/routes/readlists.ts).
+- 🟡 **Granular Multi-User Age Ratings & Permissions**:
   - Per-account age gates (PG vs 18+ strict locks) and independent multi-user reading progress.
 
 ---

@@ -79,6 +79,35 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
     }
   };
 
+  const handleEnqueueServerDownload = async (chapterNumbers: number[]) => {
+    if (!manga.id || chapterNumbers.length === 0) return;
+    try {
+      const res = await apiFetch('/api/downloads/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mangaId: manga.id,
+          chapters: chapterNumbers,
+          sourceUrl: manga.sourceUrl,
+          sourceName: manga.sourceName,
+          priority: true,
+        }),
+      });
+      if (res.ok) {
+        setDownloadSummary(`Queued ${chapterNumbers.length} chapter(s) for background CBZ download.`);
+      }
+    } catch {
+      setDownloadSummary('Failed to enqueue download.');
+    }
+  };
+
+  const handleDownloadUnread = () => {
+    const unreadChs = chapters.filter((c) => c.chapterNumber > manga.currentChapter).map((c) => c.chapterNumber);
+    if (unreadChs.length > 0) {
+      handleEnqueueServerDownload(unreadChs);
+    }
+  };
+
   useEffect(() => {
     refreshStorageUsage();
   }, []);
@@ -166,6 +195,16 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadUnread}
+                disabled={chapters.filter((c) => c.chapterNumber > manga.currentChapter).length === 0}
+                className="px-3 py-2 rounded-xl bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Download all unread chapters in background as CBZ files"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download Unread ({chapters.filter((c) => c.chapterNumber > manga.currentChapter).length})</span>
+              </button>
+
               <button
                 onClick={handleDownloadAll}
                 disabled={isDownloadingAll || chapters.length === 0}
@@ -291,6 +330,15 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleEnqueueServerDownload([ch.chapterNumber])}
+                      className="p-2 rounded-lg bg-surface hover:bg-elevated text-secondary hover:text-accent border border-edge transition-all"
+                      title="Download chapter as ComicInfo.xml-tagged CBZ"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+
                     {hasWorkingReaderSource(manga) && (
                       <button
                         onClick={() => {

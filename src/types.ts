@@ -245,7 +245,17 @@ export interface MangaItem {
   isNsfw?: boolean;
 }
 
-export type DynamicShelfRuleType = 'unread' | 'completed' | 'rating' | 'updated_recently' | 'in_progress' | 'favorites' | 'genre';
+export type DynamicShelfRuleType =
+  | 'unread'
+  | 'completed'
+  | 'rating'
+  | 'min_rating'
+  | 'updated_recently'
+  | 'in_progress'
+  | 'favorites'
+  | 'completed_gems'
+  | 'genre'
+  | 'compound_json';
 
 export interface UserCategory {
   id: string;
