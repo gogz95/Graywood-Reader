@@ -53,11 +53,16 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
 
   const fetchStatus = async () => {
     try {
-      const data = await apiFetch<BulkScrapeProgress>('/api/sources/bulk-scrape/status');
-      setProgress(data);
-      if (data.status !== 'running' && pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
+      const res = await apiFetch('/api/sources/bulk-scrape/status');
+      if (res.ok) {
+        const data = (await res.json()) as BulkScrapeProgress;
+        if (data && typeof data === 'object') {
+          setProgress(data);
+          if (data.status !== 'running' && pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+        }
       }
     } catch {
       // ignore status polling errors
@@ -87,7 +92,7 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
     setIsStarting(true);
     try {
       const sourceIds = targetScope === 'single' && selectedSourceId ? [selectedSourceId] : undefined;
-      const res = await apiFetch<{ success: boolean; progress: BulkScrapeProgress }>('/api/sources/bulk-scrape/start', {
+      const res = await apiFetch('/api/sources/bulk-scrape/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,8 +101,11 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
           enrichMetadata,
         }),
       });
-      if (res.progress) {
-        setProgress(res.progress);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.progress) {
+          setProgress(data.progress);
+        }
       }
       if (!pollTimerRef.current) {
         pollTimerRef.current = setInterval(fetchStatus, 1000);
@@ -111,18 +119,25 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
 
   const handleStop = async () => {
     try {
-      const res = await apiFetch<{ success: boolean; progress: BulkScrapeProgress }>('/api/sources/bulk-scrape/stop', {
+      const res = await apiFetch('/api/sources/bulk-scrape/stop', {
         method: 'POST',
       });
-      if (res.progress) setProgress(res.progress);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.progress) setProgress(data.progress);
+      }
     } catch (err: any) {
       alert(`Failed to stop bulk scraper: ${err.message}`);
     }
   };
 
-  const percentComplete = progress && progress.totalSources > 0
-    ? Math.round((progress.completedSources / progress.totalSources) * 100)
+  const totalSourcesCount = progress?.totalSources ?? 0;
+  const completedSourcesCount = progress?.completedSources ?? 0;
+  const percentComplete = totalSourcesCount > 0
+    ? Math.round((completedSourcesCount / totalSourcesCount) * 100)
     : 0;
+
+  const safeSourceList = Array.isArray(sourceList) ? sourceList : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -184,9 +199,9 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
                       className="w-full bg-elevated border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent-2/50"
                     >
                       <option value="">Choose a source...</option>
-                      {sourceList.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
+                      {safeSourceList.map((s) => (
+                        <option key={s?.id || String(s)} value={s?.id || String(s)}>
+                          {s?.name || s?.id || String(s)}
                         </option>
                       ))}
                     </select>
@@ -227,13 +242,13 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
           )}
 
           {/* Live Progress Bar & Stats */}
-          {progress && progress.status !== 'idle' && (
+          {progress && progress.status && progress.status !== 'idle' && (
             <div className="space-y-4">
               <div className="bg-app border border-edge rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between text-xs font-bold text-secondary">
                   <span>
                     {progress.status === 'running'
-                      ? `Scraping: ${progress.currentSourceName || 'Preparing...'} (Page ${progress.currentPage} / ${progress.maxPagesPerSource})`
+                      ? `Scraping: ${progress.currentSourceName || 'Preparing...'} (Page ${progress.currentPage || 1} / ${progress.maxPagesPerSource || maxPages})`
                       : progress.status === 'completed'
                       ? 'Bulk Ingestion Complete!'
                       : progress.status === 'stopped'
@@ -286,7 +301,7 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
               </div>
 
               {/* Error messages if any */}
-              {progress.errors.length > 0 && (
+              {Array.isArray(progress.errors) && progress.errors.length > 0 && (
                 <div className="p-3 bg-rose-950/30 border border-rose-500/30 rounded-xl space-y-1 max-h-28 overflow-y-auto custom-scrollbar">
                   <p className="text-[11px] font-bold text-rose-400 flex items-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5" /> Recent warnings
