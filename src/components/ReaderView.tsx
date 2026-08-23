@@ -84,6 +84,90 @@ interface ReaderViewProps {
   onOpenAuthModal?: () => void;
 }
 
+interface WebtoonPanelProps {
+  idx: number;
+  totalPages: number;
+  displaySrc: string;
+  isLoading: boolean;
+  isError: boolean;
+  isSeamless: boolean;
+  imageFilterStyle?: React.CSSProperties;
+  isLoupeActive: boolean;
+  showPageNumberOverlay: boolean;
+  onMouseMove?: (e: React.MouseEvent<HTMLImageElement>) => void;
+  onMouseLeave?: () => void;
+  onRetry: (idx: number) => void;
+}
+
+/** Memoized Webtoon Panel for smooth 60/120 FPS continuous vertical reading */
+const WebtoonPanel = React.memo<WebtoonPanelProps>(({
+  idx,
+  totalPages,
+  displaySrc,
+  isLoading,
+  isError,
+  isSeamless,
+  imageFilterStyle,
+  isLoupeActive,
+  showPageNumberOverlay,
+  onMouseMove,
+  onMouseLeave,
+  onRetry,
+}) => {
+  return (
+    <div
+      className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel ${
+        isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
+      }`}
+    >
+      <img
+        src={displaySrc}
+        alt={`Page ${idx + 1}`}
+        style={imageFilterStyle}
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+        decoding="async"
+        className={`w-full h-auto block object-contain transition-opacity duration-300 ${
+          isSeamless ? 'm-0 p-0 border-0' : ''
+        } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+        loading={idx < 3 ? 'eager' : 'lazy'}
+      />
+
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/60 backdrop-blur-xs text-accent gap-2">
+          <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className="text-[11px] font-mono font-bold text-secondary">Loading Page {idx + 1}...</span>
+        </div>
+      )}
+
+      {isError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center">
+          <div className="w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-bold text-secondary">Failed to load Page {idx + 1}</p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry(idx);
+            }}
+            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </button>
+        </div>
+      )}
+
+      {showPageNumberOverlay && (
+        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-app/40 backdrop-blur-[2px] text-[10px] text-secondary/80 font-mono border border-edge/40 pointer-events-none">
+          Page {idx + 1} / {totalPages}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const ReaderView: React.FC<ReaderViewProps> = ({
   manga,
   initialChapterNumber,
@@ -1101,60 +1185,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 const isSeamless = settings.noPanelSpacing || settings.pageGap === 0;
 
                 return (
-                  <div
+                  <WebtoonPanel
                     key={idx}
-                    className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel ${
-                      isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
-                    }`}
-                  >
-                      {/* Image Render */}
-                    <img
-                      src={displaySrc}
-                      alt={`Page ${idx + 1}`}
-                      style={imageFilterStyle}
-                      onMouseMove={handleImageMouseMove}
-                      onMouseLeave={handleImageMouseLeave}
-                      decoding="async"
-                      className={`w-full h-auto block object-contain transition-opacity duration-300 ${
-                        isSeamless ? 'm-0 p-0 border-0' : ''
-                      } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
-                      loading="eager"
-                    />
-
-                    {/* Preloader Spinner Overlay */}
-                    {isLoading && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/60 backdrop-blur-xs text-accent gap-2">
-                        <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
-                        <span className="text-[11px] font-mono font-bold text-secondary">Loading Page {idx + 1}...</span>
-                      </div>
-                    )}
-
-                    {/* Page Download Error & Retry Button */}
-                    {isError && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center">
-                        <div className="w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center">
-                          <X className="w-5 h-5" />
-                        </div>
-                        <p className="text-xs font-bold text-secondary">Failed to load Page {idx + 1}</p>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            loaderRef.current?.retryPage(idx);
-                          }}
-                          className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg transition-all"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry Loading</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {settings.showPageNumberOverlay && (
-                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-app/40 backdrop-blur-[2px] text-[10px] text-secondary/80 font-mono border border-edge/40 pointer-events-none">
-                        Page {idx + 1} / {chapterData.pages.length}
-                      </div>
-                    )}
-                  </div>
+                    idx={idx}
+                    totalPages={chapterData.pages.length}
+                    displaySrc={displaySrc}
+                    isLoading={isLoading}
+                    isError={isError}
+                    isSeamless={isSeamless}
+                    imageFilterStyle={imageFilterStyle}
+                    isLoupeActive={isLoupeActive}
+                    showPageNumberOverlay={Boolean(settings.showPageNumberOverlay)}
+                    onMouseMove={handleImageMouseMove}
+                    onMouseLeave={handleImageMouseLeave}
+                    onRetry={(pageIdx) => loaderRef.current?.retryPage(pageIdx)}
+                  />
                 );
               })}
 

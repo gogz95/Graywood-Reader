@@ -475,7 +475,7 @@ exploreRouter.post('/api/scrape/source-catalog', async (req, res) => {
 
   const SCRAPE_CONFIGS: Record<string, { totalPages: number; limit: number; scraper: (p: number, l: number) => Promise<any[] | { items: any[]; totalCount: number }> }> = {
     asurascans: { totalPages: 17, limit: 20, scraper: scrapeAsuraScans },
-    flamecomics: { totalPages: 1, limit: 200, scraper: scrapeFlameComics },
+    flamecomics: { totalPages: 15, limit: 30, scraper: scrapeFlameComics },
     manhwa18: { totalPages: 90, limit: 20, scraper: scrapeManhwa18 },
   };
 

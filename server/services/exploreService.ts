@@ -152,8 +152,7 @@ export async function scrapeFlameComics(page: number, limit: number): Promise<an
       });
     }
 
-    const offset = (page - 1) * limit;
-    return results.slice(offset, offset + limit);
+    return results.slice(0, limit);
   } catch (e) {
     console.error('[Scraper] Flame Comics failed:', (e as Error).message);
     return [];
@@ -239,13 +238,270 @@ export async function scrapeManhwa18(page: number, limit: number): Promise<any[]
   }
 }
 
+export async function searchSourceDirectly(
+  sourceDef: SourceDefinition,
+  query: string,
+  page: number = 1,
+  limit: number = 24
+): Promise<{ items: any[]; totalCount: number }> {
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) return getSourcePopularSeries(sourceDef, page, limit);
+
+  const lowerName = sourceDef.name.toLowerCase();
+  const lowerId = sourceDef.id.toLowerCase();
+  const baseOrigin = sourceDef.baseUrl.replace(/\/+$/, '');
+
+  // Dedicated scrapers
+  if (lowerName.includes('weebcentral') || lowerId.includes('weebcentral')) {
+    const results = await scrapeWeebCentral(1, limit);
+    const needle = cleanQ.toLowerCase();
+    const filtered = results.items.filter(
+      (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
+    );
+    return { items: filtered, totalCount: filtered.length };
+  }
+
+  if (lowerName.includes('asura') || lowerId.includes('asura')) {
+    try {
+      const cleanSlug = cleanQ.replace(/^asura_/i, '').replace(/[-_]/g, ' ').trim();
+      const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(cleanSlug || cleanQ)}`, {
+        headers: {
+          'User-Agent': SCRAPER_UA,
+          'Accept': 'application/json',
+          'Origin': 'https://asurascans.com',
+          'Referer': 'https://asurascans.com/',
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (asuraRes.ok) {
+        const json = await asuraRes.json();
+        const data: any[] = Array.isArray(json?.data) ? json.data : [];
+        const results = data.map((s: any) => {
+          const slug = s.slug || s.id || '';
+          const pubPath = s.public_url || `/comics/${s.slug || slug}`;
+          return {
+            id: `asura_${slug}`,
+            title: s.title || 'Unknown',
+            sourceUrl: `https://asurascans.com${pubPath}`,
+            coverImage: s.cover || '',
+            sourceName: 'Asura Scans',
+            description: (s.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
+            genres: (Array.isArray(s.genres) ? s.genres : []).map((g: any) => g?.name).filter(Boolean),
+            latestChapter: s.chapter_count ? Number(s.chapter_count) : 1,
+            type: s.type || 'manhwa',
+            rating: typeof s.rating === 'number' ? Number(s.rating.toFixed(1)) : 9.0,
+          };
+        });
+        return { items: results.slice(0, limit), totalCount: results.length };
+      }
+    } catch (e: any) {
+      console.warn('[Search Engine] Asura search error:', e.message);
+    }
+  }
+
+  // Build search candidate URLs based on engine type
+  const searchCandidates: string[] = [];
+  const encQ = encodeURIComponent(cleanQ);
+
+  if (sourceDef.engineType === 'madara') {
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}&post_type=wp-manga`);
+    searchCandidates.push(`${baseOrigin}/manga/?s=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
+  } else if (sourceDef.engineType === 'mangathemesia') {
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/manga/?s=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/series/?s=${encQ}`);
+  } else if (sourceDef.engineType === 'wpcomics') {
+    searchCandidates.push(`${baseOrigin}/tim-kiem?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/search?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
+  } else {
+    // Custom HTML / generic
+    if (lowerId.includes('demonic') || baseOrigin.includes('demonicscans')) {
+      searchCandidates.push(`${baseOrigin}/advanced.php?search=${encQ}`);
+    }
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/search?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/browse?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/tim-kiem?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/series?q=${encQ}`);
+  }
+
+  if (sourceCircuitBreaker.canAttempt(sourceDef.id)) {
+    for (const searchUrl of searchCandidates) {
+      try {
+        const liveRes = await fetchWithChallengeBypass(searchUrl, {
+          headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml', 'Referer': `${baseOrigin}/` },
+          enableCloudflareBypass: appSettings.enableCloudflareBypass,
+          flareSolverrUrl: appSettings.flareSolverrUrl,
+          captchaSolverEnabled: appSettings.captchaSolverEnabled,
+          captchaApiKey: appSettings.captchaApiKey,
+          timeoutMs: 8000,
+          sourceId: sourceDef.id,
+          onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
+        });
+
+        if (liveRes.ok && liveRes.html && liveRes.html.length > 500) {
+          const items = parseUniversalCatalogCards(liveRes.html, sourceDef, baseOrigin);
+          if (items.length > 0) {
+            const needle = cleanQ.toLowerCase();
+            const matching = items.filter(
+              (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
+            );
+            const finalItems = matching.length > 0 ? matching : items;
+            return { items: finalItems.slice(0, limit), totalCount: finalItems.length };
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[Search Engine] Query candidate failed for ${sourceDef.name}:`, err.message);
+      }
+    }
+  }
+
+  // Fallback: Fetch directory pages and filter in memory
+  const { items: popular } = await getSourcePopularSeries(sourceDef, 1, 60);
+  const needle = cleanQ.toLowerCase();
+  const filtered = popular.filter(
+    (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
+  );
+  return { items: filtered.slice(0, limit), totalCount: filtered.length };
+}
+
+/** Resilient DOM Card Parser that extracts series across all engine layouts */
+export function parseUniversalCatalogCards(
+  html: string,
+  sourceDef: SourceDefinition,
+  baseOrigin: string
+): any[] {
+  const $ = cheerio.load(html);
+  const scrapedItems: any[] = [];
+  const seenTitles = new Set<string>();
+  const seenUrls = new Set<string>();
+
+  const extractCover = (el: any): string => {
+    if (!el || !el.length) return '';
+    const src =
+      el.attr('data-src') ||
+      el.attr('data-lazy-src') ||
+      el.attr('data-original') ||
+      el.attr('data-cfsrc') ||
+      el.attr('data-url') ||
+      el.attr('data-img') ||
+      el.attr('data-image') ||
+      el.attr('data-page-url') ||
+      el.attr('data-srcset') ||
+      el.attr('srcset') ||
+      el.attr('src') ||
+      '';
+    let clean = (src || '').trim();
+    if (clean.includes(',') && (clean.includes(' 1x') || clean.includes(' 2x') || clean.includes('w'))) {
+      const parts = clean.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (parts.length > 0) clean = (parts[parts.length - 1].split(/\s+/)[0] || '').trim();
+    }
+    if (!clean || /logo|avatar|banner|icon|placeholder|ads|favicon|\.gif(\?|$)/i.test(clean)) return '';
+    if (isAdImageSrc(clean, baseOrigin)) return '';
+    if (clean.startsWith('//')) return `https:${clean}`;
+    if (clean.startsWith('/')) return `${baseOrigin}${clean}`;
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) return `${baseOrigin}/${clean}`;
+    return clean;
+  };
+
+  const pushItem = (href: string, title: string, cover: string, latestCh = 10, genres: string[] = ['Action', 'Fantasy']) => {
+    const normTitle = (title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!href || normTitle.length < 2 || seenTitles.has(normTitle)) return;
+    if (isNavText(title)) return;
+    if (!isContentPath(href)) return;
+
+    let absUrl = href.trim();
+    if (absUrl.startsWith('//')) absUrl = `https:${absUrl}`;
+    else if (absUrl.startsWith('/')) absUrl = `${baseOrigin}${absUrl}`;
+    else if (!absUrl.startsWith('http://') && !absUrl.startsWith('https://')) absUrl = `${baseOrigin}/${absUrl}`;
+    absUrl = absUrl.replace(/\/+$/, '');
+
+    const normUrl = absUrl.toLowerCase();
+    if (seenUrls.has(normUrl)) return;
+
+    seenTitles.add(normTitle);
+    seenUrls.add(normUrl);
+
+    const cleanTitle = title
+      .replace(/\s+/g, ' ')
+      .replace(/\s*Chapter\s*\d+.*$/i, '')
+      .replace(/\s*Ch\.\s*\d+.*$/i, '')
+      .trim();
+
+    scrapedItems.push({
+      id: generateSourceScrapeId(`live_${sourceDef.id}`, absUrl),
+      title: cleanTitle || title.trim(),
+      sourceUrl: absUrl,
+      coverImage: cover,
+      sourceName: sourceDef.name,
+      description: `Live directory entry from ${sourceDef.name}`,
+      genres: genres.length > 0 ? genres : ['Action', 'Fantasy'],
+      latestChapter: latestCh || 10,
+      type: sourceDef.id.includes('manhua') ? 'manhua' : sourceDef.id.includes('manhwa') ? 'manhwa' : 'manga',
+    });
+  };
+
+  // Strategy 1: Dedicated themesia / madara / wpcomics / custom card wrappers
+  const cardSelectors = [
+    '.listupd .bsx', '.listupd .bs', '.utao .uta',
+    '.page-item-detail', '.c-tabs-item__content', '.item-thumb', '.manga-item', '.page-listing-item .badge-pos-1',
+    '.thumb-item-flow', '.card-body .thumb-item-flow', '.film_list-wrap .flw-item',
+    '.items .item', '.list-manga .item', '.box_list .item', '.lastupdates-container .item', '.row .item',
+    'article.badge-pos-1', 'article.item', 'article.manga', 'article',
+    '.series-card', '.manga-card', '.comic-card', '.book-item', '.grid-item', '.thumb-item', '.card', '.item',
+  ];
+
+  for (const sel of cardSelectors) {
+    const cards = $(sel).toArray();
+    if (cards.length > 0) {
+      for (const el of cards) {
+        const card = $(el);
+        const a = card.is('a') ? card : card.find('.post-title a, .tt a, h3 a, h4 a, h2 a, .title a, a[title], a[href*="/manga/"], a[href*="/series/"], a[href*="/comic/"], a').first();
+        const href = a.attr('href') || '';
+        const title = (card.find('.tt, .bigor .tt, h3, h2, h4, .post-title, .series-title, .title').first().text() || a.attr('title') || a.text()).trim();
+        const cover = extractCover(card.find('img').first());
+
+        let chNum = 10;
+        const chText = card.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
+        const chMatch = chText.match(/(?:ch(?:apter)?\.?\s*|ep\.?\s*)(\d+(?:\.\d+)?)/i);
+        if (chMatch) chNum = parseFloat(chMatch[1]) || 10;
+
+        if (href && title) pushItem(href, title, cover, chNum);
+      }
+      if (scrapedItems.length >= 2) return scrapedItems;
+    }
+  }
+
+  // Strategy 2: Universal anchor & container scan
+  $('a[href]').each((_i, el) => {
+    const a = $(el);
+    const href = a.attr('href') || '';
+    if (!href || !isContentPath(href)) return;
+
+    const parent = a.closest('div, li, article, section');
+    const title = (a.attr('title') || parent.find('h2, h3, h4, h5, .title, .series-title, .name').first().text() || a.text()).trim();
+    const cover = extractCover(a.find('img').first().length ? a.find('img').first() : parent.find('img').first());
+
+    let chNum = 10;
+    const chText = parent.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
+    const chMatch = chText.match(/(?:ch(?:apter)?\.?\s*|ep\.?\s*)(\d+(?:\.\d+)?)/i);
+    if (chMatch) chNum = parseFloat(chMatch[1]) || 10;
+
+    if (title && title.length >= 2) {
+      pushItem(href, title, cover, chNum);
+    }
+  });
+
+  return scrapedItems;
+}
+
 export async function getSourcePopularSeries(
   sourceDef: SourceDefinition,
   page: number = 1,
   limit: number = 24
 ): Promise<{ items: any[]; totalCount: number }> {
-  const offset = (page - 1) * limit;
-
   if (sourceDef.engineType === 'mangadex') {
     const fallback =
       KOTATSU_SOURCES.find((s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)) ||
@@ -256,6 +512,8 @@ export async function getSourcePopularSeries(
 
   const lowerName = sourceDef.name.toLowerCase();
   const lowerId = sourceDef.id.toLowerCase();
+  const baseOrigin = sourceDef.baseUrl.replace(/\/+$/, '');
+
   if (lowerName.includes('weebcentral') || lowerId.includes('weebcentral')) {
     const result = await scrapeWeebCentral(page, limit);
     if (result.items.length > 0) return result;
@@ -266,7 +524,10 @@ export async function getSourcePopularSeries(
   }
   if (lowerName.includes('flame') || lowerId.includes('flame')) {
     const items = await scrapeFlameComics(page, limit);
-    if (items.length > 0) return { items, totalCount: items.length };
+    if (items.length > 0) {
+      const estimatedTotal = items.length >= limit ? page * limit + limit * 5 : (page - 1) * limit + items.length;
+      return { items, totalCount: estimatedTotal };
+    }
   }
   if (lowerName.includes('manhwa18') || lowerId.includes('manhwa18')) {
     const items = await scrapeManhwa18(page, limit);
@@ -277,27 +538,84 @@ export async function getSourcePopularSeries(
 
   try {
     const catalogCandidates: string[] = [];
+
+    // Build comprehensive, engine-aware catalog candidate URLs
     if (sourceDef.engineType === 'madara') {
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/page/${page}/`);
+      if (page === 1) {
+        catalogCandidates.push(`${baseOrigin}/manga/?m_orderby=views`);
+        catalogCandidates.push(`${baseOrigin}/manga/`);
+        catalogCandidates.push(`${baseOrigin}/manga-list/`);
+        catalogCandidates.push(`${baseOrigin}/`);
+      } else {
+        catalogCandidates.push(`${baseOrigin}/manga/page/${page}/?m_orderby=views`);
+        catalogCandidates.push(`${baseOrigin}/manga/page/${page}/`);
+        catalogCandidates.push(`${baseOrigin}/page/${page}/`);
+      }
     } else if (sourceDef.engineType === 'mangathemesia') {
-      catalogCandidates.push(`${sourceDef.baseUrl}/manga/?page=${page}&order=popular`);
-      catalogCandidates.push(`${sourceDef.baseUrl}/manga/?page=${page}`);
-      catalogCandidates.push(`${sourceDef.baseUrl}/series/?page=${page}`);
+      if (page === 1) {
+        catalogCandidates.push(`${baseOrigin}/manga/?order=popular`);
+        catalogCandidates.push(`${baseOrigin}/manga/`);
+        catalogCandidates.push(`${baseOrigin}/series/?order=popular`);
+        catalogCandidates.push(`${baseOrigin}/comic/`);
+        catalogCandidates.push(`${baseOrigin}/`);
+      } else {
+        catalogCandidates.push(`${baseOrigin}/manga/?page=${page}&order=popular`);
+        catalogCandidates.push(`${baseOrigin}/manga/?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/series/?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/comic/?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/page/${page}/`);
+      }
     } else if (sourceDef.engineType === 'wpcomics') {
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/?page=${page}`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga-list` : `${sourceDef.baseUrl}/manga-list?page=${page}`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga/` : `${sourceDef.baseUrl}/manga/page/${page}/`);
+      if (page === 1) {
+        catalogCandidates.push(`${baseOrigin}/manga-list`);
+        catalogCandidates.push(`${baseOrigin}/manga/`);
+        catalogCandidates.push(`${baseOrigin}/`);
+      } else {
+        catalogCandidates.push(`${baseOrigin}/manga-list?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/manga/page/${page}/`);
+      }
     } else if (sourceDef.engineType === 'foolslide') {
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/directory/` : `${sourceDef.baseUrl}/directory/${page}/`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/series/` : `${sourceDef.baseUrl}/series/${page}/`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/list/` : `${sourceDef.baseUrl}/list/${page}/`);
-      catalogCandidates.push(`${sourceDef.baseUrl}/`);
+      if (page === 1) {
+        catalogCandidates.push(`${baseOrigin}/directory/`);
+        catalogCandidates.push(`${baseOrigin}/series/`);
+        catalogCandidates.push(`${baseOrigin}/list/`);
+        catalogCandidates.push(`${baseOrigin}/`);
+      } else {
+        catalogCandidates.push(`${baseOrigin}/directory/${page}/`);
+        catalogCandidates.push(`${baseOrigin}/series/${page}/`);
+        catalogCandidates.push(`${baseOrigin}/list/${page}/`);
+      }
     } else {
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/browse` : `${sourceDef.baseUrl}/browse?page=${page}`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/series` : `${sourceDef.baseUrl}/series?page=${page}`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/manga` : `${sourceDef.baseUrl}/manga?page=${page}`);
-      catalogCandidates.push(page === 1 ? `${sourceDef.baseUrl}/` : `${sourceDef.baseUrl}/?page=${page}`);
+      // Custom HTML / Generic (Demonic Scans, PHP scripts, Next/Nuxt custom sites)
+      if (lowerId.includes('demonic') || baseOrigin.includes('demonicscans')) {
+        catalogCandidates.push(`${baseOrigin}/lastupdates.php?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/newmangalist.php?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/translationlist.php?page=${page}`);
+      }
+      if (page === 1) {
+        catalogCandidates.push(`${baseOrigin}/lastupdates.php`);
+        catalogCandidates.push(`${baseOrigin}/newmangalist.php`);
+        catalogCandidates.push(`${baseOrigin}/browse`);
+        catalogCandidates.push(`${baseOrigin}/series`);
+        catalogCandidates.push(`${baseOrigin}/comics`);
+        catalogCandidates.push(`${baseOrigin}/manga`);
+        catalogCandidates.push(`${baseOrigin}/manga-list`);
+        catalogCandidates.push(`${baseOrigin}/all-manga`);
+        catalogCandidates.push(`${baseOrigin}/directory`);
+        catalogCandidates.push(`${baseOrigin}/`);
+      } else {
+        catalogCandidates.push(`${baseOrigin}/lastupdates.php?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/newmangalist.php?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/browse?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/series?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/comics?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/manga?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/manga-list?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/all-manga?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/directory?page=${page}`);
+        catalogCandidates.push(`${baseOrigin}/?page=${page}`);
+      }
     }
 
     if (!sourceCircuitBreaker.canAttempt(sourceDef.id)) {
@@ -311,7 +629,7 @@ export async function getSourcePopularSeries(
         try {
           const timeout = [4000, 8000][attempt] || 4000;
           const liveRes = await fetchWithChallengeBypass(catalogUrl, {
-            headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+            headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html,application/xhtml+xml', 'Referer': `${baseOrigin}/` },
             enableCloudflareBypass: appSettings.enableCloudflareBypass,
             flareSolverrUrl: appSettings.flareSolverrUrl,
             captchaSolverEnabled: appSettings.captchaSolverEnabled,
@@ -320,7 +638,7 @@ export async function getSourcePopularSeries(
             sourceId: sourceDef.id,
             onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
           });
-          if (liveRes.ok && liveRes.html) {
+          if (liveRes.ok && liveRes.html && liveRes.html.length > 500) {
             html = liveRes.html;
             updateSourceHealth(sourceDef.id, liveRes.html, liveRes.status);
             break;
@@ -338,89 +656,22 @@ export async function getSourcePopularSeries(
     }
 
     if (html) {
-      const $ = cheerio.load(html);
-      const baseOrigin = sourceDef.baseUrl.replace(/\/$/, '');
-      const seenTitles = new Set<string>();
-
-      const extractCover = (el: any): string => {
-        const src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-original') || '';
-        if (!src || !/\.(jpg|jpeg|png|webp)/i.test(src) || /logo|avatar|banner|icon|placeholder/i.test(src)) return '';
-        if (isAdImageSrc(src, baseOrigin)) return '';
-        return src.startsWith('http') ? src : `${baseOrigin}${src}`;
-      };
-
-      const pushItem = (href: string, title: string, cover: string) => {
-        const normTitle = title.toLowerCase();
-        if (!href || title.length < 2 || seenTitles.has(normTitle)) return;
-        if (isNavText(title)) return;
-        if (!isContentPath(href)) return;
-        seenTitles.add(normTitle);
-        scrapedItems.push({
-          id: generateSourceScrapeId(`live_${sourceDef.id}`, href),
-          title,
-          sourceUrl: href.startsWith('http') ? href : `${baseOrigin}${href}`,
-          coverImage: cover,
-          sourceName: sourceDef.name,
-          description: `Live directory entry from ${sourceDef.name}`,
-          genres: ['Action', 'Fantasy'],
-          latestChapter: 10,
-          type: sourceDef.id.includes('manhua') ? 'manhua' : sourceDef.id.includes('manhwa') ? 'manhwa' : 'manga',
-        });
-      };
-
-      if (sourceDef.engineType === 'mangathemesia') {
-        let found = false;
-        $('.listupd .bsx, .listupd .bs').each((_i, el) => {
-          const a = $(el).find('a').first();
-          const href = a.attr('href') || '';
-          const title = ($(el).find('.tt, .bigor .tt, h3, .series-title').text() || a.attr('title') || '').trim();
-          const cover = extractCover($(el).find('img').first());
-          if (href && title) { pushItem(href, title, cover); found = true; }
-        });
-        if (!found) {
-          $('.utao .uta').each((_i, el) => {
-            const a = $(el).find('.luf a, a').first();
-            const href = a.attr('href') || '';
-            const title = ($(el).find('.luf h4, h4, .tt').text() || a.text()).trim();
-            const cover = extractCover($(el).find('img').first());
-            if (href && title) pushItem(href, title, cover);
-          });
-        }
-      } else if (sourceDef.engineType === 'madara' || sourceDef.engineType === 'wpcomics') {
-        let found = false;
-        $('.page-item-detail, .c-tabs-item__content, .item-thumb, .manga-item').each((_i, el) => {
-          const a = $(el).find('.post-title a, h3 a, h4 a, .title a, a').first();
-          const href = a.attr('href') || '';
-          const title = a.text().trim() || a.attr('title') || '';
-          const cover = extractCover($(el).find('img').first());
-          if (href && title) { pushItem(href, title, cover); found = true; }
-        });
-        if (!found) {
-          $('h3.h5 a, .post-title a, .entry-title a').each((_i, el) => {
-            const a = $(el);
-            const href = a.attr('href') || '';
-            const title = a.text().trim();
-            const cover = extractCover($(el).closest('article, .item, li').find('img').first());
-            if (href && title) pushItem(href, title, cover);
-          });
-        }
-      } else {
-        $('article, .item, .card, .thumb-item, .series-card, .comic-item, li, a[href]').each((_i, el) => {
-          if (scrapedItems.length >= limit * 2) return false;
-          const a = ($(el).is('a') ? $(el) : $(el).find('a').first());
-          const href = a.attr('href') || '';
-          const title = a.text().trim() || a.attr('title') || $(el).find('h2, h3, h4, .title').first().text().trim();
-          const cover = extractCover(a.find('img').first().length ? a.find('img').first() : $(el).find('img').first());
-          if (href && title) pushItem(href, title, cover);
-        });
-      }
+      const parsedCards = parseUniversalCatalogCards(html, sourceDef, baseOrigin);
+      scrapedItems.push(...parsedCards);
     }
-  } catch {}
-
-  if (scrapedItems.length >= limit) {
-    return { items: scrapedItems.slice(0, limit), totalCount: scrapedItems.length };
+  } catch (err: any) {
+    console.warn(`[Catalog Scraper] Scrape error on ${sourceDef.name}:`, err.message);
   }
 
+  // When items are found for this page, return them directly without out-of-bounds offset slicing
+  if (scrapedItems.length > 0) {
+    const pageItems = scrapedItems.slice(0, limit);
+    const hasMore = scrapedItems.length >= Math.min(limit, 10);
+    const calculatedTotal = hasMore ? page * limit + limit * 5 : (page - 1) * limit + pageItems.length;
+    return { items: pageItems, totalCount: calculatedTotal };
+  }
+
+  // Fallback to local DB matches if remote live scrape completely failed
   const targetId = sourceDef.id.toLowerCase();
   const targetName = sourceDef.name.toLowerCase();
   const targetDomain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
@@ -441,19 +692,8 @@ export async function getSourcePopularSeries(
     type: m.type || 'manhwa',
   }));
 
-  const combined = [...scrapedItems, ...dbMatches];
-  const uniqueItems: any[] = [];
-  const seen = new Set<string>();
-
-  for (const item of combined) {
-    const key = item.title.toLowerCase().trim();
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueItems.push(item);
-    }
-  }
-
-  return { items: uniqueItems.slice(offset, offset + limit), totalCount: uniqueItems.length };
+  const offset = (page - 1) * limit;
+  return { items: dbMatches.slice(offset, offset + limit), totalCount: dbMatches.length };
 }
 
 export const DEFAULT_EXPLORE_SOURCE_IDS = ['weebcentral', 'asurascans', 'flamecomics', 'mangaread', 'manhuaplusorg', 'ravenscans', 'manhwa18', 'hiperdex'];

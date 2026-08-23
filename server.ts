@@ -119,6 +119,8 @@ import {
   scheduleExploreRefresher,
   probeSourceSeriesCount,
   auditAndDisableEmptySources,
+  parseUniversalCatalogCards,
+  searchSourceDirectly,
 } from "./server/services/exploreService";
 import {
   initLibraryCache,
@@ -220,6 +222,8 @@ export {
   auditAndDisableEmptySources,
   parseGenericLiveSeriesMetadata,
   fetchLiveSeriesMetadata,
+  parseUniversalCatalogCards,
+  searchSourceDirectly,
 };
 
 // Initialize Express

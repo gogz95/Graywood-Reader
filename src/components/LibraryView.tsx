@@ -279,6 +279,182 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
   );
 });
 
+interface MangaListRowProps {
+  manga: MangaItem;
+  isSelectMode: boolean;
+  isSelected: boolean;
+  isReaderAvailable: boolean;
+  onToggleSelect: (id: string) => void;
+  onSelectManga: (manga: MangaItem) => void;
+  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
+  onOpenChapters: (manga: MangaItem) => void;
+  onIncrementChapter: (id: string) => void;
+  onQuickEdit: (manga: MangaItem) => void;
+  onDeleteManga: (id: string) => void;
+}
+
+/** Memoized Manga List Row for high-performance table view */
+const MangaListRow = React.memo<MangaListRowProps>(({
+  manga,
+  isSelectMode,
+  isSelected,
+  isReaderAvailable,
+  onToggleSelect,
+  onSelectManga,
+  onOpenReader,
+  onOpenChapters,
+  onIncrementChapter,
+  onQuickEdit,
+  onDeleteManga,
+}) => {
+  const hasNew = manga.latestChapter > manga.currentChapter;
+
+  return (
+    <tr
+      onClick={() => {
+        if (isSelectMode) onToggleSelect(manga.id);
+      }}
+      className={`hover:bg-elevated/40 transition-colors ${
+        isSelected ? 'bg-accent/10' : ''
+      } ${isSelectMode ? 'cursor-pointer' : ''}`}
+    >
+      {isSelectMode && (
+        <td className="py-3 px-3">
+          <div className={`w-5 h-5 rounded flex items-center justify-center border ${
+            isSelected ? 'bg-accent border-accent text-accent-fg' : 'border-edge bg-surface text-transparent'
+          }`}>
+            <Check className="w-3.5 h-3.5 stroke-[3]" />
+          </div>
+        </td>
+      )}
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-3">
+          <img
+            src={manga.coverImage}
+            alt={manga.title}
+            loading="lazy"
+            decoding="async"
+            className="w-9 h-12 rounded object-cover bg-app"
+          />
+          <div>
+            <div
+              onClick={() => {
+                if (!isSelectMode) onSelectManga(manga);
+              }}
+              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1 flex items-center gap-1.5"
+            >
+              <span>{manga.title}</span>
+              {isNsfwManga(manga) && (
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
+                  🔞 18+
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-secondary line-clamp-1">
+              {manga.altTitles[0] || 'No alt title'}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4 font-medium uppercase">
+        <span
+          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+            manga.type === 'manhwa'
+              ? 'bg-blue-950 text-info border border-info/20'
+              : manga.type === 'manhua'
+              ? 'bg-red-950 text-danger border border-danger/20'
+              : 'bg-purple-950 text-accent-2 border border-accent-2/20'
+          }`}
+        >
+          {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
+        </span>
+      </td>
+      <td className="py-3 px-4 capitalize">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
+          {manga.status.replace(/_/g, ' ')}
+        </span>
+      </td>
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-primary">Ch. {manga.currentChapter}</span>
+          <span className="text-muted">/ {manga.latestChapter}</span>
+          {hasNew && (
+            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-2 text-accent-fg font-bold">
+              NEW
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="py-3 px-4 font-bold text-accent">★ {manga.rating}</td>
+      <td className="py-3 px-4 text-secondary">
+        <div className="flex items-center gap-1.5">
+          <span>{manga.sourceName}</span>
+          {(manga.isFlagged && manga.flagReason?.toLowerCase().includes('missing source')) || !isReaderAvailable ? (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40" title="Missing reading source">
+              No Source
+            </span>
+          ) : manga.isFlagged ? (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger/80 text-white" title={manga.flagReason}>
+              Flagged
+            </span>
+          ) : null}
+        </div>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenReader(manga, manga.currentChapter + 1);
+            }}
+            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs sm:text-sm flex items-center gap-1"
+          >
+            <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-accent-fg" />
+            Read Ch. {manga.currentChapter + 1}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChapters(manga);
+            }}
+            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-secondary hover:text-white transition-all text-xs sm:text-sm"
+          >
+            Chapters
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onIncrementChapter(manga.id);
+            }}
+            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs sm:text-sm font-bold"
+            title="Quick mark +1 read"
+          >
+            +1
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickEdit(manga);
+            }}
+            className="p-1 rounded bg-elevated text-secondary hover:text-white"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteManga(manga.id);
+            }}
+            className="p-1 rounded bg-elevated text-danger hover:bg-red-950"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
 export const LibraryView: React.FC<LibraryViewProps> = ({
   mangaList,
   searchQuery,
@@ -570,7 +746,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const visibleList = React.useMemo(() => sortedList.slice(0, visibleLimit), [sortedList, visibleLimit]);
 
-  // Stats Counters (Memoized)
   const totalReading = React.useMemo(() => mangaList.filter((m) => m.status === 'reading').length, [mangaList]);
   const totalCompleted = React.useMemo(() => mangaList.filter((m) => m.status === 'completed').length, [mangaList]);
   const totalUnreadChapters = React.useMemo(() => {
@@ -579,6 +754,24 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       return acc + (diff > 0 ? diff : 0);
     }, 0);
   }, [mangaList]);
+  const nsfwCount = React.useMemo(() => mangaList.filter(isNsfwManga).length, [mangaList]);
+
+  // Precompute shelf counts in one pass to avoid O(categories * N) loop in JSX render
+  const categoryCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const cat of categories) {
+      const activeName = cat.name ? cat.name.toLowerCase().trim() : '';
+      let c = 0;
+      for (const m of mangaList) {
+        const cStr = m.categories || [];
+        if (cStr.includes(cat.id) || (activeName && cStr.some((s) => String(s).toLowerCase().trim() === activeName))) {
+          c++;
+        }
+      }
+      counts.set(cat.id, c);
+    }
+    return counts;
+  }, [categories, mangaList]);
 
   return (
     <div className="space-y-6">
@@ -867,10 +1060,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             {/* Individual Custom Category Shelves */}
             {categories.map((cat) => {
               const isCatActive = activeCategory === cat.id;
-              const count = mangaList.filter((m) => {
-                const cStr = m.categories || [];
-                return cStr.includes(cat.id) || (cat.name && cStr.some((c) => String(c).toLowerCase().trim() === cat.name.toLowerCase().trim()));
-              }).length;
+              const count = categoryCounts.get(cat.id) || 0;
 
               return (
                 <button
@@ -964,6 +1154,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               >
                 <span>🇨🇳</span> Manhua
               </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter('novel')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
+                  typeFilter === 'novel'
+                    ? 'bg-elevated text-primary shadow-xs'
+                    : 'text-secondary hover:text-primary'
+                }`}
+              >
+                <span>📖</span> Novel
+              </button>
             </div>
 
             <button
@@ -1027,7 +1228,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-edge-strong text-muted flex items-center gap-0.5">🔒 Login</span>
                 ) : (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-900/60 text-rose-300">
-                    {mangaList.filter(isNsfwManga).length}
+                    {nsfwCount}
                   </span>
                 )}
               </button>
@@ -1185,153 +1386,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-edge/80">
-                  {visibleList.map((manga) => {
-                    const hasNew = manga.latestChapter > manga.currentChapter;
-                  const isSelected = selectedIds.has(manga.id);
-                  return (
-                    <tr
+                  {visibleList.map((manga) => (
+                    <MangaListRow
                       key={manga.id}
-                      onClick={() => {
-                        if (isSelectMode) toggleSelect(manga.id);
-                      }}
-                      className={`hover:bg-elevated/40 transition-colors ${
-                        isSelected ? 'bg-accent/10' : ''
-                      } ${isSelectMode ? 'cursor-pointer' : ''}`}
-                    >
-                      {isSelectMode && (
-                        <td className="py-3 px-3">
-                          <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-                            isSelected ? 'bg-accent border-accent text-accent-fg' : 'border-edge bg-surface text-transparent'
-                          }`}>
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          </div>
-                        </td>
-                      )}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={manga.coverImage}
-                            alt={manga.title}
-                            className="w-9 h-12 rounded object-cover bg-app"
-                          />
-                          <div>
-                            <div
-                              onClick={() => {
-                                if (!isSelectMode) onSelectManga(manga);
-                              }}
-                              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1 flex items-center gap-1.5"
-                            >
-                              <span>{manga.title}</span>
-                              {isNsfwManga(manga) && (
-                                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
-                                  🔞 18+
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[11px] text-secondary line-clamp-1">
-                              {manga.altTitles[0] || 'No alt title'}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-medium uppercase">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            manga.type === 'manhwa'
-                              ? 'bg-blue-950 text-info border border-info/20'
-                              : manga.type === 'manhua'
-                              ? 'bg-red-950 text-danger border border-danger/20'
-                              : 'bg-purple-950 text-accent-2 border border-accent-2/20'
-                          }`}
-                        >
-                          {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 capitalize">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
-                          {manga.status.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-primary">Ch. {manga.currentChapter}</span>
-                          <span className="text-muted">/ {manga.latestChapter}</span>
-                          {hasNew && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-2 text-accent-fg font-bold">
-                              NEW
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-accent">★ {manga.rating}</td>
-                      <td className="py-3 px-4 text-secondary">
-                        <div className="flex items-center gap-1.5">
-                          <span>{manga.sourceName}</span>
-                          {(manga.isFlagged && manga.flagReason?.toLowerCase().includes('missing source')) || !isReaderAvailable(manga) ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40" title="Missing reading source">
-                              No Source
-                            </span>
-                          ) : manga.isFlagged ? (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger/80 text-white" title={manga.flagReason}>
-                              Flagged
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenReader(manga, manga.currentChapter + 1);
-                            }}
-                            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs sm:text-sm flex items-center gap-1"
-                          >
-                            <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-accent-fg" />
-                            Read Ch. {manga.currentChapter + 1}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenChapters(manga);
-                            }}
-                            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-secondary hover:text-white transition-all text-xs sm:text-sm"
-                          >
-                            Chapters
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onIncrementChapter(manga.id);
-                            }}
-                            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs sm:text-sm font-bold"
-                            title="Quick mark +1 read"
-                          >
-                            +1
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onQuickEdit(manga);
-                            }}
-                            className="p-1 rounded bg-elevated text-secondary hover:text-white"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteManga(manga.id);
-                            }}
-                            className="p-1 rounded bg-elevated text-danger hover:bg-red-950"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      manga={manga}
+                      isSelectMode={isSelectMode}
+                      isSelected={selectedIds.has(manga.id)}
+                      isReaderAvailable={isReaderAvailable(manga)}
+                      onToggleSelect={toggleSelect}
+                      onSelectManga={onSelectManga}
+                      onOpenReader={onOpenReader}
+                      onOpenChapters={onOpenChapters}
+                      onIncrementChapter={onIncrementChapter}
+                      onQuickEdit={onQuickEdit}
+                      onDeleteManga={onDeleteManga}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>

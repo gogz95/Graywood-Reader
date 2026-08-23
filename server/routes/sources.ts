@@ -33,6 +33,7 @@ import {
 } from '../services/sourceHealthService';
 import {
   getSourcePopularSeries,
+  searchSourceDirectly,
   auditAndDisableEmptySources,
   sourceAuditRunning,
   sourceAuditStatus,
@@ -507,98 +508,18 @@ sourcesRouter.get('/api/kotatsu/search', async (req, res) => {
       const { items: popular, totalCount } = await getSourcePopularSeries(sourceDef, page, limit);
       const enriched = await enrichWithMangaDexMetadata(popular);
       const safeEnriched = filterNsfwIfNeeded(enriched);
-      res.setHeader('X-Total-Count', String(safeEnriched.length));
-      res.setHeader('X-Total-Pages', String(Math.ceil(safeEnriched.length / limit)));
+      const effectiveTotal = Math.max(safeEnriched.length, totalCount || safeEnriched.length);
+      res.setHeader('X-Total-Count', String(effectiveTotal));
+      res.setHeader('X-Total-Pages', String(Math.ceil(effectiveTotal / limit)));
       return res.json(safeEnriched);
     }
 
-    if (sourceDef.id === 'weebcentral') {
-      try {
-        const results = await searchWeebCentral(query);
-        const enriched = await enrichWithMangaDexMetadata(results);
-        const safeEnriched = filterNsfwIfNeeded(enriched);
-        res.setHeader('X-Total-Count', String(safeEnriched.length));
-        res.setHeader('X-Total-Pages', '1');
-        return res.json(safeEnriched);
-      } catch (err: any) {
-        console.warn('[Kotatsu Search] WeebCentral search error:', err.message);
-      }
-    }
-
-    if (sourceDef.id === 'asurascans') {
-      try {
-        const cleanQuery = query.replace(/^asura_/i, '').replace(/[-_]/g, ' ').trim();
-        const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(cleanQuery || query)}`, {
-          headers: ASURA_API_HEADERS,
-          signal: AbortSignal.timeout(12000),
-        });
-        if (asuraRes.ok) {
-          const json = await asuraRes.json();
-          const data: any[] = Array.isArray(json?.data) ? json.data : [];
-          const results = data.map((s: any) => {
-            const slug = s.slug || s.id || '';
-            const pubPath = s.public_url || `/comics/${slug}`;
-            return {
-              id: `asura_${slug}`,
-              title: s.title || 'Unknown',
-              sourceUrl: `https://asurascans.com${pubPath}`,
-              coverImage: s.cover || '',
-              sourceName: 'Asura Scans',
-              description: (s.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 200),
-              genres: (Array.isArray(s.genres) ? s.genres : []).map((g: any) => g?.name).filter(Boolean),
-              latestChapter: s.chapter_count ? Number(s.chapter_count) : 1,
-              type: s.type || 'manhwa',
-              rating: typeof s.rating === 'number' ? Number(s.rating.toFixed(1)) : 9.0,
-            };
-          });
-          const enriched = await enrichWithMangaDexMetadata(results);
-          const safeEnriched = filterNsfwIfNeeded(enriched);
-          res.setHeader('X-Total-Count', String(safeEnriched.length));
-          res.setHeader('X-Total-Pages', '1');
-          return res.json(safeEnriched);
-        }
-      } catch (err: any) {
-        console.warn('[Kotatsu Search] Asura search error:', err.message);
-      }
-    }
-
-    if (sourceDef.id === 'flamecomics') {
-      try {
-        const flameSlug = query.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const flameCtx = await fetchFlameSeriesContext(`https://flamecomics.xyz/series/${flameSlug}`);
-        if (flameCtx && flameCtx.matchedSeries) {
-          const item = {
-            id: `flame_${flameCtx.seriesId}`,
-            title: flameCtx.matchedSeries.title || query,
-            sourceUrl: `https://flamecomics.xyz/series/${flameCtx.seriesId}`,
-            coverImage: flameCtx.matchedSeries.cover || '',
-            sourceName: 'Flame Comics',
-            description: flameCtx.matchedSeries.description || 'Flame Comics series',
-            genres: flameCtx.matchedSeries.genres || ['Action'],
-            latestChapter: flameCtx.chapters?.length || 1,
-            type: 'manhwa',
-            rating: 9.0,
-          };
-          const enriched = await enrichWithMangaDexMetadata([item]);
-          const safeEnriched = filterNsfwIfNeeded(enriched);
-          res.setHeader('X-Total-Count', String(safeEnriched.length));
-          res.setHeader('X-Total-Pages', '1');
-          return res.json(safeEnriched);
-        }
-      } catch (err: any) {
-        console.warn('[Kotatsu Search] Flame search error:', err.message);
-      }
-    }
-
-    const { items: popular } = await getSourcePopularSeries(sourceDef, 1, 60);
-    const needle = query.toLowerCase();
-    const filtered = popular.filter(
-      (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
-    );
-    const enriched = await enrichWithMangaDexMetadata(filtered.slice(0, limit));
+    const { items: searchResults, totalCount } = await searchSourceDirectly(sourceDef, query, page, limit);
+    const enriched = await enrichWithMangaDexMetadata(searchResults);
     const safeEnriched = filterNsfwIfNeeded(enriched);
-    res.setHeader('X-Total-Count', String(safeEnriched.length));
-    res.setHeader('X-Total-Pages', String(Math.max(1, Math.ceil(safeEnriched.length / limit))));
+    const effectiveTotal = Math.max(safeEnriched.length, totalCount || safeEnriched.length);
+    res.setHeader('X-Total-Count', String(effectiveTotal));
+    res.setHeader('X-Total-Pages', String(Math.ceil(effectiveTotal / limit)));
     return res.json(safeEnriched);
   } catch (err: any) {
     console.error('[Kotatsu Search] Error searching source:', err?.message || err);
@@ -620,22 +541,19 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
     active = active.filter((s) => !s.isNsfw);
   }
 
-  const topSources = active.slice(0, 12);
+  const topSources = active.slice(0, 16);
   const results: any[] = [];
   const seenTitles = new Set<string>();
 
   await Promise.all(
     topSources.map(async (src) => {
       try {
-        const { items } = await getSourcePopularSeries(src, 1, 30);
-        const needle = query.toLowerCase();
+        const { items } = await searchSourceDirectly(src, query, 1, 20);
         for (const it of items) {
-          if ((it.title || '').toLowerCase().includes(needle)) {
-            const key = it.title.toLowerCase().trim();
-            if (!seenTitles.has(key)) {
-              seenTitles.add(key);
-              results.push({ ...it, __sourceId: src.id, __sourceName: src.name });
-            }
+          const key = (it.title || '').toLowerCase().trim();
+          if (key && !seenTitles.has(key)) {
+            seenTitles.add(key);
+            results.push({ ...it, __sourceId: src.id, __sourceName: src.name });
           }
         }
       } catch {}

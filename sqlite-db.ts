@@ -607,32 +607,55 @@ export function migrateJsonToSqlite() {
   }
 }
 
+let _mangaCache: MangaItem[] | null = null;
+
+export function invalidateMangaCache() {
+  _mangaCache = null;
+}
+
 // Public Database Service Functions
 export const SqliteDb = {
   getAllManga(): MangaItem[] {
+    if (_mangaCache) return _mangaCache;
     const rows = stmtGetAllManga.all();
-    return rows.map(mapRowToMangaItem);
+    _mangaCache = rows.map(mapRowToMangaItem);
+    return _mangaCache;
+  },
+
+  invalidateMangaCache() {
+    _mangaCache = null;
   },
 
   rekeyCollidedSourceIds(): number {
+    _mangaCache = null;
     return rekeyCollidedSourceIds();
   },
 
   getMangaById(id: string): MangaItem | null {
+    if (_mangaCache) {
+      const found = _mangaCache.find((m) => m.id === id);
+      if (found) return found;
+    }
     const row = stmtGetMangaById.get(id);
     return row ? mapRowToMangaItem(row) : null;
   },
 
   getMangaByApiId(apiId: string): MangaItem | null {
+    if (_mangaCache) {
+      const found = _mangaCache.find((m) => m.apiId === apiId);
+      if (found) return found;
+    }
     const row = stmtGetMangaByApiId.get(apiId);
     return row ? mapRowToMangaItem(row) : null;
   },
 
   upsertManga(item: MangaItem) {
+    _mangaCache = null;
     stmtUpsertManga.run(mapMangaItemToRow(item));
   },
 
   bulkUpsertManga(items: MangaItem[]) {
+    _mangaCache = null;
     const transaction = db.transaction((list: MangaItem[]) => {
       for (const item of list) {
         stmtUpsertManga.run(mapMangaItemToRow(item));
@@ -642,22 +665,27 @@ export const SqliteDb = {
   },
 
   updateChapterProgress(id: string, chapterNumber: number) {
+    _mangaCache = null;
     stmtUpdateProgress.run(chapterNumber, new Date().toISOString(), id);
   },
 
   toggleFavorite(id: string, isFavorite: boolean) {
+    _mangaCache = null;
     stmtToggleFavorite.run(isFavorite ? 1 : 0, id);
   },
 
   toggleFlag(id: string, isFlagged: boolean, flagReason?: string) {
+    _mangaCache = null;
     stmtToggleFlag.run(isFlagged ? 1 : 0, flagReason || null, isFlagged ? new Date().toISOString() : null, id);
   },
 
   deleteManga(id: string) {
+    _mangaCache = null;
     stmtDeleteManga.run(id);
   },
 
   deleteMangaByUserId(userId: string): number {
+    _mangaCache = null;
     const info = stmtDeleteMangaByUserId.run(userId);
     return Number(info.changes) || 0;
   },
@@ -672,6 +700,7 @@ export const SqliteDb = {
    * Shared catalog rows (userId NULL) are left intact.
    */
   purgeUserData(userId: string): { mangaDeleted: number } {
+    _mangaCache = null;
     const run = db.transaction((uid: string) => {
       stmtDeleteReadingProgressByUserId.run(uid);
       stmtDeleteReadingActivityByUserId.run(uid);
@@ -685,10 +714,12 @@ export const SqliteDb = {
   },
 
   purgeReaperScans() {
+    _mangaCache = null;
     return purgeReaperScans();
   },
 
   deleteAllManga() {
+    _mangaCache = null;
     db.prepare('DELETE FROM manga').run();
   },
 

@@ -7,6 +7,7 @@ import {
   parseSrcsetCandidate,
   parseGenericChapterListFromHtml,
   parseGenericLiveSeriesMetadata,
+  parseUniversalCatalogCards,
 } from '../server';
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -182,6 +183,92 @@ describe('Automated Engine Parser Test Harness', () => {
       expect(meta?.genres).toEqual(['Adult', 'Romance']);
       expect(meta?.latestChapter).toBe(65);
       expect(meta?.rating).toBe(8.9);
+    });
+  });
+
+  describe('Universal Catalog Card Parser', () => {
+    it('extracts series cards from Custom HTML / PHP directory pages (Demonic Scans layout)', () => {
+      const customHtml = `
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <div class="lastupdates-container">
+            <div class="row">
+              <div class="col-md-6 item">
+                <a href="/manga/Swordmasters-Youngest-Son" title="Swordmaster's Youngest Son">
+                  <img src="https://cdn.demonicscans.org/covers/swordmaster.jpg" alt="cover">
+                  <h4 class="title">Swordmaster's Youngest Son</h4>
+                </a>
+                <span class="chapter">Chapter 120</span>
+              </div>
+              <div class="col-md-6 item">
+                <a href="/manga/Magic-Emperor" title="Magic Emperor">
+                  <img data-src="/images/magic-emperor.webp" alt="cover">
+                  <h4 class="title">Magic Emperor</h4>
+                </a>
+                <span class="chapter">Chapter 540</span>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const sourceDef = {
+        id: 'demonicscans',
+        name: 'Demonic Scans',
+        baseUrl: 'https://demonicscans.org',
+        engineType: 'custom_html' as const,
+        lang: 'en',
+        isNsfw: false,
+      };
+
+      const cards = parseUniversalCatalogCards(customHtml, sourceDef, 'https://demonicscans.org');
+      expect(cards.length).toBe(2);
+      expect(cards[0].title).toBe("Swordmaster's Youngest Son");
+      expect(cards[0].sourceUrl).toBe('https://demonicscans.org/manga/Swordmasters-Youngest-Son');
+      expect(cards[0].coverImage).toBe('https://cdn.demonicscans.org/covers/swordmaster.jpg');
+      expect(cards[0].latestChapter).toBe(120);
+
+      expect(cards[1].title).toBe('Magic Emperor');
+      expect(cards[1].sourceUrl).toBe('https://demonicscans.org/manga/Magic-Emperor');
+      expect(cards[1].coverImage).toBe('https://demonicscans.org/images/magic-emperor.webp');
+      expect(cards[1].latestChapter).toBe(540);
+    });
+
+    it('extracts series cards from MangaThemesia listupd layouts', () => {
+      const themesiaHtml = `
+        <div class="listupd">
+          <div class="bs">
+            <div class="bsx">
+              <a href="https://themesiasource.example/manga/nano-machine/" title="Nano Machine">
+                <div class="limit">
+                  <img src="https://cdn.themesia.example/covers/nano.jpg" class="ts-post-image">
+                </div>
+                <div class="bigor">
+                  <div class="tt">Nano Machine</div>
+                  <div class="adds"><div class="epx">Ch. 210</div></div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const sourceDef = {
+        id: 'themesiasrc',
+        name: 'Themesia Source',
+        baseUrl: 'https://themesiasource.example',
+        engineType: 'mangathemesia' as const,
+        lang: 'en',
+        isNsfw: false,
+      };
+
+      const cards = parseUniversalCatalogCards(themesiaHtml, sourceDef, 'https://themesiasource.example');
+      expect(cards.length).toBe(1);
+      expect(cards[0].title).toBe('Nano Machine');
+      expect(cards[0].sourceUrl).toBe('https://themesiasource.example/manga/nano-machine');
+      expect(cards[0].latestChapter).toBe(210);
     });
   });
 
