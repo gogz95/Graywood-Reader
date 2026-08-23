@@ -57,10 +57,6 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
         const data = (await res.json()) as BulkScrapeProgress;
         if (data && typeof data === 'object') {
           setProgress(data);
-          if (data.status !== 'running' && pollTimerRef.current) {
-            clearInterval(pollTimerRef.current);
-            pollTimerRef.current = null;
-          }
         }
       }
     } catch {

@@ -152,16 +152,18 @@ export class DomainRateLimiter {
     const config = this.domainConfigs.get(domain) || DEFAULT_CONFIG;
     this.refillTokens(domain, state, config);
 
-    if (state.tokens >= 1.0) {
+    while (state.queue.length > 0 && state.tokens >= 1.0) {
       state.tokens -= 1.0;
       const next = state.queue.shift();
       if (next) {
         next();
       }
-    } else {
+    }
+
+    if (state.queue.length > 0) {
       // Not enough tokens yet -> compute time needed to accumulate 1 token
       const waitMs = Math.ceil(((1.0 - state.tokens) / config.requestsPerSecond) * 1000);
-      setTimeout(() => this.processQueue(domain), Math.max( waitMs, 25 ));
+      setTimeout(() => this.processQueue(domain), Math.max(waitMs, 25));
     }
   }
 

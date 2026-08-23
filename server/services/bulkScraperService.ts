@@ -138,10 +138,9 @@ class BulkScraperService {
 
           const sourceItems: (Partial<MangaItem> & { title: string })[] = [];
           const seenSourceItemKeys = new Set<string>();
-          const DYNAMIC_MAX_PAGES_SAFETY = 300; // Deep crawl limit to protect against infinite mirror loops
           let page = 1;
 
-          while (page <= DYNAMIC_MAX_PAGES_SAFETY) {
+          while (page <= maxPages) {
             if (signal.aborted) break;
             this.progress.currentPage = page;
 

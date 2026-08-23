@@ -1477,12 +1477,17 @@ export const SqliteDb = {
       }
 
       // 4. Profiles
-      if (Array.isArray(dump.profiles)) {
+      const profilesList = Array.isArray(dump.profiles)
+        ? dump.profiles
+        : Array.isArray(dump.userProfiles)
+        ? dump.userProfiles
+        : [];
+      if (profilesList.length > 0) {
         const stmtProf = db.prepare(`
           INSERT OR REPLACE INTO profiles (id, name, username, email, avatar, role, password, storageFolderPath, createdAt)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        for (const p of dump.profiles) {
+        for (const p of profilesList) {
           if (p && p.id) {
             stmtProf.run(
               p.id,
@@ -1501,11 +1506,14 @@ export const SqliteDb = {
       }
 
       // 5. Settings
-      if (dump.settings && typeof dump.settings === 'object') {
+      const settingsObj = (dump.settings && typeof dump.settings === 'object')
+        ? dump.settings
+        : (dump.appSettings && typeof dump.appSettings === 'object' ? dump.appSettings : null);
+      if (settingsObj) {
         const stmtSet = db.prepare(`
           INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
         `);
-        for (const [k, v] of Object.entries(dump.settings)) {
+        for (const [k, v] of Object.entries(settingsObj)) {
           if (typeof v === 'string') {
             stmtSet.run(k, v);
           } else if (v !== undefined && v !== null) {

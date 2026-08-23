@@ -88,10 +88,17 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
       `📄 Pages Turned: ~${(wrapped.totalPagesEstimated ?? 0).toLocaleString()}\n` +
       `✨ Top Genres: ${wrapped.topGenres.slice(0, 3).map((g) => g.name).join(', ')}`;
 
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedToast(true);
-      setTimeout(() => setCopiedToast(false), 3000);
-    });
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          setCopiedToast(true);
+          setTimeout(() => setCopiedToast(false), 3000);
+        })
+        .catch(() => {
+          // Clipboard write fallback
+        });
+    }
   };
 
   const categories: { id: TrophyCategory | 'all'; label: string; icon: string }[] = [
