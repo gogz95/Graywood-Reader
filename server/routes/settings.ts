@@ -242,3 +242,23 @@ settingsRouter.post("/api/backups/upload", async (req, res) => {
     res.status(500).json({ error: `Upload failed: ${err.message}` });
   }
 });
+
+// POST /api/settings/db/vacuum - Maintenance vacuum and cache purge for database
+settingsRouter.post("/api/settings/db/vacuum", (req, res) => {
+  try {
+    const { vacuum = true, purgeExpiredCache = true, trimLogsDays = 30 } = req.body || {};
+    const result = SqliteDb.performDatabaseMaintenance({
+      vacuum: Boolean(vacuum),
+      purgeExpiredCache: Boolean(purgeExpiredCache),
+      trimLogsDays: Number(trimLogsDays) || 30,
+    });
+
+    res.json({
+      success: result.success,
+      message: "Database vacuum & maintenance completed.",
+      result,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: `Database vacuum failed: ${err.message}` });
+  }
+});

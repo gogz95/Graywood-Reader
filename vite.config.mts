@@ -62,6 +62,24 @@ export default defineConfig(() => {
             if (id.includes('src/components/AdminPanelModal')) {
               return 'admin-panel-modal';
             }
+            if (id.includes('src/components/ReadlistsModal')) {
+              return 'readlists-modal';
+            }
+            if (id.includes('src/components/DownloadManagerModal')) {
+              return 'download-manager-modal';
+            }
+            if (id.includes('src/components/BulkScrapeModal')) {
+              return 'bulk-scrape-modal';
+            }
+            if (id.includes('src/components/InitialSetupWizard')) {
+              return 'setup-wizard';
+            }
+            if (id.includes('src/utils/kotatsuImporter')) {
+              return 'kotatsu-importer';
+            }
+            if (id.includes('src/utils/soundscapes') || id.includes('src/utils/ambientSoundEngine')) {
+              return 'soundscapes-engine';
+            }
           },
         },
       },

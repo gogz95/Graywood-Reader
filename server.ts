@@ -505,6 +505,18 @@ async function startServer() {
   scheduleExploreRefresher();
   startWeeklyLibraryCacheScheduler(1);
   startAutoBackupScheduler(30);
+  scheduleDatabaseMaintenance();
+}
+
+function scheduleDatabaseMaintenance() {
+  // Run lightweight maintenance daily (cache purge, log trim, WAL checkpoint & PRAGMA optimize)
+  setInterval(() => {
+    try {
+      SqliteDb.performDatabaseMaintenance({ vacuum: false, purgeExpiredCache: true, trimLogsDays: 30 });
+    } catch (err) {
+      logger.error('SQLite', 'Scheduled database maintenance failed', { error: String(err) });
+    }
+  }, 24 * 60 * 60 * 1000);
 }
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {

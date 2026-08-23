@@ -265,6 +265,30 @@ db.exec(`
     FOREIGN KEY(readlist_id) REFERENCES readlists(id) ON DELETE CASCADE
   );
   CREATE INDEX IF NOT EXISTS idx_readlist_items_list ON readlist_items(readlist_id, sort_order);
+
+  -- Persistent Chapter Download Queue & Archive State
+  CREATE TABLE IF NOT EXISTS download_jobs (
+    id TEXT PRIMARY KEY,
+    manga_id TEXT NOT NULL,
+    manga_title TEXT NOT NULL,
+    chapter_number REAL NOT NULL,
+    chapter_title TEXT,
+    source_url TEXT,
+    source_name TEXT,
+    status TEXT NOT NULL,
+    current_page INTEGER DEFAULT 0,
+    total_pages INTEGER DEFAULT 0,
+    bytes_downloaded INTEGER DEFAULT 0,
+    percent INTEGER DEFAULT 0,
+    error TEXT,
+    output_path TEXT,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    retries INTEGER DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_download_jobs_status ON download_jobs(status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_download_jobs_manga ON download_jobs(manga_id, chapter_number);
 `);
 
 try { db.exec('ALTER TABLE page_sticky_notes ADD COLUMN user_id TEXT'); } catch (e) { }
@@ -551,6 +575,96 @@ const stmtInsertReadlistItem = db.prepare(`
   VALUES (@id, @readlistId, @mangaId, @chapterNumber, @chapterTitle, @sortOrder, @notes)
 `);
 const stmtDeleteReadlistItemById = db.prepare('DELETE FROM readlist_items WHERE id = ? AND readlist_id = ?');
+
+// ── Download Jobs Precompiled Statements ──────────────────────────────────
+const stmtGetAllDownloadJobs = db.prepare('SELECT * FROM download_jobs ORDER BY created_at DESC');
+const stmtGetDownloadJobById = db.prepare('SELECT * FROM download_jobs WHERE id = ?');
+const stmtUpsertDownloadJob = db.prepare(`
+  INSERT INTO download_jobs (
+    id, manga_id, manga_title, chapter_number, chapter_title,
+    source_url, source_name, status, current_page, total_pages,
+    bytes_downloaded, percent, error, output_path, created_at,
+    started_at, finished_at, retries
+  ) VALUES (
+    @id, @manga_id, @manga_title, @chapter_number, @chapter_title,
+    @source_url, @source_name, @status, @current_page, @total_pages,
+    @bytes_downloaded, @percent, @error, @output_path, @created_at,
+    @started_at, @finished_at, @retries
+  ) ON CONFLICT(id) DO UPDATE SET
+    status = excluded.status,
+    current_page = excluded.current_page,
+    total_pages = excluded.total_pages,
+    bytes_downloaded = excluded.bytes_downloaded,
+    percent = excluded.percent,
+    error = excluded.error,
+    output_path = excluded.output_path,
+    started_at = excluded.started_at,
+    finished_at = excluded.finished_at,
+    retries = excluded.retries
+`);
+const stmtDeleteDownloadJob = db.prepare('DELETE FROM download_jobs WHERE id = ?');
+const stmtDeleteCompletedDownloadJobs = db.prepare(`DELETE FROM download_jobs WHERE status IN ('completed', 'cancelled')`);
+
+export interface PersistedDownloadJob {
+  id: string;
+  mangaId: string;
+  mangaTitle: string;
+  chapterNumber: number;
+  chapterTitle?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  status: 'queued' | 'downloading' | 'packaging' | 'completed' | 'paused' | 'failed' | 'cancelled';
+  progress: {
+    current: number;
+    total: number;
+    percent: number;
+    bytesDownloaded: number;
+  };
+  error?: string | null;
+  outputPath?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  retries: number;
+}
+
+export interface DatabaseMaintenanceResult {
+  success: boolean;
+  timestamp: string;
+  vacuumExecuted: boolean;
+  walCheckpointed: boolean;
+  expiredCachePurged: number;
+  logsTrimmed: number;
+  initialSizeBytes: number;
+  finalSizeBytes: number;
+  freedBytes: number;
+  pageCount: number;
+}
+
+function mapRowToDownloadJob(row: any): PersistedDownloadJob {
+  return {
+    id: row.id,
+    mangaId: row.manga_id,
+    mangaTitle: row.manga_title,
+    chapterNumber: Number(row.chapter_number) || 0,
+    chapterTitle: row.chapter_title || undefined,
+    sourceUrl: row.source_url || undefined,
+    sourceName: row.source_name || undefined,
+    status: row.status,
+    progress: {
+      current: Number(row.current_page) || 0,
+      total: Number(row.total_pages) || 0,
+      percent: Number(row.percent) || 0,
+      bytesDownloaded: Number(row.bytes_downloaded) || 0,
+    },
+    error: row.error || null,
+    outputPath: row.output_path || null,
+    createdAt: row.created_at,
+    startedAt: row.started_at || null,
+    finishedAt: row.finished_at || null,
+    retries: Number(row.retries) || 0,
+  };
+}
 
 
 // Helper Serializers & Deserializers
@@ -1848,6 +1962,142 @@ export const SqliteDb = {
     }
     // Use native better-sqlite3 asynchronous online backup
     await db.backup(destPath);
+  },
+
+  /**
+   * Persistent Chapter Download Queue helpers
+   */
+  saveDownloadJob(job: PersistedDownloadJob): void {
+    stmtUpsertDownloadJob.run({
+      id: job.id,
+      manga_id: job.mangaId,
+      manga_title: job.mangaTitle,
+      chapter_number: job.chapterNumber,
+      chapter_title: job.chapterTitle || null,
+      source_url: job.sourceUrl || null,
+      source_name: job.sourceName || null,
+      status: job.status,
+      current_page: job.progress?.current || 0,
+      total_pages: job.progress?.total || 0,
+      bytes_downloaded: job.progress?.bytesDownloaded || 0,
+      percent: job.progress?.percent || 0,
+      error: job.error || null,
+      output_path: job.outputPath || null,
+      created_at: job.createdAt || new Date().toISOString(),
+      started_at: job.startedAt || null,
+      finished_at: job.finishedAt || null,
+      retries: job.retries || 0,
+    });
+  },
+
+  getDownloadJobs(): PersistedDownloadJob[] {
+    const rows = stmtGetAllDownloadJobs.all();
+    return rows.map(mapRowToDownloadJob);
+  },
+
+  getDownloadJobById(id: string): PersistedDownloadJob | null {
+    const row = stmtGetDownloadJobById.get(id);
+    return row ? mapRowToDownloadJob(row) : null;
+  },
+
+  deleteDownloadJob(id: string): boolean {
+    const res = stmtDeleteDownloadJob.run(id);
+    return res.changes > 0;
+  },
+
+  clearCompletedDownloadJobs(): number {
+    const res = stmtDeleteCompletedDownloadJobs.run();
+    return res.changes;
+  },
+
+  /**
+   * Comprehensive database maintenance:
+   * 1. Purges expired chapter page cache rows
+   * 2. Trims old logs (default > 30 days)
+   * 3. Performs SQLite WAL checkpoint (TRUNCATE) to merge log frames back into main database file
+   * 4. Runs PRAGMA optimize
+   * 5. Optional VACUUM to defragment pages and reclaim unallocated OS disk space
+   */
+  performDatabaseMaintenance(options: { vacuum?: boolean; purgeExpiredCache?: boolean; trimLogsDays?: number } = {}): DatabaseMaintenanceResult {
+    const { vacuum = false, purgeExpiredCache = true, trimLogsDays = 30 } = options;
+    const initialSizeBytes = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+    let expiredCachePurged = 0;
+    let logsTrimmed = 0;
+    let walCheckpointed = false;
+    let vacuumExecuted = false;
+
+    try {
+      if (purgeExpiredCache) {
+        const now = Date.now();
+        const res = db.prepare('DELETE FROM chapter_pages_cache WHERE expires_at < ?').run(now);
+        expiredCachePurged = res.changes;
+      }
+
+      if (trimLogsDays > 0) {
+        const cutoffDate = new Date(Date.now() - trimLogsDays * 24 * 60 * 60 * 1000).toISOString();
+        const res = db.prepare('DELETE FROM logs WHERE timestamp < ?').run(cutoffDate);
+        logsTrimmed = res.changes;
+      }
+
+      // Checkpoint WAL file to commit all pending transactions and truncate WAL to 0 bytes
+      try {
+        db.pragma('wal_checkpoint(TRUNCATE)');
+        walCheckpointed = true;
+      } catch (walErr) {
+        logger.warn('SQLite', 'WAL checkpoint warning', { error: String(walErr) });
+      }
+
+      // SQLite optimizer evaluates query planner statistics
+      try {
+        db.pragma('optimize');
+      } catch (optErr) {
+        logger.warn('SQLite', 'PRAGMA optimize warning', { error: String(optErr) });
+      }
+
+      // VACUUM defragments the entire database and reclaims unallocated OS blocks
+      if (vacuum) {
+        try {
+          db.exec('VACUUM');
+          vacuumExecuted = true;
+        } catch (vacErr) {
+          logger.warn('SQLite', 'VACUUM warning', { error: String(vacErr) });
+        }
+      }
+
+      const finalSizeBytes = fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0;
+      const pageCountRow = db.prepare('PRAGMA page_count').get() as { page_count?: number } | undefined;
+      const pageCount = pageCountRow?.page_count || 0;
+
+      const result: DatabaseMaintenanceResult = {
+        success: true,
+        timestamp: new Date().toISOString(),
+        vacuumExecuted,
+        walCheckpointed,
+        expiredCachePurged,
+        logsTrimmed,
+        initialSizeBytes,
+        finalSizeBytes,
+        freedBytes: Math.max(0, initialSizeBytes - finalSizeBytes),
+        pageCount,
+      };
+
+      logger.info('SQLite', 'Database maintenance completed', { ...result } as Record<string, unknown>);
+      return result;
+    } catch (err: any) {
+      logger.error('SQLite', 'Database maintenance failed', { error: err.message });
+      return {
+        success: false,
+        timestamp: new Date().toISOString(),
+        vacuumExecuted,
+        walCheckpointed,
+        expiredCachePurged,
+        logsTrimmed,
+        initialSizeBytes,
+        finalSizeBytes: fs.existsSync(DB_PATH) ? fs.statSync(DB_PATH).size : 0,
+        freedBytes: 0,
+        pageCount: 0,
+      };
+    }
   },
 };
 

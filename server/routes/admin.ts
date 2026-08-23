@@ -243,3 +243,28 @@ adminRouter.post("/api/admin/migration/restore", async (req, res) => {
     res.status(500).json({ error: `Migration restore failed: ${err.message}` });
   }
 });
+
+// ============================================================================
+// DATABASE MAINTENANCE & VACUUM (Host / Admin Only)
+// ============================================================================
+
+// POST /api/admin/maintenance/optimize - Trigger SQLite maintenance, cache purge, WAL truncation, and defragmentation
+adminRouter.post("/api/admin/maintenance/optimize", (req, res) => {
+  try {
+    const { vacuum, purgeExpiredCache, trimLogsDays } = req.body || {};
+    const result = SqliteDb.performDatabaseMaintenance({
+      vacuum: Boolean(vacuum),
+      purgeExpiredCache: purgeExpiredCache !== false,
+      trimLogsDays: trimLogsDays !== undefined ? Number(trimLogsDays) : 30,
+    });
+
+    res.json({
+      success: result.success,
+      message: "Database optimization and maintenance completed successfully.",
+      result,
+    });
+  } catch (err: any) {
+    logger.error('Admin', 'Database maintenance failed', { error: err.message });
+    res.status(500).json({ error: `Database maintenance failed: ${err.message}` });
+  }
+});

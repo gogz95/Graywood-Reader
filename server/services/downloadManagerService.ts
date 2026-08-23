@@ -46,6 +46,31 @@ export class DownloadManagerService {
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
     }
+    this.loadPersistedJobs();
+  }
+
+  /**
+   * Restores download queue state from SQLite upon service boot and recovers interrupted tasks.
+   */
+  private loadPersistedJobs(): void {
+    try {
+      const persisted = SqliteDb.getDownloadJobs();
+      for (const job of persisted) {
+        // Crash recovery: if server restarted while a download was in-flight, reset to queued
+        if (job.status === 'downloading' || job.status === 'packaging') {
+          job.status = 'queued';
+          job.progress.current = 0;
+          job.progress.percent = 0;
+          job.progress.bytesDownloaded = 0;
+          SqliteDb.saveDownloadJob(job);
+        }
+        this.jobs.set(job.id, job);
+      }
+      logger.info('DownloadManager', `Restored ${this.jobs.size} download jobs from database (${persisted.filter(j => j.status === 'queued').length} queued)`);
+      this.triggerQueueProcessing();
+    } catch (err: any) {
+      logger.warn('DownloadManager', `Could not load persisted download jobs: ${err?.message || err}`);
+    }
   }
 
   public getStorageDirectory(): string {
@@ -103,6 +128,7 @@ export class DownloadManagerService {
       };
 
       this.jobs.set(jobId, job);
+      SqliteDb.saveDownloadJob(job);
       createdJobs.push(job);
     }
 
@@ -112,8 +138,9 @@ export class DownloadManagerService {
 
   public pauseJob(jobId: string): boolean {
     const job = this.jobs.get(jobId);
-    if (!job || job.status !== 'queued') return false;
+    if (!job || (job.status !== 'queued' && job.status !== 'downloading')) return false;
     job.status = 'paused';
+    SqliteDb.saveDownloadJob(job);
     return true;
   }
 
@@ -121,6 +148,7 @@ export class DownloadManagerService {
     const job = this.jobs.get(jobId);
     if (!job || job.status !== 'paused') return false;
     job.status = 'queued';
+    SqliteDb.saveDownloadJob(job);
     this.triggerQueueProcessing();
     return true;
   }
@@ -130,6 +158,7 @@ export class DownloadManagerService {
     if (!job) return false;
     job.status = 'cancelled';
     this.jobs.delete(jobId);
+    SqliteDb.deleteDownloadJob(jobId);
     return true;
   }
 
@@ -139,6 +168,7 @@ export class DownloadManagerService {
         this.jobs.delete(id);
       }
     }
+    SqliteDb.clearCompletedDownloadJobs();
   }
 
   public getDownloadedFilePath(mangaId: string, chapterNumber: number): string | null {
@@ -189,6 +219,7 @@ export class DownloadManagerService {
     job.status = 'downloading';
     job.startedAt = new Date().toISOString();
     job.error = null;
+    SqliteDb.saveDownloadJob(job);
 
     logger.info('DownloadManager', `Starting download for "${job.mangaTitle}" Chapter ${job.chapterNumber}`);
 
@@ -209,6 +240,7 @@ export class DownloadManagerService {
       job.progress.total = pages.length;
       job.progress.current = 0;
       job.progress.percent = 0;
+      SqliteDb.saveDownloadJob(job);
 
       const zip = new AdmZip();
       const safeSeriesName = (manga.title || 'Untitled').replace(/[/\\?%*:|"<>]/g, '_').trim();
@@ -236,10 +268,17 @@ export class DownloadManagerService {
         job.progress.current = pageIdx;
         job.progress.bytesDownloaded += imgBuffer.length;
         job.progress.percent = Math.round((pageIdx / pages.length) * 100);
+
+        // Periodically checkpoint progress to database every 5 pages or at 100%
+        if (pageIdx % 5 === 0 || pageIdx === pages.length) {
+          SqliteDb.saveDownloadJob(job);
+        }
       }
 
       // 3. Inject standard ComicInfo.xml into CBZ
       job.status = 'packaging';
+      SqliteDb.saveDownloadJob(job);
+
       comicInfoService.injectIntoZip(zip, manga, {
         chapterNumber: job.chapterNumber,
         title: job.chapterTitle,
@@ -257,6 +296,7 @@ export class DownloadManagerService {
       job.outputPath = finalPath;
       job.finishedAt = new Date().toISOString();
       job.progress.percent = 100;
+      SqliteDb.saveDownloadJob(job);
 
       logger.info('DownloadManager', `Successfully saved "${cbzFilename}" (${job.progress.bytesDownloaded} bytes, ${pages.length} pages)`);
     } catch (err: any) {
@@ -264,6 +304,7 @@ export class DownloadManagerService {
       job.status = 'failed';
       job.error = err.message || 'Download failed';
       job.finishedAt = new Date().toISOString();
+      SqliteDb.saveDownloadJob(job);
     }
   }
 
