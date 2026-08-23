@@ -58,6 +58,7 @@ import { bugsRouter } from "./server/routes/bugs";
 import { webhooksRouter } from "./server/routes/webhooks";
 import { categoriesRouter } from "./server/routes/categories";
 import { challengesRouter } from "./server/routes/challenges";
+import { downloadsRouter } from "./server/routes/downloads";
 import { mangaRouter, isContentPath, isNavText } from "./server/routes/manga";
 import {
   readerRouter,
@@ -315,6 +316,7 @@ app.use(sourcesRouter);
 app.use(exploreRouter);
 app.use(trackerRouter);
 app.use(challengesRouter);
+app.use(downloadsRouter);
 
 // ── Base Server Health, Version & Config Endpoints ────────────────────────────
 app.get("/api/health", (req, res) => {

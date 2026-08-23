@@ -71,7 +71,7 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ## 🔮 Strategic Master Plan: 4 Next-Gen Tracks
 
-### 🎯 Track 1: Reader Core Polish & Visual Performance (Active 🟢)
+### 🎯 Track 1: Reader Core Polish & Visual Performance (Completed 🟢)
 - **Dynamic Webtoon Image Virtualization**:
   - Off-screen image recycling with height preservation for 100+ page chapters to eliminate browser memory bloat and scroll stutter.
 - **Fluid Pinch-to-Zoom & Double-Tap Smart Zoom**:
@@ -81,13 +81,13 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-### 🛡️ Track 2: Source Reliability & Resilient Server Download Manager (Upcoming 🟡)
+### 🛡️ Track 2: Source Reliability & Resilient Server Download Manager (Completed 🟢)
 - **Dedicated Background Server Download Manager**:
-  - Priority queue with auto-retries on 429/503 HTTP rate limits and bandwidth throttling.
+  - Priority queue with auto-retries, progress tracking, and packaging into standard `.cbz` archives on disk.
 - **Universal `ComicInfo.xml` Standard Compliance**:
   - Automatic bidirectional reading and writing of `ComicInfo.xml` metadata inside local and downloaded `.cbz` archives for 100% interoperability with Komga, Kavita, and Mihon.
 - **Per-Domain Leaky-Bucket Rate Limiting**:
-  - Dynamic host request scheduling to prevent Cloudflare Turnstile triggers and IP bans.
+  - Dynamic host request scheduling (`DomainRateLimiter`) with token buckets and exponential backoff on HTTP 429/503.
 
 ---
 

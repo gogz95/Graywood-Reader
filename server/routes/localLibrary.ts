@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import { SqliteDb } from '../../sqlite-db';
 import { MangaItem } from '../../src/types';
+import { comicInfoService, ComicInfoMetadata } from '../services/comicInfoService';
 
 export const localLibraryRouter = Router();
 
@@ -33,6 +34,10 @@ export interface LocalArchive {
   coverDataUrl?: string;
   isTextNovel?: boolean;
   toc?: { index: number; title: string; href: string }[];
+  comicInfo?: ComicInfoMetadata;
+  summary?: string;
+  genres?: string[];
+  author?: string;
 }
 
 export interface CachedArchiveEntry {
@@ -95,11 +100,19 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
     let epubManifest = new Map<string, { href: string; mediaType: string }>();
     let epubBasePath = '';
     let epubToc: { index: number; title: string; href: string }[] = [];
+    let parsedComicInfo: ComicInfoMetadata | undefined;
 
     if (type === 'cbz' || type === 'cbr' || type === 'other') {
       try {
         const zip = new AdmZip(filePath);
         imageEntries = listArchiveImages(zip);
+
+        // Read ComicInfo.xml if present
+        const cInfo = comicInfoService.readFromZip(zip);
+        if (cInfo) {
+          parsedComicInfo = cInfo;
+        }
+
         const first = zip.getEntry(imageEntries[0]);
         if (first) {
           const buf = first.getData();
@@ -207,9 +220,10 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
       coverDataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
     }
 
+    const title = parsedComicInfo?.series || parsedComicInfo?.title || deriveTitle(fileName);
     const archive: LocalArchive = {
       id,
-      title: deriveTitle(fileName),
+      title,
       fileName,
       filePath,
       type,
@@ -218,6 +232,10 @@ function scanArchive(filePath: string): CachedArchiveEntry | null {
       coverDataUrl,
       isTextNovel: type === 'epub',
       toc: epubToc.length > 0 ? epubToc : undefined,
+      comicInfo: parsedComicInfo,
+      summary: parsedComicInfo?.summary,
+      genres: parsedComicInfo?.genre ? parsedComicInfo.genre.split(',').map((g) => g.trim()) : undefined,
+      author: parsedComicInfo?.writer,
     };
 
     const entry: CachedArchiveEntry = {
