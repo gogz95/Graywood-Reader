@@ -309,7 +309,7 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
               No sources matched your current filter criteria.
             </div>
           ) : (
-            filteredSources.slice(0, 150).map((source) => (
+            filteredSources.map((source) => (
               <div
                 key={source.id}
                 className="p-3 bg-app hover:bg-elevated/40 rounded-xl border border-edge flex items-center justify-between gap-3 transition-colors"
@@ -378,7 +378,7 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
 
         {/* Footer */}
         <div className="p-3 border-t border-edge bg-surface/80 flex items-center justify-between text-xs text-secondary">
-          <span>Showing {Math.min(filteredSources.length, 150)} of {filteredSources.length} sources</span>
+          <span>Showing {filteredSources.length} of {sources.length} sources</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-elevated hover:bg-elevated/80 text-primary font-bold transition-all"

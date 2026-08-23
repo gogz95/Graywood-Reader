@@ -22,6 +22,7 @@ import {
   isSourceAlive,
   isMetadataOnlySource,
   buildFullSourceInventory,
+  getAllSourcesWithExtensions,
   getSourceById,
   rebuildDeadSourcesSet,
   SourceDefinition,
@@ -259,27 +260,29 @@ sourcesRouter.post('/api/kotatsu/sources/deactivate-all', (_req, res) => {
 // ── GET /api/kotatsu/sources/health ───────────────────────────────────────────
 sourcesRouter.get('/api/kotatsu/sources/health', (_req, res) => {
   const healthData: Record<string, any> = {};
-  for (const source of KOTATSU_SOURCES) {
+  const allSources = getAllSourcesWithExtensions();
+  for (const source of allSources) {
     const h = sourceHealthMap.get(source.id);
     const cb = sourceCircuitBreaker.getState(source.id);
-    if (h || cb.state !== 'CLOSED') {
-      healthData[source.id] = {
-        id: source.id,
-        lastChecked: h?.lastChecked || cb.lastChecked || Date.now(),
-        lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : 'ok'),
-        consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
-        tripCount: cb.tripCount || 0,
-        nextProbeTime: cb.nextProbeTime,
-        failureReason: h?.failureReason || cb.lastFailureReason,
-        circuitState: cb.state,
-      };
-    }
+    const isAlive = isSourceAlive(source.id, syncConfig) && !disabledSourceIds.has(source.id);
+    healthData[source.id] = {
+      id: source.id,
+      name: source.name,
+      lastChecked: h?.lastChecked || cb.lastChecked || 0,
+      lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : isAlive ? 'ok' : 'disabled'),
+      consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
+      tripCount: cb.tripCount || 0,
+      nextProbeTime: cb.nextProbeTime,
+      failureReason: h?.failureReason || cb.lastFailureReason,
+      circuitState: cb.state,
+      isAlive,
+    };
   }
   res.json({
-    healthy: Object.values(healthData).filter(h => h.lastStatus === 'ok' && h.circuitState !== 'OPEN').length,
-    degraded: Object.values(healthData).filter(h => h.lastStatus === 'degraded' || h.circuitState === 'HALF_OPEN').length,
-    blocked: Object.values(healthData).filter(h => h.lastStatus === 'blocked').length,
-    down: Object.values(healthData).filter(h => h.lastStatus === 'down' || h.circuitState === 'OPEN').length,
+    healthy: Object.values(healthData).filter((h: any) => h.lastStatus === 'ok' && h.circuitState !== 'OPEN').length,
+    degraded: Object.values(healthData).filter((h: any) => h.lastStatus === 'degraded' || h.circuitState === 'HALF_OPEN').length,
+    blocked: Object.values(healthData).filter((h: any) => h.lastStatus === 'blocked').length,
+    down: Object.values(healthData).filter((h: any) => h.lastStatus === 'down' || h.circuitState === 'OPEN').length,
     disabled: disabledSourceIds.size,
     sources: healthData,
     disabledSourceIds: Array.from(disabledSourceIds),
@@ -315,17 +318,19 @@ sourcesRouter.post('/api/kotatsu/sources/circuit-reset', (req, res) => {
 
 // ── GET /api/sources/dashboard ───────────────────────────────────────────────
 sourcesRouter.get('/api/sources/dashboard', (_req, res) => {
-  const topSourcesList = KOTATSU_SOURCES.slice(0, 50).map((source) => {
+  const allSources = getAllSourcesWithExtensions();
+  const topSourcesList = allSources.map((source) => {
     const h = sourceHealthMap.get(source.id);
     const cb = sourceCircuitBreaker.getState(source.id);
     const srcDef = SOURCE_MAP.get(source.id);
     const urlStr = source.baseUrl || srcDef?.baseUrl || '';
     let domainStr = '';
     try { domainStr = new URL(urlStr).hostname; } catch {}
+    const isAlive = isSourceAlive(source.id, syncConfig) && !disabledSourceIds.has(source.id);
     return {
       id: source.id,
       name: source.name,
-      engine: (source.id.includes('madara') ? 'madara' : 'custom'),
+      engine: (source.engineType || (source.id.includes('madara') ? 'madara' : 'custom')),
       lang: source.lang || 'en',
       domain: domainStr,
       baseUrl: urlStr,
@@ -334,8 +339,11 @@ sourcesRouter.get('/api/sources/dashboard', (_req, res) => {
       nextProbeTime: cb.nextProbeTime,
       consecutiveFailures: h?.consecutiveFailures ?? cb.failures,
       lastChecked: h?.lastChecked || cb.lastChecked || 0,
-      lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : 'ok'),
+      lastStatus: h?.lastStatus || (cb.state === 'OPEN' ? 'down' : isAlive ? 'ok' : 'disabled'),
       failureReason: h?.failureReason || cb.lastFailureReason,
+      isAlive,
+      latencyMs: (h as any)?.latencyMs || 0,
+      challenge: (h as any)?.challenge || 'None',
     };
   });
 
