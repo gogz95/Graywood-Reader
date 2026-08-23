@@ -46,6 +46,20 @@ export function buildLibraryCacheSnapshot(): LibraryCacheSnapshot {
   const typeSet = new Set<string>();
   const sourceCountMap = new Map<string, number>();
 
+  // Pre-index sources for fast O(1) lookup instead of O(N*M) linear search
+  const sourceById = new Map<string, string>();
+  const sourceByName = new Map<string, string>();
+  const sourceByDomain: Array<{ domain: string; id: string }> = [];
+
+  for (const s of activeSources) {
+    const idL = s.id.toLowerCase();
+    const nameL = s.name.toLowerCase();
+    const domain = s.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+    sourceById.set(idL, s.id);
+    sourceByName.set(nameL, s.id);
+    if (domain) sourceByDomain.push({ domain, id: s.id });
+  }
+
   for (const m of allManga) {
     if (isSeriesFromDisabledSource(m)) continue;
 
@@ -64,23 +78,21 @@ export function buildLibraryCacheSnapshot(): LibraryCacheSnapshot {
       }
     }
 
-    // Match and track source
-    const sName = (m.sourceName || '').toLowerCase();
+    // Fast O(1) match and track source
+    const sName = (m.sourceName || '').toLowerCase().trim();
     const sUrl = (m.sourceUrl || '').toLowerCase();
-    const matchedSrc = activeSources.find((s) => {
-      const idL = s.id.toLowerCase();
-      const nameL = s.name.toLowerCase();
-      const domain = s.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
-      return (
-        sName.includes(idL) ||
-        idL.includes(sName) ||
-        sName.includes(nameL) ||
-        nameL.includes(sName) ||
-        (sUrl && domain && sUrl.includes(domain))
-      );
-    });
+    let matchedId = sourceById.get(sName) || sourceByName.get(sName);
 
-    const srcId = matchedSrc ? matchedSrc.id : (m.sourceName || 'custom').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!matchedId && sUrl) {
+      for (const d of sourceByDomain) {
+        if (sUrl.includes(d.domain)) {
+          matchedId = d.id;
+          break;
+        }
+      }
+    }
+
+    const srcId = matchedId || (sName ? sName.replace(/[^a-z0-9]/g, '') : 'custom');
     sourceCountMap.set(srcId, (sourceCountMap.get(srcId) || 0) + 1);
   }
 

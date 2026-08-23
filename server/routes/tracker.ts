@@ -15,6 +15,7 @@ import {
   syncResetManga,
   syncBulkAddOrUpdateManga,
   getGeminiClient,
+  autoUpdateLogs,
 } from '../appState';
 import { isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import {
@@ -39,7 +40,7 @@ export interface AutoUpdateLog {
   newChapter?: number;
 }
 
-export const autoUpdateLogs: AutoUpdateLog[] = [];
+export { autoUpdateLogs };
 export const autoUpdateStatus = {
   isScanning: false,
   currentSource: '',

@@ -297,6 +297,7 @@ export class KotatsuImageLoader {
       clearInterval(this._gcInterval);
       this._gcInterval = null;
     }
+    this.onStateChange = undefined;
   }
 
   /**

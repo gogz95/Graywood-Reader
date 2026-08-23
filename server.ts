@@ -355,7 +355,20 @@ async function runLiveRateSpacedAutoUpdate() {
   autoUpdateStatus.newReleasesFound = 0;
   autoUpdateStatus.lastScanTimestamp = new Date().toISOString();
 
-  const activeSeries = mangaDatabase.filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m));
+  // Prioritize reading series & favorites over cold catalog entries
+  const eligibleSeries = mangaDatabase
+    .filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m))
+    .sort((a, b) => {
+      const aPrio = (a.status === 'reading' ? 10 : 0) + (a.isFavorite ? 5 : 0);
+      const bPrio = (b.status === 'reading' ? 10 : 0) + (b.isFavorite ? 5 : 0);
+      if (aPrio !== bPrio) return bPrio - aPrio;
+      const aTime = Math.max(new Date(a.lastReadAt || 0).getTime(), new Date(a.lastUpdated || 0).getTime());
+      const bTime = Math.max(new Date(b.lastReadAt || 0).getTime(), new Date(b.lastUpdated || 0).getTime());
+      return bTime - aTime;
+    });
+
+  // Process a prioritized batch of up to 120 series per cycle to avoid endless background scraping
+  const activeSeries = eligibleSeries.slice(0, 120);
   autoUpdateStatus.totalCount = activeSeries.length;
 
   for (const manga of activeSeries) {
@@ -377,6 +390,7 @@ async function runLiveRateSpacedAutoUpdate() {
           oldChapter: prevCh,
           newChapter: updated.latestChapter,
         });
+        if (autoUpdateLogs.length > 100) autoUpdateLogs.pop();
         dispatchNewChapterWebhooks(updated, updated.latestChapter || 1);
       }
       await new Promise((r) => setTimeout(r, 600));

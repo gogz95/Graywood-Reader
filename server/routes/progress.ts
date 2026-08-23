@@ -153,21 +153,19 @@ progressRouter.get("/api/reader/history/:mangaId", (req, res) => {
 // Get the "Continue Reading" list: most-recently-read manga for the user.
 progressRouter.get("/api/reader/history", (req, res) => {
   const userId = resolveProgressUserId(req);
-  const all = SqliteDb.getAllManga();
+  const progRows = SqliteDb.getAllReadingProgressForUser(userId);
   const map = new Map<string, any>();
-  for (const m of all) {
-    const prog = SqliteDb.getReadingProgress(m.id, userId);
-    for (const p of prog) {
-      const rec = map.get(m.id);
-      if (!rec || (p.last_read_at || '') > (rec.last_read_at || '')) {
-        map.set(m.id, { manga: m, progress: p });
-      }
+
+  for (const p of progRows) {
+    if (!p.manga_id || map.has(p.manga_id)) continue;
+    const manga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
+    if (manga) {
+      map.set(p.manga_id, { manga, progress: p });
+      if (map.size >= 50) break;
     }
   }
-  const list = [...map.values()]
-    .sort((a, b) => (b.progress.last_read_at || '').localeCompare(a.progress.last_read_at || ''))
-    .slice(0, 50);
-  res.json(list);
+
+  res.json([...map.values()]);
 });
 
 // Get real reading analytics (per-day activity) for the active user, converted

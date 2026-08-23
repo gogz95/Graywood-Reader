@@ -38,7 +38,7 @@ export function scheduleSourceHealthPersist() {
       for (const [id, h] of sourceHealthMap) obj[id] = h;
       SqliteDb.setSourceHealthMap(obj);
     } catch { /* non-critical — health state is best-effort */ }
-  }, 500);
+  }, 5000);
 }
 
 export function updateSourceHealth(sourceId: string, html: string | null, statusCode: number, error?: string) {

@@ -1344,19 +1344,27 @@ export class KotatsuImageEngine {
       const sqliteCached = SqliteDb.getCachedChapterPages(domainId, chapterNumber, targetUrl);
       if (sqliteCached && sqliteCached.pages.length > 0) {
         console.log(`[Kotatsu Image Engine] SQLite Cache Hit for ${cacheKey} (${sqliteCached.pages.length} pages)`);
-        this.pageListCache.set(cacheKey, { pages: sqliteCached.pages, timestamp: Date.now() });
+        this.setMemoryCache(cacheKey, { pages: sqliteCached.pages, timestamp: Date.now() });
         return sqliteCached.pages;
       }
     } catch {}
 
     const pages = await extractLiveDomainChapterPages(targetUrl, domainId, chapterNumber);
     if (pages && pages.length > 0) {
-      this.pageListCache.set(cacheKey, { pages, timestamp: Date.now() });
+      this.setMemoryCache(cacheKey, { pages, timestamp: Date.now() });
       try {
         SqliteDb.setCachedChapterPages(domainId, chapterNumber, targetUrl, pages, this.maxCacheAgeMs);
       } catch {}
     }
     return pages;
+  }
+
+  private setMemoryCache(key: string, entry: KotatsuPageListCacheEntry) {
+    if (this.pageListCache.size >= 300) {
+      const oldest = this.pageListCache.keys().next().value;
+      if (oldest) this.pageListCache.delete(oldest);
+    }
+    this.pageListCache.set(key, entry);
   }
 
   public clearCache() {

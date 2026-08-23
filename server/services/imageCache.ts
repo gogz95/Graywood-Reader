@@ -23,8 +23,11 @@ const MEM_MAX_TOTAL_BYTES = 40 * 1024 * 1024; // 40 MB max in RAM
 class ImageCacheService {
   private memCache = new Map<string, { image: CachedImage; lastAccessed: number }>();
   private inFlight = new Map<string, Promise<CachedImage | null>>();
+  private diskMetaIndex = new Map<string, { size: number; lastAccessed: number }>();
   private totalMemBytes = 0;
+  private totalDiskBytes = 0;
   private isInitialized = false;
+  private lastDiskPruneTime = 0;
 
   constructor() {
     this.ensureDirectory();
@@ -36,9 +39,31 @@ class ImageCacheService {
         fs.mkdirSync(CACHE_DIR, { recursive: true });
       }
       this.isInitialized = true;
+      // Asynchronously initialize disk metadata index once in the background
+      setTimeout(() => this.initializeDiskIndex().catch(() => {}), 1000);
     } catch (err) {
       console.warn('[ImageCache] Failed to initialize disk cache dir:', err);
     }
+  }
+
+  private async initializeDiskIndex() {
+    if (!this.isInitialized) return;
+    try {
+      const files = await fs.promises.readdir(CACHE_DIR);
+      const metaFiles = files.filter((f) => f.endsWith('.json'));
+      let sumBytes = 0;
+      for (const mf of metaFiles) {
+        try {
+          const raw = await fs.promises.readFile(path.join(CACHE_DIR, mf), 'utf8');
+          const meta: MetaInfo = JSON.parse(raw);
+          const key = mf.replace('.json', '');
+          const size = meta.size || 0;
+          sumBytes += size;
+          this.diskMetaIndex.set(key, { size, lastAccessed: meta.lastAccessed || 0 });
+        } catch {}
+      }
+      this.totalDiskBytes = sumBytes;
+    } catch {}
   }
 
   private hashUrl(url: string): string {
@@ -86,7 +111,10 @@ class ImageCacheService {
         this.putMemory(key, cached);
 
         // Update access time asynchronously
-        meta.lastAccessed = Date.now();
+        const now = Date.now();
+        meta.lastAccessed = now;
+        const indexed = this.diskMetaIndex.get(key);
+        if (indexed) indexed.lastAccessed = now;
         fs.promises.writeFile(metaPath, JSON.stringify(meta)).catch(() => {});
 
         return cached;
@@ -111,18 +139,26 @@ class ImageCacheService {
       try {
         const binPath = path.join(CACHE_DIR, `${key}.bin`);
         const metaPath = path.join(CACHE_DIR, `${key}.json`);
+        const now = Date.now();
         const meta: MetaInfo = {
           contentType,
           etag,
           size: buffer.length,
-          lastAccessed: Date.now(),
+          lastAccessed: now,
         };
 
         await fs.promises.writeFile(binPath, buffer);
         await fs.promises.writeFile(metaPath, JSON.stringify(meta));
 
-        // Periodically prune disk cache in background
-        if (Math.random() < 0.05) {
+        // Update in-memory index
+        const prev = this.diskMetaIndex.get(key);
+        if (prev) this.totalDiskBytes -= prev.size;
+        this.diskMetaIndex.set(key, { size: buffer.length, lastAccessed: now });
+        this.totalDiskBytes += buffer.length;
+
+        // Throttled background disk prune check (runs at most once every 10 minutes)
+        if (now - this.lastDiskPruneTime > 10 * 60 * 1000 && this.totalDiskBytes > MAX_DISK_BYTES) {
+          this.lastDiskPruneTime = now;
           this.pruneDiskCache().catch(() => {});
         }
       } catch (err) {
@@ -200,37 +236,26 @@ class ImageCacheService {
   private async pruneDiskCache() {
     if (!this.isInitialized) return;
     try {
-      const files = await fs.promises.readdir(CACHE_DIR);
-      const metaFiles = files.filter((f) => f.endsWith('.json'));
+      if (this.totalDiskBytes <= MAX_DISK_BYTES) return;
 
-      let totalBytes = 0;
-      const entries: { key: string; size: number; lastAccessed: number }[] = [];
+      const entries = Array.from(this.diskMetaIndex.entries()).map(([key, info]) => ({
+        key,
+        size: info.size,
+        lastAccessed: info.lastAccessed,
+      }));
 
-      for (const mf of metaFiles) {
+      // Sort oldest first
+      entries.sort((a, b) => a.lastAccessed - b.lastAccessed);
+
+      for (const entry of entries) {
+        if (this.totalDiskBytes <= MAX_DISK_BYTES * 0.8) break;
         try {
-          const raw = await fs.promises.readFile(path.join(CACHE_DIR, mf), 'utf8');
-          const meta: MetaInfo = JSON.parse(raw);
-          const key = mf.replace('.json', '');
-          totalBytes += meta.size || 0;
-          entries.push({ key, size: meta.size || 0, lastAccessed: meta.lastAccessed || 0 });
+          await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.bin`)).catch(() => {});
+          await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.json`)).catch(() => {});
+          this.totalDiskBytes -= entry.size;
+          this.diskMetaIndex.delete(entry.key);
         } catch {
-          // ignore corrupted meta
-        }
-      }
-
-      if (totalBytes > MAX_DISK_BYTES) {
-        // Sort oldest first
-        entries.sort((a, b) => a.lastAccessed - b.lastAccessed);
-
-        for (const entry of entries) {
-          if (totalBytes <= MAX_DISK_BYTES * 0.8) break;
-          try {
-            await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.bin`)).catch(() => {});
-            await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.json`)).catch(() => {});
-            totalBytes -= entry.size;
-          } catch {
-            // ignore unlink errors
-          }
+          // ignore unlink errors
         }
       }
     } catch {

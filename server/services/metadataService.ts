@@ -181,6 +181,10 @@ export async function getMangaDexMetadataByTitle(
       genres: (matched.attributes?.tags || []).map((t: any) => t.attributes?.name?.en).filter(Boolean).slice(0, 8),
       altTitles: (matched.attributes?.altTitles || []).map((t: any) => Object.values(t)[0]).filter(Boolean) as string[],
     };
+    if (mangadexMetaCache.size >= 500) {
+      const oldestKey = mangadexMetaCache.keys().next().value;
+      if (oldestKey) mangadexMetaCache.delete(oldestKey);
+    }
     mangadexMetaCache.set(key, { ...meta, fetchedAt: Date.now() });
     return meta;
   } catch (_) {
@@ -638,6 +642,10 @@ async function cachedProviderResult<T extends UnifiedMetadataResult | null>(
   if (hit && hit.expires > Date.now()) return hit.value as T;
   const value = await fn();
   if (value) {
+    if (metadataCache.size >= 500) {
+      const oldestKey = metadataCache.keys().next().value;
+      if (oldestKey) metadataCache.delete(oldestKey);
+    }
     metadataCache.set(key, { value, expires: Date.now() + ttl });
   } else {
     metadataCache.delete(key);

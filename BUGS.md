@@ -35,6 +35,23 @@ _No active bugs._
 
 > Bugs that have been resolved are moved here for historical reference.
 
+### [BUG-043] Overnight Performance Degradation, Ballooning Auto-Updater & Scraper Leaks
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server.ts`, `server/routes/progress.ts`, `server/services/imageCache.ts`, `server/services/libraryCacheService.ts`, `server/services/metadataService.ts`, `server/services/crawlerEngine.ts`, `server/services/sourceHealthService.ts`, `src/utils/KotatsuImageLoader.ts`, `src/hooks/useGamepadNavigation.ts`, `src/types.ts`
+- **Submitted-By**: Darkmodes (2026-08-23)
+- **Description**: After leaving the server running overnight, the application experienced high lag, high memory consumption, and slow response times.
+- **Root causes**:
+  1. Auto-updater scanned all 2,039 series every 30m without prioritizing active/reading titles; `autoUpdateLogs` had no upper bound.
+  2. `GET /api/reader/history` executed 2,039 synchronous SQLite queries in a loop.
+  3. `ImageCacheService.pruneDiskCache` read every `.json` file on disk synchronously on random image writes.
+  4. `buildLibraryCacheSnapshot` performed 2.4 million string comparisons in an $O(N \times M)$ loop.
+  5. In-memory caches (`mangadexMetaCache`, `metadataCache`, `KotatsuImageEngine.pageListCache`) lacked upper capacity bounds and LRU eviction.
+  6. `useGamepadNavigation` polled `requestAnimationFrame` continuously at 60-144 FPS even when idle with no gamepad connected.
+  7. `KotatsuImageLoader` created un-cleared GC intervals and closures on chapter loads without a `destroy()` cleanup hook.
+- **Fixed in**: 2026-08-23 — Prioritized active/reading series batches; capped `autoUpdateLogs` to 100 items; converted `/api/reader/history` to a single indexed SQL lookup; added in-memory disk index and 10m throttling for image cache pruning; pre-indexed library cache sources for $O(1)$ lookups; capped in-memory maps with LRU eviction; optimized gamepad RAF loop to run only when gamepads are attached; and implemented `destroy()` on `KotatsuImageLoader`.
+
 ### [BUG-042] Notifications on series with new chapters
 - **Status**: `fixed`
 - **Priority**: `medium`

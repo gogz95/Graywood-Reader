@@ -73,17 +73,35 @@ export function useGamepadNavigation({
     return () => window.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  // 3. HTML5 Gamepad / Nintendo Joy-Con Polling Loop
+  // 3. HTML5 Gamepad / Nintendo Joy-Con Polling Loop (Active only when gamepads are plugged in)
   useEffect(() => {
-    let animFrameId: number;
+    let animFrameId: number | null = null;
+    let isPolling = false;
+    let slowCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+    const hasConnectedGamepad = (): boolean => {
+      if (typeof navigator.getGamepads !== 'function') return false;
+      const gps = navigator.getGamepads();
+      for (let i = 0; i < gps.length; i++) {
+        if (gps[i]) return true;
+      }
+      return false;
+    };
 
     const pollGamepads = () => {
+      if (document.hidden) {
+        stopPolling();
+        return;
+      }
+
       const gamepads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+      let anyFound = false;
       const now = Date.now();
       const DEBOUNCE_MS = 220; // prevent rapid duplicate fires
 
       for (const gp of gamepads) {
         if (!gp) continue;
+        anyFound = true;
 
         // Button index mapping:
         // 0: A / Bottom face button -> Next
@@ -132,10 +150,58 @@ export function useGamepadNavigation({
         }
       }
 
+      if (anyFound) {
+        animFrameId = requestAnimationFrame(pollGamepads);
+      } else {
+        stopPolling();
+      }
+    };
+
+    const startPolling = () => {
+      if (isPolling || document.hidden) return;
+      isPolling = true;
       animFrameId = requestAnimationFrame(pollGamepads);
     };
 
-    animFrameId = requestAnimationFrame(pollGamepads);
-    return () => cancelAnimationFrame(animFrameId);
+    const stopPolling = () => {
+      isPolling = false;
+      if (animFrameId !== null) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+    };
+
+    const handleGamepadConnected = () => startPolling();
+    const handleGamepadDisconnected = () => {
+      if (!hasConnectedGamepad()) stopPolling();
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) stopPolling();
+      else if (hasConnectedGamepad()) startPolling();
+    };
+
+    window.addEventListener('gamepadconnected', handleGamepadConnected);
+    window.addEventListener('gamepaddisconnected', handleGamepadDisconnected);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Initial check: only start high-frequency RAF if a gamepad is already attached
+    if (hasConnectedGamepad()) {
+      startPolling();
+    } else {
+      // Light check every 3s in case browser doesn't dispatch gamepadconnected
+      slowCheckInterval = setInterval(() => {
+        if (!isPolling && hasConnectedGamepad()) {
+          startPolling();
+        }
+      }, 3000);
+    }
+
+    return () => {
+      stopPolling();
+      if (slowCheckInterval) clearInterval(slowCheckInterval);
+      window.removeEventListener('gamepadconnected', handleGamepadConnected);
+      window.removeEventListener('gamepaddisconnected', handleGamepadDisconnected);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 }

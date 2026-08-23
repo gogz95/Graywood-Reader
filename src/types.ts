@@ -287,13 +287,18 @@ export interface DuplicateCandidate {
 
 export interface AutoUpdateLog {
   id: string;
-  mangaId: string;
+  mangaId?: string;
   mangaTitle: string;
-  previousChapter: number;
-  newChapter: number;
-  source: string;
+  previousChapter?: number;
+  newChapter?: number;
+  oldChapter?: number;
+  source?: string;
+  sourceName?: string;
   timestamp: string;
-  type: MangaType;
+  type?: MangaType;
+  status?: 'updated' | 'unchanged' | 'error' | string;
+  message?: string;
+  details?: string;
 }
 
 
