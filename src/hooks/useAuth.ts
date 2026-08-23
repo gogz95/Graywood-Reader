@@ -159,7 +159,7 @@ export function useAuth() {
     setActiveProfileId(fallbackId);
   }, [isHostComputer, setActiveProfileId]);
 
-  const handleUpdateProfile = useCallback(async (updates: { name?: string; avatar?: string; email?: string }): Promise<boolean> => {
+  const handleUpdateProfile = useCallback(async (updates: { name?: string; avatar?: string; email?: string; theme?: UserProfile['theme'] }): Promise<boolean> => {
     try {
       const res = await apiFetch('/api/auth/profile', {
         method: 'PUT',

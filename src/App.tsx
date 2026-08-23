@@ -40,6 +40,7 @@ import {
   DuplicateCandidate,
   OpenApiManga,
   AppSettings,
+  AppTheme,
   ReadingStatus,
   isNsfwManga,
 } from './types';
@@ -399,7 +400,18 @@ export default function App() {
   }, [appSettings.appLockEnabled, appSettings.appLockPinHash, appSettings.appLockTimeoutMinutes]);
 
   const handleSaveSettings = async (newSettings: AppSettings) => {
-    setAppSettings(newSettings);
+    setAppSettings((prev) => ({ ...prev, ...newSettings }));
+    // Persist the chosen UI theme to the signed-in user's profile too, so each
+    // account keeps its own theme across sessions / devices (falling back to the
+    // global default below when the user has never picked one).
+    if (
+      newSettings.appTheme &&
+      activeProfile &&
+      activeProfile.id !== 'usr_guest' &&
+      activeProfile.theme !== newSettings.appTheme
+    ) {
+      await handleUpdateProfile({ theme: newSettings.appTheme });
+    }
     try {
       await apiFetch('/api/settings', {
         method: 'POST',
@@ -466,17 +478,22 @@ export default function App() {
     })();
   }, [fetchClientContext, fetchProfiles, fetchAuthMe]);
 
+  // Effective UI theme — a signed-in user's saved theme wins, otherwise fall
+  // back to the global default (so each account keeps its own appearance).
+  const effectiveTheme: AppTheme =
+    (activeProfile?.theme as AppTheme) || appSettings.appTheme || 'amber';
+
   // Synchronize App Theme on body element (+ browser chrome / PWA color)
   useEffect(() => {
-    if (appSettings.appTheme) {
-      document.body.className = `theme-${appSettings.appTheme}`;
+    if (effectiveTheme) {
+      document.body.className = `theme-${effectiveTheme}`;
       requestAnimationFrame(() => {
         const bg = getComputedStyle(document.body).getPropertyValue('--bg-app').trim();
         const meta = document.querySelector('meta[name="theme-color"]');
         if (bg && meta) meta.setAttribute('content', bg);
       });
     }
-  }, [appSettings.appTheme]);
+  }, [effectiveTheme]);
 
   // Run Auto-Update Crawler
   const handleRunAutoUpdate = async () => {
@@ -1198,7 +1215,7 @@ export default function App() {
       {isSettingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal
-            settings={appSettings}
+            settings={{ ...appSettings, appTheme: effectiveTheme }}
             onSaveSettings={handleSaveSettings}
             onClose={() => setIsSettingsOpen(false)}
             onRefreshData={() => {

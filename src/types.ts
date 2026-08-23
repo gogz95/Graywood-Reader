@@ -352,6 +352,7 @@ export interface UserProfile {
   avatar: string; // Emoji or avatar icon
   role: UserRole; // 'admin' (Host/Administrator) or 'user' (Individual User)
   storageFolderPath?: string; // Encrypted at rest (AES-256-GCM PII)
+  theme?: AppTheme;
   createdAt: string;
 }
 

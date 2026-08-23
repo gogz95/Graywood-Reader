@@ -238,7 +238,7 @@ authRouter.put("/api/auth/profile", (req, res) => {
     return res.status(404).json({ error: 'Not Found', message: 'User profile not found.' });
   }
 
-  const { name, avatar, email } = req.body || {};
+  const { name, avatar, email, theme } = req.body || {};
   const current = userProfiles[userIdx];
 
   if (name && typeof name === 'string' && name.trim()) {
@@ -246,6 +246,9 @@ authRouter.put("/api/auth/profile", (req, res) => {
   }
   if (avatar && typeof avatar === 'string' && avatar.trim()) {
     current.avatar = avatar.trim();
+  }
+  if (theme && typeof theme === 'string' && ['amber', 'emerald', 'amoled', 'violet', 'cyberpunk'].includes(theme)) {
+    current.theme = theme as any;
   }
   if (email && typeof email === 'string' && email.trim()) {
     const cleanEmail = email.trim().toLowerCase();
@@ -265,7 +268,7 @@ authRouter.put("/api/auth/profile", (req, res) => {
     saveDatabaseToDisk();
   }
 
-  logger.info('Auth', `Profile updated for user "${current.username}" (${current.id})`);
+  logger.info('Auth', `Profile updated for user "${current.username}" (${current.id}) theme=${current.theme || 'default'}`);
   res.json({ success: true, user: toPublicUser(current) });
 });
 

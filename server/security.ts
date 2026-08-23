@@ -245,6 +245,7 @@ export function toPublicUser(u: UserProfile) {
     email: u.email,
     avatar: u.avatar,
     role: u.role,
+    theme: u.theme,
     createdAt: u.createdAt,
   };
 }
