@@ -731,14 +731,13 @@ mangaRouter.post('/:id/custom-metadata-update', (req, res) => {
 
   updated.lastUpdated = new Date().toISOString();
 
-  SqliteDb.upsertManga(updated);
-  const idx = mangaDatabase.findIndex((m) => m.id === id);
-  if (idx !== -1) mangaDatabase[idx] = updated;
-  saveDatabaseToDisk();
+  syncAddOrUpdateManga(updated);
+  const uid = resolveRequestUserId(req);
+  const finalManga = uid ? SqliteDb.applyUserOverlay([updated], uid)[0] : updated;
 
   res.json({
     success: true,
-    manga: updated,
+    manga: finalManga,
     message: 'Metadata and artwork updated successfully',
   });
 });

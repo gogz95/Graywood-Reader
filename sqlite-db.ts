@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const DB_PATH = path.join(DATA_DIR, 'manga.db');
+const DB_PATH = process.env.DB_PATH || (process.env.NODE_ENV === 'test' ? path.join(DATA_DIR, 'test-manga.db') : path.join(DATA_DIR, 'manga.db'));
 
 logger.info('SQLite', 'Initializing SQLite database', { dbPath: DB_PATH });
 const db = new Database(DB_PATH);
@@ -534,6 +534,29 @@ export function purgeReaperScans(): number {
   }
 }
 
+export function purgeTestRemnants(): number {
+  try {
+    const info = db.prepare(`
+      DELETE FROM manga 
+      WHERE id LIKE 'test_backup_%'
+         OR id LIKE 'manga_mig_%'
+         OR id LIKE 'tachi_prog_%'
+         OR title = 'Safe Adventure Story'
+         OR title = 'Adult Smut Explicit Story'
+         OR title = 'Solo Backup Leveling'
+         OR title LIKE '%Server Migration Edition%'
+         OR (title = 'Solo Leveling' AND coverImage LIKE '%unsplash.com%')
+    `).run();
+    if (info.changes > 0) {
+      logger.info('SQLite', `Cleaned up ${info.changes} test remnant series from database`);
+    }
+    return info.changes;
+  } catch (err: any) {
+    logger.warn('SQLite', 'Failed to purge test remnants', { error: err?.message });
+    return 0;
+  }
+}
+
 function mapMangaItemToRow(item: MangaItem) {
   const metadataOverrides = Array.isArray(item.metadataOverrides) ? item.metadataOverrides : [];
   const isOverrideSet = metadataOverrides.includes('isNsfw');
@@ -655,6 +678,11 @@ export const SqliteDb = {
   rekeyCollidedSourceIds(): number {
     _mangaCache = null;
     return rekeyCollidedSourceIds();
+  },
+
+  purgeTestRemnants(): number {
+    _mangaCache = null;
+    return purgeTestRemnants();
   },
 
   getMangaById(id: string): MangaItem | null {

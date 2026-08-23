@@ -40,14 +40,24 @@ function computeMetadataOverrides(
     isNsfw: boolean;
   }
 ): string[] {
-  if (!prev) return [];
+  if (!prev) {
+    const overridden = new Set<string>();
+    if (next.title) overridden.add('title');
+    if (next.altTitles && next.altTitles.length > 0) overridden.add('altTitles');
+    if (next.description) overridden.add('description');
+    if (next.coverImage) overridden.add('coverImage');
+    if (next.genres && next.genres.length > 0) overridden.add('genres');
+    if (next.rating) overridden.add('rating');
+    if (next.isNsfw) overridden.add('isNsfw');
+    return OVERRIDEABLE_METADATA.filter((field) => overridden.has(field));
+  }
   const overridden = new Set<string>(prev.metadataOverrides || []);
 
   if (prev.title !== next.title) overridden.add('title');
-  if (prev.altTitles.join('|') !== next.altTitles.join('|')) overridden.add('altTitles');
+  if ((prev.altTitles || []).join('|') !== next.altTitles.join('|')) overridden.add('altTitles');
   if (prev.description !== next.description) overridden.add('description');
   if (prev.coverImage !== next.coverImage) overridden.add('coverImage');
-  if (prev.genres.join('|') !== next.genres.join('|')) overridden.add('genres');
+  if ((prev.genres || []).join('|') !== next.genres.join('|')) overridden.add('genres');
   if (Number(prev.rating) !== Number(next.rating)) overridden.add('rating');
   if (Boolean(prev.isNsfw !== undefined ? prev.isNsfw : isNsfwManga(prev)) !== Boolean(next.isNsfw)) {
     overridden.add('isNsfw');

@@ -255,6 +255,9 @@ export function cancelPendingSave(): void {
 // Legacy JSON snapshot writer — used only for graceful-shutdown backups and
 // explicit exports. SQLite (data/manga.db) is the canonical persistent store.
 export function writeLegacyJsonSnapshot(reason: string) {
+  if (process.env.NODE_ENV === 'test' || process.env.DISABLE_DISK_SNAPSHOTS === 'true') {
+    return;
+  }
   try {
     const dataToSave = {
       version: 1,
@@ -433,6 +436,7 @@ export function loadDatabaseFromDisk() {
     //    generator (which collapsed every series on a site into a single row).
     //    Must run before mangaDatabase is loaded so the fixed IDs are used.
     try { SqliteDb.rekeyCollidedSourceIds(); } catch (e) { console.warn("[SQLite Engine] rekeyCollidedSourceIds failed:", e); }
+    try { SqliteDb.purgeTestRemnants(); } catch (e) { console.warn("[SQLite Engine] purgeTestRemnants failed:", e); }
 
     // 1. Manga library: SQLite is the canonical store.
     //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)

@@ -7,6 +7,11 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     globals: false,
     testTimeout: 15000,
+    env: {
+      NODE_ENV: 'test',
+      DB_PATH: path.resolve(process.cwd(), 'data', 'test-manga.db'),
+      DISABLE_DISK_SNAPSHOTS: 'true',
+    },
   },
   resolve: {
     alias: {
@@ -14,3 +19,4 @@ export default defineConfig({
     },
   },
 });
+

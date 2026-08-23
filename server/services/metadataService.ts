@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
-import { mangaDatabase, appSettings, saveDatabaseToDisk } from '../appState';
+import { mangaDatabase, appSettings, saveDatabaseToDisk, syncAddOrUpdateManga } from '../appState';
 import {
   snapshotMetadataOverrides,
   restoreMetadataOverrides,
@@ -634,12 +634,7 @@ export async function refreshSingleMangaMetadata(manga: MangaItem): Promise<Mang
   restoreMetadataOverrides(manga, metadataSnap);
 
   manga.lastUpdated = new Date().toISOString();
-  SqliteDb.upsertManga(manga);
-
-  const idx = mangaDatabase.findIndex((m) => m.id === manga.id);
-  if (idx !== -1) {
-    mangaDatabase[idx] = manga;
-  }
+  syncAddOrUpdateManga(manga);
   return manga;
 }
 
