@@ -223,6 +223,16 @@ body.theme-cyberpunk {
   scrollbar-width: none;
 }
 
+/* Fluid responsive modal viewport heights & touch targets */
+.modal-viewport-height {
+  max-height: min(92vh, calc(100dvh - 2rem));
+}
+
+.tap-target-touch {
+  min-height: 44px;
+  min-width: 44px;
+}
+
 /* Fluid responsive image scaling */
 img {
   max-width: 100%;
@@ -432,4 +442,49 @@ body.e-ink-mode *,
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
 }
+
+/* ── Cinematic Media Hub Tokens & Helpers ─────────────────────────────────── */
+.hero-ambient-glow {
+  background: radial-gradient(
+    circle at 75% 35%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--accent-2) 14%, transparent) 40%,
+    transparent 70%
+  );
+}
+
+.shelf-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 0.75rem;
+  scrollbar-width: thin;
+}
+
+.shelf-carousel > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Ambient glow on cards */
+.glow-card {
+  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.5), 0 0 15px -2px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.glow-card:hover {
+  box-shadow: 0 14px 40px -4px rgba(0, 0, 0, 0.7), 0 0 25px -1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Wide horizontal Jump-Back-In card */
+.card-wide-resume {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateZ(0);
+}
+
+.card-wide-resume:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
 

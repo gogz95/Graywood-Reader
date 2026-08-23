@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeReadingAchievements } from '../src/utils/achievementsEngine';
+import { computeReadingAchievements, getPlayerLevelInfo } from '../src/utils/achievementsEngine';
 import { MangaItem } from '../src/types';
 
 describe('Achievements Engine', () => {
@@ -22,7 +22,7 @@ describe('Achievements Engine', () => {
       lastUpdated: '',
       rating: 9.8,
       autoUpdateEnabled: true,
-      notes: 'One of the best manhwa ever.',
+      notes: 'One of the best manhwa ever created. The art style and dungeon pacing are incredible.',
       addedAt: '',
       lastReadAt: '2026-08-21T02:30:00.000Z', // 2:30 AM night owl
       customTags: ['S-Rank', 'Favorite'],
@@ -66,14 +66,32 @@ describe('Achievements Engine', () => {
     expect(martialGod?.progress).toBe(100);
   });
 
-  it('calculates achievements score, tiers, and point values', () => {
+  it('calculates achievements score, tiers, and 75+ trophies matrix', () => {
     const { trophies, wrapped } = computeReadingAchievements(sampleList);
 
-    expect(trophies.length).toBeGreaterThanOrEqual(40);
+    expect(trophies.length).toBeGreaterThanOrEqual(70);
     expect(wrapped.totalScore).toBeGreaterThan(0);
     expect(wrapped.maxScore).toBeGreaterThan(wrapped.totalScore);
     expect(wrapped.tierBreakdown.bronze.total).toBeGreaterThan(0);
+    expect(wrapped.tierBreakdown.silver.total).toBeGreaterThan(0);
+    expect(wrapped.tierBreakdown.gold.total).toBeGreaterThan(0);
+    expect(wrapped.tierBreakdown.platinum.total).toBeGreaterThan(0);
+    expect(wrapped.tierBreakdown.diamond.total).toBeGreaterThan(0);
     expect(wrapped.tierBreakdown.mythic.total).toBeGreaterThan(0);
+  });
+
+  it('calculates player levels and titles smoothly', () => {
+    const level1 = getPlayerLevelInfo(0);
+    expect(level1.level).toBe(1);
+    expect(level1.title).toBe('Novice Reader');
+
+    const level10 = getPlayerLevelInfo(600);
+    expect(level10.level).toBe(11);
+    expect(level10.title).toBe('Dedicated Bookworm');
+
+    const levelHigh = getPlayerLevelInfo(6000);
+    expect(levelHigh.level).toBe(100);
+    expect(levelHigh.title).toBe('Endless Sovereign');
   });
 
   it('computes top genres and format distribution', () => {
@@ -107,7 +125,7 @@ describe('Achievements Engine', () => {
     expect(wrapped.totalSeriesTracked).toBe(0);
     expect(wrapped.topGenres.length).toBe(0);
     expect(wrapped.totalScore).toBe(0);
-    expect(trophies.length).toBeGreaterThanOrEqual(40);
+    expect(trophies.length).toBeGreaterThanOrEqual(70);
+    expect(wrapped.playerLevel).toBe(1);
   });
 });
-

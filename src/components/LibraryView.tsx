@@ -41,6 +41,9 @@ import {
   SlidersHorizontal,
   Grid3X3,
   List,
+  Play,
+  ArrowRight,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface LibraryViewProps {
@@ -455,6 +458,385 @@ const MangaListRow = React.memo<MangaListRowProps>(({
   );
 });
 
+interface HeroSpotlightProps {
+  items: MangaItem[];
+  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
+  onSelectManga: (manga: MangaItem) => void;
+}
+
+export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOpenReader, onSelectManga }) => {
+  const [index, setIndex] = useState(0);
+
+  if (!items || items.length === 0) return null;
+  const current = items[Math.min(index, items.length - 1)];
+  const progress = current.latestChapter > 0 ? Math.min(100, Math.round((current.currentChapter / current.latestChapter) * 100)) : 0;
+  const hasNew = current.latestChapter > current.currentChapter;
+
+  return (
+    <div className="relative rounded-3xl overflow-hidden border border-edge/80 shadow-2xl bg-surface/90 text-primary min-h-[300px] sm:min-h-[340px] flex flex-col justify-between group">
+      {/* Blurred ambient backdrop art */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <img
+          src={current.coverImage}
+          alt=""
+          className="w-full h-full object-cover blur-3xl opacity-25 scale-125 transition-all duration-700"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-app via-app/90 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/50" />
+        <div className="hero-ambient-glow absolute inset-0" />
+      </div>
+
+      {/* Main Hero Content */}
+      <div className="relative z-10 p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        <div className="space-y-3.5 max-w-2xl">
+          {/* Badges */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black tracking-wide uppercase bg-accent/20 text-accent border border-accent/30 shadow-xs">
+              ★ SPOTLIGHT
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+              current.type === 'manhwa' ? 'bg-blue-950/80 text-info border-info/30' :
+              current.type === 'manhua' ? 'bg-red-950/80 text-danger border-danger/30' :
+              'bg-purple-950/80 text-accent-2 border-accent-2/30'
+            }`}>
+              {current.type === 'manga' ? '🇯🇵 Manga' : current.type === 'manhwa' ? '🇰🇷 Manhwa' : current.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
+            </span>
+            {hasNew && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-sm">
+                +{current.latestChapter - current.currentChapter} New Chapters
+              </span>
+            )}
+            <div className="flex items-center gap-1 text-xs font-bold text-accent bg-app/60 px-2 py-0.5 rounded-full border border-edge">
+              <Star className="w-3 h-3 fill-accent text-accent" />
+              <span>{current.rating || '9.5'}</span>
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <h2
+              onClick={() => onSelectManga(current)}
+              className="text-2xl sm:text-4xl font-black text-primary hover:text-accent cursor-pointer transition-colors tracking-tight line-clamp-1 sm:line-clamp-2"
+            >
+              {current.title}
+            </h2>
+            {current.altTitles && current.altTitles.length > 0 && (
+              <p className="text-xs text-secondary/80 font-medium line-clamp-1 mt-0.5">
+                {current.altTitles[0]}
+              </p>
+            )}
+          </div>
+
+          {/* Synopsis */}
+          {current.description && (
+            <p className="text-xs sm:text-sm text-secondary line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-xl">
+              {current.description}
+            </p>
+          )}
+
+          {/* Progress Indicator */}
+          <div className="space-y-1.5 pt-1 max-w-md">
+            <div className="flex items-center justify-between text-xs font-semibold text-secondary">
+              <span>Chapter {current.currentChapter} of {current.latestChapter}</span>
+              <span className="text-accent font-bold">{progress}% read</span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-app/80 border border-edge/60 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-accent to-accent-2 rounded-full transition-all duration-500 shadow-sm"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Action CTAs */}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              onClick={() => onOpenReader(current, current.currentChapter + 1)}
+              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-accent/25 hover:shadow-accent/40 transition-all hover:scale-105 active:scale-95"
+            >
+              <Play className="w-4 h-4 fill-accent-fg" />
+              <span>Resume Chapter {current.currentChapter + 1}</span>
+            </button>
+
+            <button
+              onClick={() => onSelectManga(current)}
+              className="px-4 py-2.5 rounded-2xl bg-elevated/80 hover:bg-elevated text-primary font-bold text-xs sm:text-sm border border-edge-strong flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
+            >
+              <BookOpen className="w-4 h-4 text-accent" />
+              <span>View Series Info</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3D Floating Cover Card (Desktop) */}
+        <div
+          onClick={() => onSelectManga(current)}
+          className="hidden sm:block relative shrink-0 cursor-pointer group/cover"
+        >
+          <div className="relative aspect-[3/4] w-40 sm:w-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group-hover/cover:scale-105 group-hover/cover:border-accent transition-all duration-300">
+            <img
+              src={current.coverImage}
+              alt={current.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end p-3">
+              <span className="text-xs font-bold text-white flex items-center gap-1">
+                <BookOpen className="w-3.5 h-3.5 text-accent" /> View Details
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Slide Navigation Dots */}
+      {items.length > 1 && (
+        <div className="relative z-10 px-6 py-2.5 bg-app/40 backdrop-blur-md border-t border-edge/60 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            {items.slice(0, 6).map((item, idx) => (
+              <button
+                key={item.id}
+                onClick={() => setIndex(idx)}
+                aria-label={`Slide to ${item.title}`}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  index === idx ? 'w-8 bg-accent' : 'w-2 bg-edge-strong hover:bg-muted'
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIndex((prev) => (prev > 0 ? prev - 1 : Math.min(5, items.length - 1)))}
+              className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors"
+              title="Previous featured series"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIndex((prev) => (prev < Math.min(5, items.length - 1) ? prev + 1 : 0))}
+              className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors"
+              title="Next featured series"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+interface JumpBackInShelfProps {
+  items: MangaItem[];
+  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
+  onSelectManga: (manga: MangaItem) => void;
+}
+
+export const JumpBackInShelf = React.memo<JumpBackInShelfProps>(({ items, onOpenReader, onSelectManga }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-accent/15 text-accent border border-accent/25">
+            <Flame className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-primary tracking-tight">Jump Back In</h3>
+            <p className="text-[11px] text-secondary">Continue where you left off</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => scrollRef.current?.scrollBy({ left: -340, behavior: 'smooth' })}
+            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
+            title="Scroll left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => scrollRef.current?.scrollBy({ left: 340, behavior: 'smooth' })}
+            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
+            title="Scroll right"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="shelf-carousel gap-4 no-scrollbar py-1"
+      >
+        {items.map((manga) => {
+          const progress = manga.latestChapter > 0 ? Math.min(100, Math.round((manga.currentChapter / manga.latestChapter) * 100)) : 0;
+          const hasNew = manga.latestChapter > manga.currentChapter;
+
+          return (
+            <div
+              key={manga.id}
+              onClick={() => onSelectManga(manga)}
+              className="w-80 sm:w-96 card-wide-resume bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl p-3.5 flex gap-3.5 shadow-lg group cursor-pointer shrink-0"
+            >
+              <div className="relative w-20 sm:w-24 aspect-[3/4] rounded-xl overflow-hidden bg-app shrink-0">
+                <img
+                  src={manga.coverImage}
+                  alt={manga.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+                {hasNew && (
+                  <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded text-[9px] font-black bg-accent-2 text-accent-fg shadow-md">
+                    +{manga.latestChapter - manga.currentChapter}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2">
+                <div>
+                  <h4 className="font-bold text-sm text-primary group-hover:text-accent transition-colors line-clamp-1">
+                    {manga.title}
+                  </h4>
+                  <p className="text-[11px] text-secondary line-clamp-1">
+                    {manga.altTitles[0] || manga.sourceName}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-secondary">
+                    <span>Ch. {manga.currentChapter} of {manga.latestChapter}</span>
+                    <span className="text-accent font-bold">{progress}%</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-app overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-accent to-accent-2 rounded-full"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenReader(manga, manga.currentChapter + 1);
+                  }}
+                  className="w-full py-1.5 rounded-xl bg-accent text-accent-fg font-black text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-accent-bright transition-all active:scale-95"
+                >
+                  <Play className="w-3.5 h-3.5 fill-accent-fg" />
+                  <span>Resume Ch. {manga.currentChapter + 1}</span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+interface FreshReleasesShelfProps {
+  items: MangaItem[];
+  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
+  onSelectManga: (manga: MangaItem) => void;
+}
+
+export const FreshReleasesShelf = React.memo<FreshReleasesShelfProps>(({ items, onOpenReader, onSelectManga }) => {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-accent-2/15 text-accent-2 border border-accent-2/25">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-primary tracking-tight">Fresh Releases & Updates</h3>
+            <p className="text-[11px] text-secondary">Series with new chapters waiting for you</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => scrollRef.current?.scrollBy({ left: -340, behavior: 'smooth' })}
+            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
+            title="Scroll left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => scrollRef.current?.scrollBy({ left: 340, behavior: 'smooth' })}
+            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
+            title="Scroll right"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="shelf-carousel gap-4 no-scrollbar py-1"
+      >
+        {items.map((manga) => (
+          <div
+            key={manga.id}
+            onClick={() => onSelectManga(manga)}
+            className="w-36 sm:w-44 card-interactive bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl overflow-hidden shadow-lg flex flex-col shrink-0 cursor-pointer group"
+          >
+            <div className="relative aspect-[3/4] w-full overflow-hidden bg-app">
+              <img
+                src={manga.coverImage}
+                alt={manga.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/40" />
+
+              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md">
+                +{manga.latestChapter - manga.currentChapter} New
+              </span>
+
+              <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-app/80 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-edge text-[10px] font-bold text-accent">
+                <Star className="w-2.5 h-2.5 fill-accent text-accent" />
+                <span>{manga.rating || '9.0'}</span>
+              </div>
+            </div>
+
+            <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
+              <div>
+                <h4 className="font-bold text-xs text-primary group-hover:text-accent transition-colors line-clamp-1">
+                  {manga.title}
+                </h4>
+                <p className="text-[10px] text-secondary line-clamp-1">
+                  Ch. {manga.currentChapter} / {manga.latestChapter}
+                </p>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenReader(manga, manga.currentChapter + 1);
+                }}
+                className="w-full py-1 rounded-lg bg-accent text-accent-fg font-black text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-accent-bright transition-all"
+              >
+                <Play className="w-3 h-3 fill-accent-fg" />
+                <span>Read Ch. {manga.currentChapter + 1}</span>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
 export const LibraryView: React.FC<LibraryViewProps> = ({
   mangaList,
   searchQuery,
@@ -475,7 +857,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
   const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
   const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'title' | 'rating' | 'chapter' | 'nsfwFirst' | 'sfwFirst'>('updated');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'shelves' | 'grid' | 'table'>('shelves');
 
   const [isAutoTagging, setIsAutoTagging] = useState<boolean>(false);
   const [autoTagToast, setAutoTagToast] = useState<string | null>(null);
@@ -795,6 +1177,32 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
     return counts;
   }, [categories, mangaList]);
+
+  // Spotlight items (active series / top favorites with unread or progress)
+  const spotlightItems = React.useMemo(() => {
+    const list = [...mangaList].filter(m => !isGuest || !isNsfwManga(m));
+    return list.sort((a, b) => {
+      const aScore = (a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0) + (a.isFavorite ? 100000000000 : 0) + ((a.latestChapter - a.currentChapter > 0) ? 50000000000 : 0);
+      const bScore = (b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0) + (b.isFavorite ? 100000000000 : 0) + ((b.latestChapter - b.currentChapter > 0) ? 50000000000 : 0);
+      return bScore - aScore;
+    }).slice(0, 6);
+  }, [mangaList, isGuest]);
+
+  // Jump Back In items (actively in-progress reading)
+  const jumpBackInItems = React.useMemo(() => {
+    return mangaList
+      .filter((m) => m.status === 'reading' && m.currentChapter > 0 && (!isGuest || !isNsfwManga(m)))
+      .sort((a, b) => new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime())
+      .slice(0, 10);
+  }, [mangaList, isGuest]);
+
+  // Fresh releases items (latestChapter > currentChapter)
+  const freshReleasesItems = React.useMemo(() => {
+    return mangaList
+      .filter((m) => m.latestChapter > m.currentChapter && (!isGuest || !isNsfwManga(m)))
+      .sort((a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
+      .slice(0, 12);
+  }, [mangaList, isGuest]);
 
   return (
     <div className="space-y-6">

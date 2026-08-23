@@ -111,6 +111,36 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
+### 🤖 Track 5: AI Deep Comic Intelligence & "Webtoonification" Engine (Backlog ⚪)
+- **Smart Vision Panel-by-Panel "Webtoonification" of Classic Manga**:
+  - Canvas/WASM and ONNX panel boundary segmentation to transform traditional multi-panel RTL/LTR pages into a seamless, mobile-optimized vertical webtoon continuous scroll.
+- **Context-Aware Comic Inpainting & Dialogue Auto-Translation**:
+  - Seamless speech balloon text erasure with background inpainting and re-rendering of translated dialogue using dynamic manga typography.
+- **Spoiler-Safe Story Companion & Character Graph ("Who is this again?")**:
+  - Chapter-gated vector summaries, character relationship diagrams, and catch-up recaps (Chapters 1 → Current) powered by LLM without spoiling future chapters.
+
+---
+
+### ⚡ Track 6: Real-Time Co-Reading & "Manga Together" (Backlog ⚪)
+- **Synchronized Reading Rooms (WebRTC / WebSockets)**:
+  - Private multi-user reading lobbies with host-follower scroll interpolation, synchronized page turning, and instant chapter jumps.
+- **Live Laser Pointers & Flying Emoji Reactions**:
+  - Real-time cursor/laser overlays for highlighting panels and floating reactions attached to specific manga panels.
+- **Synced Ambient Atmosphere Audio**:
+  - Synchronized Web Audio ambient soundscapes (rain, cafe, fireplace) shared across room participants.
+
+---
+
+### 🌐 Track 7: Local-First Architecture & Multi-Node Federation (Backlog ⚪)
+- **In-Browser SQLite via OPFS (`wa-sqlite` / CRDT Sync)**:
+  - Run the library and reading state directly in browser storage for instant 0ms startup and 100% offline capability.
+- **Conflict-Free Bidirectional Replication**:
+  - Event-sourced delta sync resolving progress, notes, and shelf updates automatically between mobile, web, and home servers upon reconnection.
+- **Peer-to-Peer Local Library Sharing (Graywood Federation)**:
+  - Cross-instance federated catalog sharing to stream or sync missing `.cbz`/`.epub` files between home servers without external scrapers.
+
+---
+
 ## 🔧 Code Quality & Maintenance Tracking
 
 ### 🟢 Completed / Resolved
