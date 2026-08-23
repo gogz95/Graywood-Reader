@@ -29,9 +29,11 @@ import { StickyNotesDrawer } from './reader/StickyNotesDrawer';
 import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
 import { QuickJumpModal } from './reader/QuickJumpModal';
 import { AmbientSoundModal } from './reader/AmbientSoundModal';
+import { MirrorSourceModal } from './reader/MirrorSourceModal';
 import { soundscapes } from '../utils/soundscapes';
 import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
 import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';
+import { useReaderZoom } from '../hooks/useReaderZoom';
 import { performPanelOcr, OcrResult } from '../utils/ocrEngine';
 import {
   ArrowLeft,
@@ -97,9 +99,10 @@ interface WebtoonPanelProps {
   onMouseMove?: (e: React.MouseEvent<HTMLImageElement>) => void;
   onMouseLeave?: () => void;
   onRetry: (idx: number) => void;
+  onDoubleTap?: (clientX: number, clientY: number, rect?: DOMRect) => void;
 }
 
-/** Memoized Webtoon Panel for smooth 60/120 FPS continuous vertical reading */
+/** Memoized Virtualized Webtoon Panel for smooth 60/120 FPS continuous vertical reading */
 const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   idx,
   totalPages,
@@ -113,27 +116,86 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   onMouseMove,
   onMouseLeave,
   onRetry,
+  onDoubleTap,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(idx < 4);
+  const [cachedHeight, setCachedHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        } else {
+          // Offscreen beyond 1200px -> unmount heavy image bitmap
+          setIsVisible(false);
+        }
+      },
+      {
+        rootMargin: '1200px 0px 1200px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const naturalH = e.currentTarget.clientHeight;
+    if (naturalH > 50) {
+      setCachedHeight(naturalH);
+    }
+  };
+
+  const handlePanelClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.detail === 2 && onDoubleTap) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      onDoubleTap(e.clientX, e.clientY, rect);
+    }
+  };
+
   return (
     <div
+      ref={containerRef}
+      onClick={handlePanelClick}
+      style={{ minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px' }}
       className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel ${
         isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
       }`}
     >
-      <img
-        src={displaySrc}
-        alt={`Page ${idx + 1}`}
-        style={imageFilterStyle}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
-        decoding="async"
-        className={`w-full h-auto block object-contain transition-opacity duration-300 ${
-          isSeamless ? 'm-0 p-0 border-0' : ''
-        } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
-        loading={idx < 3 ? 'eager' : 'lazy'}
-      />
+      {isVisible ? (
+        <img
+          src={displaySrc}
+          alt={`Page ${idx + 1}`}
+          style={imageFilterStyle}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
+          onLoad={handleImageLoad}
+          decoding="async"
+          className={`w-full h-auto block object-contain transition-opacity duration-300 ${
+            isSeamless ? 'm-0 p-0 border-0' : ''
+          } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+          loading={idx < 3 ? 'eager' : 'lazy'}
+        />
+      ) : (
+        <div
+          className="w-full flex items-center justify-center text-muted/40 font-mono text-[10px]"
+          style={{ height: cachedHeight ? `${cachedHeight}px` : '400px' }}
+        >
+          Page {idx + 1}
+        </div>
+      )}
 
-      {isLoading && (
+      {isVisible && isLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2">
           <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
           <span className="text-[11px] font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-edge/60">
@@ -142,7 +204,7 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
         </div>
       )}
 
-      {isError && (
+      {isVisible && isError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center">
           <div className="w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center">
             <X className="w-5 h-5" />
@@ -161,7 +223,7 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
         </div>
       )}
 
-      {showPageNumberOverlay && (
+      {showPageNumberOverlay && isVisible && (
         <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-app/40 backdrop-blur-[2px] text-[10px] text-secondary/80 font-mono border border-edge/40 pointer-events-none">
           Page {idx + 1} / {totalPages}
         </div>
@@ -208,6 +270,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Selected Scanlation Release Group Version
   const [selectedScanGroup, setSelectedScanGroup] = useState<string>(manga.sourceName || 'AsuraScans');
+  const [activeSourceName, setActiveSourceName] = useState<string>(manga.sourceName || '');
+  const [activeSourceUrl, setActiveSourceUrl] = useState<string>(manga.sourceUrl || '');
+  const [showMirrorModal, setShowMirrorModal] = useState<boolean>(false);
+
+  // High-performance Gesture Pinch-to-Zoom & Double-Tap Hook
+  const zoom = useReaderZoom();
 
   const detectedFormat = useMemo(() => detectMangaFormat(manga), [manga]);
 
@@ -434,7 +502,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const hasMultipleSources = availableScanGroups.length > 1;
 
   // Fetch chapter page image URLs
-  const fetchChapterPages = useCallback(async (chNum: number) => {
+  const fetchChapterPages = useCallback(async (chNum: number, overrideUrl?: string) => {
     setLoading(true);
     setError(null);
     setCurrentPageIndex(0);
@@ -470,9 +538,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setIsOfflineAvailable(false);
       }
 
+      const effectiveUrl = overrideUrl || activeSourceUrl || manga.sourceUrl;
       const url = `/api/reader/chapter-pages?mangaId=${encodeURIComponent(
         manga.id
-      )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}${manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''}${manga.title ? `&title=${encodeURIComponent(manga.title)}` : ''}`;
+      )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}${effectiveUrl ? `&url=${encodeURIComponent(effectiveUrl)}` : ''}${manga.title ? `&title=${encodeURIComponent(manga.title)}` : ''}`;
       const res = await apiFetch(url);
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -511,7 +580,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       // Initialize Kotatsu Parallel Image Loader Engine
       if (data.pages && data.pages.length > 0 && !data.isPlaceholder && !data.contentUnavailable) {
-        const loader = new KotatsuImageLoader(data.pages, manga.sourceUrl, (states) => {
+        const loader = new KotatsuImageLoader(data.pages, effectiveUrl, (states) => {
           setPageLoadStates(new Map(states));
         });
         loaderRef.current = loader;
@@ -541,7 +610,30 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [initialChapterId, manga.id, manga.sourceUrl, settings.autoMarkRead, markChapterReadOnce]);
+  }, [initialChapterId, manga.id, manga.sourceUrl, activeSourceUrl, settings.autoMarkRead, markChapterReadOnce]);
+
+  const handleSelectSource = useCallback(async (sourceName: string, sourceUrl: string, persistToDatabase: boolean) => {
+    setActiveSourceName(sourceName);
+    setActiveSourceUrl(sourceUrl);
+    setShowMirrorModal(false);
+    triggerToast(`Switched source to ${sourceName}`);
+
+    if (persistToDatabase) {
+      try {
+        await apiFetch(`/api/manga/${encodeURIComponent(manga.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            sourceName,
+            sourceUrl,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to persist source to database', e);
+      }
+    }
+
+    fetchChapterPages(currentChapterNum, sourceUrl);
+  }, [manga.id, currentChapterNum, fetchChapterPages, triggerToast]);
 
   useEffect(() => {
     fetchChapterPages(currentChapterNum);
@@ -942,6 +1034,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               return next;
             });
           }}
+          onOpenMirrorModal={() => setShowMirrorModal(true)}
+          zoomScale={zoom.scale}
+          onZoomIn={zoom.zoomIn}
+          onZoomOut={zoom.zoomOut}
+          onResetZoom={zoom.resetZoom}
           onClose={onClose}
           onPrevChapter={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
           onNextChapter={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}
@@ -1045,15 +1142,26 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       <main
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        onClick={() => setShowHud(!showHud)}
-        className="flex-1 overflow-y-auto overflow-x-hidden p-0 relative cursor-pointer"
+        onTouchStart={zoom.handleTouchStart}
+        onTouchMove={zoom.handleTouchMove}
+        onTouchEnd={zoom.handleTouchEnd}
+        onMouseDown={zoom.handleMouseDown}
+        onMouseMove={zoom.handleMouseMove}
+        onMouseUp={zoom.handleMouseUp}
+        onWheel={zoom.handleWheel}
+        onClick={() => {
+          if (!zoom.isZoomed) {
+            setShowHud(!showHud);
+          }
+        }}
+        className={`flex-1 overflow-y-auto overflow-x-hidden p-0 relative ${zoom.isZoomed ? 'cursor-grab' : 'cursor-pointer'}`}
       >
         {loading ? (
           <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center">
             <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-primary">Fetching Chapter {currentChapterNum}...</h3>
-              <p className="text-xs text-secondary">Scanlation Version: {selectedScanGroup}</p>
+              <p className="text-xs text-secondary">Scanlation Version: {activeSourceName || selectedScanGroup}</p>
             </div>
           </div>
         ) : error ? (
@@ -1072,10 +1180,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
               <button
                 onClick={() => fetchChapterPages(currentChapterNum)}
-                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center gap-2"
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center gap-2 shadow-lg"
               >
                 <RefreshCw className="w-4 h-4" />
                 Retry Chapter
+              </button>
+              <button
+                onClick={() => setShowMirrorModal(true)}
+                className="px-4 py-2 rounded-xl bg-accent/20 border border-accent/40 text-accent font-bold text-xs flex items-center gap-2 hover:bg-accent hover:text-accent-fg transition-all"
+              >
+                <Globe className="w-4 h-4" />
+                Switch Mirror / Source
               </button>
               {chapterData?.nextChapterNumber ? (
                 <button
@@ -1184,6 +1299,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div
               className="w-full mx-auto flex flex-col items-center shadow-2xl relative z-20"
               style={{
+                ...zoom.transformStyle,
                 maxWidth: settings.maxWidth,
                 gap: `${settings.noPanelSpacing ? 0 : settings.pageGap}px`
               }}
@@ -1210,6 +1326,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     onMouseMove={handleImageMouseMove}
                     onMouseLeave={handleImageMouseLeave}
                     onRetry={(pageIdx) => loaderRef.current?.retryPage(pageIdx)}
+                    onDoubleTap={zoom.handleDoubleTap}
                   />
                 );
               })}
@@ -1253,7 +1370,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               className={`relative w-full mx-auto flex items-center justify-center ${
                 settings.viewMode === 'double' ? 'max-w-6xl' : ''
               }`}
-              style={{ maxWidth: settings.viewMode === 'double' ? '1200px' : settings.maxWidth }}
+              style={{
+                ...zoom.transformStyle,
+                maxWidth: settings.viewMode === 'double' ? '1200px' : settings.maxWidth
+              }}
             >
               {settings.viewMode === 'double' && chapterData ? (
                 /* DOUBLE-PAGE SPREAD RENDERING */
@@ -1268,7 +1388,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   const rightIndex = isRtl ? idx1 : idx2;
 
                   return (
-                    <div className="flex items-center justify-center gap-1 w-full max-h-[85vh]">
+                    <div
+                      onDoubleClick={(e) => zoom.handleDoubleTap(e.clientX, e.clientY)}
+                      className="flex items-center justify-center gap-1 w-full max-h-[85vh]"
+                    >
                       {leftIndex !== null && chapterData.pages[leftIndex] && (
                         <div className={`flex-1 flex ${rightIndex === null ? 'justify-center' : 'justify-end'}`}>
                           <img
@@ -1307,7 +1430,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   const isError = pageState?.status === 'error';
 
                   return (
-                    <div className="relative w-full flex items-center justify-center">
+                    <div
+                      onDoubleClick={(e) => zoom.handleDoubleTap(e.clientX, e.clientY)}
+                      className="relative w-full flex items-center justify-center"
+                    >
                       <img
                         src={displaySrc}
                         alt={`Page ${currentPageIndex + 1}`}
@@ -1519,7 +1645,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* IN-READER MIRROR & SOURCE SWITCHER MODAL */}
+      {showMirrorModal && (
+        <MirrorSourceModal
+          manga={manga}
+          currentChapterNum={currentChapterNum}
+          activeSourceName={activeSourceName}
+          activeSourceUrl={activeSourceUrl}
+          onClose={() => setShowMirrorModal(false)}
+          onSelectSource={handleSelectSource}
+        />
+      )}
     </div>
   );
 };
+
 

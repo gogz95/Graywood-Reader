@@ -37,6 +37,11 @@ export interface ReaderHeaderProps {
   onOpenAmbientModal?: () => void;
   isLoupeActive?: boolean;
   onToggleLoupe?: () => void;
+  onOpenMirrorModal?: () => void;
+  zoomScale?: number;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
   onClose: () => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
@@ -71,6 +76,11 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
   onOpenAmbientModal,
   isLoupeActive,
   onToggleLoupe,
+  onOpenMirrorModal,
+  zoomScale = 1.0,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
   onClose,
   onPrevChapter,
   onNextChapter,
@@ -211,6 +221,29 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
 
       {/* Right Action Bar */}
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Zoom Controls Indicator (When Zoomed or hovered) */}
+        {zoomScale > 1.05 && onResetZoom && (
+          <button
+            onClick={onResetZoom}
+            className="px-2 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-[10px] font-mono font-bold hover:bg-accent hover:text-accent-fg transition-all flex items-center gap-1"
+            title="Click to reset zoom to 100% (Esc / 0)"
+          >
+            <span>{Math.round(zoomScale * 100)}%</span>
+            <span className="text-[9px] opacity-70">✕</span>
+          </button>
+        )}
+
+        {/* In-Reader Mirror / Alternative Source Switcher */}
+        {onOpenMirrorModal && (
+          <button
+            onClick={onOpenMirrorModal}
+            className="p-2 sm:p-2.5 rounded-xl border bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-accent text-xs sm:text-sm font-bold transition-all flex items-center gap-1"
+            title="Switch Mirror / Alternative Source Provider"
+          >
+            <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+          </button>
+        )}
+
         {/* Ambient Atmosphere & Lo-Fi Audio Trigger */}
         {onOpenAmbientModal && (
           <button

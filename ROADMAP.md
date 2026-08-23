@@ -69,15 +69,45 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-## 🔮 Next-Generation Horizons & Future Architecture (Post-Roadmap)
+## 🔮 Strategic Master Plan: 4 Next-Gen Tracks
 
-### 📦 Native Packaging & Standalone Distributions
-- **Capacitor Mobile Packaging (iOS & Android)**:
-  - Wrap frontend with `@capacitor/core` and `@capacitor-community/sqlite` for direct App Store and Google Play distribution.
-- **Tauri / Electron Desktop Bundle**:
-  - Standalone desktop client with embedded Node/Rust runtime and native tray notifications.
+### 🎯 Track 1: Reader Core Polish & Visual Performance (Active 🟢)
+- **Dynamic Webtoon Image Virtualization**:
+  - Off-screen image recycling with height preservation for 100+ page chapters to eliminate browser memory bloat and scroll stutter.
+- **Fluid Pinch-to-Zoom & Double-Tap Smart Zoom**:
+  - Touch gesture pinch-to-zoom, double-tap 2x toggle, keyboard (`+`/`-`/`0`), and desktop `Ctrl + Wheel` zooming with pan clamping.
+- **In-Reader Mirror & Alternative Source Switcher**:
+  - Instant source swapping modal in HUD and error views to seamlessly fall back to MangaDex or Kotatsu mirrors without leaving the reader.
+
+---
+
+### 🛡️ Track 2: Source Reliability & Resilient Server Download Manager (Upcoming 🟡)
+- **Dedicated Background Server Download Manager**:
+  - Priority queue with auto-retries on 429/503 HTTP rate limits and bandwidth throttling.
+- **Universal `ComicInfo.xml` Standard Compliance**:
+  - Automatic bidirectional reading and writing of `ComicInfo.xml` metadata inside local and downloaded `.cbz` archives for 100% interoperability with Komga, Kavita, and Mihon.
+- **Per-Domain Leaky-Bucket Rate Limiting**:
+  - Dynamic host request scheduling to prevent Cloudflare Turnstile triggers and IP bans.
+
+---
+
+### 📚 Track 3: Smart Dynamic Shelves & Custom Readlists (Upcoming 🟡)
+- **Rule-Based Dynamic Virtual Shelves**:
+  - Auto-updating smart collections (*"Unread Catch-Up"*, *"High Priority"*, *"Ongoing Manhwa"*, *"Completed Gems"*) backed by custom query criteria.
+- **Cross-Series Story Arcs & Readlists**:
+  - Chronological multi-series playlists and crossover reading lists with custom chapter order.
+- **Granular Multi-User Permissions & Age Ratings**:
+  - Per-account age gates (PG vs 18+ strict locks) and independent multi-user reading progress.
+
+---
+
+### 📦 Track 4: Native Packaging & Local-First Browser Distribution (Future ⚪)
+- **Capacitor Mobile Shell (Android & iOS)**:
+  - Wrap React client with `@capacitor/core` and `@capacitor-community/sqlite` for direct APK and mobile app store distribution.
 - **Local-First PWA with Origin Private File System (OPFS)**:
-  - `wa-sqlite` compilation for 100% offline in-browser relational library database without requiring a backend server.
+  - In-browser SQLite relational engine (`wa-sqlite`) for zero-server, 100% offline standalone usage.
+- **Tauri / Electron Native Desktop Distribution**:
+  - Standalone desktop bundle with native tray controls and file system hooks.
 
 ---
 
@@ -93,3 +123,4 @@ This document outlines the implemented milestones, architectural enhancements, a
 - ✅ **FlameComics `buildId` cache & atomic promise deduplication**.
 - ✅ **WeebCentral exact chapter count parser & numeric sorter**.
 - ✅ **Structured logger migration in SQLite engine** (standardized log levels to `logger.info`).
+
