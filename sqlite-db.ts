@@ -319,6 +319,7 @@ const stmtUpsertManga = db.prepare(`
     flaggedAt=excluded.flaggedAt,
     metadataOverrides=excluded.metadataOverrides,
     customTags=excluded.customTags,
+    categories=excluded.categories,
     isNsfw=excluded.isNsfw
 `);
 

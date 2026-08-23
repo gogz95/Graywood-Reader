@@ -441,7 +441,45 @@ export function parseGenericChapterListFromHtml(sHtml: string, origin: string): 
   const out: ResolvedChapter[] = [];
   const seen = new Set<string>();
 
-  // Prioritize dedicated chapter containers to isolate from sidebar recommendations
+  // 1. Check for Next.js / embedded JSON chapter arrays
+  const nextData = $('script#__NEXT_DATA__').html()?.trim();
+  if (nextData) {
+    try {
+      const parsed = JSON.parse(nextData);
+      const chs =
+        parsed?.props?.pageProps?.chapters ||
+        parsed?.props?.pageProps?.series?.chapters ||
+        parsed?.props?.pageProps?.manga?.chapters ||
+        parsed?.props?.pageProps?.comic?.chapters ||
+        parsed?.props?.pageProps?.data?.chapters;
+      if (Array.isArray(chs)) {
+        for (const ch of chs) {
+          const num = typeof ch.chapter === 'number' ? ch.chapter : parseFloat(ch.chapter || ch.name || ch.title || '0');
+          const href = ch.url || ch.link || ch.id || ch.slug || '';
+          if (Number.isFinite(num) && num > 0 && href) {
+            const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
+            if (!seen.has(abs)) {
+              seen.add(abs);
+              out.push({
+                number: num,
+                id: abs,
+                slug: abs,
+                title: ch.title || ch.name || `Chapter ${num}`,
+                url: abs,
+                pageCount: 0,
+              });
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (out.length > 0) {
+    return out;
+  }
+
+  // 2. Prioritize dedicated chapter containers to isolate from sidebar recommendations
   const dedicatedContainerSelectors = [
     'div.eplister li a',
     'ul.chapter-list li a',

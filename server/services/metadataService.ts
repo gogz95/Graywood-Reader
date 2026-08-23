@@ -211,74 +211,141 @@ export function parseGenericLiveSeriesMetadata(html: string, pageUrl: string): P
     origin = '';
   }
 
-  // 1. Title Extraction
-  let title =
-    $('.post-title h1, .entry-title, .series-name h1, .series-name a, .profile-manga .post-title h1, .story-info-right h1, div.anime-title h1, .manga-info h1')
-      .first()
-      .text()
-      .trim() ||
-    $('meta[property="og:title"]').attr('content') ||
-    $('meta[name="twitter:title"]').attr('content') ||
-    $('title').text().trim() ||
-    '';
+  let title = '';
+  let coverImage = '';
+  let description = '';
+  const genresSet = new Set<string>();
+  let latestChapter: number | undefined = undefined;
+  let rating: number | undefined = undefined;
 
-  title = title
-    .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua).*$/i, '')
-    .replace(/\s*(?:Raw|Full|Uncensored|Read\s+Online|Chapter\s+\d+).*$/i, '')
-    .trim();
+  // A. Check JSON-LD structured data first
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const raw = $(el).html()?.trim();
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] || [])];
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        const type = String(item['@type'] || '').toLowerCase();
+        if (type.includes('book') || type.includes('creativework') || type.includes('comicseries') || type.includes('article') || type.includes('webpage')) {
+          if (!title && item.name) title = cleanHtml(String(item.name));
+          if (!description && item.description) description = cleanHtml(String(item.description));
+          if (!coverImage && (item.image || item.thumbnailUrl)) {
+            const img = item.image?.url || item.image || item.thumbnailUrl;
+            if (typeof img === 'string') coverImage = img;
+          }
+          if (Array.isArray(item.genre)) {
+            item.genre.forEach((g: any) => typeof g === 'string' && genresSet.add(g.trim()));
+          }
+        }
+      }
+    } catch (_) {}
+  });
+
+  // B. Check __NEXT_DATA__ SSR hydration
+  const nextData = $('script#__NEXT_DATA__').html()?.trim();
+  if (nextData) {
+    try {
+      const parsed = JSON.parse(nextData);
+      const seriesObj = parsed?.props?.pageProps?.series || parsed?.props?.pageProps?.manga || parsed?.props?.pageProps?.comic || parsed?.props?.pageProps?.data;
+      if (seriesObj && typeof seriesObj === 'object') {
+        if (!title && seriesObj.title) title = cleanHtml(seriesObj.title);
+        if (!description && (seriesObj.description || seriesObj.synopsis)) {
+          description = cleanHtml(seriesObj.description || seriesObj.synopsis);
+        }
+        if (!coverImage && (seriesObj.cover || seriesObj.thumbnail || seriesObj.thumb || seriesObj.image || seriesObj.coverImage)) {
+          coverImage = seriesObj.cover || seriesObj.thumbnail || seriesObj.thumb || seriesObj.image || seriesObj.coverImage;
+        }
+        if (Array.isArray(seriesObj.genres)) {
+          seriesObj.genres.forEach((g: any) => {
+            const name = typeof g === 'string' ? g : g?.name || g?.title;
+            if (name) genresSet.add(String(name).trim());
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  // C. Fallback to CSS Selectors for Title
+  if (!title) {
+    title =
+      $('.post-title h1, .entry-title, .series-name h1, .series-name a, .profile-manga .post-title h1, .story-info-right h1, div.anime-title h1, .manga-info h1')
+        .first()
+        .text()
+        .trim() ||
+      $('meta[property="og:title"]').attr('content') ||
+      $('meta[name="twitter:title"]').attr('content') ||
+      $('title').text().trim() ||
+      '';
+
+    title = title
+      .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua).*$/i, '')
+      .replace(/\s*(?:Raw|Full|Uncensored|Read\s+Online|Chapter\s+\d+).*$/i, '')
+      .trim();
+  }
 
   if (isAdSeries(title, pageUrl) || isAdUrl(pageUrl) || isAdTitle(title)) {
     return null;
   }
 
-  // 2. Cover Image
-  let coverImage =
-    $('.summary_image img, .tab-summary .summary_image img, .profile-manga .thumb img, .story-info-left .img-loading, .series-thumb img, div.poster img, .manga-info-pic img')
-      .first()
-      .attr('data-src') ||
-    $('.summary_image img, .tab-summary .summary_image img, .profile-manga .thumb img, .story-info-left .img-loading, .series-thumb img, div.poster img, .manga-info-pic img')
-      .first()
-      .attr('src') ||
-    $('meta[property="og:image"]').attr('content') ||
-    $('meta[name="twitter:image"]').attr('content') ||
-    '';
+  // D. Fallback to CSS Selectors for Cover Image
+  if (!coverImage) {
+    const candidateImg = $(
+      '.summary_image img, .tab-summary .summary_image img, .profile-manga .thumb img, .story-info-left .img-loading, .series-thumb img, div.poster img, .manga-info-pic img'
+    ).first();
+
+    coverImage =
+      candidateImg.attr('data-src') ||
+      candidateImg.attr('data-lazy-src') ||
+      candidateImg.attr('data-original') ||
+      candidateImg.attr('data-cdn-src') ||
+      candidateImg.attr('data-cfsrc') ||
+      candidateImg.attr('data-full-url') ||
+      candidateImg.attr('src') ||
+      $('meta[property="og:image"]').attr('content') ||
+      $('meta[name="twitter:image"]').attr('content') ||
+      '';
+  }
 
   if (coverImage) {
+    coverImage = coverImage.trim();
     if (coverImage.startsWith('//')) coverImage = 'https:' + coverImage;
     else if (coverImage.startsWith('/') && origin) coverImage = `${origin}${coverImage}`;
   }
 
-  // 3. Synopsis / Description
-  let description =
-    $('.summary__content, .description-summary .summary__content, .panel-story-info-description, .series-synopsis, div.synopsis, .story-info-right .panel-story-info-description, .entry-content p, .post-content')
-      .first()
-      .text()
-      .trim() ||
-    $('meta[property="og:description"]').attr('content') ||
-    $('meta[name="description"]').attr('content') ||
-    '';
+  // E. Fallback to CSS Selectors for Description
+  if (!description) {
+    description =
+      $('.summary__content, .description-summary .summary__content, .panel-story-info-description, .series-synopsis, div.synopsis, .story-info-right .panel-story-info-description, .entry-content p, .post-content')
+        .first()
+        .text()
+        .trim() ||
+      $('meta[property="og:description"]').attr('content') ||
+      $('meta[name="description"]').attr('content') ||
+      '';
 
-  description = description.replace(/^(?:Description|Synopsis)\s*:\s*/i, '').trim();
+    description = cleanHtml(description.replace(/^(?:Description|Synopsis)\s*:\s*/i, ''));
+  }
 
-  // 4. Genres
-  const genresSet = new Set<string>();
-  $('.genres-content a, .mgen a, .series-genres a, .story-info-right-extent .genres-content a, .post-content_item:contains("Genre") a, a[href*="/genre/"], a[href*="/genres/"], a[href*="/the-loai/"]')
-    .each((_, el) => {
-      const g = $(el).text().trim();
-      if (g && g.length < 30 && !/^(read|manga|all|genre|genres)$/i.test(g)) {
-        genresSet.add(g);
-      }
-    });
+  // F. Fallback to CSS Selectors for Genres
+  if (genresSet.size === 0) {
+    $('.genres-content a, .mgen a, .series-genres a, .story-info-right-extent .genres-content a, .post-content_item:contains("Genre") a, a[href*="/genre/"], a[href*="/genres/"], a[href*="/the-loai/"]')
+      .each((_, el) => {
+        const g = $(el).text().trim();
+        if (g && g.length < 30 && !/^(read|manga|all|genre|genres)$/i.test(g)) {
+          genresSet.add(g);
+        }
+      });
+  }
 
-  // 5. Chapters
+  // G. Chapters
   const chapters = parseGenericChapterListFromHtml(html, origin);
-  let latestChapter: number | undefined = undefined;
   if (chapters.length > 0) {
     latestChapter = Math.max(...chapters.map((c) => c.number));
   }
 
-  // 6. Rating
-  let rating: number | undefined = undefined;
+  // H. Rating
   const ratingStr =
     $('.post-total-rating .score, span.rating-val, .star-rating span, meta[itemprop="ratingValue"]')
       .first()
@@ -531,6 +598,39 @@ export async function refreshSingleMangaMetadata(manga: MangaItem): Promise<Mang
     }
   }
 
+  // 6. Multi-Provider Fallback Enrichment
+  // If metadata is sparse (missing or short synopsis, missing cover, or empty genres),
+  // query multi-provider aggregators (AniList, MangaDex, MAL, Kitsu) to enrich missing details.
+  const isSparse =
+    !manga.coverImage ||
+    !manga.description ||
+    manga.description.length < 35 ||
+    !manga.genres ||
+    manga.genres.length === 0;
+
+  if (isSparse && manga.title && manga.title !== 'Unknown') {
+    try {
+      const { merged } = await aggregateMultiSourceMetadata(manga.title);
+      if (merged) {
+        if (merged.coverImage && !manga.coverImage) {
+          manga.coverImage = merged.coverImage;
+        }
+        if (merged.description && (!manga.description || manga.description.length < (merged.description?.length || 0))) {
+          manga.description = merged.description;
+        }
+        if (merged.genres && merged.genres.length > 0) {
+          manga.genres = Array.from(new Set([...(manga.genres || []), ...merged.genres]));
+        }
+        if (merged.altTitles && merged.altTitles.length > 0) {
+          manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...merged.altTitles]));
+        }
+        if (merged.rating && (!manga.rating || manga.rating === 9.0)) {
+          manga.rating = merged.rating;
+        }
+      }
+    } catch (_) {}
+  }
+
   restoreMetadataOverrides(manga, metadataSnap);
 
   manga.lastUpdated = new Date().toISOString();
@@ -659,7 +759,39 @@ async function cachedProviderResult<T extends UnifiedMetadataResult | null>(
   return value;
 }
 
-const cleanHtml = (raw: string): string => (raw || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+export function decodeHtmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&hellip;/g, '…')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+export function cleanHtml(raw: string): string {
+  if (!raw) return '';
+  const withoutTags = raw.replace(/<[^>]*>?/gm, ' ');
+  const decoded = decodeHtmlEntities(withoutTags);
+  return decoded.replace(/\s+/g, ' ').trim();
+}
+
+export function sanitizeTitleForSearch(rawTitle: string): string {
+  if (!rawTitle) return '';
+  return decodeHtmlEntities(rawTitle)
+    .replace(/\[(?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^\]]*\]/gi, ' ')
+    .replace(/\((?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^)]*\)/gi, ' ')
+    .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua|Bato|MangaDex|Dynasty|Kun Manga).*$/i, '')
+    .replace(/(?:\s*-\s*)?(?:Chapter|Chapitre|Capitulo|Ch\.?|Episode|Ep\.?|Season|S\d+)\s*\d+.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // ── Multi-Provider Metadata Aggregator Engine ────────────────────────────────
 export interface UnifiedMetadataResult {
@@ -683,7 +815,8 @@ export interface UnifiedMetadataResult {
 }
 
 export async function fetchAniListMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   const graphqlQuery = `
     query ($search: String) {
       Page(page: 1, perPage: 3) {
@@ -707,7 +840,7 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
     const res = await fetch("https://graphql.anilist.co", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ query: graphqlQuery, variables: { search: title } }),
+      body: JSON.stringify({ query: graphqlQuery, variables: { search: searchTitle } }),
       signal: AbortSignal.timeout(8000),
     });
 
@@ -716,7 +849,7 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
     const media = json.data?.Page?.media?.[0];
     if (!media) return null;
 
-    const engTitle = media.title?.english || media.title?.romaji || media.title?.native || title;
+    const engTitle = media.title?.english || media.title?.romaji || media.title?.native || searchTitle;
     const altTitles = [media.title?.romaji, media.title?.native, media.title?.english].filter(Boolean) as string[];
     const origin = media.countryOfOrigin;
     const pubType = origin === 'KR' ? 'manhwa' : origin === 'CN' || origin === 'TW' ? 'manhua' : 'manga';
@@ -741,7 +874,8 @@ export async function fetchAniListMetadata(title: string): Promise<UnifiedMetada
 }
 
 export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   const mup = appSettings as any;
   const username = mup.mangaUpdatesUsername || '';
   const password = mup.mangaUpdatesPassword || '';
@@ -782,7 +916,7 @@ export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedM
     const res = await fetch('https://api.mangaupdates.com/v1/series', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ search: title, page: 1, perpage: 3 }),
+      body: JSON.stringify({ search: searchTitle, page: 1, perpage: 3 }),
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
@@ -799,7 +933,7 @@ export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedM
       .filter(Boolean);
     return {
       provider: 'MangaUpdates',
-      title: record.title || title,
+      title: record.title || searchTitle,
       altTitles: Array.from(new Set(altTitles)),
       coverImage: record.image?.url?.original || record.image?.url?.thumb || '',
       description: cleanHtml(record.description || ''),
@@ -820,10 +954,11 @@ export async function fetchMangaUpdatesMetadata(title: string): Promise<UnifiedM
 }
 
 export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   try {
     await throttleProvider('jikan');
-    const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(title)}&limit=1`, {
+    const res = await fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(searchTitle)}&limit=1`, {
       headers: { 'User-Agent': APP_USER_AGENT },
       signal: AbortSignal.timeout(8000),
     });
@@ -836,7 +971,7 @@ export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadata
     const altTitles = [item.title_english, item.title_japanese, ...(item.titles || []).map((t: any) => t.title)].filter(Boolean);
     return {
       provider: 'MyAnimeList',
-      title: item.title_english || item.title || title,
+      title: item.title_english || item.title || searchTitle,
       altTitles: Array.from(new Set(altTitles)),
       coverImage: item.images?.jpg?.large_image_url || item.images?.jpg?.image_url || '',
       description: cleanHtml(item.synopsis || ''),
@@ -852,11 +987,13 @@ export async function fetchJikanMetadata(title: string): Promise<UnifiedMetadata
     return null;
   }
 }
+
 export async function fetchKitsuMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   try {
     await throttleProvider('kitsu');
-    const url = `https://kitsu.io/api/edge/manga?filter%5Btext%5D=${encodeURIComponent(title)}&page%5Blimit%5D=3`;
+    const url = `https://kitsu.io/api/edge/manga?filter%5Btext%5D=${encodeURIComponent(searchTitle)}&page%5Blimit%5D=3`;
     const res = await fetch(url, {
       headers: { 'Accept': 'application/vnd.api+json', 'User-Agent': APP_USER_AGENT },
       signal: AbortSignal.timeout(8000),
@@ -866,7 +1003,7 @@ export async function fetchKitsuMetadata(title: string): Promise<UnifiedMetadata
     const item = json?.data?.[0];
     if (!item) return null;
     const attr = item.attributes || {};
-    const canonical = attr.canonicalTitle || attr.en_us || attr.en_jp || title;
+    const canonical = attr.canonicalTitle || attr.en_us || attr.en_jp || searchTitle;
     const altTitles = [
       ...Object.values(attr.titles || {}),
       ...(attr.abbreviatedTitles || []),
@@ -904,10 +1041,11 @@ export async function fetchKitsuMetadata(title: string): Promise<UnifiedMetadata
 }
 
 export async function fetchOpenLibraryMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   try {
     await throttleProvider('openlibrary');
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(title)}&limit=5&fields=title,author_name,first_publish_year,cover_i,key,subject`;
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(searchTitle)}&limit=5&fields=title,author_name,first_publish_year,cover_i,key,subject`;
     const res = await fetch(url, {
       headers: { 'User-Agent': APP_USER_AGENT },
       signal: AbortSignal.timeout(8000),
@@ -920,7 +1058,7 @@ export async function fetchOpenLibraryMetadata(title: string): Promise<UnifiedMe
     const cover = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : '';
     return {
       provider: 'OpenLibrary',
-      title: doc.title || title,
+      title: doc.title || searchTitle,
       altTitles: [],
       coverImage: cover,
       description: '',
@@ -939,10 +1077,11 @@ export async function fetchOpenLibraryMetadata(title: string): Promise<UnifiedMe
 }
 
 export async function fetchGoogleBooksMetadata(title: string): Promise<UnifiedMetadataResult | null> {
-  if (!title || title.length < 2) return null;
+  const searchTitle = sanitizeTitleForSearch(title) || title;
+  if (!searchTitle || searchTitle.length < 2) return null;
   try {
     await throttleProvider('googlebooks');
-    const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(title)}&maxResults=5`;
+    const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(searchTitle)}&maxResults=5`;
     const res = await fetch(url, {
       headers: { 'User-Agent': APP_USER_AGENT },
       signal: AbortSignal.timeout(8000),
@@ -957,7 +1096,7 @@ export async function fetchGoogleBooksMetadata(title: string): Promise<UnifiedMe
     const r5 = vi.averageRating ? Number(vi.averageRating) : undefined;
     return {
       provider: 'GoogleBooks',
-      title: vi.title || title,
+      title: vi.title || searchTitle,
       altTitles: (vi.subtitle ? [vi.subtitle] : []).filter(Boolean),
       coverImage: cover,
       description: cleanHtml(vi.description || ''),
@@ -980,6 +1119,7 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
   merged: Partial<UnifiedMetadataResult>;
   sources: UnifiedMetadataResult[];
 }> {
+  const queryTitle = sanitizeTitleForSearch(title) || title;
   const t = appSettings as any;
   const enabled = {
     mangadex: t.mangadexConnected !== false,
@@ -992,8 +1132,8 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
   };
 
   const results = await Promise.allSettled([
-    cachedProviderResult('mangadex:' + title, () => enabled.mangadex
-      ? getMangaDexMetadataByTitle(title).then((md) => md ? {
+    cachedProviderResult('mangadex:' + queryTitle, () => enabled.mangadex
+      ? getMangaDexMetadataByTitle(queryTitle).then((md) => md ? {
           provider: 'MangaDex' as const,
           title: title,
           altTitles: md.altTitles || [],
@@ -1003,12 +1143,12 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
           apiId: md.apiId || undefined,
         } : null)
       : Promise.resolve(null)),
-    cachedProviderResult('anilist:' + title, () => enabled.anilist ? fetchAniListMetadata(title) : Promise.resolve(null)),
-    cachedProviderResult('mangaupdates:' + title, () => enabled.mangaupdates ? fetchMangaUpdatesMetadata(title) : Promise.resolve(null)),
-    cachedProviderResult('jikan:' + title, () => enabled.mal !== false ? fetchJikanMetadata(title) : Promise.resolve(null)),
-    cachedProviderResult('kitsu:' + title, () => enabled.kitsu ? fetchKitsuMetadata(title) : Promise.resolve(null)),
-    cachedProviderResult('openlibrary:' + title, () => enabled.openlibrary ? fetchOpenLibraryMetadata(title) : Promise.resolve(null)),
-    cachedProviderResult('googlebooks:' + title, () => enabled.googlebooks ? fetchGoogleBooksMetadata(title) : Promise.resolve(null)),
+    cachedProviderResult('anilist:' + queryTitle, () => enabled.anilist ? fetchAniListMetadata(queryTitle) : Promise.resolve(null)),
+    cachedProviderResult('mangaupdates:' + queryTitle, () => enabled.mangaupdates ? fetchMangaUpdatesMetadata(queryTitle) : Promise.resolve(null)),
+    cachedProviderResult('jikan:' + queryTitle, () => enabled.mal !== false ? fetchJikanMetadata(queryTitle) : Promise.resolve(null)),
+    cachedProviderResult('kitsu:' + queryTitle, () => enabled.kitsu ? fetchKitsuMetadata(queryTitle) : Promise.resolve(null)),
+    cachedProviderResult('openlibrary:' + queryTitle, () => enabled.openlibrary ? fetchOpenLibraryMetadata(queryTitle) : Promise.resolve(null)),
+    cachedProviderResult('googlebooks:' + queryTitle, () => enabled.googlebooks ? fetchGoogleBooksMetadata(queryTitle) : Promise.resolve(null)),
   ]);
 
   const sources: UnifiedMetadataResult[] = [];
