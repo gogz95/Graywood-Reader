@@ -159,23 +159,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [loadingSimilar, setLoadingSimilar] = useState(false);
 
   const handleSaveQuickChanges = () => {
-    // Real metadata field the user can change here is the rating (star control).
-    // Record it as an override so a later metadata refresh preserves their rating.
-    const metadataOverrides = Array.from(
-      new Set<string>([
-        ...(manga.metadataOverrides || []),
-        ...(Number(rating) !== Number(manga.rating) ? ['rating'] : []),
-      ])
-    );
-
+    // Only update personal reading tracking state without touching series metadata overrides
     onUpdateManga({
       ...manga,
       currentChapter,
       status,
-      rating,
       notes,
       isFavorite,
-      metadataOverrides,
       lastReadAt: new Date().toISOString(),
     });
     onClose();
@@ -660,14 +650,15 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               }}
               className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5"
             >
-              <Edit className="w-4 h-4" />
-              Edit Details
+              <Palette className="w-4 h-4 text-accent" />
+              Edit Metadata
             </button>
 
             <button
               onClick={handleSaveQuickChanges}
-              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs shadow-lg transition-all"
+              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs shadow-lg transition-all flex items-center gap-1.5"
             >
+              <Check className="w-4 h-4" />
               Save Progress
             </button>
           </div>

@@ -72,6 +72,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
   onClose,
   onSave,
 }) => {
+  const [activeTab, setActiveTab] = useState<'metadata' | 'reading'>('metadata');
   const [title, setTitle] = useState(initialManga?.title || '');
   const [altTitlesStr, setAltTitlesStr] = useState(initialManga?.altTitles.join(', ') || '');
   const [type, setType] = useState<MangaType>(initialManga?.type || 'manhwa');
@@ -204,7 +205,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-accent" />
             <h3 className="text-lg font-bold text-primary">
-              {initialManga ? 'Edit Series Details' : 'Add New Manhwa / Manhua'}
+              {initialManga ? 'Edit Series & Reading State' : 'Add New Manhwa / Manhua'}
             </h3>
           </div>
 
@@ -213,268 +214,362 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
           </button>
         </div>
 
+        {/* Feature Separation Tabs */}
+        <div className="flex border-b border-edge bg-app/40 px-6 pt-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('metadata')}
+            className={`pb-2.5 px-4 font-bold text-xs sm:text-sm flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === 'metadata'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-secondary hover:text-primary'
+            }`}
+          >
+            <Palette className="w-4 h-4" />
+            <span>Series Metadata & Artwork</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('reading')}
+            className={`pb-2.5 px-4 font-bold text-xs sm:text-sm flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === 'reading'
+                ? 'border-accent text-accent'
+                : 'border-transparent text-secondary hover:text-primary'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>My Reading Progress & Notes</span>
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs sm:text-sm">
-          {/* Title & Gemini Auto Enrich */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-bold text-secondary">Series Title *</label>
-              <button
-                type="button"
-                onClick={handleAutoEnrich}
-                disabled={enriching}
-                className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
-              >
-                <Sparkles className={`w-3.5 h-3.5 ${enriching ? 'animate-spin' : ''}`} />
-                <span>{enriching ? 'Enriching...' : 'Auto-Fill with Gemini AI'}</span>
-              </button>
-            </div>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Solo Leveling, Omniscient Reader, Martial Peak..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-app border border-edge-strong rounded-xl p-3 text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </div>
+          {activeTab === 'metadata' ? (
+            <div className="space-y-4">
+              <div className="p-3 bg-accent/10 border border-accent/20 rounded-xl text-xs text-secondary flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                <p>
+                  <strong className="text-primary block font-bold">Isolated Metadata Layer:</strong>
+                  Editing title, artwork, genres, or synopsis locks your custom metadata. It will <strong>never</strong> modify or reset your personal reading history, bookmarks, or statistics.
+                </p>
+              </div>
 
-          {/* Alt Titles */}
-          <div>
-            <label className="block font-bold text-secondary mb-1">
-              Alternate / Romanized Titles (comma-separated):
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Na Honjaman Level Up, Only I Level Up"
-              value={altTitlesStr}
-              onChange={(e) => setAltTitlesStr(e.target.value)}
-              className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </div>
+              {/* Title & Gemini Auto Enrich */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-secondary">Series Title *</label>
+                  <button
+                    type="button"
+                    onClick={handleAutoEnrich}
+                    disabled={enriching}
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${enriching ? 'animate-spin' : ''}`} />
+                    <span>{enriching ? 'Enriching...' : 'Auto-Fill with Gemini AI'}</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Solo Leveling, Omniscient Reader, Martial Peak..."
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full bg-app border border-edge-strong rounded-xl p-3 text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+              </div>
 
-          {/* Origin Type & Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-bold text-secondary mb-1">Origin Format:</label>
-              <select
-                value={type}
-                onChange={(e: any) => setType(e.target.value)}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
-              >
-                <option value="manhwa">🇰🇷 Korean Manhwa</option>
-                <option value="manhua">🇨🇳 Chinese Manhua</option>
-                <option value="manga">🇯🇵 Manga / Other</option>
-              </select>
-            </div>
+              {/* Alt Titles */}
+              <div>
+                <label className="block font-bold text-secondary mb-1">
+                  Alternate / Romanized Titles (comma-separated):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Na Honjaman Level Up, Only I Level Up"
+                  value={altTitlesStr}
+                  onChange={(e) => setAltTitlesStr(e.target.value)}
+                  className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+              </div>
 
-            <div>
-              <label className="block font-bold text-secondary mb-1">Reading Status:</label>
-              <select
-                value={status}
-                onChange={(e: any) => setStatus(e.target.value)}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
-              >
-                <option value="reading">Reading</option>
-                <option value="plan_to_read">Plan to Read</option>
-                <option value="completed">Completed</option>
-                <option value="on_hold">On Hold</option>
-                <option value="dropped">Dropped</option>
-              </select>
-            </div>
-          </div>
+              {/* Origin Type & Rating */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Origin Format:</label>
+                  <select
+                    value={type}
+                    onChange={(e: any) => setType(e.target.value)}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  >
+                    <option value="manhwa">🇰🇷 Korean Manhwa</option>
+                    <option value="manhua">🇨🇳 Chinese Manhua</option>
+                    <option value="manga">🇯🇵 Manga / Other</option>
+                  </select>
+                </div>
 
-          {/* Chapter Numbers & Rating */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block font-bold text-secondary mb-1">Current Chapter:</label>
-              <input
-                type="number"
-                value={currentChapter}
-                onChange={(e) => setCurrentChapter(Number(e.target.value))}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-            </div>
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Series Rating (1-10):</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={rating}
+                    onChange={(e) => setRating(Number(e.target.value))}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block font-bold text-secondary mb-1">Latest Released:</label>
-              <input
-                type="number"
-                value={latestChapter}
-                onChange={(e) => setLatestChapter(Number(e.target.value))}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-            </div>
+              {/* Cover Image & Genres */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-secondary">Cover Artwork:</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCoverPickerOpen(true)}
+                      className="px-2.5 py-1 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 font-bold text-xs flex items-center gap-1.5 transition-all"
+                      title="Browse volume covers, alternate posters, and source artwork"
+                    >
+                      <Palette className="w-3.5 h-3.5" />
+                      <span>Browse All Covers</span>
+                    </button>
+                  </div>
 
-            <div>
-              <label className="block font-bold text-secondary mb-1">Rating (1-10):</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="10"
-                value={rating}
-                onChange={(e) => setRating(Number(e.target.value))}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-            </div>
-          </div>
+                  <div className="flex gap-3 items-start bg-app p-2.5 rounded-xl border border-edge">
+                    <div
+                      onClick={() => setIsCoverPickerOpen(true)}
+                      className="w-14 h-20 rounded-lg overflow-hidden bg-surface border border-edge shrink-0 relative group cursor-pointer shadow-sm"
+                      title="Click to change cover"
+                    >
+                      {coverImage ? (
+                        <img
+                          src={coverImage}
+                          alt="Cover Preview"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-1">
+                          <ImageIcon className="w-5 h-5" />
+                          <span className="text-[9px] font-bold">No Art</span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                        <Eye className="w-4 h-4" />
+                      </div>
+                    </div>
 
-          {/* Cover Image & Genres */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-secondary">Cover Artwork:</label>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <input
+                        type="text"
+                        placeholder="https://... (or click Browse All Covers)"
+                        value={coverImage}
+                        onChange={(e) => setCoverImage(e.target.value)}
+                        className="w-full bg-surface border border-edge rounded-lg p-2 text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      />
+                      <div className="flex items-center justify-between text-[11px] text-muted">
+                        <span className="truncate">Standard 3:4 Poster Ratio</span>
+                        {coverImage && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCoverPickerOpen(true)}
+                            className="text-accent hover:underline font-semibold"
+                          >
+                            Change Art
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Genres (comma-separated):</label>
+                  <input
+                    type="text"
+                    placeholder="Action, System, Murim, Cultivation"
+                    value={genresStr}
+                    onChange={(e) => setGenresStr(e.target.value)}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+              </div>
+
+              {/* 18+ Adult Content (NSFW) Marking */}
+              <div className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                isNsfw
+                  ? 'bg-rose-500/10 border-rose-500/30'
+                  : 'bg-app border-edge hover:border-edge-strong'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-xs transition-colors shrink-0 ${
+                    isNsfw
+                      ? 'bg-rose-500/25 text-rose-400 border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                      : 'bg-surface text-muted border border-edge'
+                  }`}>
+                    {isNsfw ? <Flame className="w-4 h-4 text-rose-400" /> : '18+'}
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-primary flex items-center gap-2">
+                      <span>18+ Adult Content / NSFW</span>
+                      {isNsfw ? (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold tracking-wide uppercase">
+                          Marked 18+
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-surface text-muted border border-edge text-[10px] font-medium">
+                          Safe / General
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-secondary">
+                      {isNsfw
+                        ? 'Synchronized with metadata database. Filtered when library is in Safe mode.'
+                        : 'Toggle to mark this series as 18+ / NSFW and synchronize with metadata database.'}
+                    </p>
+                  </div>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setIsCoverPickerOpen(true)}
-                  className="px-2.5 py-1 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 font-bold text-xs flex items-center gap-1.5 transition-all"
-                  title="Browse volume covers, alternate posters, and source artwork"
+                  onClick={handleToggleNsfw}
+                  aria-label="Toggle 18+ NSFW Content"
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500/40 ${
+                    isNsfw ? 'bg-rose-500' : 'bg-edge-strong'
+                  }`}
                 >
-                  <Palette className="w-3.5 h-3.5" />
-                  <span>Browse All Covers</span>
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      isNsfw ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
               </div>
 
-              <div className="flex gap-3 items-start bg-app p-2.5 rounded-xl border border-edge">
-                <div
-                  onClick={() => setIsCoverPickerOpen(true)}
-                  className="w-14 h-20 rounded-lg overflow-hidden bg-surface border border-edge shrink-0 relative group cursor-pointer shadow-sm"
-                  title="Click to change cover"
-                >
-                  {coverImage ? (
-                    <img
-                      src={coverImage}
-                      alt="Cover Preview"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-1">
-                      <ImageIcon className="w-5 h-5" />
-                      <span className="text-[9px] font-bold">No Art</span>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                    <Eye className="w-4 h-4" />
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <input
-                    type="text"
-                    placeholder="https://... (or click Browse All Covers)"
-                    value={coverImage}
-                    onChange={(e) => setCoverImage(e.target.value)}
-                    className="w-full bg-surface border border-edge rounded-lg p-2 text-xs text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-                  />
-                  <div className="flex items-center justify-between text-[11px] text-muted">
-                    <span className="truncate">Standard 3:4 Manga Poster Ratio</span>
-                    {coverImage && (
-                      <button
-                        type="button"
-                        onClick={() => setIsCoverPickerOpen(true)}
-                        className="text-accent hover:underline font-semibold"
-                      >
-                        Change Art
-                      </button>
-                    )}
-                  </div>
-                </div>
+              {/* Description */}
+              <div>
+                <label className="block font-bold text-secondary mb-1">Synopsis / Description:</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
               </div>
             </div>
-
-            <div>
-              <label className="block font-bold text-secondary mb-1">Genres (comma-separated):</label>
-              <input
-                type="text"
-                placeholder="Action, System, Murim, Cultivation"
-                value={genresStr}
-                onChange={(e) => setGenresStr(e.target.value)}
-                className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-              />
-            </div>
-          </div>
-
-          {/* 18+ Adult Content (NSFW) Marking */}
-          <div className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-            isNsfw
-              ? 'bg-rose-500/10 border-rose-500/30'
-              : 'bg-app border-edge hover:border-edge-strong'
-          }`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-xs transition-colors shrink-0 ${
-                isNsfw
-                  ? 'bg-rose-500/25 text-rose-400 border border-rose-500/50 shadow-sm shadow-rose-500/10'
-                  : 'bg-surface text-muted border border-edge'
-              }`}>
-                {isNsfw ? <Flame className="w-4 h-4 text-rose-400" /> : '18+'}
-              </div>
-              <div className="space-y-0.5">
-                <div className="font-bold text-primary flex items-center gap-2">
-                  <span>18+ Adult Content / NSFW</span>
-                  {isNsfw ? (
-                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] font-extrabold tracking-wide uppercase">
-                      Marked 18+
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded bg-surface text-muted border border-edge text-[10px] font-medium">
-                      Safe / General
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-secondary">
-                  {isNsfw
-                    ? 'Synchronized with metadata database. Filtered when library is in Safe mode.'
-                    : 'Toggle to mark this series as 18+ / NSFW and synchronize with metadata database.'}
+          ) : (
+            <div className="space-y-4">
+              <div className="p-3 bg-info/10 border border-info/20 rounded-xl text-xs text-secondary flex items-start gap-2.5">
+                <BookOpen className="w-4 h-4 text-info shrink-0 mt-0.5" />
+                <p>
+                  <strong className="text-primary block font-bold">Personal Reading History & Bookmarks:</strong>
+                  Track your current reading chapter, reading status, and private notes. These values belong exclusively to your profile.
                 </p>
               </div>
+
+              {/* Status & Chapters */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Reading Status:</label>
+                  <select
+                    value={status}
+                    onChange={(e: any) => setStatus(e.target.value)}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  >
+                    <option value="reading">Reading</option>
+                    <option value="plan_to_read">Plan to Read</option>
+                    <option value="completed">Completed</option>
+                    <option value="on_hold">On Hold</option>
+                    <option value="dropped">Dropped</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Current Chapter:</label>
+                  <input
+                    type="number"
+                    value={currentChapter}
+                    onChange={(e) => setCurrentChapter(Number(e.target.value))}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Latest Released:</label>
+                  <input
+                    type="number"
+                    value={latestChapter}
+                    onChange={(e) => setLatestChapter(Number(e.target.value))}
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary font-bold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+              </div>
+
+              {/* Source Link info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Primary Source Name:</label>
+                  <input
+                    type="text"
+                    value={sourceName}
+                    onChange={(e) => setSourceName(e.target.value)}
+                    placeholder="e.g. Asura Scans, MangaDex"
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-secondary mb-1">Primary Source URL:</label>
+                  <input
+                    type="url"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  />
+                </div>
+              </div>
+
+              {/* Personal Notes */}
+              <div>
+                <label className="block font-bold text-secondary mb-1">Personal Reading Notes:</label>
+                <textarea
+                  rows={4}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Keep track of arcs, favorite moments, character names..."
+                  className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+                />
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={handleToggleNsfw}
-              aria-label="Toggle 18+ NSFW Content"
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-rose-500/40 ${
-                isNsfw ? 'bg-rose-500' : 'bg-edge-strong'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                  isNsfw ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block font-bold text-secondary mb-1">Synopsis / Description:</label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </div>
+          )}
 
           {/* Footer Submit */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-edge">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-elevated text-secondary hover:text-white font-semibold text-xs sm:text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold shadow-lg transition-all flex items-center gap-2 text-xs sm:text-sm"
-            >
-              <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>{initialManga ? 'Update Series' : 'Save to Tracker'}</span>
-            </button>
+          <div className="flex items-center justify-between pt-4 border-t border-edge">
+            <div className="text-[11px] text-muted">
+              {activeTab === 'metadata' ? 'Editing Metadata' : 'Editing Personal Progress'}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-elevated text-secondary hover:text-white font-semibold text-xs sm:text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold shadow-lg transition-all flex items-center gap-2 text-xs sm:text-sm"
+              >
+                <Save className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{initialManga ? 'Save Changes' : 'Save to Tracker'}</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

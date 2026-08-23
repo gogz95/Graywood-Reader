@@ -511,12 +511,18 @@ export default function App() {
   const handleSaveManga = async (mangaData: Partial<MangaItem>) => {
     try {
       if (mangaData.id) {
+        // Optimistic UI update
+        setMangaList((prev) => prev.map((m) => (m.id === mangaData.id ? { ...m, ...mangaData } : m)));
         const res = await apiFetch(`/api/manga/${mangaData.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(mangaData),
         });
         if (res.ok) {
+          const updated = await res.json().catch(() => null);
+          if (updated && updated.id) {
+            setMangaList((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+          }
           await fetchMangaList();
         }
       } else {
