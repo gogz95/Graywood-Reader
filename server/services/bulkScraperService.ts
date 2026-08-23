@@ -135,29 +135,58 @@ class BulkScraperService {
           this.progress.currentSourceId = source.id;
           this.progress.currentSourceName = source.name;
 
-          const sourceItems: Partial<MangaItem>[] = [];
+          const sourceItems: (Partial<MangaItem> & { title: string })[] = [];
+          const seenSourceItemKeys = new Set<string>();
+          const DYNAMIC_MAX_PAGES_SAFETY = 300; // Deep crawl limit to protect against infinite mirror loops
+          let page = 1;
 
-          for (let page = 1; page <= maxPages; page++) {
+          while (page <= DYNAMIC_MAX_PAGES_SAFETY) {
             if (signal.aborted) break;
             this.progress.currentPage = page;
 
             try {
               const res = await getSourcePopularSeries(source, page, limitPerPage);
               if (!res.items || res.items.length === 0) {
-                // No more pages available from this source
+                // Catalog fully exhausted
                 break;
               }
 
+              let newOnThisPage = 0;
               for (const it of res.items) {
-                if (it && it.title && !isAdSeries(it.title, it.sourceUrl, it.description)) {
-                  sourceItems.push(it);
+                if (it && it.title && typeof it.title === 'string' && !isAdSeries(it.title, it.sourceUrl, it.description)) {
+                  const key = (it.sourceUrl || it.title).toLowerCase().trim();
+                  if (!seenSourceItemKeys.has(key)) {
+                    seenSourceItemKeys.add(key);
+                    sourceItems.push(it as Partial<MangaItem> & { title: string });
+                    newOnThisPage++;
+                  }
                 }
               }
 
-              this.progress.seriesScraped += res.items.length;
+              this.progress.seriesScraped += newOnThisPage;
+
+              // Loop detection: if server repeats previous pages or returns 0 new series, stop
+              if (newOnThisPage === 0) {
+                break;
+              }
+
+              // Incremental merge every 3 pages so items appear in library immediately
+              if (page % 3 === 0 && sourceItems.length > 0) {
+                let batch = sourceItems.splice(0, sourceItems.length);
+                if (enrich) {
+                  try {
+                    batch = await enrichWithMangaDexMetadata(batch);
+                  } catch {}
+                }
+                const { mergedCount, newCount } = this.mergeItemsIntoLibrary(batch);
+                this.progress.seriesMerged += mergedCount;
+                this.progress.seriesNew += newCount;
+                saveDatabaseToDisk();
+              }
 
               // Small throttle between pages to avoid IP blocking
-              await new Promise((r) => setTimeout(r, 800));
+              await new Promise((r) => setTimeout(r, 600));
+              page++;
             } catch (err: any) {
               const errMsg = `[${source.name} p.${page}] ${err?.message || err}`;
               this.progress.errors.push(errMsg);
@@ -166,7 +195,7 @@ class BulkScraperService {
             }
           }
 
-          // Metadata enrichment if requested
+          // Metadata enrichment & merge for any remaining items in batch
           let finalItems = sourceItems;
           if (enrich && sourceItems.length > 0) {
             try {
@@ -176,7 +205,6 @@ class BulkScraperService {
             }
           }
 
-          // Merge into Library
           if (finalItems.length > 0) {
             const { mergedCount, newCount } = this.mergeItemsIntoLibrary(finalItems);
             this.progress.seriesMerged += mergedCount;
@@ -273,7 +301,7 @@ class BulkScraperService {
           latestChapter: item.latestChapter || 1,
           type: (item.type as any) || 'manhwa',
           rating: item.rating || 9.0,
-          status: 'ongoing',
+          status: 'unread',
           altTitles: item.altTitles || [],
           availableSources: item.sourceName && item.sourceUrl ? [{ sourceName: item.sourceName, sourceUrl: item.sourceUrl }] : [],
           unreadCount: item.latestChapter || 1,

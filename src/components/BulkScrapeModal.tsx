@@ -43,7 +43,6 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
   initialSourceId,
   sourceList = [],
 }) => {
-  const [maxPages, setMaxPages] = useState<number>(5);
   const [targetScope, setTargetScope] = useState<'all' | 'single'>(initialSourceId ? 'single' : 'all');
   const [selectedSourceId, setSelectedSourceId] = useState<string>(initialSourceId || '');
   const [enrichMetadata, setEnrichMetadata] = useState<boolean>(true);
@@ -97,7 +96,6 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceIds,
-          maxPagesPerSource: maxPages,
           enrichMetadata,
         }),
       });
@@ -190,7 +188,7 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
                 </div>
 
                 {/* Specific Source if single */}
-                {targetScope === 'single' && (
+                {targetScope === 'single' ? (
                   <div>
                     <label className="block text-xs font-bold text-secondary mb-1.5">Select Source</label>
                     <select
@@ -206,24 +204,14 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
                       ))}
                     </select>
                   </div>
+                ) : (
+                  <div className="p-3 bg-elevated/40 border border-edge rounded-xl flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-accent-2 shrink-0" />
+                    <p className="text-[11px] text-secondary leading-snug">
+                      Dynamically crawls all pages until the catalog is exhausted.
+                    </p>
+                  </div>
                 )}
-
-                {/* Max Pages */}
-                <div>
-                  <label className="block text-xs font-bold text-secondary mb-1.5">
-                    Pages per Source <span className="text-muted">(~24 series/page)</span>
-                  </label>
-                  <select
-                    value={maxPages}
-                    onChange={(e) => setMaxPages(Number(e.target.value))}
-                    className="w-full bg-elevated border border-edge rounded-xl px-3 py-2 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-accent-2/50"
-                  >
-                    <option value={3}>3 Pages (~72 series/source)</option>
-                    <option value={5}>5 Pages (~120 series/source)</option>
-                    <option value={10}>10 Pages (~240 series/source)</option>
-                    <option value={20}>20 Pages (~480 series/source)</option>
-                  </select>
-                </div>
               </div>
 
               {/* Checkboxes */}
@@ -248,7 +236,7 @@ export const BulkScrapeModal: React.FC<BulkScrapeModalProps> = ({
                 <div className="flex items-center justify-between text-xs font-bold text-secondary">
                   <span>
                     {progress.status === 'running'
-                      ? `Scraping: ${progress.currentSourceName || 'Preparing...'} (Page ${progress.currentPage || 1} / ${progress.maxPagesPerSource || maxPages})`
+                      ? `Scraping: ${progress.currentSourceName || 'Preparing...'} • Page ${progress.currentPage || 1} (Crawling available series...)`
                       : progress.status === 'completed'
                       ? 'Bulk Ingestion Complete!'
                       : progress.status === 'stopped'
