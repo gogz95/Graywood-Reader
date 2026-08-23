@@ -10,6 +10,28 @@ export function isContentPath(p: string): boolean {
          /[-_/](ch(?:apter)?|ep(?:isode)?)[-_/]?\d+/i.test(p);
 }
 
+/** Strictly checks if a URL path points to a series/manga container and NOT an individual chapter/reading page */
+export function isSeriesContentPath(p: string): boolean {
+  if (!p) return false;
+  // Reject if it contains explicit chapter/episode/reading paths
+  if (/\/(chapter|read|reader|view|episode)[-_/]?\d+/i.test(p)) return false;
+  if (/[-_/](ch(?:apter)?|ep(?:isode)?)[-_/]?\d+/i.test(p)) return false;
+  if (/\/chapter[-_/]/i.test(p)) return false;
+
+  // Must match standard manga/comic/series container routes
+  return /\/(manga|comic|series|webtoon|manhwa|manhua|comic-detail|title)\/[^/]+/i.test(p) ||
+         /\/(manga|comic|series|webtoon|manhwa|manhua)\/[^/]+(?:\/|$)/i.test(p);
+}
+
+/** Identifies whether a text string is actually a chapter number/label rather than a genuine series title */
+export function isChapterTitle(t: string): boolean {
+  if (!t) return true;
+  const clean = t.trim();
+  if (/^(?:ch(?:apter)?\.?\s*\d+|ep(?:isode)?\.?\s*\d+|vol(?:ume)?\.?\s*\d+|season\s*\d+\s*(?:ep\s*\d+)?|\d+(?:\.\d+)?)$/i.test(clean)) return true;
+  if (/^(?:read\s+chapter|chapter\s+\d+|ch\.\s*\d+|ep\.\s*\d+|all\s+chapters|previous\s+chapter|next\s+chapter)/i.test(clean)) return true;
+  return false;
+}
+
 export function isNavText(t: string): boolean {
   if (!t) return true;
   const lower = t.toLowerCase().trim();
@@ -361,6 +383,36 @@ export const SOURCE_REGISTRY: Record<string, IMangaSource> = {
 
   flamecomics: new GenericSourceAdapter('flamecomics', 'Flame Comics', {
     metadataConfidence: 75,
+    isMetadataOnly: false,
+  }),
+
+  mangaread: new GenericSourceAdapter('mangaread', 'MangaRead', {
+    metadataConfidence: 85,
+    isMetadataOnly: false,
+  }),
+
+  manhuaplus: new GenericSourceAdapter('manhuaplus', 'Manhua Plus', {
+    metadataConfidence: 85,
+    isMetadataOnly: false,
+  }),
+
+  manhuaplusorg: new GenericSourceAdapter('manhuaplusorg', 'ManhuaPlus.org', {
+    metadataConfidence: 85,
+    isMetadataOnly: false,
+  }),
+
+  demonicscans: new GenericSourceAdapter('demonicscans', 'Demonic Scans', {
+    metadataConfidence: 80,
+    isMetadataOnly: false,
+  }),
+
+  aquamanga: new GenericSourceAdapter('aquamanga', 'Aqua Manga', {
+    metadataConfidence: 80,
+    isMetadataOnly: false,
+  }),
+
+  kunmanga: new GenericSourceAdapter('kunmanga', 'Kun Manga', {
+    metadataConfidence: 80,
     isMetadataOnly: false,
   }),
 };

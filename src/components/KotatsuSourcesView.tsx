@@ -23,9 +23,11 @@ import {
   Grid,
   X,
   Activity,
+  Database,
 } from 'lucide-react';
 import { SourceDefinition, SourceEngineType, MangaItem } from '../types';
 import { SourceHealthDashboardModal } from './SourceHealthDashboardModal';
+import { BulkScrapeModal } from './BulkScrapeModal';
 
 interface KotatsuSourceResult {
   id: string;
@@ -174,6 +176,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const [activeTab, setActiveTab] = useState<ViewSection>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isHealthDashboardOpen, setIsHealthDashboardOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   // Category & Expanded Results (Popular, Latest, Search, Expanded 50/page)
   const [popularResults, setPopularResults] = useState<KotatsuSourceResult[]>([]);
@@ -765,6 +768,15 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
           </button>
 
           <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 font-bold text-xs border border-purple-500/30 flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+            title="Bulk crawl sources to populate your library"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Build Library</span>
+          </button>
+
+          <button
             onClick={handleClearAppCache}
             disabled={isClearingCache}
             className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated border border-edge-strong text-primary hover:text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md active:scale-95"
@@ -1231,6 +1243,16 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         isOpen={isHealthDashboardOpen}
         onClose={() => setIsHealthDashboardOpen(false)}
       />
+
+      {/* Bulk Library Harvester Modal */}
+      {isBulkModalOpen && (
+        <BulkScrapeModal
+          isOpen={isBulkModalOpen}
+          onClose={() => setIsBulkModalOpen(false)}
+          initialSourceId={selectedSource?.id}
+          sourceList={sources.filter((s) => !disabledSourceIds.has(s.id))}
+        />
+      )}
     </div>
   );
 };

@@ -43,6 +43,7 @@ import { enrichWithMangaDexMetadata } from '../services/metadataService';
 import { searchWeebCentral } from '../scrapers/weebCentral';
 import { ASURA_API_HEADERS } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
+import { bulkScraperService } from '../services/bulkScraperService';
 
 export function reviveSource(sourceId: string): { ok: boolean; message: string; source?: SourceDefinition } {
   if (!sourceId) return { ok: false, message: "sourceId is required" };
@@ -677,5 +678,35 @@ sourcesRouter.post('/api/extensions/test-selector', async (req, res) => {
     res.status(500).json({ error: "Selector test failed", details: err.message });
   }
 });
+
+// ── Bulk Library Harvester Endpoints ───────────────────────────────────────────
+
+// POST /api/sources/bulk-scrape/start - Launch background multi-source crawler
+sourcesRouter.post('/api/sources/bulk-scrape/start', async (req: Request, res: Response) => {
+  try {
+    const { sourceIds, maxPagesPerSource, enrichMetadata, limitPerPage } = req.body || {};
+    const progress = await bulkScraperService.start({
+      sourceIds: Array.isArray(sourceIds) ? sourceIds : undefined,
+      maxPagesPerSource: typeof maxPagesPerSource === 'number' ? maxPagesPerSource : 5,
+      enrichMetadata: enrichMetadata !== false,
+      limitPerPage: typeof limitPerPage === 'number' ? limitPerPage : 30,
+    });
+    res.json({ success: true, progress });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to start bulk scraper", details: err.message });
+  }
+});
+
+// GET /api/sources/bulk-scrape/status - Poll live bulk scraping progress
+sourcesRouter.get('/api/sources/bulk-scrape/status', (req: Request, res: Response) => {
+  res.json(bulkScraperService.getProgress());
+});
+
+// POST /api/sources/bulk-scrape/stop - Cancel running bulk scrape
+sourcesRouter.post('/api/sources/bulk-scrape/stop', (req: Request, res: Response) => {
+  const stopped = bulkScraperService.stop();
+  res.json({ success: true, stopped, progress: bulkScraperService.getProgress() });
+});
+
 
 

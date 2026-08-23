@@ -82,10 +82,10 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
   const handleShareSummary = () => {
     const text =
       `📚 My Graywood Reader Recap:\n` +
-      `🏆 Score: ${wrapped.totalScore.toLocaleString()} / ${wrapped.maxScore.toLocaleString()} Pts (${wrapped.unlockedTrophiesCount}/${wrapped.totalTrophiesCount} Trophies)\n` +
+      `🏆 Score: ${(wrapped.totalScore ?? 0).toLocaleString()} / ${(wrapped.maxScore ?? 0).toLocaleString()} Pts (${wrapped.unlockedTrophiesCount}/${wrapped.totalTrophiesCount} Trophies)\n` +
       `🔥 Streak: ${wrapped.currentStreakDays} Days\n` +
-      `📖 Chapters Read: ${wrapped.totalChaptersRead.toLocaleString()}\n` +
-      `📄 Pages Turned: ~${wrapped.totalPagesEstimated.toLocaleString()}\n` +
+      `📖 Chapters Read: ${(wrapped.totalChaptersRead ?? 0).toLocaleString()}\n` +
+      `📄 Pages Turned: ~${(wrapped.totalPagesEstimated ?? 0).toLocaleString()}\n` +
       `✨ Top Genres: ${wrapped.topGenres.slice(0, 3).map((g) => g.name).join(', ')}`;
 
     navigator.clipboard.writeText(text).then(() => {
@@ -253,7 +253,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                   <div className="p-2.5 rounded-xl bg-app/80 border border-edge text-center min-w-[80px]">
                     <div className="text-xs text-secondary font-bold">GamerScore</div>
                     <div className="text-sm font-black text-amber-400 font-mono">
-                      {wrapped.totalScore.toLocaleString()} <span className="text-[10px] text-muted">/ {wrapped.maxScore.toLocaleString()}</span>
+                      {(wrapped.totalScore ?? 0).toLocaleString()} <span className="text-[10px] text-muted">/ {(wrapped.maxScore ?? 0).toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -456,14 +456,14 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                     <div className="text-2xl sm:text-3xl font-black text-amber-400">
-                      {wrapped.totalChaptersRead.toLocaleString()}
+                      {(wrapped.totalChaptersRead ?? 0).toLocaleString()}
                     </div>
                     <div className="text-xs text-indigo-200 mt-0.5">Chapters Read</div>
                   </div>
 
                   <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                     <div className="text-2xl sm:text-3xl font-black text-purple-300">
-                      ~{wrapped.totalPagesEstimated.toLocaleString()}
+                      ~{(wrapped.totalPagesEstimated ?? 0).toLocaleString()}
                     </div>
                     <div className="text-xs text-indigo-200 mt-0.5">Pages Turned</div>
                   </div>
@@ -487,7 +487,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
                 <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-2.5">
                   <div className="flex items-center justify-between text-xs font-bold text-indigo-200">
                     <span>Trophy Tier Breakdown</span>
-                    <span className="font-mono text-amber-300 font-black">{wrapped.totalScore.toLocaleString()} / {wrapped.maxScore.toLocaleString()} Points</span>
+                    <span className="font-mono text-amber-300 font-black">{(wrapped.totalScore ?? 0).toLocaleString()} / {(wrapped.maxScore ?? 0).toLocaleString()} Points</span>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs">
                     <div className="p-2 bg-white/5 rounded-xl border border-amber-700/30">

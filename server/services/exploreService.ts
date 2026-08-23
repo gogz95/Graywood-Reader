@@ -27,6 +27,8 @@ import {
   isSourceAlive,
   isMetadataOnlySource,
   isContentPath,
+  isSeriesContentPath,
+  isChapterTitle,
   isNavText,
   getAllSourcesWithExtensions,
   isSeriesFromDisabledSource,
@@ -37,6 +39,11 @@ import {
   sourceHealthMap,
 } from './sourceHealthService';
 import { scrapeWeebCentral } from '../scrapers/weebCentral';
+import { scrapeMangaRead, searchMangaRead } from '../scrapers/mangaRead';
+import { scrapeManhuaPlus, searchManhuaPlus } from '../scrapers/manhuaPlus';
+import { scrapeDemonicScans, searchDemonicScans } from '../scrapers/demonicScans';
+import { scrapeAquaManga } from '../scrapers/aquaManga';
+import { scrapeKunManga } from '../scrapers/kunManga';
 import { syncConfig } from '../appState';
 
 export const SCRAPER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -257,7 +264,6 @@ export async function searchSourceDirectly(
   const lowerId = sourceDef.id.toLowerCase();
   const baseOrigin = sourceDef.baseUrl.replace(/\/+$/, '');
 
-  // Dedicated scrapers
   if (lowerName.includes('weebcentral') || lowerId.includes('weebcentral')) {
     const results = await scrapeWeebCentral(1, limit);
     const needle = cleanQ.toLowerCase();
@@ -265,6 +271,21 @@ export async function searchSourceDirectly(
       (m: any) => (m.title || '').toLowerCase().includes(needle) || (m.description || '').toLowerCase().includes(needle)
     );
     return { items: filtered, totalCount: filtered.length };
+  }
+
+  if (lowerName.includes('mangaread') || lowerId.includes('mangaread')) {
+    const results = await searchMangaRead(cleanQ, limit);
+    if (results.length > 0) return { items: results, totalCount: results.length };
+  }
+
+  if (lowerName.includes('manhuaplus') || lowerId.includes('manhuaplus')) {
+    const results = await searchManhuaPlus(cleanQ, limit);
+    if (results.length > 0) return { items: results, totalCount: results.length };
+  }
+
+  if (lowerName.includes('demonic') || lowerId.includes('demonic')) {
+    const results = await searchDemonicScans(cleanQ, limit);
+    if (results.length > 0) return { items: results, totalCount: results.length };
   }
 
   if (lowerName.includes('asura') || lowerId.includes('asura')) {
@@ -386,39 +407,86 @@ export function parseUniversalCatalogCards(
   const seenTitles = new Set<string>();
   const seenUrls = new Set<string>();
 
-  const extractCover = (el: any): string => {
-    if (!el || !el.length) return '';
-    const src =
-      el.attr('data-src') ||
-      el.attr('data-lazy-src') ||
-      el.attr('data-original') ||
-      el.attr('data-cfsrc') ||
-      el.attr('data-url') ||
-      el.attr('data-img') ||
-      el.attr('data-image') ||
-      el.attr('data-page-url') ||
-      el.attr('data-srcset') ||
-      el.attr('srcset') ||
-      el.attr('src') ||
-      '';
-    let clean = (src || '').trim();
-    if (clean.includes(',') && (clean.includes(' 1x') || clean.includes(' 2x') || clean.includes('w'))) {
-      const parts = clean.split(',').map((s: string) => s.trim()).filter(Boolean);
-      if (parts.length > 0) clean = (parts[parts.length - 1].split(/\s+/)[0] || '').trim();
+  const isPlaceholderCover = (url: string): boolean => {
+    if (!url) return true;
+    const lower = url.toLowerCase();
+    if (lower.startsWith('data:image/gif;base64,r0lgodlhaqab') || lower.startsWith('data:image/png;base64,ivborw0kggoaaaansuheugaaaaee') || lower.startsWith('data:image/svg+xml')) {
+      return true;
     }
-    if (!clean || /logo|avatar|banner|icon|placeholder|ads|favicon|\.gif(\?|$)/i.test(clean)) return '';
-    if (isAdImageSrc(clean, baseOrigin)) return '';
-    if (clean.startsWith('//')) return `https:${clean}`;
-    if (clean.startsWith('/')) return `${baseOrigin}${clean}`;
-    if (!clean.startsWith('http://') && !clean.startsWith('https://')) return `${baseOrigin}/${clean}`;
-    return clean;
+    return /placeholder|blank\.gif|loading\.gif|spinner\.gif|default-avatar|no-image|default_cover|default-cover|wp-manga\/assets\/images\/placeholder|no_cover|\.gif(\?|$)/i.test(lower);
+  };
+
+  const extractCover = (el: any, cardParent?: any): string => {
+    if (!el || !el.length) {
+      if (cardParent && cardParent.length) {
+        const bgStyle = cardParent.attr('style') || '';
+        const bgMatch = bgStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
+        if (bgMatch && bgMatch[1] && !isPlaceholderCover(bgMatch[1])) return bgMatch[1].trim();
+        const dataBg = cardParent.attr('data-bg') || cardParent.attr('data-background') || cardParent.attr('data-src') || '';
+        if (dataBg && !isPlaceholderCover(dataBg)) return dataBg.trim();
+      }
+      return '';
+    }
+
+    const candidateAttrs = [
+      'data-src',
+      'data-lazy-src',
+      'data-original',
+      'data-cfsrc',
+      'data-bg',
+      'data-background',
+      'data-img-url',
+      'data-url',
+      'data-image',
+      'data-img',
+      'data-page-url',
+      'data-srcset',
+      'srcset',
+      'src',
+    ];
+
+    let found = '';
+    for (const attr of candidateAttrs) {
+      const val = el.attr(attr);
+      if (val && !isPlaceholderCover(val)) {
+        found = val.trim();
+        break;
+      }
+    }
+
+    // Check style on the image itself or parent card
+    if (!found) {
+      const style = el.attr('style') || (cardParent ? cardParent.attr('style') : '') || '';
+      const bgMatch = style.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
+      if (bgMatch && bgMatch[1] && !isPlaceholderCover(bgMatch[1])) {
+        found = bgMatch[1].trim();
+      }
+    }
+
+    if (!found && cardParent && cardParent.length) {
+      const pBg = cardParent.attr('data-bg') || cardParent.attr('data-background') || cardParent.attr('data-src') || '';
+      if (pBg && !isPlaceholderCover(pBg)) found = pBg.trim();
+    }
+
+    if (!found) return '';
+
+    if (found.includes(',') && (found.includes(' 1x') || found.includes(' 2x') || found.includes('w'))) {
+      const parts = found.split(',').map((s: string) => s.trim()).filter(Boolean);
+      if (parts.length > 0) found = (parts[parts.length - 1].split(/\s+/)[0] || '').trim();
+    }
+
+    if (isAdImageSrc(found, baseOrigin)) return '';
+    if (found.startsWith('//')) return `https:${found}`;
+    if (found.startsWith('/')) return `${baseOrigin}${found}`;
+    if (!found.startsWith('http://') && !found.startsWith('https://')) return `${baseOrigin}/${found}`;
+    return found;
   };
 
   const pushItem = (href: string, title: string, cover: string, latestCh = 10, genres: string[] = ['Action', 'Fantasy']) => {
-    const normTitle = (title || '').replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!href || normTitle.length < 2 || seenTitles.has(normTitle)) return;
+    if (!href) return;
+    if (!isSeriesContentPath(href)) return;
+    if (isChapterTitle(title)) return;
     if (isNavText(title)) return;
-    if (!isContentPath(href)) return;
     if (isAdSeries(title, href) || isAdUrl(href) || isAdTitle(title)) return;
 
     let absUrl = href.trim();
@@ -427,22 +495,30 @@ export function parseUniversalCatalogCards(
     else if (!absUrl.startsWith('http://') && !absUrl.startsWith('https://')) absUrl = `${baseOrigin}/${absUrl}`;
     absUrl = absUrl.replace(/\/+$/, '');
 
-    const normUrl = absUrl.toLowerCase();
-    if (seenUrls.has(normUrl)) return;
+    if (!isSeriesContentPath(absUrl)) return;
     if (isAdUrl(absUrl)) return;
 
-    seenTitles.add(normTitle);
-    seenUrls.add(normUrl);
+    const normUrl = absUrl.toLowerCase();
+    if (seenUrls.has(normUrl)) return;
 
     const cleanTitle = title
       .replace(/\s+/g, ' ')
       .replace(/\s*Chapter\s*\d+.*$/i, '')
       .replace(/\s*Ch\.\s*\d+.*$/i, '')
+      .replace(/\s*Ep\.\s*\d+.*$/i, '')
       .trim();
+
+    if (!cleanTitle || cleanTitle.length < 2 || isChapterTitle(cleanTitle)) return;
+
+    const normTitle = cleanTitle.toLowerCase();
+    if (seenTitles.has(normTitle)) return;
+
+    seenTitles.add(normTitle);
+    seenUrls.add(normUrl);
 
     scrapedItems.push({
       id: generateSourceScrapeId(`live_${sourceDef.id}`, absUrl),
-      title: cleanTitle || title.trim(),
+      title: cleanTitle,
       sourceUrl: absUrl,
       coverImage: cover,
       sourceName: sourceDef.name,
@@ -471,7 +547,7 @@ export function parseUniversalCatalogCards(
         const a = card.is('a') ? card : card.find('.post-title a, .tt a, h3 a, h4 a, h2 a, .title a, a[title], a[href*="/manga/"], a[href*="/series/"], a[href*="/comic/"], a').first();
         const href = a.attr('href') || '';
         const title = (card.find('.tt, .bigor .tt, h3, h2, h4, .post-title, .series-title, .title').first().text() || a.attr('title') || a.text()).trim();
-        const cover = extractCover(card.find('img').first());
+        const cover = extractCover(card.find('img').first(), card);
 
         let chNum = 10;
         const chText = card.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
@@ -484,15 +560,17 @@ export function parseUniversalCatalogCards(
     }
   }
 
-  // Strategy 2: Universal anchor & container scan
+  // Strategy 2: Universal anchor & container scan (strictly matching series paths)
   $('a[href]').each((_i, el) => {
     const a = $(el);
     const href = a.attr('href') || '';
-    if (!href || !isContentPath(href)) return;
+    if (!href || !isSeriesContentPath(href)) return;
 
     const parent = a.closest('div, li, article, section');
     const title = (a.attr('title') || parent.find('h2, h3, h4, h5, .title, .series-title, .name').first().text() || a.text()).trim();
-    const cover = extractCover(a.find('img').first().length ? a.find('img').first() : parent.find('img').first());
+    if (isChapterTitle(title)) return;
+
+    const cover = extractCover(a.find('img').first().length ? a.find('img').first() : parent.find('img').first(), parent);
 
     let chNum = 10;
     const chText = parent.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
@@ -542,6 +620,26 @@ export async function getSourcePopularSeries(
   if (lowerName.includes('manhwa18') || lowerId.includes('manhwa18')) {
     const items = await scrapeManhwa18(page, limit);
     if (items.length > 0) return { items, totalCount: 90 * limit };
+  }
+  if (lowerName.includes('mangaread') || lowerId.includes('mangaread')) {
+    const result = await scrapeMangaRead(page, limit);
+    if (result.items.length > 0) return result;
+  }
+  if (lowerName.includes('manhuaplus') || lowerId.includes('manhuaplus')) {
+    const result = await scrapeManhuaPlus(page, limit);
+    if (result.items.length > 0) return result;
+  }
+  if (lowerName.includes('demonic') || lowerId.includes('demonic')) {
+    const result = await scrapeDemonicScans(page, limit);
+    if (result.items.length > 0) return result;
+  }
+  if (lowerName.includes('aquamanga') || lowerId.includes('aquamanga')) {
+    const result = await scrapeAquaManga(page, limit);
+    if (result.items.length > 0) return result;
+  }
+  if (lowerName.includes('kunmanga') || lowerId.includes('kunmanga')) {
+    const result = await scrapeKunManga(page, limit);
+    if (result.items.length > 0) return result;
   }
 
   const scrapedItems: any[] = [];
