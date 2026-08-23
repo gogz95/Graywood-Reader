@@ -14,7 +14,13 @@ import {
 } from '../appState';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { sourceCircuitBreaker } from '../circuitBreaker';
-import { isAdImageSrc } from '../adFilter';
+import {
+  isAdImageSrc,
+  isAdUrl,
+  isAdTitle,
+  isAdSeries,
+  stripAdElements,
+} from '../adFilter';
 import {
   KOTATSU_SOURCES,
   ALL_SOURCES_CATALOG,
@@ -270,6 +276,7 @@ export function isValidPanelImageUrl(url: string): boolean {
   
   if (/(logo|avatar|banner|covers|discord|tracker|pixel|top_ad|\/ads\/|\/banners\/|\/covers\/|\/avatar\/|\/tracker\/|\.gif(\?|$))/i.test(u)) return false;
   if (/doubleclick|googleadservices|pagead2|googlesyndication|adservice/i.test(u)) return false;
+  if (isAdUrl(u)) return false;
   if (isAdImageSrc(u, 'https://example.com')) return false;
 
   const isImageExt = /\.(jpg|jpeg|png|webp|avif)(\?|$)/i.test(u);
@@ -315,6 +322,7 @@ export function extractPanelImages(htmlText: string, origin: string): string[] {
 
   try {
     const $ = cheerio.load(htmlText);
+    stripAdElements($);
     const containerSelectors = [
       '#chapter-content img', '.chapter-content img', '#chapter_content img',
       '#readerarea img', '.reading-content img', '.read-content img',
@@ -429,10 +437,35 @@ export function extractPanelImages(htmlText: string, origin: string): string[] {
 export function parseGenericChapterListFromHtml(sHtml: string, origin: string): ResolvedChapter[] {
   if (!sHtml) return [];
   const $ = cheerio.load(sHtml);
+  stripAdElements($);
   const out: ResolvedChapter[] = [];
   const seen = new Set<string>();
 
-  const candidateNodes = $('a[href], select option[value], ul.chapter-list li a, .chapters-list li a, #chapterlist li a, div.eplister li a, .row-content-chapter li a, .list-chapter .row a, .element .title a').toArray();
+  // Prioritize dedicated chapter containers to isolate from sidebar recommendations
+  const dedicatedContainerSelectors = [
+    'div.eplister li a',
+    'ul.chapter-list li a',
+    '.chapters-list li a',
+    '#chapterlist li a',
+    '.row-content-chapter li a',
+    '.listing-chapters_wrap li a',
+    '.list-chapter .row a',
+    '.version-chap a',
+    '.chapter-container a',
+    '#chapters a',
+  ];
+
+  let candidateNodes: any[] = [];
+  for (const sel of dedicatedContainerSelectors) {
+    const found = $(sel).toArray();
+    if (found.length > 0) {
+      candidateNodes.push(...found);
+    }
+  }
+
+  if (candidateNodes.length === 0) {
+    candidateNodes = $('a[href], select option[value], .element .title a').toArray();
+  }
 
   const chapterRegex = /(?:chapter|chapitre|capitulo|capítulo|cap|chap|ch|episode|ep|глава|tập|tap|vol|volume|#)[^\d]*(\d+(?:\.\d+)?)/i;
   const pathNumberRegex = /\/(?:chapter|chap|ch|episode|ep)[-_/]?(\d+(?:\.\d+)?)/i;
@@ -443,6 +476,7 @@ export function parseGenericChapterListFromHtml(sHtml: string, origin: string): 
     const href = tag === 'option' ? ($(node).attr('value') || '') : ($(node).attr('href') || '');
     if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
     const text = $(node).text().trim() || $(node).attr('title') || '';
+    if (isAdUrl(href) || isAdTitle(text) || isAdSeries(text, href)) continue;
     
     const numMatch = (href + ' ' + text).match(chapterRegex) || href.match(pathNumberRegex);
     if (!numMatch && !/chapter|chap|ch/i.test(href) && !/chapter|chap|ch/i.test(text)) {
@@ -452,7 +486,7 @@ export function parseGenericChapterListFromHtml(sHtml: string, origin: string): 
     if (!Number.isFinite(num) || num <= 0) continue;
 
     const abs = href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
-    if (seen.has(abs)) continue;
+    if (seen.has(abs) || isAdUrl(abs)) continue;
     seen.add(abs);
     out.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
   }

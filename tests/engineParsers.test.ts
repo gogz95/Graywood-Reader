@@ -8,6 +8,10 @@ import {
   parseGenericChapterListFromHtml,
   parseGenericLiveSeriesMetadata,
   parseUniversalCatalogCards,
+  isAdTitle,
+  isAdUrl,
+  isAdSeries,
+  stripAdElements,
 } from '../server';
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -290,4 +294,98 @@ describe('Automated Engine Parser Test Harness', () => {
       ]);
     });
   });
+
+  describe('Ad & Spam Defense / BUG-044 Protection', () => {
+    it('detects cam models, adult spam, and affiliate ads via isAdTitle and isAdSeries', () => {
+      expect(isAdTitle('ChristinaSiemone Cam Model: Free Live Sex Show & Chat')).toBe(true);
+      expect(isAdTitle('Live Sex Chat - Meet Hot Singles Now')).toBe(true);
+      expect(isAdTitle('Chaturbate Live Stream')).toBe(true);
+      expect(isAdTitle('Slot Gacor Online - Free Coins')).toBe(true);
+      expect(isAdTitle('Solo Leveling: Ragnarok')).toBe(false);
+      expect(isAdTitle('Omniscient Reader’s Viewpoint')).toBe(false);
+
+      expect(isAdUrl('https://adnetwork.trafficjunky.net/clkg.php?aff_id=123')).toBe(true);
+      expect(isAdUrl('https://exoclick.com/adclick?zone_id=99')).toBe(true);
+      expect(isAdUrl('https://manhwa18.com/manga/secret-class')).toBe(false);
+
+      expect(isAdSeries('ChristinaSiemone Cam Model: Free Live Sex Show & Chat', 'https://mangahentai.me/cam/model')).toBe(true);
+      expect(isAdSeries('Martial Peak', 'https://manhuaplus.top/manga/martial-peak/')).toBe(false);
+    });
+
+    it('filters out ad cards from catalog and explore HTML', () => {
+      const mixedHtml = `
+        <div class="listupd">
+          <div class="bsx">
+            <a href="https://example.com/manga/nano-machine">
+              <div class="tt">Nano Machine</div>
+              <img src="https://cdn.example.com/nano.jpg">
+            </a>
+          </div>
+          <div class="bsx sponsored-card">
+            <a href="https://trafficjunky.net/clkg.php?id=99">
+              <div class="tt">ChristinaSiemone Cam Model: Free Live Sex Show & Chat</div>
+              <img src="https://cdn.example.com/cam_banner.jpg">
+            </a>
+          </div>
+          <div class="bsx">
+            <a href="https://example.com/manga/lookism">
+              <div class="tt">Lookism</div>
+              <img src="https://cdn.example.com/lookism.jpg">
+            </a>
+          </div>
+        </div>
+      `;
+
+      const sourceDef = {
+        id: 'test_src',
+        name: 'Test Source',
+        baseUrl: 'https://example.com',
+        engineType: 'mangathemesia' as const,
+        lang: 'en',
+        isNsfw: false,
+      };
+
+      const items = parseUniversalCatalogCards(mixedHtml, sourceDef, 'https://example.com');
+      expect(items.length).toBe(2);
+      expect(items.some((i) => i.title.includes('Cam Model'))).toBe(false);
+      expect(items[0].title).toBe('Nano Machine');
+      expect(items[1].title).toBe('Lookism');
+    });
+
+    it('isolates dedicated chapter containers and rejects sidebar recommendation links', () => {
+      const htmlWithSidebar = `
+        <div class="row-content-chapter">
+          <li><a href="https://example.com/manga/solo-leveling/chapter-100">Chapter 100</a></li>
+          <li><a href="https://example.com/manga/solo-leveling/chapter-99">Chapter 99</a></li>
+        </div>
+        <div class="sidebar-popular-widget">
+          <h3>Popular Manga</h3>
+          <li><a href="https://example.com/manga/another-series/chapter-500">Another Series Chapter 500</a></li>
+          <li><a href="https://adnetwork.com/click?aff_id=99">Play Free Adult Game Now</a></li>
+        </div>
+      `;
+
+      const chapters = parseGenericChapterListFromHtml(htmlWithSidebar, 'https://example.com');
+      expect(chapters.length).toBe(2);
+      expect(chapters[0].number).toBe(100);
+      expect(chapters[1].number).toBe(99);
+      expect(chapters.some((c) => c.title.includes('Another Series'))).toBe(false);
+      expect(chapters.some((c) => c.title.includes('Adult Game'))).toBe(false);
+    });
+
+    it('rejects ad landing pages in parseGenericLiveSeriesMetadata', () => {
+      const adPageHtml = `
+        <html>
+          <head><title>Free Live Sex Show & Chat</title></head>
+          <body>
+            <div class="post-title"><h1>ChristinaSiemone Cam Model: Free Live Sex Show & Chat</h1></div>
+            <div class="summary__content"><p>Watch free live cam show now!</p></div>
+          </body>
+        </html>
+      `;
+      const meta = parseGenericLiveSeriesMetadata(adPageHtml, 'https://mangahentai.me/ad-landing');
+      expect(meta).toBeNull();
+    });
+  });
 });
+

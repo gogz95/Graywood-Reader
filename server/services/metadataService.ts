@@ -14,6 +14,7 @@ import { isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { sourceCookieJar } from './sourceHealthService';
 import { parseGenericChapterListFromHtml } from './crawlerEngine';
+import { isAdSeries, isAdUrl, isAdTitle, stripAdElements } from '../adFilter';
 import { APP_USER_AGENT } from '../version';
 
 // ── Rate-Limiting & Compliance Engine for MangaDex API ────────────────────────
@@ -202,6 +203,7 @@ export function isMangaDexSourceLink(sourceName?: string, sourceUrl?: string): b
 export function parseGenericLiveSeriesMetadata(html: string, pageUrl: string): Partial<MangaItem> | null {
   if (!html) return null;
   const $ = cheerio.load(html);
+  stripAdElements($);
   let origin = '';
   try {
     origin = new URL(pageUrl).origin;
@@ -224,6 +226,10 @@ export function parseGenericLiveSeriesMetadata(html: string, pageUrl: string): P
     .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua).*$/i, '')
     .replace(/\s*(?:Raw|Full|Uncensored|Read\s+Online|Chapter\s+\d+).*$/i, '')
     .trim();
+
+  if (isAdSeries(title, pageUrl) || isAdUrl(pageUrl) || isAdTitle(title)) {
+    return null;
+  }
 
   // 2. Cover Image
   let coverImage =

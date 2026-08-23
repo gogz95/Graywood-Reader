@@ -251,6 +251,31 @@ try { db.exec('CREATE INDEX IF NOT EXISTS idx_sticky_notes_user ON page_sticky_n
 try { db.exec('ALTER TABLE logs ADD COLUMN mangaId TEXT'); } catch (e) { }
 try { db.exec('ALTER TABLE logs ADD COLUMN type TEXT'); } catch (e) { }
 
+// Auto-sanitize ad & spam entries from legacy scrapes/imports (e.g. BUG-044)
+try {
+  const adRows = db.prepare(`
+    SELECT id, title FROM manga
+    WHERE title LIKE '%cam model%'
+       OR title LIKE '%free live sex show%'
+       OR title LIKE '%live sex chat%'
+       OR title LIKE '%chaturbate%'
+       OR title LIKE '%stripchat%'
+       OR title LIKE '%camsoda%'
+       OR title LIKE '%slot online%'
+       OR title LIKE '%slot gacor%'
+       OR id LIKE '%nottobemissed%'
+  `).all() as any[];
+
+  if (adRows && adRows.length > 0) {
+    const deleteStmt = db.prepare('DELETE FROM manga WHERE id = ?');
+    for (const row of adRows) {
+      deleteStmt.run(row.id);
+      logger.info('SQLite', 'Purged ad/spam item from database', { id: row.id, title: row.title });
+    }
+  }
+} catch (e) { }
+
+
 // Prepared Statements for Sub-millisecond Execution
 const stmtGetAllManga = db.prepare('SELECT * FROM manga ORDER BY lastUpdated DESC');
 const stmtGetMangaById = db.prepare('SELECT * FROM manga WHERE id = ?');

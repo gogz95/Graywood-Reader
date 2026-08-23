@@ -94,6 +94,13 @@ import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
 import { startAutoBackupScheduler } from "./server/services/autoBackupService";
 import { imageCacheService } from "./server/services/imageCache";
 import {
+  isAdSeries,
+  isAdUrl,
+  isAdTitle,
+  isAdImageSrc,
+  stripAdElements,
+} from "./server/adFilter";
+import {
   sourceHealthMap,
   updateSourceHealth,
   loadSourceHealthMap,
@@ -224,6 +231,11 @@ export {
   fetchLiveSeriesMetadata,
   parseUniversalCatalogCards,
   searchSourceDirectly,
+  isAdSeries,
+  isAdUrl,
+  isAdTitle,
+  isAdImageSrc,
+  stripAdElements,
 };
 
 // Initialize Express

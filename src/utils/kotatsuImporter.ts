@@ -4,6 +4,7 @@
  */
 
 import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../types';
+import { isAdSeries } from './metadataHelpers';
 
 export interface KotatsuChapter {
   id?: number | string;
@@ -1339,6 +1340,10 @@ export async function parseKotatsuBackup(
           categories.push(cName.trim());
         }
       }
+    }
+
+    if (isAdSeries(title, sourceUrl, description)) {
+      continue;
     }
 
     const hasWorkingSource = Boolean(sourceUrl && sourceUrl.trim().length > 0 && !isMangaDexSourceLink(sourceName, sourceUrl));

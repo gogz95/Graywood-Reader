@@ -238,3 +238,59 @@ export function preferEnglishTitle(
   const values = Object.values(titleMap).filter(Boolean);
   return values[0] ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Ad & Spam Series Protection Helpers
+// ---------------------------------------------------------------------------
+
+export const AD_SERIES_PATTERNS = [
+  /\bcam\s*model\b/i,
+  /\bfree\s*live\s*sex\s*show\b/i,
+  /\blive\s*sex\s*chat\b/i,
+  /\bsex\s*chat\b/i,
+  /\blive\s*cam\b/i,
+  /\bwebcam\s*girl/i,
+  /\bchaturbate\b/i,
+  /\bstripchat\b/i,
+  /\bcamsoda\b/i,
+  /\blivejasmin\b/i,
+  /\bbongacams\b/i,
+  /\bmeet\s*(?:hot\s*)?singles\b/i,
+  /\bhot\s*girls?\s*in\s*your\s*area\b/i,
+  /\badult\s*dating\b/i,
+  /\bfree\s*sex\s*simulator\b/i,
+  /\bplay\s*(?:online\s*)?(?:casino|slot|poker)\b/i,
+  /\bslot\s*gacor\b/i,
+  /\bjudi\s*online\b/i,
+  /\bfree\s*coins\b/i,
+  /\bclaim\s*(?:free\s*)?bonus\b/i,
+  /\bdownload\s*pc\s*game\b/i,
+  /\binstall\s*app\s*now\b/i,
+  /\bwatch\s*free\s*porn\b/i,
+  /\bclick\s*here\s*to\s*(?:watch|play|chat|join)\b/i,
+  /\bjoin\s*free\s*now\b/i,
+  /\bonlyfans\s*leak\b/i,
+  /\bwin\s*real\s*money\b/i,
+  /\b18\+\s*(?:game|dating|cam|chat)\b/i,
+];
+
+export function isAdSeries(title: string, url?: string, description?: string): boolean {
+  if (!title || typeof title !== 'string') return false;
+  const cleanTitle = title.trim();
+  for (const p of AD_SERIES_PATTERNS) {
+    if (p.test(cleanTitle)) return true;
+  }
+  if (url && typeof url === 'string') {
+    const cleanUrl = url.trim().toLowerCase();
+    if (/(?:trafficjunky|exoclick|adsterra|juicyads|ero-advertising|chaturbate|stripchat|bongacams|livejasmin|realsrv|plugrush|popcash|popads)/i.test(cleanUrl)) {
+      return true;
+    }
+  }
+  if (description && typeof description === 'string') {
+    for (const p of AD_SERIES_PATTERNS) {
+      if (p.test(description)) return true;
+    }
+  }
+  return false;
+}
+

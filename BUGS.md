@@ -27,28 +27,6 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
-### [BUG-044] [Other Fault] ChristinaSiemone Cam Model: Free Live Sex Show & Chat
-- **Status**: `open`
-- **Priority**: `high`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Darkmodes (2026-08-23)
-- **Description**: Flagged issue: Other Fault.
-
-Series: ChristinaSiemone Cam Model: Free Live Sex Show & Chat (kotatsu_1787348359960_598_nottobemissed)
-Source: MangaHentai
-Flag reason: Other Fault
-
-
-This is a popup ad
-- **Steps to Reproduce**:
-  1. 1. Open series "ChristinaSiemone Cam Model: Free Live Sex Show & Chat"
-2. Trigger reading / metadata load
-3. Observe: Other Fault
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
 _No active bugs._
 
 ---
@@ -56,6 +34,19 @@ _No active bugs._
 ## Fixed Bugs (Archive)
 
 > Bugs that have been resolved are moved here for historical reference.
+
+### [BUG-044] [Other Fault] ChristinaSiemone Cam Model: Free Live Sex Show & Chat (Popup Ad Injection)
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/adFilter.ts`, `server/services/exploreService.ts`, `server/services/crawlerEngine.ts`, `server/services/metadataService.ts`, `src/utils/kotatsuImporter.ts`, `src/utils/metadataHelpers.ts`, `sqlite-db.ts`, `tests/engineParsers.test.ts`
+- **Submitted-By**: Darkmodes (2026-08-23)
+- **Description**: Flagged issue: Other Fault. Series "ChristinaSiemone Cam Model: Free Live Sex Show & Chat" (`kotatsu_1787348359960_598_nottobemissed`) from source MangaHentai was a sponsored adult cam model popup ad card injected by the site's layout and parsed as a real series.
+- **Root cause**:
+  1. The ad protection filter lacked heuristic title, URL, and spam pattern checking (`isAdTitle`, `isAdUrl`, `isAdSeries`) to detect sponsored cam/affiliate cards.
+  2. DOM parsing in `exploreService.ts` (`parseUniversalCatalogCards`), `crawlerEngine.ts`, and `kotatsuImporter.ts` did not strip ad elements before extracting series cards and links.
+  3. `parseGenericChapterListFromHtml` lacked dedicated container scoping and could pick up recommendation/ad links from sidebars.
+- **Fixed in**: 2026-08-23 — Implemented `isAdTitle`, `isAdUrl`, and `isAdSeries` guards; added DOM ad element stripping before catalog card, chapter, and image extraction; isolated dedicated chapter wrappers from sidebar recommendations; added Kotatsu backup import ad filtering; and auto-sanitized ad/spam entries on SQLite startup.
 
 ### [BUG-043] Overnight Performance Degradation, Ballooning Auto-Updater & Scraper Leaks
 - **Status**: `fixed`

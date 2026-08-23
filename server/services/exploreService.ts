@@ -13,7 +13,13 @@ import {
 } from '../appState';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { sourceCircuitBreaker } from '../circuitBreaker';
-import { isAdImageSrc } from '../adFilter';
+import {
+  isAdImageSrc,
+  isAdSeries,
+  isAdUrl,
+  isAdTitle,
+  stripAdElements,
+} from '../adFilter';
 import {
   SourceDefinition,
   KOTATSU_SOURCES,
@@ -373,7 +379,9 @@ export function parseUniversalCatalogCards(
   sourceDef: SourceDefinition,
   baseOrigin: string
 ): any[] {
+  if (!html) return [];
   const $ = cheerio.load(html);
+  stripAdElements($);
   const scrapedItems: any[] = [];
   const seenTitles = new Set<string>();
   const seenUrls = new Set<string>();
@@ -411,6 +419,7 @@ export function parseUniversalCatalogCards(
     if (!href || normTitle.length < 2 || seenTitles.has(normTitle)) return;
     if (isNavText(title)) return;
     if (!isContentPath(href)) return;
+    if (isAdSeries(title, href) || isAdUrl(href) || isAdTitle(title)) return;
 
     let absUrl = href.trim();
     if (absUrl.startsWith('//')) absUrl = `https:${absUrl}`;
@@ -420,6 +429,7 @@ export function parseUniversalCatalogCards(
 
     const normUrl = absUrl.toLowerCase();
     if (seenUrls.has(normUrl)) return;
+    if (isAdUrl(absUrl)) return;
 
     seenTitles.add(normTitle);
     seenUrls.add(normUrl);
@@ -726,6 +736,7 @@ export function dedupeExploreItems(aggregated: any[]): any[] {
   const seen = new Map<string, any>();
   for (const it of aggregated) {
     if (!it || !it.title) continue;
+    if (isAdSeries(it.title, it.sourceUrl, it.description)) continue;
     const key = String(it.title)
       .toLowerCase()
       .normalize('NFD')
@@ -767,6 +778,7 @@ export function buildDatabaseExploreItems(): any[] {
   const items: any[] = [];
   for (const m of allManga) {
     if (isSeriesFromDisabledSource(m)) continue;
+    if (isAdSeries(m.title, m.sourceUrl, m.description)) continue;
 
     const sName = (m.sourceName || '').toLowerCase();
     const sUrl = (m.sourceUrl || '').toLowerCase();
