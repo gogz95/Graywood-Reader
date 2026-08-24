@@ -38,6 +38,40 @@ export function isNavText(t: string): boolean {
   return ['next', 'prev', 'previous', 'first', 'last', 'index', 'home', 'back', 'chapter list', 'all chapters'].includes(lower);
 }
 
+// ---------------------------------------------------------------------------
+// Source "verified" classification (task: harden the "listed but may not work"
+// reality). A source is only surfaced as verified when we have real reason to
+// believe its extraction actually works, instead of implying the whole 1,100+
+// catalog is scrape-ready:
+//   1. It has a dedicated handwritten scraper module (server/scrapers/*), OR
+//   2. Its engine type maps to a *maintained* generic parser (Madara, MangaThemesia,
+//      WPComics, FoolSlide — all backed by real logic in crawlerEngine), OR
+//   3. A live health check recently reported 'ok'.
+// Everything else (bare 'custom_html' entries, unprobed sources) is "unverified".
+// ---------------------------------------------------------------------------
+
+const VERIFIED_DEDICATED_IDS = new Set<string>([
+  'mangadex',
+  'weebcentral', 'asurascans', 'flamecomics',
+  'mangaread', 'manhuaplus', 'manhuaplusorg', 'demonicscans',
+  'aquamanga', 'kunmanga', 'manhwa18', 'manhwa18cc',
+]);
+
+const VERIFIED_ENGINE_TYPES = new Set<SourceEngineType>([
+  'madara', 'mangathemesia', 'wpcomics', 'foolslide',
+]);
+
+export function isSourceVerified(
+  source: { id: string; engineType?: SourceEngineType },
+  healthStatus?: string,
+): boolean {
+  if (!source) return false;
+  if (VERIFIED_DEDICATED_IDS.has(String(source.id).toLowerCase())) return true;
+  if (source.engineType && VERIFIED_ENGINE_TYPES.has(source.engineType)) return true;
+  if (healthStatus === 'ok') return true;
+  return false;
+}
+
 // Curated active fallback sources in case catalog.json is unavailable.
 // IMPORTANT — engine labels:
 //   asurascans  → 'custom_html' (uses api.asurascans.com — NOT the mangathemesia HTML theme)
@@ -264,6 +298,7 @@ export interface FullSourceInventoryItem extends SourceDefinition {
   isMetadataOnly: boolean;
   isEnabled: boolean;
   status: 'active' | 'disabled' | 'removed' | 'metadata';
+  verified: boolean;
 }
 
 export function buildFullSourceInventory(syncConfig?: DatabaseSyncConfig): FullSourceInventoryItem[] {
@@ -285,6 +320,7 @@ export function buildFullSourceInventory(syncConfig?: DatabaseSyncConfig): FullS
       isMetadataOnly: isMeta,
       isEnabled: state === 'active' && !isMeta,
       status: isMeta ? 'metadata' : state,
+      verified: isSourceVerified(s),
     });
   };
 
@@ -312,6 +348,7 @@ export function buildFullSourceInventory(syncConfig?: DatabaseSyncConfig): FullS
         isMetadataOnly: false,
         isEnabled: false,
         status: 'removed',
+        verified: false,
       });
     }
   }

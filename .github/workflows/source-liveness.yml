@@ -1,0 +1,68 @@
+name: Source Liveness
+
+# Nightly + on-demand scan of the scrapeable source catalogue so theme/domain
+# breakages (Madara->WPComics migrations, Cloudflare rollouts, dead domains)
+# are caught the day they happen instead of after users report BUG-0xx.
+#
+# NOTE: This job makes real outbound network requests and is intentionally
+# scheduled/detached so it never blocks normal CI or PR checks (the main
+# ci.yml is the gate). Reports are uploaded as a downloadable artifact and a
+# summary is posted to the workflow run.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # 03:17 UTC nightly
+  workflow_dispatch:        # allow manual trigger from the Actions tab
+
+jobs:
+  liveness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Sample the catalogue (default 50 sources) to keep the run fast & cheap.
+      # --patch lets healthy redirect chains update domains. Writes data/source-health.json.
+      - name: Scan source liveness (sampled)
+        id: liveness
+        run: node scripts/catalog-liveness.mjs --sample 50 --patch
+
+      - name: Run source audit report table
+        if: always()
+        run: node scripts/source-audit.mjs --out scratch/source-audit-report.json || true
+
+      - name: Summarize liveness
+        if: always()
+        shell: bash
+        run: |
+          if [ -f data/source-health.json ]; then
+            node -e '
+              const d = require("./data/source-health.json");
+              const arr = Array.isArray(d) ? d : (d.results || d.sources || []);
+              const ok = arr.filter(s => s && (s.status === "ok" || s.httpStatus === 200)).length;
+              const dead = arr.filter(s => s && (s.status === "dead" || String(s.status).startsWith("http-"))).length;
+              const cf = arr.filter(s => s && s.status === "cf-blocked").length;
+              const parked = arr.filter(s => s && s.status === "parked").length;
+              console.log(`Scanned=${arr.length} ok=${ok} dead=${dead} cf-blocked=${cf} parked=${parked}`);
+            '
+          else
+            echo "no liveness report produced"
+          fi
+
+      - name: Upload liveness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-liveness-${{ github.run_id }}
+          path: |
+            data/source-health.json
+            scratch/source-audit-report.json
+            scratch/source-audit-report.md
+          if-no-files-found: ignore

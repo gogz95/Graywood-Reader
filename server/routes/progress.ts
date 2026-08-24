@@ -142,6 +142,35 @@ progressRouter.post("/api/reader/progress", (req, res) => {
   res.json({ success: true });
 });
 
+// ── Per-Series Reader Settings Sync ───────────────────────────────────────────
+// Reader preferences (mode, page gap, filter, background, zoom…) roam across
+// PWA / Electron / other browsers per user exactly like reading progress does.
+// Falls back to 404/null when no server-side settings were saved yet so the
+// client can keep using its fast local (localStorage) snapshot.
+
+// GET /api/reader/settings/:mangaId  → saved settings JSON (or 404/null)
+progressRouter.get("/api/reader/settings/:mangaId", (req, res) => {
+  const mangaId = String(req.params.mangaId || '');
+  if (!mangaId) return res.status(400).json({ error: 'mangaId is required' });
+  const userId = resolveProgressUserId(req);
+  const saved = SqliteDb.getSeriesReaderSettings(userId, mangaId);
+  if (!saved) return res.status(404).json({ error: 'No saved reader settings', settings: null });
+  res.json({ success: true, settings: saved });
+});
+
+// PUT /api/reader/settings/:mangaId  → persist settings for this user
+progressRouter.put("/api/reader/settings/:mangaId", (req, res) => {
+  const mangaId = String(req.params.mangaId || '');
+  const settings = req.body?.settings || req.body || {};
+  if (!mangaId) return res.status(400).json({ error: 'mangaId is required' });
+  if (!settings || typeof settings !== 'object') {
+    return res.status(400).json({ error: 'settings object is required' });
+  }
+  const userId = resolveProgressUserId(req);
+  SqliteDb.setSeriesReaderSettings(userId, mangaId, settings);
+  res.json({ success: true });
+});
+
 // Get the resume position(s) for a manga (all stored chapters for the user).
 progressRouter.get("/api/reader/history/:mangaId", (req, res) => {
   const { mangaId } = req.params;

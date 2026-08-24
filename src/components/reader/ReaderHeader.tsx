@@ -328,6 +328,8 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
               ? '📖 Double'
               : settings.viewMode === 'webtoon'
               ? '📜 Webtoon'
+              : settings.viewMode === 'vertical-paged'
+              ? '📑 Paged Vert'
               : '📱 Seamless'}
           </span>
         </button>

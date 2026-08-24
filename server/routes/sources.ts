@@ -21,6 +21,7 @@ import {
   disabledSourceIds,
   isSourceAlive,
   isMetadataOnlySource,
+  isSourceVerified,
   buildFullSourceInventory,
   getAllSourcesWithExtensions,
   getSourceById,
@@ -121,6 +122,7 @@ export const handleGetSources = (req: Request, res: Response) => {
   const listWithStates = activeSources.map((s) => ({
     ...s,
     isEnabled: true,
+    verified: isSourceVerified(s),
   }));
   res.json(listWithStates);
 };
@@ -176,6 +178,7 @@ export const handleGetAllSources = (req: Request, res: Response) => {
     const h = sourceHealthMap.get(item.id);
     return {
       ...item,
+      verified: isSourceVerified(item, h ? h.lastStatus : undefined),
       healthStatus: h ? h.lastStatus : 'unknown',
       circuitState: h ? (h.circuitState || 'CLOSED') : 'CLOSED',
       consecutiveFailures: h ? (h.consecutiveFailures || 0) : 0,
@@ -183,7 +186,11 @@ export const handleGetAllSources = (req: Request, res: Response) => {
       failureReason: h ? (h.failureReason || null) : null,
     };
   });
-  res.json(enriched);
+  const verifiedCount = enriched.filter((s) => s.verified).length;
+  res.json({
+    summary: { total: enriched.length, verified: verifiedCount, unverified: enriched.length - verifiedCount },
+    sources: enriched,
+  });
 };
 
 sourcesRouter.get('/api/kotatsu/sources/all', handleGetAllSources);
@@ -335,6 +342,7 @@ sourcesRouter.get('/api/sources/dashboard', (_req, res) => {
       lang: source.lang || 'en',
       domain: domainStr,
       baseUrl: urlStr,
+      verified: isSourceVerified(source, h?.lastStatus),
       circuitState: cb.state,
       tripCount: cb.tripCount || 0,
       nextProbeTime: cb.nextProbeTime,
@@ -350,6 +358,8 @@ sourcesRouter.get('/api/sources/dashboard', (_req, res) => {
 
   const summary = {
     totalMonitored: topSourcesList.length,
+    verified: topSourcesList.filter((s) => s.verified).length,
+    unverified: topSourcesList.filter((s) => !s.verified).length,
     healthy: topSourcesList.filter((s) => s.lastStatus === 'ok' && s.circuitState !== 'OPEN').length,
     degraded: topSourcesList.filter((s) => s.lastStatus === 'degraded' || s.circuitState === 'HALF_OPEN').length,
     blocked: topSourcesList.filter((s) => s.lastStatus === 'blocked').length,

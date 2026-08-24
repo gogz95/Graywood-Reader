@@ -20,6 +20,8 @@ import {
   saveSeriesReadingMode,
   saveFormatReadingMode,
   saveLastUsedReadingMode,
+  fetchSeriesReadingModeFromServer,
+  pushSeriesReadingModeToServer,
 } from '../utils/readingMode';
 import { ReaderHeader } from './reader/ReaderHeader';
 import { ReaderFooter } from './reader/ReaderFooter';
@@ -286,16 +288,40 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   const setSettings = useCallback(
     (newSettings: ReaderSettings) => {
+      hydratedRef.current = true; // user took control — don't let hydration override
       setSettingsState(newSettings);
       saveSeriesReadingMode(manga.id, newSettings);
       saveFormatReadingMode(detectedFormat, newSettings);
       saveLastUsedReadingMode(newSettings);
+      // Durable server-side sync so settings roam across devices/browsers.
+      pushSeriesReadingModeToServer(manga.id, newSettings);
       if (onSaveSettings) {
         onSaveSettings(newSettings);
       }
     },
     [manga.id, detectedFormat, onSaveSettings]
   );
+
+  // On mount, hydrate per-series reader settings from the server (durable
+  // source of truth) and merge any that were saved on another device/browser.
+  // Local (localStorage) is the fast first paint; the server wins if it has a
+  // snapshot. A `hydratedRef` prevents this from racing a quick user edit.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await fetchSeriesReadingModeFromServer(manga.id);
+        if (!remote || cancelled || hydratedRef.current) return;
+        hydratedRef.current = true;
+        setSettingsState((prev) => ({ ...prev, ...remote }));
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manga.id]);
   // Guard against double-firing mark-read (autoMarkRead on load + 85% scroll),
   // which otherwise sends duplicate mark-read + AniList scrobble calls.
   const markedReadRef = useRef<Set<number>>(new Set());
@@ -681,10 +707,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setReadProgressPercent(percent);
 
     if (chapterData.pages.length > 0) {
-      const pIdx = Math.min(
-        chapterData.pages.length - 1,
-        Math.floor((scrollTop / (scrollHeight - clientHeight + 1)) * chapterData.pages.length)
-      );
+      const pIdx = settings.viewMode === 'vertical-paged'
+        ? Math.min(chapterData.pages.length - 1, Math.max(0, Math.round(scrollTop / window.innerHeight)))
+        : Math.min(
+            chapterData.pages.length - 1,
+            Math.floor((scrollTop / (scrollHeight - clientHeight + 1)) * chapterData.pages.length)
+          );
       setCurrentPageIndex(pIdx);
     }
 
@@ -702,7 +730,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         }
       }, 3000);
     }
-  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum]);
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum, settings.viewMode]);
 
   // Debounced server progress persistence (page + percent) for analytics/resume
   useEffect(() => {
@@ -751,6 +779,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         if (pageTurnSfxEnabled) soundscapes.playPageTurn();
         if (settings.viewMode === 'rtl' && chapterData) {
           if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+        } else if (settings.viewMode === 'vertical-paged' && scrollContainerRef.current) {
+          e.preventDefault();
+          const el = scrollContainerRef.current;
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+            if (chapterData?.nextChapterNumber) setCurrentChapterNum(chapterData.nextChapterNumber);
+          } else {
+            el.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+          }
         } else if (chapterData) {
           if (currentPageIndex < chapterData.pages.length - 1) {
             setCurrentPageIndex((prev) => prev + 1);
@@ -762,6 +798,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         if (pageTurnSfxEnabled) soundscapes.playPageTurn();
         if (settings.viewMode === 'rtl' && chapterData) {
           if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+        } else if (settings.viewMode === 'vertical-paged' && scrollContainerRef.current) {
+          e.preventDefault();
+          scrollContainerRef.current.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
         } else if (chapterData) {
           if (currentPageIndex > 0) {
             setCurrentPageIndex((prev) => prev - 1);
@@ -770,16 +809,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }
         }
       } else if (e.key === 'ArrowDown' || e.key === 'j') {
-        if (isWebtoon && scrollContainerRef.current) {
-          e.preventDefault();
-          const step = settings.guidedPanelView ? window.innerHeight * 0.75 : 250;
-          scrollContainerRef.current.scrollBy({ top: step, behavior: 'smooth' });
+        if (isWebtoon || settings.viewMode === 'vertical-paged') {
+          if (scrollContainerRef.current) {
+            e.preventDefault();
+            const step = settings.viewMode === 'vertical-paged' ? window.innerHeight : (settings.guidedPanelView ? window.innerHeight * 0.75 : 250);
+            scrollContainerRef.current.scrollBy({ top: step, behavior: 'smooth' });
+          }
         }
       } else if (e.key === 'ArrowUp' || e.key === 'k') {
-        if (isWebtoon && scrollContainerRef.current) {
-          e.preventDefault();
-          const step = settings.guidedPanelView ? window.innerHeight * 0.75 : 250;
-          scrollContainerRef.current.scrollBy({ top: -step, behavior: 'smooth' });
+        if (isWebtoon || settings.viewMode === 'vertical-paged') {
+          if (scrollContainerRef.current) {
+            e.preventDefault();
+            const step = settings.viewMode === 'vertical-paged' ? window.innerHeight : (settings.guidedPanelView ? window.innerHeight * 0.75 : 250);
+            scrollContainerRef.current.scrollBy({ top: -step, behavior: 'smooth' });
+          }
         }
       } else if (e.key === 'n') {
         setNoteInputText('');
@@ -1278,6 +1321,101 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 >
                   Next Chapter <ChevronRight className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : settings.viewMode === 'vertical-paged' && chapterData ? (
+          /* PAGED VERTICAL MODE — one viewport-height "page" per block, stacked
+             vertically. Reads like a vertical strip but each page snaps to a
+             full screen, so standard manga pages don't get stretched into a
+             long seamless ribbon. Prev/Next navigate one page at a time. */
+          <div className="flex flex-col items-center w-full relative select-none">
+            {/* Center Tap — Toggle HUD */}
+            <div
+              className="fixed left-[30%] right-[30%] top-0 bottom-0 z-10 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowHud(!showHud);
+              }}
+            />
+
+            {chapterData.pages.map((pageSrc, idx) => {
+              const pageState = pageLoadStates.get(idx);
+              const displaySrc = pageState?.blobUrl || pageSrc;
+              const isLoading = pageState?.status === 'loading';
+              const isError = pageState?.status === 'error';
+
+              return (
+                <div
+                  key={idx}
+                  className="relative w-full flex items-center justify-center"
+                  style={{ height: '100vh', maxWidth: settings.maxWidth }}
+                  data-page-index={idx}
+                >
+                  {isLoading ? (
+                    <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                  ) : isError ? (
+                    <div className="flex flex-col items-center gap-2 text-secondary">
+                      <AlertTriangle className="w-6 h-6 text-rose-400" />
+                      <span className="text-xs font-medium">Page {idx + 1} failed to load</span>
+                      <button
+                        onClick={() => loaderRef.current?.retryPage(idx)}
+                        className="px-2.5 py-1 rounded-lg bg-elevated border border-edge text-primary text-xs font-bold"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <img
+                      src={displaySrc}
+                      alt={`Page ${idx + 1}`}
+                      style={imageFilterStyle}
+                      onMouseMove={handleImageMouseMove}
+                      onMouseLeave={handleImageMouseLeave}
+                      decoding="async"
+                      className="max-h-[100vh] max-w-full w-auto object-contain shadow-2xl"
+                    />
+                  )}
+                  {settings.showPageNumberOverlay && (
+                    <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full bg-black/50 text-white text-[10px] font-bold">
+                      {idx + 1} / {chapterData.pages.length}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Previous page tap zone (left 30%) */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+                }
+              }}
+              className="fixed left-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-start pl-4 z-10"
+            >
+              <div className="p-3 rounded-full bg-surface/80 text-secondary opacity-0 hover:opacity-100 transition-opacity">
+                <ChevronLeft className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Next page tap zone (right 30%) */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!scrollContainerRef.current) return;
+                const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+                if (scrollTop + clientHeight >= scrollHeight - 4) {
+                  if (chapterData.nextChapterNumber) setCurrentChapterNum(chapterData.nextChapterNumber);
+                } else {
+                  scrollContainerRef.current.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+                }
+              }}
+              className="fixed right-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-end pr-4 z-10"
+            >
+              <div className="p-3 rounded-full bg-accent/90 text-accent-fg opacity-0 hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-6 h-6 stroke-[3]" />
               </div>
             </div>
           </div>

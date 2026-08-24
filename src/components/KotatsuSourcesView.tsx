@@ -109,6 +109,21 @@ const SourceRow = React.memo<SourceRowProps>(({
               {meta.label}
             </span>
             <span className="text-[9px] text-muted uppercase font-mono">{s.lang}</span>
+            {s.verified === false ? (
+              <span
+                title="Unverified — generic/listed source that may not scrape correctly"
+                className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              >
+                UNVERIFIED
+              </span>
+            ) : (
+              <span
+                title="Verified — dedicated scraper, maintained theme, or healthy probe"
+                className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              >
+                ✓
+              </span>
+            )}
             {s.isNsfw && (
               <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-danger/20 text-danger border border-danger/30">
                 18+

@@ -115,6 +115,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
               { id: 'ltr', label: '🇺🇸 Western / Manhua', desc: 'Left to Right page turn' },
               { id: 'single', label: '📄 Single Page', desc: 'One page per view' },
               { id: 'double', label: '📖 Double Spread', desc: 'Two pages side-by-side' },
+              { id: 'vertical-paged', label: '📑 Paged Vertical', desc: 'Full-screen pages, vertical scroll' },
             ].map((mode) => (
               <button
                 key={mode.id}

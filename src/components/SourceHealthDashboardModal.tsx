@@ -29,6 +29,7 @@ export interface SourceHealthEntry {
   circuitTrips?: number;
   circuitCoolingDownUntil?: number;
   isAlive?: boolean;
+  verified?: boolean;
 }
 
 interface SourceHealthDashboardModalProps {
@@ -44,6 +45,9 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
   const [statusFilter, setStatusFilter] = useState<'all' | 'healthy' | 'challenged' | 'tripped'>('all');
   const [engineFilter, setEngineFilter] = useState<string>('all');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  // Hide unverified (dedicated-scraper / maintained-theme / recently-OK) sources
+  // so operators only see entries we have real reason to trust.
+  const [hideUnverified, setHideUnverified] = useState<boolean>(false);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -65,6 +69,7 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
           circuitTrips: s.circuitTrips || 0,
           circuitCoolingDownUntil: s.circuitCoolingDownUntil,
           isAlive: s.isAlive !== false,
+          verified: s.verified !== false,
         }));
         setSources(mapped);
       }
@@ -128,7 +133,8 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
     const healthy = sources.filter((s) => s.circuitState !== 'OPEN' && s.httpStatus === 200 && (!s.challenge || s.challenge === 'None')).length;
     const challenged = sources.filter((s) => s.challenge && s.challenge !== 'None').length;
     const tripped = sources.filter((s) => s.circuitState === 'OPEN').length;
-    return { total, healthy, challenged, tripped };
+    const verified = sources.filter((s) => s.verified).length;
+    return { total, healthy, challenged, tripped, verified };
   }, [sources]);
 
   const availableEngines = useMemo(() => {
@@ -149,6 +155,8 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
 
       if (engineFilter !== 'all' && s.engine !== engineFilter) return false;
 
+      if (hideUnverified && !s.verified) return false;
+
       if (statusFilter === 'healthy') {
         return s.circuitState !== 'OPEN' && s.httpStatus === 200 && (!s.challenge || s.challenge === 'None');
       }
@@ -161,7 +169,7 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
 
       return true;
     });
-  }, [sources, searchQuery, statusFilter, engineFilter]);
+  }, [sources, searchQuery, statusFilter, engineFilter, hideUnverified]);
 
   if (!isOpen) return null;
 
@@ -199,7 +207,7 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
             </div>
             <div>
               <div className="text-lg font-black">{summary.total}</div>
-              <div className="text-[11px] text-secondary">Total Registered</div>
+              <div className="text-[11px] text-secondary">Total Registered ({summary.verified} verified)</div>
             </div>
           </div>
 
@@ -271,6 +279,19 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
                 </option>
               ))}
             </select>
+
+            <button
+              onClick={() => setHideUnverified((v) => !v)}
+              title="Only show sources backed by a dedicated scraper, a maintained theme parser, or a recent healthy probe"
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                hideUnverified
+                  ? 'bg-accent/20 border-accent/40 text-accent'
+                  : 'bg-app border-edge text-secondary hover:text-primary'
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{hideUnverified ? 'Showing Verified' : 'Show All'}</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -332,6 +353,20 @@ export const SourceHealthDashboardModal: React.FC<SourceHealthDashboardModalProp
                       </span>
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-surface text-secondary border border-edge">
                         {source.engine}
+                      </span>
+                      <span
+                        title={
+                          source.verified
+                            ? 'Verified — dedicated scraper, maintained theme parser, or recently probed healthy'
+                            : 'Unverified — generic/listed source that may not scrape correctly'
+                        }
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                          source.verified
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}
+                      >
+                        {source.verified ? 'Verified' : 'Unverified'}
                       </span>
                     </div>
                     <div className="text-[11px] text-secondary truncate flex items-center gap-1.5">

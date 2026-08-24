@@ -1010,6 +1010,32 @@ export const SqliteDb = {
     }
   },
 
+  // ── Per-Series Reader Settings (server-side sync) ───────────────────────────
+  // Reader preferences (mode, page gap, image filter, background, zoom…)
+  // persisted per (user, manga) so they roam across PWA / Electron / other
+  // browsers exactly like reading progress does. Keyed into the `settings`
+  // table as a single JSON blob per (user, manga).
+  getSeriesReaderSettings(userId: string, mangaId: string): Record<string, any> | null {
+    try {
+      const key = `series_reader_settings:${userId}:${mangaId}`;
+      const raw = stmtGetSetting.get(key) as { value: string } | undefined;
+      if (!raw || !raw.value) return null;
+      const parsed = JSON.parse(raw.value);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setSeriesReaderSettings(userId: string, mangaId: string, settings: Record<string, any>) {
+    try {
+      const key = `series_reader_settings:${userId}:${mangaId}`;
+      stmtSetSetting.run({ key, value: JSON.stringify(settings || {}) });
+    } catch (err) {
+      console.error('[SQLite Engine] Error persisting series reader settings:', err);
+    }
+  },
+
   // ── Persistent Library Cache ───────────────────────────────────────────────
   // A persistent snapshot of the library index built on first boot and updated weekly.
   getLibraryCache(): any | null {

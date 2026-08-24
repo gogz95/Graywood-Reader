@@ -1,4 +1,5 @@
 import { MangaItem, MangaType, ReaderSettings, ReaderViewMode, AppSettings } from '../types';
+import { apiFetch } from './api';
 
 const STORAGE_KEY_LAST_GLOBAL = 'graywood_reader_last_settings';
 const STORAGE_KEY_FORMAT_PREFIX = 'graywood_reader_format_';
@@ -211,4 +212,44 @@ export function resolveInitialReaderSettings(
   }
 
   return base;
+}
+
+// ---------------------------------------------------------------------------
+// Server-side per-series reader setting sync (roams across PWA / Electron /
+// other browsers exactly like reading progress does). The local (localStorage)
+// snapshot stays the fast first paint; the server is the durable source of
+// truth. All calls are best-effort and never throw.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the server-persisted reader settings for a series.
+ * Resolves to `null` when none were saved yet (client keeps local snapshot).
+ */
+export async function fetchSeriesReadingModeFromServer(mangaId: string): Promise<Partial<ReaderSettings> | null> {
+  try {
+    const res = await apiFetch(`/api/reader/settings/${encodeURIComponent(mangaId)}`, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const saved = data?.settings;
+    return saved && typeof saved === 'object' ? (saved as Partial<ReaderSettings>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Push the current reader settings for a series to the server (best-effort).
+ * Fire-and-forget from the caller — failures are silent and non-blocking.
+ */
+export async function pushSeriesReadingModeToServer(mangaId: string, settings: Partial<ReaderSettings>): Promise<void> {
+  try {
+    await apiFetch(`/api/reader/settings/${encodeURIComponent(mangaId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings }),
+      signal: AbortSignal.timeout(6000),
+    });
+  } catch {
+    /* offline / server unavailable — local copy remains authoritative until next sync */
+  }
 }

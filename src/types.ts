@@ -21,6 +21,10 @@ export interface SourceDefinition {
   // (ConfigKey.Domain / base-class constructor). False when derived from the
   // unreliable `<id>.com` fallback and should be reviewed by an operator.
   baseUrlReliable?: boolean;
+  // Emitted by the server: true when the source has a dedicated scraper, a
+  // maintained theme parser, or a recent healthy probe (see isSourceVerified).
+  verified?: boolean;
+  healthStatus?: 'ok' | 'degraded' | 'blocked' | 'down' | 'broken' | 'unknown';
   selectors?: {
     listContainer?: string;
     itemTitle?: string;

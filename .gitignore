@@ -43,3 +43,8 @@ kotatsu-app/
 kotatsu-parsers/
 kotatsu-parsers-redo/
 
+# Local tooling artifacts (type-check / test dashboards)
+*.out.txt
+tsc-out.txt
+test-out.txt
+
