@@ -578,6 +578,7 @@ sourcesRouter.get('/api/kotatsu/search-all', async (req, res) => {
 
 // ── Dynamic Source Extensions Lifecycle API ──────────────────────────────────
 import { extensionEngine } from '../sources/extensionEngine';
+import { fetchWithSsrfGuard } from '../security';
 import * as cheerio from 'cheerio';
 
 sourcesRouter.get('/api/extensions/list', (_req, res) => {
@@ -600,7 +601,8 @@ sourcesRouter.post('/api/extensions/install-url', async (req, res) => {
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: "Manifest URL is required" });
     }
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    // SSRF-guarded: blocks private/reserved IPs and validates every redirect hop.
+    const response = await fetchWithSsrfGuard(url, { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error(`HTTP ${response.status} fetching manifest`);
     const manifest = await response.json();
     const installed = extensionEngine.installExtension(manifest);
@@ -623,11 +625,11 @@ sourcesRouter.delete('/api/extensions/:id', (req, res) => {
   res.json({ success });
 });
 
-sourcesRouter.post('/api/extensions/execute/:id', (req, res) => {
+sourcesRouter.post('/api/extensions/execute/:id', async (req, res) => {
   const { id } = req.params;
   const { query } = req.body || {};
   try {
-    const results = extensionEngine.executeExtensionSearch(id, query || '');
+    const results = await extensionEngine.executeExtensionSearch(id, query || '');
     res.json({ success: true, results });
   } catch (err: any) {
     res.status(500).json({ error: "Extension execution failed", details: err.message });

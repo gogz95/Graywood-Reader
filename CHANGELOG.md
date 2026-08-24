@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Madara chapter-list AJAX regression** (`crawler_engine`): the modern-Madara `/ajax/chapters` fallback was sent as a GET (empty `postBody` string was falsy) — new Madara requires an **empty-body POST** with `X-Requested-With`. Added Mihon-style per-source `useNewChapterEndpoint` detection cache so the dead `admin-ajax.php` round-trip is skipped after first failure, and WordPress literal `"0"` failure bodies are no longer treated as a chapter list.
+- **Decimal chapter matching** (`crawler_engine`): `matchResolvedChapter` interpolated raw chapter numbers into a regex, so `10.5` acted as a wildcard and could match slugs like `chapter-10x5`; numbers are now regex-escaped.
+- **SSRF in `/api/extensions/install-url`** (`sources_router`): user-supplied manifest URLs were fetched without the SSRF guard; now routed through `fetchWithSsrfGuard`.
+
+### Changed
+- **Shared Madara theme scraper factory** (`server/scrapers/madaraTheme.ts`): consolidated the four near-identical Madara-theme list/search scrapers (MangaRead, Aqua Manga, Kun Manga, Manhua Plus) into one configured factory, mirroring Mihon's shared `Madara` base class. Includes real pagination-total parsing (`wp-pagenavi`) and rejection of chapter deep-links masquerading as series cards.
+- **Honest metadata policy**: dedicated scrapers no longer fabricate data — removed hard-coded `rating: 9.0`, placeholder descriptions ("Series from X"), invented genres, and inflated `totalCount: Math.max(items.length, N)` values. Totals are parsed from real pagination widgets or reported as actual item counts.
+- **ManhuaPlus rebuilt for new theme** (see BUG-045) and **Demonic Scans rebuilt** (see BUG-046).
+- **WPComics support**: generic chapter parser now recognizes `#nt_listchapter`, `.list-chapter`, and `.works-chapter-list` containers used by WPComics-family sources.
+
+### Added
+- **Network-capable extension sandbox** (`extensionEngine`): community dynamic sources can now perform HTTP requests through an SSRF-guarded, header-filtered, size-capped `fetch` exposed inside the hardened VM context (`codeGeneration: { strings: false, wasm: false }` blocks eval/Function/WASM escapes). Async `search()` functions are supported with a host-side 15s timeout, and all extension output is sanitized (type checks, relative-URL resolution, 100-result cap).
+
 ### Added
 - GitHub Community Standard guidelines (`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, issue & PR templates).
 - Formal backend component version tracking registry (`server/version.ts`) and `/api/version` endpoint.

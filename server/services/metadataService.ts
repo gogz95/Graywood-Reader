@@ -6,6 +6,7 @@ import {
   snapshotMetadataOverrides,
   restoreMetadataOverrides,
   preferEnglishTitle,
+  DEFAULT_UNKNOWN_RATING,
 } from '../../src/utils/metadataHelpers';
 import { fetchAsuraSeriesMetadata } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
@@ -61,8 +62,15 @@ export function calculateStringSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
   if (str1 === str2) return 100;
 
-  const s1 = str1.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-  const s2 = str2.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  const s1 = normalize(str1);
+  const s2 = normalize(str2);
 
   if (s1 === s2) return 100;
   if (!s1 || !s2) return 0;
@@ -115,19 +123,37 @@ export function calculateStringSimilarity(str1: string, str2: string): number {
 const mangadexMetaCache = new Map<
   string,
   {
+    title: string;
     apiId: string | null;
     coverImage: string;
     description: string;
     genres: string[];
     altTitles: string[];
-    fetchedAt: number;
+    expires: number;
   }
 >();
 const MANGADEX_META_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
+/**
+ * Shared cache eviction: first sweeps expired entries, then enforces a hard
+ * capacity cap by evicting the oldest (FIFO) entries.  This prevents both
+ * unbounded growth and stale data from lingering past its TTL.
+ */
+function evictCache<K>(cache: Map<K, { expires: number }>, maxSize: number): void {
+  const now = Date.now();
+  for (const [k, v] of cache) {
+    if (v.expires <= now) cache.delete(k);
+  }
+  while (cache.size >= maxSize) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
+
 export async function getMangaDexMetadataByTitle(
   title: string
-): Promise<{ apiId: string | null; coverImage: string; description: string; genres: string[]; altTitles: string[] } | null> {
+): Promise<{ apiId: string | null; title: string; coverImage: string; description: string; genres: string[]; altTitles: string[] } | null> {
   const cleanTitle = (title || '').trim();
   if (!cleanTitle) return null;
   const key = cleanTitle
@@ -136,13 +162,18 @@ export async function getMangaDexMetadataByTitle(
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
   if (!key) return null;
-  const cached = mangadexMetaCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < MANGADEX_META_TTL) return cached;
+    const cached = mangadexMetaCache.get(key);
+  if (cached && cached.expires > Date.now()) {
+    const { title, apiId, coverImage, description, genres, altTitles } = cached;
+    return { title, apiId, coverImage, description, genres, altTitles };
+  }
 
   try {
-    const clean = cleanTitle
+        const clean = cleanTitle
       .replace(/\s*\([^)]*\)/g, '')
       .replace(/uncensored|reboot|hd|season\s+\d+|ch\s*\d+/gi, '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .trim();
     if (clean.length < 3) return null;
 
@@ -173,7 +204,8 @@ export async function getMangaDexMetadataByTitle(
     const coverRel = (matched.relationships || []).find((r: any) => r.type === 'cover_art');
     const coverFileName = coverRel?.attributes?.fileName;
     const descObj = matched.attributes?.description || {};
-    const meta = {
+        const meta = {
+      title: preferEnglishTitle(matched.attributes?.title || null) || '',
       apiId: matched.id,
       coverImage: coverFileName
         ? `/api/mangadex/image-proxy?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${matched.id}/${coverFileName}.512.jpg`)}`
@@ -182,11 +214,8 @@ export async function getMangaDexMetadataByTitle(
       genres: (matched.attributes?.tags || []).map((t: any) => t.attributes?.name?.en).filter(Boolean).slice(0, 8),
       altTitles: (matched.attributes?.altTitles || []).map((t: any) => Object.values(t)[0]).filter(Boolean) as string[],
     };
-    if (mangadexMetaCache.size >= 500) {
-      const oldestKey = mangadexMetaCache.keys().next().value;
-      if (oldestKey) mangadexMetaCache.delete(oldestKey);
-    }
-    mangadexMetaCache.set(key, { ...meta, fetchedAt: Date.now() });
+    if (mangadexMetaCache.size >= 500) evictCache(mangadexMetaCache, 500);
+    mangadexMetaCache.set(key, { ...meta, expires: Date.now() + MANGADEX_META_TTL });
     return meta;
   } catch (_) {
     return null;
@@ -624,7 +653,7 @@ export async function refreshSingleMangaMetadata(manga: MangaItem): Promise<Mang
         if (merged.altTitles && merged.altTitles.length > 0) {
           manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...merged.altTitles]));
         }
-        if (merged.rating && (!manga.rating || manga.rating === 9.0)) {
+                if (merged.rating && (!manga.rating || manga.rating === DEFAULT_UNKNOWN_RATING)) {
           manga.rating = merged.rating;
         }
       }
@@ -743,10 +772,7 @@ async function cachedProviderResult<T extends UnifiedMetadataResult | null>(
   if (hit && hit.expires > Date.now()) return hit.value as T;
   const value = await fn();
   if (value) {
-    if (metadataCache.size >= 500) {
-      const oldestKey = metadataCache.keys().next().value;
-      if (oldestKey) metadataCache.delete(oldestKey);
-    }
+        if (metadataCache.size >= 500) evictCache(metadataCache, 500);
     metadataCache.set(key, { value, expires: Date.now() + ttl });
   } else {
     metadataCache.delete(key);
@@ -772,14 +798,16 @@ export function decodeHtmlEntities(str: string): string {
 
 export function cleanHtml(raw: string): string {
   if (!raw) return '';
-  const withoutTags = raw.replace(/<[^>]*>?/gm, ' ');
+    const withoutTags = raw.replace(/<[^>]*>/gm, ' ');
   const decoded = decodeHtmlEntities(withoutTags);
   return decoded.replace(/\s+/g, ' ').trim();
 }
 
 export function sanitizeTitleForSearch(rawTitle: string): string {
-  if (!rawTitle) return '';
+    if (!rawTitle) return '';
   return decodeHtmlEntities(rawTitle)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\[(?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^\]]*\]/gi, ' ')
     .replace(/\((?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^)]*\)/gi, ' ')
     .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua|Bato|MangaDex|Dynasty|Kun Manga).*$/i, '')
@@ -1130,7 +1158,7 @@ export async function aggregateMultiSourceMetadata(title: string): Promise<{
     cachedProviderResult('mangadex:' + queryTitle, () => enabled.mangadex
       ? getMangaDexMetadataByTitle(queryTitle).then((md) => md ? {
           provider: 'MangaDex' as const,
-          title: title,
+                  title: md.title || title,
           altTitles: md.altTitles || [],
           coverImage: md.coverImage || '',
           description: md.description || '',

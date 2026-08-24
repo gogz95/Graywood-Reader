@@ -104,8 +104,10 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
     madaraSelectTestAsync: 'ul.row-content-chapter', madaraSelectChapter: 'li.a-h', madaraSelectBodyPage: 'div.read-content',
   },
   { id: 'aquamanga', name: 'Aqua Manga', domain: 'aquareader.org', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false },
+  // ManhuaPlus migrated off Madara (2026-08): WPComics-style theme with the
+  // chapter list inlined at #nt_listchapter — no wp-admin AJAX exists anymore.
+  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
+  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
   { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.me', engine: 'madara', lang: 'en', isNsfw: false, madaraPageSize: 10 },
   { id: 'anisascans', name: 'Anisa Scans', domain: 'anisascans.in', engine: 'madara', lang: 'en', isNsfw: false, madaraDatePattern: 'dd MMM, yyyy' },
   { id: 'adultwebtoon', name: 'Adult Webtoon', domain: 'adultwebtoon.com', engine: 'madara', lang: 'en', isNsfw: true },
@@ -245,7 +247,10 @@ export function normalizeAsuraPageList(rawPages: unknown): string[] {
 export function matchResolvedChapter(chapters: ResolvedChapter[], chapterNumber: number): ResolvedChapter | undefined {
   const exact = chapters.find((c) => c.number === chapterNumber);
   if (exact) return exact;
-  const rx = new RegExp(`(?:^|[_-]|ch(?:apter)?[_-]?)${chapterNumber}(?:$|[_.-])`, 'i');
+  // Escape regex metacharacters — decimal chapters (e.g. 10.5) would otherwise
+  // turn '.' into a wildcard and mis-match slugs like "chapter-10x5".
+  const escaped = String(chapterNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp(`(?:^|[_-]|ch(?:apter)?[_-]?)${escaped}(?:$|[_.-])`, 'i');
   return chapters.find((c) => c.slug && rx.test(c.slug));
 }
 
@@ -485,6 +490,9 @@ export function parseGenericChapterListFromHtml(sHtml: string, origin: string): 
     'ul.chapter-list li a',
     '.chapters-list li a',
     '#chapterlist li a',
+    '#nt_listchapter ul li a',
+    '.list-chapter ul li a',
+    '.works-chapter-list a',
     '.row-content-chapter li a',
     '.listing-chapters_wrap li a',
     '.list-chapter .row a',
@@ -579,6 +587,13 @@ export async function fetchGenericChapterList(targetUrl: string): Promise<Resolv
   }
 }
 
+/**
+ * Per-source cache of Madara "new chapter endpoint" detection.
+ * Mihon equivalent: `Madara.useNewChapterEndpoint`.  true = the legacy
+ * admin-ajax `manga_get_chapters` action is disabled for this source.
+ */
+const madaraNewChapterEndpointCache = new Map<string, boolean>();
+
 export async function fetchMadaraChapterList(targetUrl: string, config: EngineSourceConfig): Promise<ResolvedChapter[]> {
   if (!sourceCircuitBreaker.canAttempt(config.id)) {
     console.warn(`[Madara Engine] Fast-failing ${config.name} (circuit OPEN)`);
@@ -587,12 +602,16 @@ export async function fetchMadaraChapterList(targetUrl: string, config: EngineSo
   const origin = new URL(targetUrl).origin;
   const headers = { ...UA_HEADERS, 'Referer': origin + '/' };
 
+  // NOTE: `postBody !== undefined` (not truthiness) decides POST vs GET — the
+  // Madara `/ajax/chapters` endpoint requires a POST with an EMPTY body, and
+  // an empty string must not silently downgrade the request to a GET.
   const fetchHtml = async (url: string, postBody?: string): Promise<string | null> => {
+    const isPost = postBody !== undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const timeout = [6000, 12000, 20000][attempt] || 6000;
         const opts: any = {
-          headers: postBody
+          headers: isPost
             ? { ...headers, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }
             : headers,
           enableCloudflareBypass: appSettings.enableCloudflareBypass,
@@ -603,9 +622,9 @@ export async function fetchMadaraChapterList(targetUrl: string, config: EngineSo
           sourceId: config.id,
           onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
         };
-        if (postBody) opts.method = 'POST'; else { opts.method = 'GET'; }
-        const res = postBody
-          ? await fetchWithPostBypass(url, postBody, opts)
+        opts.method = isPost ? 'POST' : 'GET';
+        const res = isPost
+          ? await fetchWithPostBypass(url, postBody ?? '', opts)
           : await fetchWithChallengeBypass(url, opts);
 
         if (res.ok && res.html) {
@@ -667,20 +686,37 @@ export async function fetchMadaraChapterList(targetUrl: string, config: EngineSo
       const mangaId = holder.attr('data-id')
         || (html.match(/"post_id"\s*:\s*(\d+)/)?.[1])
         || (html.match(/"manga_id"\s*:\s*(\d+)/)?.[1]);
+      const ajaxChaptersUrl = `${targetUrl.replace(/\/$/, '')}/ajax/chapters/`;
 
-      if (mangaId) {
-        if (config.madaraPostReq !== false) {
-          const formBody = `action=manga_get_chapters&manga=${mangaId}`;
-          const ajaxHtml = await fetchHtml(`${origin}/wp-admin/admin-ajax.php`, formBody);
-          if (ajaxHtml && ajaxHtml.trim().length > 0) chaptersHtml = ajaxHtml;
-        }
-        if (!chaptersHtml) {
-          const relHtml = await fetchHtml(`${targetUrl.replace(/\/$/, '')}/ajax/chapters/`, '');
-          if (relHtml && relHtml.trim().length > 0) chaptersHtml = relHtml;
+      // Modern Madara (>= 1.8) removed the admin-ajax manga_get_chapters
+      // action; the chapter list must be POSTed from {seriesUrl}/ajax/chapters
+      // with an empty body and X-Requested-With.  Once detected we cache the
+      // decision per-source (Mihon's `useNewChapterEndpoint` pattern) so we
+      // stop paying for the dead admin-ajax round-trip on every refresh.
+      const tryNewEndpoint = async (): Promise<void> => {
+        const relHtml = await fetchHtml(ajaxChaptersUrl, '');
+        // Guard against WordPress' literal "0" / empty failure bodies.
+        if (relHtml && relHtml.trim().length > 2) chaptersHtml = relHtml;
+      };
+
+      if (madaraNewChapterEndpointCache.get(config.id) === true) {
+        await tryNewEndpoint();
+      } else if (mangaId && config.madaraPostReq !== false) {
+        const formBody = `action=manga_get_chapters&manga=${mangaId}`;
+        const ajaxHtml = await fetchHtml(`${origin}/wp-admin/admin-ajax.php`, formBody);
+        if (ajaxHtml && ajaxHtml.trim().length > 2) {
+          chaptersHtml = ajaxHtml;
+        } else {
+          // Legacy endpoint disabled (HTTP 400 / "0") — remember for next time.
+          madaraNewChapterEndpointCache.set(config.id, true);
+          await tryNewEndpoint();
         }
       } else {
-        chaptersHtml = html;
+        // No manga id discoverable — the new endpoint needs only the series URL.
+        await tryNewEndpoint();
       }
+
+      if (!chaptersHtml) chaptersHtml = html;
     }
 
     if (!chaptersHtml) return [];

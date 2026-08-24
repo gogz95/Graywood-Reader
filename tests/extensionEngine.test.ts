@@ -43,7 +43,7 @@ describe('Dynamic Source Extension Engine', () => {
     expect(fs.existsSync(savedPath)).toBe(true);
   });
 
-  it('executes custom JS search inside VM sandbox safely', () => {
+  it('executes custom JS search inside VM sandbox safely', async () => {
     engine.installExtension({
       id: 'ext_vm_test',
       name: 'VM Test Extension',
@@ -58,10 +58,73 @@ describe('Dynamic Source Extension Engine', () => {
       `,
     });
 
-    const results = engine.executeExtensionSearch('ext_vm_test', 'Solo Leveling');
+    const results = await engine.executeExtensionSearch('ext_vm_test', 'Solo Leveling');
     expect(results.length).toBe(2);
     expect(results[0].title).toBe('Solo Leveling Chapter 1');
     expect(results[0].url).toBe('https://test-manga.org/ch1');
+  });
+
+  it('supports async search functions (network-capable extensions)', async () => {
+    engine.installExtension({
+      id: 'ext_async_test',
+      name: 'Async Test Extension',
+      baseUrl: 'https://async-manga.org',
+      scriptContent: `
+        async function search(q) {
+          // Simulate an async source round-trip without hitting the network.
+          await new Promise((r) => setTimeout(r, 5));
+          return [{ title: 'Async ' + q, url: '/manga/async-result', latestChapter: 7 }];
+        }
+      `,
+    });
+
+    const results = await engine.executeExtensionSearch('ext_async_test', 'Query');
+    expect(results.length).toBe(1);
+    expect(results[0].title).toBe('Async Query');
+    // Relative URLs are resolved against the extension baseUrl.
+    expect(results[0].url).toBe('https://async-manga.org/manga/async-result');
+    expect(results[0].latestChapter).toBe(7);
+  });
+
+  it('blocks dynamic code generation (eval / Function) inside the sandbox', async () => {
+    engine.installExtension({
+      id: 'ext_eval_test',
+      name: 'Eval Test Extension',
+      baseUrl: 'https://eval-manga.org',
+      scriptContent: `
+        function search(q) {
+          eval('globalThis.pwned = true');
+          return [{ title: 'should not survive', url: 'https://eval-manga.org/x' }];
+        }
+      `,
+    });
+
+    // codeGeneration.strings=false makes eval throw; engine must fail safe.
+    const results = await engine.executeExtensionSearch('ext_eval_test', 'x');
+    expect(results).toEqual([]);
+  });
+
+  it('sanitizes malformed extension output instead of propagating it', async () => {
+    engine.installExtension({
+      id: 'ext_malformed_test',
+      name: 'Malformed Test Extension',
+      baseUrl: 'https://mal-manga.org',
+      scriptContent: `
+        function search() {
+          return [
+            null,
+            'a string',
+            { title: 42, url: 'https://mal-manga.org/notitle' },
+            { title: 'No URL' },
+            { title: 'Valid Entry', url: 'https://mal-manga.org/manga/valid', coverImage: 'https://mal-manga.org/c.jpg' },
+          ];
+        }
+      `,
+    });
+
+    const results = await engine.executeExtensionSearch('ext_malformed_test', 'q');
+    expect(results.length).toBe(1);
+    expect(results[0].title).toBe('Valid Entry');
   });
 
   it('toggles and uninstalls extensions', () => {

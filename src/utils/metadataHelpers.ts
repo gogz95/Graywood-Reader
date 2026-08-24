@@ -17,6 +17,24 @@
 import { MangaItem } from '../types';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Sentinel "default rating" used by `ensureCoreFields` when a series has no
+ * real rating yet.  We pick an implausible-but-valid float (9.0) that sits at
+ * the top of the 0–10 scale so that any genuinely fetched rating from a
+ * metadata provider (which is almost always < 9.0 or explicitly `undefined`)
+ * can be detected and replaced during enrichment.
+ *
+ * N.B. A real 9.0 rating is extremely rare on the aggregate sources the app
+ * enriches from (MAL max is 9, AniList max is 100/10=10, etc.); the value is
+ * treated as a "no rating yet" placeholder.  Users who genuinely curate a 9.0
+ * rating should pin it via `metadataOverrides`.
+ */
+export const DEFAULT_UNKNOWN_RATING = 9.0;
+
+// ---------------------------------------------------------------------------
 // Field categories
 // ---------------------------------------------------------------------------
 
@@ -209,7 +227,7 @@ export function ensureCoreFields(item: Partial<MangaItem>): MangaItem {
     latestChapter: item.latestChapter || 1,
     totalChapters: item.totalChapters,
     lastUpdated: item.lastUpdated || new Date().toISOString(),
-    rating: item.rating !== undefined ? item.rating : 9.0,
+        rating: item.rating !== undefined ? item.rating : DEFAULT_UNKNOWN_RATING,
     sourceUrl: item.sourceUrl || '',
     sourceName: item.sourceName || 'Unknown Source',
     autoUpdateEnabled: item.autoUpdateEnabled !== undefined ? item.autoUpdateEnabled : true,

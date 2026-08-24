@@ -20,7 +20,7 @@
   {
     "id": "adult_webtoon",
     "name": "Adult Webtoon",
-    "baseUrl": "https://adultwebtoon.com",
+    "baseUrl": "https://blacksacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -29,7 +29,7 @@
   {
     "id": "adumanga",
     "name": "AduManga",
-    "baseUrl": "https://adumanga.com",
+    "baseUrl": "https://storyofspringfield.com",
     "engineType": "mangathemesia",
     "lang": "tr",
     "isNsfw": false,
@@ -191,7 +191,7 @@
   {
     "id": "animexnovel",
     "name": "AnimeXNovel",
-    "baseUrl": "https://animexnovel.com",
+    "baseUrl": "https://www.animexnovel.com",
     "engineType": "custom_html",
     "lang": "pt",
     "isNsfw": false,
@@ -236,7 +236,7 @@
   {
     "id": "anzmangashd",
     "name": "AnzMangasHd",
-    "baseUrl": "https://anzmangashd.com",
+    "baseUrl": "https://www.anzmanga25.com",
     "engineType": "custom_html",
     "lang": "es",
     "isNsfw": false,
@@ -380,7 +380,7 @@
   {
     "id": "armoniscans",
     "name": "ArmoniScans",
-    "baseUrl": "https://armoniscans.net",
+    "baseUrl": "https://www.autismsupportnetwork.com",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -434,7 +434,7 @@
   {
     "id": "asemifansub",
     "name": "AsemiFansub",
-    "baseUrl": "https://asemifansub.com",
+    "baseUrl": "https://www.cerah88hoki.com",
     "engineType": "mangathemesia",
     "lang": "tr",
     "isNsfw": false,
@@ -452,7 +452,7 @@
   {
     "id": "asqorg",
     "name": "3Asq",
-    "baseUrl": "https://3asq.org",
+    "baseUrl": "https://3asq.online",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -515,7 +515,7 @@
   {
     "id": "asurascans_us",
     "name": "AsuraScans.us",
-    "baseUrl": "https://asurascans.us",
+    "baseUrl": "https://mangapark.tv",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -524,7 +524,7 @@
   {
     "id": "asurascansgg",
     "name": "AsuraScansGg",
-    "baseUrl": "https://asurascans.us",
+    "baseUrl": "https://mangapark.tv",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -560,7 +560,7 @@
   {
     "id": "atikrost",
     "name": "Atikrost",
-    "baseUrl": "https://mangaoku.org",
+    "baseUrl": "https://mangaoku.com.tr",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -650,7 +650,7 @@
   {
     "id": "baozimh",
     "name": "Baozimh",
-    "baseUrl": "https://baozimh.com",
+    "baseUrl": "https://www.baozimh.com",
     "engineType": "custom_html",
     "lang": "zh",
     "isNsfw": false,
@@ -717,7 +717,7 @@
     "engineType": "custom_html",
     "lang": "fr",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "berserkscan",
@@ -749,7 +749,7 @@
   {
     "id": "beyondtheataraxia",
     "name": "Beyond The Ataraxia",
-    "baseUrl": "https://beyondtheataraxia.com",
+    "baseUrl": "https://www.beyondtheataraxia.com",
     "engineType": "madara",
     "lang": "it",
     "isNsfw": false,
@@ -866,7 +866,7 @@
   {
     "id": "brmangas",
     "name": "BrMangas",
-    "baseUrl": "https://brmangas.net",
+    "baseUrl": "https://alanajewelry.com",
     "engineType": "custom_html",
     "lang": "pt",
     "isNsfw": false,
@@ -1235,7 +1235,7 @@
   {
     "id": "damconuong",
     "name": "Dâm Cô Nương",
-    "baseUrl": "https://damconuong.co",
+    "baseUrl": "https://damconuong.sbs",
     "engineType": "custom_html",
     "lang": "vi",
     "isNsfw": false,
@@ -1262,7 +1262,7 @@
   {
     "id": "daprob",
     "name": "Daprob",
-    "baseUrl": "https://daprob.com",
+    "baseUrl": "https://ninja138gacor.org",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -1712,7 +1712,7 @@
   {
     "id": "emperorscan",
     "name": "EmperorScan",
-    "baseUrl": "https://emperorscan.mundoalterno.org",
+    "baseUrl": "https://imperiomanhua.com",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -1748,7 +1748,7 @@
   {
     "id": "epikman",
     "name": "EpikMan",
-    "baseUrl": "https://epikman.com",
+    "baseUrl": "https://www.epikman.com",
     "engineType": "custom_html",
     "lang": "tr",
     "isNsfw": false,
@@ -2000,7 +2000,7 @@
   {
     "id": "freemanga",
     "name": "FreeManga",
-    "baseUrl": "https://freemanga.me",
+    "baseUrl": "https://blacksacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -2126,7 +2126,7 @@
   {
     "id": "gatemanga",
     "name": "GateManga",
-    "baseUrl": "https://gatemanga.com",
+    "baseUrl": "https://www.gatemanga.com",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -2207,7 +2207,7 @@
   {
     "id": "goctruyentranh",
     "name": "Góc Truyện Tranh",
-    "baseUrl": "https://goctruyentranh.net",
+    "baseUrl": "https://goctruyentranh.com",
     "engineType": "custom_html",
     "lang": "vi",
     "isNsfw": false,
@@ -2315,7 +2315,7 @@
   {
     "id": "guncel_manga",
     "name": "GuncelManga",
-    "baseUrl": "https://guncelmanga.net",
+    "baseUrl": "https://aguanuvo.cl",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -2387,7 +2387,7 @@
   {
     "id": "haremscann",
     "name": "HaremScann",
-    "baseUrl": "https://haremscann.es",
+    "baseUrl": "https://deckbuilderscharlestown.com",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -2549,7 +2549,7 @@
   {
     "id": "hentaimanga",
     "name": "HentaiManga",
-    "baseUrl": "https://hentaimanga.me",
+    "baseUrl": "https://bluesacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -2666,7 +2666,7 @@
   {
     "id": "hentaivnplus",
     "name": "HentaiVN.plus",
-    "baseUrl": "https://hentaivn.party",
+    "baseUrl": "https://hentaivn.show",
     "engineType": "madara",
     "lang": "vi",
     "isNsfw": false,
@@ -2684,7 +2684,7 @@
   {
     "id": "hentaiwebtoon",
     "name": "HentaiWebtoon",
-    "baseUrl": "https://hentaiwebtoon.com",
+    "baseUrl": "https://bluesacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -2765,7 +2765,7 @@
   {
     "id": "heytoon",
     "name": "HeyToon",
-    "baseUrl": "https://heytoon.net",
+    "baseUrl": "https://toonhey.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -2837,7 +2837,7 @@
   {
     "id": "hmangabat",
     "name": "MangaBat",
-    "baseUrl": "https://mangabats.com",
+    "baseUrl": "https://www.mangabats.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -2963,7 +2963,7 @@
   {
     "id": "ikiru",
     "name": "Ikiru",
-    "baseUrl": "https://01.ikiru.wtf",
+    "baseUrl": "https://07.ikiru.wtf",
     "engineType": "custom_html",
     "lang": "id",
     "isNsfw": false,
@@ -2999,7 +2999,7 @@
   {
     "id": "imperiodabritannia",
     "name": "ImperioDaBritannia",
-    "baseUrl": "https://imperiodabritannia.com",
+    "baseUrl": "https://discord.com",
     "engineType": "madara",
     "lang": "pt",
     "isNsfw": false,
@@ -3080,7 +3080,7 @@
   {
     "id": "inovascanmanga",
     "name": "InovaScanManga",
-    "baseUrl": "https://inovascanmanga.com",
+    "baseUrl": "https://sexhihi.bz",
     "engineType": "custom_html",
     "lang": "fr",
     "isNsfw": false,
@@ -3089,7 +3089,7 @@
   {
     "id": "instamanhwa",
     "name": "InstaManhwa",
-    "baseUrl": "https://manhwaden.com",
+    "baseUrl": "https://www.manhwaden.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -3278,7 +3278,7 @@
   {
     "id": "kdtscans",
     "name": "KdtScans",
-    "baseUrl": "https://silentquill.net",
+    "baseUrl": "https://www.silentquill.net",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -3341,7 +3341,7 @@
   {
     "id": "kiryuu",
     "name": "Kiryuu",
-    "baseUrl": "https://kiryuu02.com",
+    "baseUrl": "https://kiryuu.io",
     "engineType": "mangathemesia",
     "lang": "id",
     "isNsfw": false,
@@ -3368,7 +3368,7 @@
   {
     "id": "klikmanga",
     "name": "KlikManga",
-    "baseUrl": "https://klikmanga.com",
+    "baseUrl": "https://klikmanga.org",
     "engineType": "madara",
     "lang": "id",
     "isNsfw": false,
@@ -3404,7 +3404,7 @@
   {
     "id": "kofiscans",
     "name": "KofiScans",
-    "baseUrl": "https://isekaikomik.com",
+    "baseUrl": "https://ch1.isekaikomik.site",
     "engineType": "mangathemesia",
     "lang": "id",
     "isNsfw": false,
@@ -3494,7 +3494,7 @@
   {
     "id": "komikid",
     "name": "KomikId",
-    "baseUrl": "https://komikid.com",
+    "baseUrl": "https://magicly.bio",
     "engineType": "custom_html",
     "lang": "id",
     "isNsfw": false,
@@ -3701,7 +3701,7 @@
   {
     "id": "kuroimanga",
     "name": "KuroiManga",
-    "baseUrl": "https://kuroimanga.com",
+    "baseUrl": "https://www.kuroimanga.com",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -3782,7 +3782,7 @@
   {
     "id": "lectormanga",
     "name": "LectorManga",
-    "baseUrl": "https://lectormangaa.com",
+    "baseUrl": "https://lectormangass.net",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -3854,7 +3854,7 @@
   {
     "id": "lekmangacom",
     "name": "LekMangaCom",
-    "baseUrl": "https://lekmanga.com",
+    "baseUrl": "https://lekmanga.site",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -3872,7 +3872,7 @@
   {
     "id": "lelmanga",
     "name": "LelManga",
-    "baseUrl": "https://lelmanga.com",
+    "baseUrl": "https://www.lelmanga.com",
     "engineType": "mangathemesia",
     "lang": "fr",
     "isNsfw": false,
@@ -3971,7 +3971,7 @@
   {
     "id": "lianscans",
     "name": "LianScans",
-    "baseUrl": "https://lianscans.com",
+    "baseUrl": "https://www.lianscans.com",
     "engineType": "mangathemesia",
     "lang": "id",
     "isNsfw": false,
@@ -3989,7 +3989,7 @@
   {
     "id": "lichsubs",
     "name": "LichSubs",
-    "baseUrl": "https://kuroimanga.com",
+    "baseUrl": "https://www.kuroimanga.com",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -4007,7 +4007,7 @@
   {
     "id": "likemangain",
     "name": "LikeManga.in",
-    "baseUrl": "https://likemanga.in",
+    "baseUrl": "https://mgread.io",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -4061,7 +4061,7 @@
   {
     "id": "linewebtoons_en",
     "name": "LineWebtoons English",
-    "baseUrl": "https://webtoons.com",
+    "baseUrl": "https://www.webtoons.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -4371,7 +4371,7 @@
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "manga_scan",
@@ -4461,7 +4461,7 @@
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "manga1st",
@@ -4691,7 +4691,7 @@
   {
     "id": "mangaeffect",
     "name": "MangaEffect",
-    "baseUrl": "https://mangaread.org",
+    "baseUrl": "https://www.mangaread.org",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -4799,7 +4799,7 @@
   {
     "id": "mangageko",
     "name": "MangaGeko",
-    "baseUrl": "https://mgeko.cc",
+    "baseUrl": "https://www.mgeko.cc",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -4853,7 +4853,7 @@
   {
     "id": "mangahentai",
     "name": "MangaHentai",
-    "baseUrl": "https://mangahentai.me",
+    "baseUrl": "https://blacksacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -4907,7 +4907,7 @@
   {
     "id": "mangairo",
     "name": "MangaIro",
-    "baseUrl": "https://w.mangairo.com",
+    "baseUrl": "https://emojilar.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -4925,7 +4925,7 @@
   {
     "id": "mangajinx",
     "name": "MangaJinx",
-    "baseUrl": "https://mangajinx.com",
+    "baseUrl": "https://mgjinx.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -4943,7 +4943,7 @@
   {
     "id": "mangakakalot",
     "name": "Mangakakalot.gg",
-    "baseUrl": "https://mangakakalot.gg",
+    "baseUrl": "https://www.mangakakalot.gg",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -4988,7 +4988,7 @@
   {
     "id": "mangakimi",
     "name": "MangaKimi",
-    "baseUrl": "https://mangakimi.com",
+    "baseUrl": "https://www.mangakimi.com",
     "engineType": "mangathemesia",
     "lang": "th",
     "isNsfw": false,
@@ -5042,7 +5042,7 @@
   {
     "id": "mangakoma01",
     "name": "MangaKoma01",
-    "baseUrl": "https://mangakoma01.com",
+    "baseUrl": "https://mangakoma01.top",
     "engineType": "custom_html",
     "lang": "ja",
     "isNsfw": false,
@@ -5078,7 +5078,7 @@
   {
     "id": "mangalek",
     "name": "LekManga",
-    "baseUrl": "https://lekmanga.net",
+    "baseUrl": "https://mangalik.net",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -5213,7 +5213,7 @@
   {
     "id": "manganato",
     "name": "Manganato",
-    "baseUrl": "https://natomanga.com",
+    "baseUrl": "https://www.natomanga.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -5222,7 +5222,7 @@
   {
     "id": "manganelo_com",
     "name": "MangaNelo.com",
-    "baseUrl": "https://nelomanga.com",
+    "baseUrl": "https://www.nelomanga.net",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -5384,7 +5384,7 @@
   {
     "id": "mangapro",
     "name": "MangaPro",
-    "baseUrl": "https://promanga.pro",
+    "baseUrl": "https://procomic.pro",
     "engineType": "mangathemesia",
     "lang": "ar",
     "isNsfw": false,
@@ -5420,7 +5420,7 @@
   {
     "id": "mangarbic",
     "name": "MangaArabic",
-    "baseUrl": "https://lekmanga.net",
+    "baseUrl": "https://mangalik.net",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -5429,7 +5429,7 @@
   {
     "id": "mangaread",
     "name": "MangaRead",
-    "baseUrl": "https://mangaread.org",
+    "baseUrl": "https://www.mangaread.org",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -5631,12 +5631,12 @@
     "engineType": "custom_html",
     "lang": "ar",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "mangaspark",
     "name": "Manga-Spark",
-    "baseUrl": "https://manga-spark.com",
+    "baseUrl": "https://sparkmanga.net",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -5744,7 +5744,7 @@
   {
     "id": "mangatown",
     "name": "MangaTown",
-    "baseUrl": "https://mangatown.com",
+    "baseUrl": "http://www.mangatown.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -5933,7 +5933,7 @@
   {
     "id": "manhatic",
     "name": "Manhatic",
-    "baseUrl": "https://manhatic.com",
+    "baseUrl": "https://hentailek.com",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -5951,7 +5951,7 @@
   {
     "id": "manhuabug",
     "name": "ManhuaBug",
-    "baseUrl": "https://manhuabug.com",
+    "baseUrl": "https://www.manhuabug.com",
     "engineType": "madara",
     "lang": "th",
     "isNsfw": false,
@@ -5996,7 +5996,7 @@
   {
     "id": "manhuagui",
     "name": "Manhuagui",
-    "baseUrl": "https://manhuagui.com",
+    "baseUrl": "https://www.manhuagui.com",
     "engineType": "custom_html",
     "lang": "zh",
     "isNsfw": false,
@@ -6014,7 +6014,7 @@
   {
     "id": "manhuakey",
     "name": "ManhuaKey",
-    "baseUrl": "https://manhuakey.com",
+    "baseUrl": "https://www.manhuakey.com",
     "engineType": "madara",
     "lang": "th",
     "isNsfw": false,
@@ -6176,7 +6176,7 @@
   {
     "id": "manhwabreakup",
     "name": "ManhwaBreakup",
-    "baseUrl": "https://manhwabreakup.com",
+    "baseUrl": "https://www.manhwabreakup.com",
     "engineType": "madara",
     "lang": "th",
     "isNsfw": false,
@@ -6194,7 +6194,7 @@
   {
     "id": "manhwaden",
     "name": "ManhwaDen",
-    "baseUrl": "https://manhwaden.com",
+    "baseUrl": "https://www.manhwaden.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -6365,7 +6365,7 @@
   {
     "id": "manhwaraw_com",
     "name": "ManhwaRaw.com",
-    "baseUrl": "https://manhwaraw.com",
+    "baseUrl": "https://bluesacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -6401,7 +6401,7 @@
   {
     "id": "manhwatoon",
     "name": "ManhwaToon",
-    "baseUrl": "https://manhwatoon.com",
+    "baseUrl": "https://www.manhwatoon.me",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -6491,7 +6491,7 @@
   {
     "id": "manytoonme",
     "name": "ManyToon.me",
-    "baseUrl": "https://manytoon.me",
+    "baseUrl": "https://bluesacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -6608,7 +6608,7 @@
   {
     "id": "mihentai",
     "name": "MiHentai",
-    "baseUrl": "https://mihentai.com",
+    "baseUrl": "https://mihentai.net",
     "engineType": "mangathemesia",
     "lang": "id",
     "isNsfw": false,
@@ -6653,7 +6653,7 @@
   {
     "id": "mimihentai",
     "name": "MimiHentai",
-    "baseUrl": "https://mimihentai.com",
+    "baseUrl": "https://mimihentai.moe",
     "engineType": "custom_html",
     "lang": "vi",
     "isNsfw": false,
@@ -6666,7 +6666,7 @@
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "mintmanga",
@@ -6806,7 +6806,7 @@
   {
     "id": "muitohentai",
     "name": "MuitoHentai",
-    "baseUrl": "https://muitohentai.com",
+    "baseUrl": "https://www.muitohentai.com",
     "engineType": "custom_html",
     "lang": "pt",
     "isNsfw": false,
@@ -6887,7 +6887,7 @@
   {
     "id": "neatmanga",
     "name": "NeatManga",
-    "baseUrl": "https://neatmangas.com",
+    "baseUrl": "https://naga138gacor2.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -7085,7 +7085,7 @@
   {
     "id": "nicovideo_seiga",
     "name": "NicoVideo Seiga",
-    "baseUrl": "https://nicovideo.jp",
+    "baseUrl": "https://www.nicovideo.jp",
     "engineType": "custom_html",
     "lang": "ja",
     "isNsfw": false,
@@ -7103,7 +7103,7 @@
   {
     "id": "nightscans",
     "name": "NightScans",
-    "baseUrl": "https://nightsup.net",
+    "baseUrl": "https://qimanga.com",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
@@ -7364,7 +7364,7 @@
   {
     "id": "onepieceex",
     "name": "OnePieceEx",
-    "baseUrl": "https://onepieceex.net",
+    "baseUrl": "https://www.coda-cj.jp",
     "engineType": "custom_html",
     "lang": "pt",
     "isNsfw": false,
@@ -7400,7 +7400,7 @@
   {
     "id": "onma",
     "name": "Onma",
-    "baseUrl": "https://onma.com",
+    "baseUrl": "https://onma.de",
     "engineType": "custom_html",
     "lang": "ar",
     "isNsfw": false,
@@ -7508,7 +7508,7 @@
   {
     "id": "paritehaber",
     "name": "Paritehaber",
-    "baseUrl": "https://paritehaber.com",
+    "baseUrl": "https://www.paritehaber.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -7562,7 +7562,7 @@
   {
     "id": "petrotechsociety",
     "name": "Petrotech Society",
-    "baseUrl": "https://petrotechsociety.org",
+    "baseUrl": "https://www.petrotechsociety.org",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -7652,7 +7652,7 @@
   {
     "id": "platinumscans",
     "name": "PlatinumScans",
-    "baseUrl": "https://platinumscans.com",
+    "baseUrl": "https://vip333a.pro",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -8084,7 +8084,7 @@
   {
     "id": "readmanhua",
     "name": "ReadManhua (Broken)",
-    "baseUrl": "https://readmanhua.net",
+    "baseUrl": "https://themeraider.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -8102,7 +8102,7 @@
   {
     "id": "readonepiece",
     "name": "ReadOnePiece",
-    "baseUrl": "https://ww11.readonepiece.com",
+    "baseUrl": "https://ww13.readonepiece.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -8264,7 +8264,7 @@
   {
     "id": "rocksmanga",
     "name": "RocksManga",
-    "baseUrl": "https://rockscans.org",
+    "baseUrl": "https://rocksmanga.com",
     "engineType": "madara",
     "lang": "ar",
     "isNsfw": false,
@@ -8354,7 +8354,7 @@
   {
     "id": "samuraiscan",
     "name": "SamuraiScan",
-    "baseUrl": "https://samuraiscan.com",
+    "baseUrl": "https://samurai.j5z.xyz",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -8363,7 +8363,7 @@
   {
     "id": "sapphirescan",
     "name": "SapphireScan",
-    "baseUrl": "https://sapphirescan.com",
+    "baseUrl": "https://www.sapphirescan.com",
     "engineType": "madara",
     "lang": "es",
     "isNsfw": false,
@@ -8381,7 +8381,7 @@
   {
     "id": "sayhentai",
     "name": "SayHentai",
-    "baseUrl": "https://sayhentaii.art",
+    "baseUrl": "https://sayhentai.cx",
     "engineType": "custom_html",
     "lang": "vi",
     "isNsfw": false,
@@ -8543,7 +8543,7 @@
   {
     "id": "scarmanga",
     "name": "ScarManga",
-    "baseUrl": "https://scarmanga.com",
+    "baseUrl": "https://www.judoclubhadamar.de",
     "engineType": "mangathemesia",
     "lang": "ar",
     "isNsfw": false,
@@ -8759,7 +8759,7 @@
   {
     "id": "shojoscans",
     "name": "ShojoScans",
-    "baseUrl": "https://violetscans.com",
+    "baseUrl": "https://violetscans.org",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
@@ -8966,7 +8966,7 @@
   {
     "id": "sssscanlator",
     "name": "YomuComics",
-    "baseUrl": "https://yomucomics.com",
+    "baseUrl": "https://yomu.com.br",
     "engineType": "mangathemesia",
     "lang": "pt",
     "isNsfw": false,
@@ -9119,7 +9119,7 @@
   {
     "id": "tarotscans",
     "name": "TarotScans",
-    "baseUrl": "https://tarotscans.com",
+    "baseUrl": "https://www.tarotscans.com",
     "engineType": "mangathemesia",
     "lang": "tr",
     "isNsfw": false,
@@ -9227,7 +9227,7 @@
   {
     "id": "tempestscans",
     "name": "TempestScans",
-    "baseUrl": "https://adumanga.com",
+    "baseUrl": "https://storyofspringfield.com",
     "engineType": "mangathemesia",
     "lang": "tr",
     "isNsfw": false,
@@ -9236,7 +9236,7 @@
   {
     "id": "templescan",
     "name": "TempleScan",
-    "baseUrl": "https://templescan.com",
+    "baseUrl": "https://templetoons.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -9281,7 +9281,7 @@
   {
     "id": "thaimanga",
     "name": "ThaiManga",
-    "baseUrl": "https://thaimanga.net",
+    "baseUrl": "https://www.thaimanga.net",
     "engineType": "mangathemesia",
     "lang": "th",
     "isNsfw": false,
@@ -9317,7 +9317,7 @@
   {
     "id": "tilkiscans",
     "name": "TilkiScans",
-    "baseUrl": "https://tilkiscans.com",
+    "baseUrl": "https://www.tilkiscans.com",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -9339,7 +9339,7 @@
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false
   },
   {
     "id": "tmomanga",
@@ -9740,7 +9740,7 @@
   {
     "id": "trwebtoon",
     "name": "TrWebtoon",
-    "baseUrl": "https://trwebtoon.com",
+    "baseUrl": "https://trmanga.com",
     "engineType": "custom_html",
     "lang": "tr",
     "isNsfw": false,
@@ -9830,7 +9830,7 @@
   {
     "id": "umimanga",
     "name": "Umi Manga",
-    "baseUrl": "https://umimanga.com",
+    "baseUrl": "http://www.umimanga.com",
     "engineType": "custom_html",
     "lang": "ar",
     "isNsfw": false,
@@ -9965,7 +9965,7 @@
   {
     "id": "violetscans",
     "name": "VioletScans",
-    "baseUrl": "https://violetscans.com",
+    "baseUrl": "https://violetscans.org",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -9983,7 +9983,7 @@
   {
     "id": "voidscans",
     "name": "HiveToon",
-    "baseUrl": "https://hivetoon.com",
+    "baseUrl": "https://hivetoons.org",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
@@ -10001,7 +10001,7 @@
   {
     "id": "vortexscans",
     "name": "VortexScans",
-    "baseUrl": "https://vortexscans.com",
+    "baseUrl": "https://vortexscans.org",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -10019,7 +10019,7 @@
   {
     "id": "vyvymanga",
     "name": "VyvyManga",
-    "baseUrl": "https://vyvymanga.org",
+    "baseUrl": "https://mangaowl.io",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -10091,7 +10091,7 @@
   {
     "id": "webtoons_en",
     "name": "Webtoons English",
-    "baseUrl": "https://webtoons.com",
+    "baseUrl": "https://www.webtoons.com",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -10262,7 +10262,7 @@
   {
     "id": "xmanhwa",
     "name": "XManhwa",
-    "baseUrl": "https://manhwaden.com",
+    "baseUrl": "https://www.manhwaden.com",
     "engineType": "madara",
     "lang": "id",
     "isNsfw": false,
@@ -10541,7 +10541,7 @@
   {
     "id": "yurilive",
     "name": "YuriLive",
-    "baseUrl": "https://yuri.live",
+    "baseUrl": "https://yurionair.top",
     "engineType": "madara",
     "lang": "pt",
     "isNsfw": false,
@@ -10649,7 +10649,7 @@
   {
     "id": "zinmanga",
     "name": "ZinManga.net",
-    "baseUrl": "https://zinmanga.net",
+    "baseUrl": "https://www.zinmanga.net",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,

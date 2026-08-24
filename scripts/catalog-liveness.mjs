@@ -47,6 +47,12 @@ const concurrArg = args.findIndex(a => a === '--concurrency');
 const CONCURRENCY = concurrArg !== -1 ? parseInt(args[concurrArg + 1] || '20', 10) : 20;
 const PATCH = args.includes('--patch');
 
+// Never follow "migrations" onto domain-marketplace / parking pages — those
+// redirects mean the original domain lapsed and was bought by a reseller,
+// not that the scanlation site moved.
+const BAD_TARGET_RX = /expireddomains|hugedomains|sedo|afternic|dan\.com|godaddy|forsale|buydomain|parking|for-sale/i;
+
+
 const catalog = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
 console.log(`[Liveness] Loaded ${catalog.length} sources from catalog.json`);
 
@@ -123,8 +129,15 @@ for (const r of results) {
     const origHost = new URL(src.baseUrl).hostname;
     const finalHost = new URL(r.finalUrl).hostname;
     if (origHost !== finalHost && r.status === 'ok') {
-      domainChanges.push({ id: src.id, oldUrl: src.baseUrl, newUrl: new URL(r.finalUrl).origin });
-      console.log(`[Liveness] Domain migration: ${src.id}  ${src.baseUrl} -> ${new URL(r.finalUrl).origin}`);
+      const newOrigin = new URL(r.finalUrl).origin;
+      // Domain-reseller redirects (ExpiredDomains, HugeDomains, GoDaddy
+      // parking, ...) mean the domain lapsed — never treat as a migration.
+      if (!BAD_TARGET_RX.test(newOrigin)) {
+        domainChanges.push({ id: src.id, oldUrl: src.baseUrl, newUrl: newOrigin });
+        console.log(`[Liveness] Domain migration: ${src.id}  ${src.baseUrl} -> ${newOrigin}`);
+      } else {
+        console.log(`[Liveness] Ignoring bogus migration (domain reseller): ${src.id}  ${src.baseUrl} -> ${newOrigin}`);
+      }
     }
   } catch {}
 }

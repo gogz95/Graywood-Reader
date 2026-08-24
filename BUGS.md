@@ -27,11 +27,27 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
-_No active bugs._
+### [BUG-045] ManhuaPlus catalogue/search returned 0 results after site theme migration
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/scrapers/manhuaPlus.ts`, `server/services/crawlerEngine.ts`, `server/scrapers/madaraTheme.ts`
+- **Description**: manhuaplus.top migrated off the WordPress Madara theme. The old `/manga/?m_orderby=views` catalogue, wp-admin AJAX chapter endpoint, and `/?s=&post_type=wp-manga` search all return 404, so the Madara-theme list scraper yielded 0 items.
+- **Root cause**: scraper hard-coded the retired Madara markup/endpoints.
+- **Fixed in**: 2026-08-24 — Rebuilt `manhuaPlus.ts` for the new WPComics-style theme (`/all-manga/{page}/?sort=views` cards at `div.item > figure`, search via `/filter?keyword=`, inline chapter list `#nt_listchapter`); marked its engine configs `madaraWithoutAjax: true`; added WPComics chapter containers to the generic chapter parser. Verified live: scrape + search + latest-chapter extraction.
+
+### [BUG-046] Demonic Scans catalogue pagination param wrong & card markup changed
+- **Status**: `fixed`
+- **Priority**: `medium`
+- **Auto-fix**: `yes`
+- **File(s)**: `server/scrapers/demonicScans.ts`
+- **Description**: demonicscans.org redesigned; pages past 1 were requested with `?page=N` which the site silently ignores (correct param is `?list=N`), and the old `.item / .box_list .item / .media` selectors no longer match the new `.updates-element` cards.
+- **Fixed in**: 2026-08-24 — Rewrote listing parser for `.updates-element` cards with real latest-chapter extraction from `chaptered.php?...&chapter=N`, advanced-search parser for `/advanced.php?search=` (`.advanced-element`), correct `?list=` pagination, honest totalCount from the pagination widget, and URI-encoded cover URLs. Verified live.
 
 ---
 
 ## Fixed Bugs (Archive)
+
 
 > Bugs that have been resolved are moved here for historical reference.
 
