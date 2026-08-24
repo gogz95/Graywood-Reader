@@ -62,7 +62,7 @@ export function calculateStringSimilarity(str1: string, str2: string): number {
   if (!str1 || !str2) return 0;
   if (str1 === str2) return 100;
 
-    const normalize = (s: string) =>
+  const normalize = (s: string) =>
     s
       .toLowerCase()
       .normalize('NFD')
@@ -162,14 +162,14 @@ export async function getMangaDexMetadataByTitle(
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '');
   if (!key) return null;
-    const cached = mangadexMetaCache.get(key);
+  const cached = mangadexMetaCache.get(key);
   if (cached && cached.expires > Date.now()) {
     const { title, apiId, coverImage, description, genres, altTitles } = cached;
     return { title, apiId, coverImage, description, genres, altTitles };
   }
 
   try {
-        const clean = cleanTitle
+    const clean = cleanTitle
       .replace(/\s*\([^)]*\)/g, '')
       .replace(/uncensored|reboot|hd|season\s+\d+|ch\s*\d+/gi, '')
       .normalize('NFD')
@@ -204,7 +204,7 @@ export async function getMangaDexMetadataByTitle(
     const coverRel = (matched.relationships || []).find((r: any) => r.type === 'cover_art');
     const coverFileName = coverRel?.attributes?.fileName;
     const descObj = matched.attributes?.description || {};
-        const meta = {
+    const meta = {
       title: preferEnglishTitle(matched.attributes?.title || null) || '',
       apiId: matched.id,
       coverImage: coverFileName
@@ -653,7 +653,7 @@ export async function refreshSingleMangaMetadata(manga: MangaItem): Promise<Mang
         if (merged.altTitles && merged.altTitles.length > 0) {
           manga.altTitles = Array.from(new Set([...(manga.altTitles || []), ...merged.altTitles]));
         }
-                if (merged.rating && (!manga.rating || manga.rating === DEFAULT_UNKNOWN_RATING)) {
+        if (merged.rating && (!manga.rating || manga.rating === DEFAULT_UNKNOWN_RATING)) {
           manga.rating = merged.rating;
         }
       }
@@ -772,7 +772,7 @@ async function cachedProviderResult<T extends UnifiedMetadataResult | null>(
   if (hit && hit.expires > Date.now()) return hit.value as T;
   const value = await fn();
   if (value) {
-        if (metadataCache.size >= 500) evictCache(metadataCache, 500);
+    if (metadataCache.size >= 500) evictCache(metadataCache, 500);
     metadataCache.set(key, { value, expires: Date.now() + ttl });
   } else {
     metadataCache.delete(key);
@@ -811,7 +811,7 @@ export function sanitizeTitleForSearch(rawTitle: string): string {
     .replace(/\[(?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^\]]*\]/gi, ' ')
     .replace(/\((?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^)]*\)/gi, ' ')
     .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua|Bato|MangaDex|Dynasty|Kun Manga).*$/i, '')
-    .replace(/(?:\s*-\s*)?(?:Chapter|Chapitre|Capitulo|Ch\.?|Episode|Ep\.?|Season|S\d+)\s*\d+.*$/i, '')
+    .replace(/(?:\s*-\s*)?(?:(?:Chapter|Chapitre|Capitulo|Ch\.?|Episode|Ep\.?|Season|S)\s*\d+).*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
