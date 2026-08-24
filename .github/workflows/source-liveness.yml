@@ -36,7 +36,12 @@ jobs:
 
       - name: Run source audit report table
         if: always()
-        run: node scripts/source-audit.mjs --out scratch/source-audit-report.json || true
+        shell: bash
+        # scratch/ is gitignored, so create it — source-audit.mjs writes its
+        # report with a bare fs.writeFileSync() and does not mkdir itself.
+        run: |
+          mkdir -p scratch
+          node scripts/source-audit.mjs --out scratch/source-audit-report.json || true
 
       - name: Summarize liveness
         if: always()
@@ -44,7 +49,8 @@ jobs:
         run: |
           if [ -f data/source-health.json ]; then
             node -e '
-              const d = require("./data/source-health.json");
+              const fs = require("fs");
+              const d = JSON.parse(fs.readFileSync("./data/source-health.json", "utf8"));
               const arr = Array.isArray(d) ? d : (d.results || d.sources || []);
               const ok = arr.filter(s => s && (s.status === "ok" || s.httpStatus === 200)).length;
               const dead = arr.filter(s => s && (s.status === "dead" || String(s.status).startsWith("http-"))).length;
