@@ -191,7 +191,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
         {/* Header / Hero Cover Bar */}
         <div className="relative p-6 bg-gradient-to-r from-app via-surface to-app border-b border-edge/80 overflow-hidden">
