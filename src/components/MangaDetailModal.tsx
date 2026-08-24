@@ -200,9 +200,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
             <img
               src={manga.coverImage}
               alt=""
-              className="w-full h-full object-cover blur-3xl opacity-25 scale-150 transition-opacity duration-700"
+              className="w-full h-full object-cover opacity-10 scale-150 transition-opacity duration-700"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/95 to-surface/85" />
             <div className="hero-ambient-glow absolute inset-0" />
           </div>
 
