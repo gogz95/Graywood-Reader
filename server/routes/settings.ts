@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { APP_VERSION } from '../version';
 import {
+  mangaDatabase,
   appSettings,
   setAppSettings,
   syncConfig,
@@ -26,10 +27,19 @@ export const settingsRouter = Router();
 
 // GET Settings
 settingsRouter.get("/api/settings", (_req, res) => {
+  // If the server has existing series in library or explicit completion flag, setup is completed
+  const isSetupCompleted = Boolean(
+    appSettings.initialSetupCompleted ||
+    mangaDatabase.length > 0 ||
+    SqliteDb.getSetting('appSettings') !== null ||
+    (typeof SqliteDb.getMangaCount === 'function' && SqliteDb.getMangaCount() > 0)
+  );
+
   // Secrets never leave the server in plaintext: captcha API keys and webhook
   // URLs/tokens are replaced by a mask sentinel for EVERY caller.
   res.json({
     ...appSettings,
+    initialSetupCompleted: isSetupCompleted,
     captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
     discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
     telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',

@@ -555,6 +555,11 @@ export function loadDatabaseFromDisk() {
       saveDatabaseToDisk();
     }
 
+    // Auto-mark setup completed if database already contains existing series or settings
+    if (!appSettings.initialSetupCompleted && (storedSettingsJson || mangaDatabase.length > 0)) {
+      appSettings.initialSetupCompleted = true;
+    }
+
     console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${mangaDatabase.length} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
   } catch (err) {
     console.error("[SQLite Engine] Error loading app state on startup:", err);

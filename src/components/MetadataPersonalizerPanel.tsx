@@ -205,9 +205,9 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
           <button
             type="button"
             onClick={onOpenStudio}
-            className="px-2.5 py-1 rounded-lg bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-sm shrink-0"
+            className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 border border-amber-300 text-black font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer"
           >
-            <Palette className="w-3.5 h-3.5" />
+            <Palette className="w-3.5 h-3.5 fill-black" />
             <span>Open Studio</span>
           </button>
         )}

@@ -291,6 +291,8 @@ export default function App() {
     },
   });
 
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
   const fetchSettings = async () => {
     try {
       const res = await apiFetch('/api/settings');
@@ -300,6 +302,8 @@ export default function App() {
       }
     } catch (err) {
       console.error('Fetch settings error:', err);
+    } finally {
+      setSettingsLoaded(true);
     }
   };
 
@@ -331,6 +335,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    fetchSettings();
     fetchChallengeCount();
     fetchDownloadsCount();
     const intervalChallenges = setInterval(fetchChallengeCount, 30000);
@@ -343,13 +348,20 @@ export default function App() {
 
   // Initial Setup Wizard First-Run Trigger (Host Administrator)
   useEffect(() => {
+    if (!settingsLoaded) return; // Wait until server settings have resolved from SQLite
     try {
-      const isCompleted = localStorage.getItem('graywood_setup_completed') || appSettings.initialSetupCompleted;
+      const isCompleted =
+        localStorage.getItem('graywood_setup_completed') === 'true' ||
+        Boolean(appSettings.initialSetupCompleted) ||
+        mangaList.length > 0;
+
       if (!isCompleted && isHostComputer) {
         setSetupWizardOpen(true);
+      } else {
+        setSetupWizardOpen(false);
       }
     } catch (_) {}
-  }, [isHostComputer, appSettings.initialSetupCompleted]);
+  }, [isHostComputer, appSettings.initialSetupCompleted, settingsLoaded, mangaList.length]);
 
   // App Lock Lifecycle & Inactivity Timeout
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);

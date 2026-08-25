@@ -191,24 +191,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-      <div className="bg-surface border border-edge rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
+    <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 rounded-t-3xl sm:rounded-2xl max-w-3xl w-full max-h-[92vh] sm:max-h-[85vh] overflow-y-auto shadow-2xl my-0 sm:my-8">
         {/* Header / Hero Cover Bar */}
-        <div className="relative p-6 bg-gradient-to-r from-app via-surface to-app border-b border-edge/80 overflow-hidden">
-          {/* Blurred ambient backdrop art */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <img
-              src={manga.coverImage}
-              alt=""
-              className="w-full h-full object-cover opacity-10 scale-150 transition-opacity duration-700"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/95 to-surface/85" />
-            <div className="hero-ambient-glow absolute inset-0" />
-          </div>
-
+        <div className="relative p-6 bg-slate-900 border-b border-slate-700 overflow-hidden">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 z-20 p-2 rounded-full bg-elevated/80 text-secondary hover:text-white transition-colors"
+            className="absolute top-4 right-4 z-20 p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white shadow-lg transition-all hover:scale-105 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -222,24 +211,26 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               <img
                 src={manga.coverImage}
                 alt={manga.title}
-                className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-app shadow-xl border border-edge group-hover:opacity-90 group-hover:scale-[1.02] transition-all"
+                className="w-28 h-40 sm:w-36 sm:h-48 rounded-xl object-cover bg-slate-900 shadow-xl border border-slate-700 group-hover:opacity-90 group-hover:scale-[1.02] transition-all"
               />
-              <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 rounded-xl flex flex-col items-center justify-center gap-2 transition-opacity p-2 text-center text-white">
-                <Palette className="w-6 h-6 text-accent" />
+              <div className="absolute inset-0 bg-slate-950/80 opacity-0 group-hover:opacity-100 rounded-xl flex flex-col items-center justify-center gap-2 transition-opacity p-2 text-center text-white">
+                <Palette className="w-6 h-6 text-amber-400" />
                 <span className="text-xs font-black tracking-wide">Change Cover</span>
-                <span className="text-[10px] text-muted">Preview all sources</span>
+                <span className="text-[10px] text-slate-400">Preview all sources</span>
               </div>
             </div>
 
-            <div className="space-y-2 flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="space-y-3 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <span
-                  className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase ${
+                  className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm ${
                     manga.type === 'manhwa'
-                      ? 'bg-blue-950 text-info border border-info/30'
+                      ? 'bg-sky-900 text-sky-100 border border-sky-400'
                       : manga.type === 'manhua'
-                      ? 'bg-red-950 text-danger border border-danger/30'
-                      : 'bg-purple-950 text-accent-2 border border-accent-2/30'
+                      ? 'bg-rose-900 text-rose-100 border border-rose-400'
+                      : manga.type === 'novel'
+                      ? 'bg-amber-900 text-amber-100 border border-amber-400'
+                      : 'bg-indigo-900 text-indigo-100 border border-indigo-400'
                   }`}
                 >
                   {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
@@ -247,13 +238,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
                 <button
                   onClick={() => setIsFavorite(!isFavorite)}
-                  className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-bold flex items-center gap-1 transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
                     isFavorite
-                      ? 'bg-accent/20 text-accent border border-accent/30'
-                      : 'bg-elevated text-secondary'
+                      ? 'bg-amber-500 hover:bg-amber-400 text-black border border-amber-300'
+                      : 'bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white'
                   }`}
                 >
-                  <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-accent text-accent' : ''}`} />
+                  <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-black text-black' : 'text-slate-300'}`} />
                   <span>{isFavorite ? 'Favorite' : 'Add Favorite'}</span>
                 </button>
 
@@ -261,20 +252,20 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 <div className="relative">
                   <button
                     onClick={() => setShowFlagDropdown(!showFlagDropdown)}
-                    className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-bold flex items-center gap-1 transition-all ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
                       isFlagged
-                        ? 'bg-danger/20 text-danger border border-danger/40 shadow-sm'
-                        : 'bg-elevated text-secondary hover:text-primary'
+                        ? 'bg-rose-900 hover:bg-rose-800 border border-rose-400 text-white'
+                        : 'bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white'
                     }`}
                     title="Flag series for loading errors or broken content"
                   >
-                    <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFlagged ? 'text-danger fill-danger/20' : 'text-secondary'}`} />
+                    <AlertTriangle className={`w-3.5 h-3.5 ${isFlagged ? 'text-rose-300 fill-rose-300' : 'text-slate-300'}`} />
                     <span>{isFlagged ? `Flagged: ${flagReason || 'Error'}` : 'Flag Issue'}</span>
                   </button>
                   {showFlagDropdown && (
-                    <div className="absolute left-0 top-full mt-1 z-[999] w-60 bg-surface border border-edge rounded-xl shadow-2xl overflow-hidden">
-                      <div className="p-2 border-b border-edge">
-                        <p className="text-[11px] font-bold text-primary">What went wrong?</p>
+                    <div className="absolute left-0 top-full mt-1.5 z-[999] w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                      <div className="p-2.5 border-b border-slate-800 bg-slate-950">
+                        <p className="text-[11px] font-bold text-white">What went wrong?</p>
                       </div>
                       {FLAG_CATEGORIES.map((cat) => (
                         <button
@@ -295,12 +286,12 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                             onUpdateManga({ ...manga, isFlagged: true, flagReason: cat.flagReason, flaggedAt: new Date().toISOString() });
                             onReport(cat, manga);
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium text-primary hover:bg-danger/10 hover:text-danger transition-colors text-left border-b border-edge/50 last:border-0"
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-slate-200 hover:bg-rose-950 hover:text-white transition-colors text-left border-b border-slate-800 last:border-0 cursor-pointer"
                         >
-                          <span className="p-1 rounded bg-danger/10 text-danger">{cat.icon}</span>
+                          <span className="p-1 rounded bg-rose-900 text-rose-200">{cat.icon}</span>
                           <span>
                             <span className="block font-bold">{cat.label}</span>
-                            <span className="block text-[10px] text-secondary">{cat.description}</span>
+                            <span className="block text-[10px] text-slate-400">{cat.description}</span>
                           </span>
                         </button>
                       ))}
@@ -317,9 +308,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                             setFlagReason('');
                             onUpdateManga({ ...manga, isFlagged: false, flagReason: undefined, flaggedAt: undefined });
                           }}
-                          className="w-full px-3 py-2 text-xs font-bold text-secondary hover:text-danger hover:bg-danger/10 transition-colors text-center border-t border-edge flex items-center justify-center gap-1.5"
+                          className="w-full px-3 py-2.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-rose-950 transition-colors text-center border-t border-slate-800 flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <Check className="w-3 h-3" /> Remove Flag
+                          <Check className="w-3.5 h-3.5" /> Remove Flag
                         </button>
                       )}
                     </div>
@@ -327,18 +318,21 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 </div>
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-black text-primary">{manga.title}</h2>
+              <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">{manga.title}</h2>
 
               {manga.altTitles.length > 0 && (
-                <p className="text-xs text-secondary font-mono">
-                  Alt Names: {manga.altTitles.join(' • ')}
+                <p className="text-xs text-slate-300 font-semibold">
+                  Alt Names: <span className="text-white font-medium">{manga.altTitles.join(' • ')}</span>
                 </p>
               )}
 
               {/* Genre Tags */}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {manga.genres.map((g, idx) => (
-                  <span key={idx} className="px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-200 shadow-sm hover:border-slate-500 hover:text-white transition-colors"
+                  >
                     {g}
                   </span>
                 ))}
@@ -346,18 +340,18 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
               {/* 18+ / NSFW Guest Access Notice */}
               {isGuest && isNsfwManga(manga) && (
-                <div className="p-3.5 bg-rose-950/80 border border-rose-500/50 rounded-2xl text-xs text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <div className="p-3.5 bg-rose-950 border border-rose-500 rounded-2xl text-xs text-rose-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
                   <div className="flex items-center gap-2.5">
                     <span className="text-xl">🔞</span>
                     <div>
-                      <span className="font-bold block text-rose-100">18+ Adult Explicit Title</span>
+                      <span className="font-bold block text-white">18+ Adult Explicit Title</span>
                       <span className="text-[11px] text-rose-300">You must be logged in to an account to read adult content.</span>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onOpenAuthModal?.()}
-                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95"
+                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     <span>Sign In</span>
                   </button>
@@ -366,18 +360,18 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
               {/* Missing Source Notice */}
               {!hasWorkingReaderSource(manga) && (
-                <div className="p-3.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                <div className="p-3.5 bg-amber-950 border border-amber-500 rounded-2xl text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                     <div>
                       <span className="font-bold block text-amber-300">Missing Reading Source</span>
-                      <span className="text-[11px] text-secondary">This series is in your library but has no linked chapter source.</span>
+                      <span className="text-[11px] text-slate-300">This series is in your library but has no linked chapter source.</span>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsSourceFinderOpen(true)}
-                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95"
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Find Alternative Sources</span>
@@ -386,8 +380,26 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               )}
 
               {/* Built-in Reader Action Buttons */}
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                {hasWorkingReaderSource(manga) && (
+              <div className="space-y-3 pt-2">
+                {/* Primary Action Buttons */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {hasWorkingReaderSource(manga) && (
+                    <button
+                      onClick={() => {
+                        if (isGuest && isNsfwManga(manga)) {
+                          onOpenAuthModal?.();
+                          return;
+                        }
+                        onClose();
+                        onOpenReader(manga, manga.currentChapter + 1);
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black border border-amber-300 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer"
+                    >
+                      <BookOpen className="w-4 h-4 fill-black text-black" />
+                      <span>Read Chapter {manga.currentChapter + 1} Now</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       if (isGuest && isNsfwManga(manga)) {
@@ -395,79 +407,70 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                         return;
                       }
                       onClose();
-                      onOpenReader(manga, manga.currentChapter + 1);
+                      onOpenChapters(manga);
                     }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center gap-1.5 shadow-lg shadow-accent/20 transition-all hover:scale-105"
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all hover:scale-[1.02] cursor-pointer"
                   >
-                    <BookOpen className="w-4 h-4 fill-accent-fg" />
-                    <span>Read Chapter {manga.currentChapter + 1} Now</span>
+                    <Globe className="w-4 h-4 text-sky-400" />
+                    <span>Browse All Chapters</span>
                   </button>
-                )}
 
-                <button
-                  onClick={() => {
-                    if (isGuest && isNsfwManga(manga)) {
-                      onOpenAuthModal?.();
-                      return;
-                    }
-                    onClose();
-                    onOpenChapters(manga);
-                  }}
-                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
-                >
-                  <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
-                  <span>Browse All Chapters</span>
-                </button>
+                  {manga.sourceUrl && (
+                    <a
+                      href={manga.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                      <span>External Site</span>
+                    </a>
+                  )}
+                </div>
 
-                {manga.sourceUrl && (
-                  <a
-                    href={manga.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-secondary hover:text-primary"
+                {/* Secondary Utility / Studio Buttons */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsSourceFinderOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-sky-900 hover:bg-sky-800 border border-sky-400 text-sky-100 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
+                    title="Search active online sources for this series"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>External Site</span>
-                  </a>
-                )}
+                    <Sparkles className="w-4 h-4 text-sky-300" />
+                    <span>Find Alternative Sources</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsSourceFinderOpen(true)}
-                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 border border-accent-2/30 text-accent-2 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm"
-                  title="Search active online sources for this series"
-                >
-                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-2" />
-                  <span>Find Alternative Sources</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsMetadataStudioOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-purple-900 hover:bg-purple-800 border border-purple-400 text-purple-100 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
+                    title="Personalize artwork, choose covers from available sources & lock fields (Jellyfin/Plex style)"
+                  >
+                    <Palette className="w-4 h-4 text-purple-300" />
+                    <span>Poster & Metadata Studio</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsMetadataStudioOpen(true)}
-                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm"
-                  title="Personalize artwork, choose covers from available sources & lock fields (Jellyfin/Plex style)"
-                >
-                  <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent" />
-                  <span>Poster & Metadata Studio</span>
-                </button>
+                  <button
+                    onClick={handleRefreshMetadata}
+                    disabled={isRefreshingMetadata}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-800 border border-emerald-400 disabled:opacity-50 text-emerald-100 hover:text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] cursor-pointer"
+                    title="Fetch latest metadata, chapter counts, covers, and rating from live sources"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-emerald-300 ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshingMetadata ? 'Refreshing...' : 'Refresh Metadata'}</span>
+                  </button>
 
-                <button
-                  onClick={handleRefreshMetadata}
-                  disabled={isRefreshingMetadata}
-                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated disabled:opacity-50 text-primary font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
-                  title="Fetch latest metadata, chapter counts, covers, and rating from live sources"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-info ${isRefreshingMetadata ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshingMetadata ? 'Refreshing...' : 'Refresh Metadata'}</span>
-                </button>
+                  {refreshMsg && (
+                    <span className="text-xs font-bold text-emerald-300 animate-pulse bg-emerald-950 border border-emerald-500 px-2.5 py-1 rounded-lg">
+                      {refreshMsg}
+                    </span>
+                  )}
+                </div>
 
-                {refreshMsg && (
-                  <span className="text-xs font-bold text-success animate-pulse">{refreshMsg}</span>
-                )}
                 {/* Available Sources List */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-info" />
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-sky-400" />
                     <span>Found Across Sources ({manga.availableSources?.length || (manga.sourceName ? 1 : 0)}):</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -478,14 +481,14 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                           href={src.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-app border border-edge hover:border-info/50 text-info text-xs font-semibold flex items-center gap-1 transition-all"
+                          className="px-3.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600 hover:border-sky-400 text-sky-300 hover:text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                         >
                           <span>{src.sourceName}</span>
-                          <ExternalLink className="w-3 h-3 text-muted" />
+                          <ExternalLink className="w-3 h-3 text-slate-400" />
                         </a>
                       ))
                     ) : (
-                      <span className="px-2.5 py-1 rounded-lg bg-app border border-edge text-secondary text-xs font-semibold">
+                      <span className="px-3.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 text-xs font-semibold shadow-sm">
                         {manga.sourceName || 'Kotatsu Source'}
                       </span>
                     )}
@@ -497,16 +500,16 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6 text-xs sm:text-sm">
+        <div className="p-6 space-y-6 text-xs sm:text-sm bg-slate-900">
           {/* Custom Shelves & Categories */}
           {categories.length > 0 && (
-            <div className="space-y-2 bg-app/60 p-4 rounded-xl border border-edge">
+            <div className="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-secondary flex items-center gap-1.5">
-                  <Folder className="w-3.5 h-3.5 text-accent" />
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-amber-400" />
                   <span>Custom Shelves & Categories:</span>
                 </span>
-                <span className="text-[11px] text-muted">Click to assign or remove</span>
+                <span className="text-[11px] text-slate-400">Click to assign or remove</span>
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {categories.map((cat) => {
@@ -519,7 +522,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
                         isAssigned
                           ? 'border-accent shadow-sm'
-                          : 'bg-surface border-edge text-secondary hover:text-primary hover:bg-elevated'
+                          : 'bg-slate-800 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700'
                       }`}
                       style={
                         isAssigned
@@ -547,34 +550,34 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
           {/* Synopsis */}
           <div className="space-y-1.5">
-            <h4 className="font-bold text-primary">Synopsis</h4>
-            <p className="text-secondary leading-relaxed bg-app p-3.5 rounded-xl border border-edge">
+            <h4 className="font-bold text-white text-sm">Synopsis</h4>
+            <p className="text-slate-200 leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800">
               {manga.description || 'No synopsis provided.'}
             </p>
           </div>
 
           {/* Quick Chapter Progress Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-app/60 p-4 rounded-xl border border-edge">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
             <div>
-              <label className="block font-bold text-secondary mb-2">
+              <label className="block font-bold text-slate-200 mb-2">
                 Reading Chapter Progress:
               </label>
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setCurrentChapter(Math.max(0, currentChapter - 1))}
-                  className="p-2 rounded-lg bg-elevated hover:bg-elevated text-primary"
+                  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
 
                 <div className="text-center min-w-[100px]">
-                  <span className="text-xl font-black text-accent">Ch. {currentChapter}</span>
-                  <span className="text-xs text-muted block">of {manga.latestChapter}</span>
+                  <span className="text-xl font-black text-amber-400">Ch. {currentChapter}</span>
+                  <span className="text-xs text-slate-400 block">of {manga.latestChapter}</span>
                 </div>
 
                 <button
                   onClick={() => setCurrentChapter(currentChapter + 1)}
-                  className="p-2 rounded-lg bg-accent hover:bg-accent-bright text-accent-fg font-bold"
+                  className="p-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold border border-amber-300"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -582,13 +585,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
             </div>
 
             <div>
-              <label className="block font-bold text-secondary mb-2">
+              <label className="block font-bold text-slate-200 mb-2">
                 Reading Status:
               </label>
               <select
                 value={status}
                 onChange={(e: any) => setStatus(e.target.value)}
-                className="w-full bg-surface border border-edge-strong rounded-lg p-2.5 text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-accent/50"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               >
                 <option value="reading">Reading</option>
                 <option value="plan_to_read">Plan to Read</option>
@@ -601,13 +604,13 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
           {/* Personal Notes */}
           <div className="space-y-1.5">
-            <label className="block font-bold text-secondary">Reading Notes & Arc Thoughts:</label>
+            <label className="block font-bold text-slate-200">Reading Notes & Arc Thoughts:</label>
             <textarea
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add personal reading notes..."
-              className="w-full bg-app border border-edge rounded-xl p-3 text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
           </div>
 
@@ -621,7 +624,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               <button
                 onClick={handleFetchSimilar}
                 disabled={loadingSimilar}
-                className="px-3 py-1 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30 text-xs font-bold transition-all"
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black border border-amber-300 text-xs font-bold transition-all shadow-sm cursor-pointer"
               >
                 {loadingSimilar ? 'Analyzing...' : 'Generate Recommendations'}
               </button>
@@ -644,30 +647,30 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-app border-t border-edge flex items-center justify-between gap-3">
+        <div className="p-4 bg-slate-900 border-t border-slate-700 flex items-center justify-between gap-3">
           <button
             onClick={() => onDeleteManga(manga.id)}
-            className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-red-950/80 hover:bg-red-900 text-danger font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all"
+            className="px-4 py-2.5 rounded-xl bg-rose-900 hover:bg-rose-800 border border-rose-400 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
           >
             <Trash2 className="w-4 h-4" />
             Delete
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => {
                 onClose();
                 onEditManga(manga);
               }}
-              className="px-4 py-2 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
             >
-              <Palette className="w-4 h-4 text-accent" />
+              <Palette className="w-4 h-4 text-amber-400" />
               Edit Metadata
             </button>
 
             <button
               onClick={handleSaveQuickChanges}
-              className="px-5 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs shadow-lg transition-all flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black border border-amber-300 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition-all flex items-center gap-1.5 cursor-pointer hover:scale-[1.02] active:scale-95"
             >
               <Check className="w-4 h-4" />
               Save Progress
