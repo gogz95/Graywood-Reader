@@ -137,6 +137,101 @@ describe('Automated Engine Parser Test Harness', () => {
     });
   });
 
+  describe('WPComics Engine Parser', () => {
+    it('extracts chapter numbers correctly from various WPComics naming styles', async () => {
+      const { extractWPComicsChapterNumber } = await import('../server/services/crawlerEngine');
+      expect(extractWPComicsChapterNumber('/manga/martial-peak/chap-3450', 'Chapter 3450', 1)).toBe(3450);
+      expect(extractWPComicsChapterNumber('/manga/apotheosis/chapter-120.5', 'Chap 120.5', 1)).toBe(120.5);
+      expect(extractWPComicsChapterNumber('/manga/yuan-zun/ch-500', 'Ch 500', 1)).toBe(500);
+      expect(extractWPComicsChapterNumber('/manga/tales/chapter-100', '', 1)).toBe(100);
+    });
+
+    it('extracts series cards from WPComics catalog markup', () => {
+      const wpComicsHtml = `
+        <div class="row">
+          <div class="item">
+            <figure class="clearfix">
+              <a title="Martial Peak" href="https://manhuaplus.top/manga/martial-peak">
+                <img class="lazy" data-original="https://manhuaplus.top/covers/martial-peak.jpg" alt="Martial Peak">
+              </a>
+              <figcaption>
+                <h3><a href="https://manhuaplus.top/manga/martial-peak">Martial Peak</a></h3>
+                <ul>
+                  <li class="chapter"><a href="https://manhuaplus.top/manga/martial-peak/chap-3450">Chap 3450</a></li>
+                </ul>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      `;
+
+      const sourceDef = {
+        id: 'manhuaplus',
+        name: 'Manhua Plus',
+        baseUrl: 'https://manhuaplus.top',
+        engineType: 'wpcomics' as const,
+        lang: 'en',
+        isNsfw: false,
+      };
+
+      const cards = parseUniversalCatalogCards(wpComicsHtml, sourceDef, 'https://manhuaplus.top');
+      expect(cards.length).toBe(1);
+      expect(cards[0].title).toBe('Martial Peak');
+      expect(cards[0].sourceUrl).toBe('https://manhuaplus.top/manga/martial-peak');
+      expect(cards[0].coverImage).toBe('https://manhuaplus.top/covers/martial-peak.jpg');
+      expect(cards[0].latestChapter).toBe(3450);
+    });
+  });
+
+  describe('MangaThemesia Engine Parser', () => {
+    it('extracts image URLs from inline ts_reader script payloads', async () => {
+      const { extractMangaReaderPageUrls } = await import('../server/services/crawlerEngine');
+      const html = `
+        <html>
+        <head><title>Chapter 100</title></head>
+        <body>
+          <script>
+            ts_reader.run({
+              "prevUrl": "https://ravenscans.net/ch-99",
+              "nextUrl": "https://ravenscans.net/ch-101",
+              "sources": [
+                {
+                  "source": "Default",
+                  "images": [
+                    "https://cdn.ravenscans.net/ch100/01.webp",
+                    "https://cdn.ravenscans.net/ch100/02.webp",
+                    "https://cdn.ravenscans.net/ch100/03.webp"
+                  ]
+                }
+              ]
+            });
+          </script>
+        </body>
+        </html>
+      `;
+
+      const pages = extractMangaReaderPageUrls(html, 'https://ravenscans.net');
+      expect(pages.length).toBe(3);
+      expect(pages[0]).toBe('https://cdn.ravenscans.net/ch100/01.webp');
+      expect(pages[1]).toBe('https://cdn.ravenscans.net/ch100/02.webp');
+      expect(pages[2]).toBe('https://cdn.ravenscans.net/ch100/03.webp');
+    });
+
+    it('extracts image URLs from base64 encoded ts_reader scripts', async () => {
+      const { extractMangaReaderPageUrls } = await import('../server/services/crawlerEngine');
+      const payload = JSON.stringify({
+        sources: [{ images: ['https://cdn.hentai20.io/p1.jpg', 'https://cdn.hentai20.io/p2.jpg'] }]
+      });
+      const b64 = Buffer.from(`ts_reader.run(${payload});`).toString('base64');
+      const html = `<html><body><script src="data:text/javascript;base64,${b64}"></script></body></html>`;
+
+      const pages = extractMangaReaderPageUrls(html, 'https://hentai20.io');
+      expect(pages.length).toBe(2);
+      expect(pages[0]).toBe('https://cdn.hentai20.io/p1.jpg');
+      expect(pages[1]).toBe('https://cdn.hentai20.io/p2.jpg');
+    });
+  });
+
   describe('Live Series Metadata Parser', () => {
     it('extracts metadata from Manhwa18 series page HTML', () => {
       const html = loadFixture('manhwa18-series.html');

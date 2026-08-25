@@ -54,7 +54,7 @@ const VERIFIED_DEDICATED_IDS = new Set<string>([
   'mangadex',
   'weebcentral', 'asurascans', 'flamecomics',
   'mangaread', 'manhuaplus', 'manhuaplusorg', 'demonicscans',
-  'aquamanga', 'kunmanga', 'manhwa18', 'manhwa18cc',
+  'aquamanga', 'kunmanga', 'manhwa18', 'manhwa18cc', 'hotcomics', 'daycomics',
 ]);
 
 const VERIFIED_ENGINE_TYPES = new Set<SourceEngineType>([
@@ -88,8 +88,8 @@ const DEFAULT_PRIMARY_SOURCES: SourceDefinition[] = [
   { id: 'manhwa18',      name: 'Manhwa18',            baseUrl: 'https://manhwa18.com',       engineType: 'custom_html',   lang: 'en', isNsfw: true  },
   { id: 'manhwa18cc',    name: 'Manhwa18.cc',         baseUrl: 'https://manhwa18.cc',        engineType: 'custom_html',   lang: 'en', isNsfw: true  },
   { id: 'aquamanga',     name: 'Aqua Manga',          baseUrl: 'https://aquareader.org',     engineType: 'madara',        lang: 'en', isNsfw: false },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org',      baseUrl: 'https://manhuaplus.top',     engineType: 'madara',        lang: 'en', isNsfw: false },
-  { id: 'manhuaplus',    name: 'Manhua Plus',         baseUrl: 'https://manhuaplus.top',     engineType: 'madara',        lang: 'en', isNsfw: false },
+  { id: 'manhuaplusorg', name: 'ManhuaPlus.org',      baseUrl: 'https://manhuaplus.top',     engineType: 'wpcomics',      lang: 'en', isNsfw: false },
+  { id: 'manhuaplus',    name: 'Manhua Plus',         baseUrl: 'https://manhuaplus.top',     engineType: 'wpcomics',      lang: 'en', isNsfw: false },
   { id: 'mangaread',     name: 'MangaRead',           baseUrl: 'https://www.mangaread.org',  engineType: 'madara',        lang: 'en', isNsfw: false },
   { id: 'harimanga',     name: 'Hari Manga',          baseUrl: 'https://harimanga.com',      engineType: 'madara',        lang: 'en', isNsfw: false },
   { id: 'anisascans',    name: 'Anisa Scans',         baseUrl: 'https://anisascans.in',      engineType: 'madara',        lang: 'en', isNsfw: false },
@@ -129,6 +129,33 @@ export const INITIAL_DEAD_SOURCES = new Set<string>([
   'adultwebtoon',      // adultwebtoon.com — domain lapsed / redirected to spam cam site
   'adultwebtoon.com',
   'adultwebtoon.net',
+  'adult_webtoon',
+  'blacksacam.com',
+  'bluesacam.com',
+  'freemanga',
+  'hentaimanga',
+  'hentaiwebtoon',
+  'mangahentai',
+  'manhwaraw_com',
+  'manytoonme',
+  'bookmanga',
+  'dark_scans',
+  'allporn_comic',
+  'agscomics',
+  'altayscans',
+  'anigliscans',
+  'arcanescans',
+  'arcrelight',
+  'ascalonscans',
+  'astrascans',
+  'babelwuxia',
+  'banana_manga',
+  'bananascan_com',
+  'batcave',
+  'beetoon',
+  'bibimanga',
+  'birdmanga',
+  'boys_love',
   'manhwa18.org',      // HTTP 521 dead origin
   'hentai20.com',      // dead origin (moved to hentai20.io)
   'manhuascan',        // manhuascan.us — ENOTFOUND

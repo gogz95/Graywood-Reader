@@ -56,7 +56,7 @@ export interface ResolvedChapter {
   pageCount: number;
 }
 
-export type SourceEngine = 'madara' | 'manhwa18' | 'manhwa18cc' | 'mangareader' | 'hotcomics' | 'custom' | 'foolslide';
+export type SourceEngine = 'madara' | 'manhwa18' | 'manhwa18cc' | 'mangareader' | 'mangathemesia' | 'wpcomics' | 'hotcomics' | 'custom' | 'foolslide';
 
 export interface EngineSourceConfig {
   id: string;
@@ -95,6 +95,8 @@ export const DOMAIN_MIRRORS: Record<string, string> = {
   'mangatx.unblockit.ch': 'mangatx.com',
   'manhuaplus.org': 'manhuaplus.top',
   'manhuaplus.com': 'manhuaplus.top',
+  'aryascans.com': 'brainrotcomics.com',
+  'comizy.io': 'mangabuddy.com',
 };
 
 export const UA_HEADERS = {
@@ -106,11 +108,9 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'manhwa18', name: 'Manhwa18', domain: 'manhwa18.com', engine: 'manhwa18', lang: 'en', isNsfw: true },
   { id: 'manhwa18cc', name: 'Manhwa18.cc', domain: 'manhwa18.cc', engine: 'manhwa18cc', lang: 'en', isNsfw: true },
   { id: 'aquamanga', name: 'Aqua Manga', domain: 'aquareader.org', engine: 'madara', lang: 'en', isNsfw: false },
-  // ManhuaPlus migrated off Madara (2026-08): WPComics-style theme with the
-  // chapter list inlined at #nt_listchapter — no wp-admin AJAX exists anymore.
-  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
-  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
-  { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.com', engine: 'madara', lang: 'en', isNsfw: false, madaraPageSize: 10 },
+  { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'wpcomics', lang: 'en', isNsfw: false },
+  { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'wpcomics', lang: 'en', isNsfw: false },
+  { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.com', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true, madaraPageSize: 10 },
   { id: 'anisascans', name: 'Anisa Scans', domain: 'anisascans.in', engine: 'madara', lang: 'en', isNsfw: false, madaraDatePattern: 'dd MMM, yyyy' },
   { id: 'mangaread', name: 'MangaRead', domain: 'www.mangaread.org', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'manhwabuddy', name: 'Manhwa Buddy', domain: 'manhwabuddy.com', engine: 'madara', lang: 'en', isNsfw: false },
@@ -129,8 +129,8 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'hiperdex', name: 'Hiperdex', domain: 'hiperdex.com', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'beehentai', name: 'ToonTop', domain: 'toontop.io', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'mangatx', name: 'Manga TX', domain: 'mangatx.com', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.net', engine: 'mangareader', lang: 'en', isNsfw: false },
-  { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.io', engine: 'mangareader', lang: 'en', isNsfw: true },
+  { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.net', engine: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.io', engine: 'mangathemesia', lang: 'en', isNsfw: true },
 ];
 
 export const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [...CURATED_ENGINE_SOURCES];
@@ -170,7 +170,7 @@ export function syncEngineRegistryFromCatalog(): void {
       added++;
     } else if (src.engineType === 'mangathemesia') {
       ENGINE_SOURCE_REGISTRY.push({
-        id: src.id, name: src.name, domain, engine: 'mangareader',
+        id: src.id, name: src.name, domain, engine: 'mangathemesia',
         lang: src.lang, isNsfw: src.isNsfw,
         madaraSelectTestAsync: 'div.eplister',
         madaraSelectChapter: 'div.eplister ul li',
@@ -179,7 +179,7 @@ export function syncEngineRegistryFromCatalog(): void {
       added++;
     } else if (src.engineType === 'wpcomics') {
       ENGINE_SOURCE_REGISTRY.push({
-        id: src.id, name: src.name, domain, engine: 'madara',
+        id: src.id, name: src.name, domain, engine: 'wpcomics',
         lang: src.lang, isNsfw: src.isNsfw,
       });
       added++;
@@ -757,6 +757,9 @@ export async function fetchMadaraChapterList(targetUrl: string, config: EngineSo
         chapters.push({ number: num, id: abs, slug: abs, title: text || `Chapter ${num}`, url: abs, pageCount: 0 });
       });
     }
+    if (chapters.length === 0) {
+      return parseGenericChapterListFromHtml(html, origin);
+    }
     return chapters;
   } catch (e: any) {
     console.warn(`[Madara Engine] Chapter list failed for ${config.name}:`, e.message);
@@ -976,6 +979,96 @@ export async function fetchManhwa18CCChapterPages(chapterUrl: string, domain: st
     return pages.length > 0 ? pages : null;
   } catch (e: any) {
     console.warn('[Manhwa18CC Engine] Page extraction failed:', e.message);
+    return null;
+  }
+}
+
+export function extractWPComicsChapterNumber(href: string, name: string, fallback: number): number {
+  const rx = /chapter[-_\.\s]*(\d+(?:\.\d+)?)|ch\.?\s*(\d+(?:\.\d+)?)|chap[-_\.\s]*(\d+(?:\.\d+)?)|[-_\./]\s*(\d+(?:\.\d+)?)\s*$/i;
+  const m = (href + ' ' + name).match(rx);
+  const v = m ? (m[1] || m[2] || m[3] || m[4]) : null;
+  const parsed = v ? parseFloat(v) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export async function fetchWPComicsChapterList(seriesUrl: string, domain: string): Promise<ResolvedChapter[]> {
+  try {
+    const normalized = normalizeLiveTargetUrl(seriesUrl);
+    const origin = (() => { try { return new URL(normalized).origin; } catch { return `https://${domain}`; } })();
+    const bypassRes = await fetchWithChallengeBypass(normalized, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+    });
+    if (!bypassRes.ok || !bypassRes.html) return [];
+    const html = bypassRes.html;
+    const $ = cheerio.load(html);
+    let anchors = $('#nt_listchapter ul li a, .list-chapter ul li a, .list-chapters li a, div.list-chapter a, #list-chapter a').toArray();
+    if (anchors.length === 0) anchors = $('a[href*="/chap-"], a[href*="/chapter-"], a[href*="/chapter/"]').toArray();
+    if (anchors.length === 0) return [];
+    const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < anchors.length; i++) {
+      const el = $(anchors[i]);
+      const href = el.attr('href') || '';
+      if (!href || href.startsWith('javascript') || href.startsWith('#')) continue;
+      const rawText = el.text().trim();
+      if (/read\s+(first|last)/i.test(rawText) || /all\s+chapters/i.test(rawText)) continue;
+      const abs = (href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`).replace(/\/+$/, '');
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      const name = el.find('.chapter-name, .chapter-title').text().trim() || rawText;
+      const num = extractWPComicsChapterNumber(href, name, anchors.length - i);
+      chapters.push({ number: num, id: abs, slug: abs, title: name || `Chapter ${num}`, url: abs, pageCount: 0 });
+    }
+    return chapters;
+  } catch (e: any) {
+    console.warn('[WPComics Engine] Chapter list failed:', e.message);
+    return [];
+  }
+}
+
+export async function fetchWPComicsChapterPages(chapterUrl: string, domain: string): Promise<string[] | null> {
+  try {
+    const origin = (() => { try { return new URL(chapterUrl).origin; } catch { return `https://${domain}`; } })();
+    const bypassRes = await fetchWithChallengeBypass(chapterUrl, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+    });
+    if (!bypassRes.ok || !bypassRes.html) return null;
+    const html = bypassRes.html;
+    const $ = cheerio.load(html);
+    const pages: string[] = [];
+    const pushSrc = (raw: string) => {
+      const src = (raw || '').trim();
+      if (!src) return;
+      if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src) && !/cdn/i.test(src)) return;
+      if (/logo|avatar|icon|banner|favicon|loading/i.test(src)) return;
+      const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
+      if (!pages.includes(abs)) pages.push(abs);
+    };
+    $('.reading-detail .page-chapter img, .page-chapter img, .reading-detail img, .chapter-content img, #chapter-content img, .page-break img').each((_, el) => {
+      pushSrc($(el).attr('data-original') || $(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-cdn') || $(el).attr('src') || '');
+    });
+    if (pages.length === 0) {
+      $('img.lazy, img[data-src], img[data-original]').each((_, el) => {
+        pushSrc($(el).attr('data-original') || $(el).attr('data-src') || $(el).attr('src') || '');
+      });
+    }
+    return pages.length > 0 ? pages : null;
+  } catch (e: any) {
+    console.warn('[WPComics Engine] Page extraction failed:', e.message);
     return null;
   }
 }
@@ -1258,8 +1351,12 @@ export async function fetchLiveChapterList(rawTargetUrl: string, domainId: strin
     const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
     if (chapters.length > 0) return chapters;
   }
-  if (engineConfig && engineConfig.engine === 'mangareader') {
+  if (engineConfig && (engineConfig.engine === 'mangareader' || engineConfig.engine === 'mangathemesia')) {
     const chapters = await fetchMangaReaderChapterList(targetUrl);
+    if (chapters.length > 0) return chapters;
+  }
+  if (engineConfig && engineConfig.engine === 'wpcomics') {
+    const chapters = await fetchWPComicsChapterList(targetUrl, engineConfig.domain || domainId);
     if (chapters.length > 0) return chapters;
   }
   if (engineConfig && engineConfig.engine === 'hotcomics') {
@@ -1416,6 +1513,18 @@ export async function extractLiveDomainChapterPages(
         if (mhPages && mhPages.length > 0) return mhPages;
       }
     }
+    if (engCfg && engCfg.engine === 'wpcomics') {
+      if (/\/chapter|[-_/]ch(?:apter|ap)?[-_/]?\d+/i.test(targetUrl)) {
+        const directPages = await fetchWPComicsChapterPages(targetUrl, engCfg.domain || domainId);
+        if (directPages && directPages.length > 0) return directPages;
+      }
+      const wpChapters = await fetchWPComicsChapterList(targetUrl, engCfg.domain || domainId);
+      const wpTarget = matchResolvedChapter(wpChapters, chapterNumber);
+      if (wpTarget) {
+        const wpPages = await fetchWPComicsChapterPages(wpTarget.url, engCfg.domain || domainId);
+        if (wpPages && wpPages.length > 0) return wpPages;
+      }
+    }
     if (engCfg && engCfg.engine === 'hotcomics') {
       const hcChapters = await fetchHotComicsChapterList(targetUrl, engCfg.domain);
       const hcTarget = matchResolvedChapter(hcChapters, chapterNumber);
@@ -1424,7 +1533,11 @@ export async function extractLiveDomainChapterPages(
         if (hcPages && hcPages.length > 0) return hcPages;
       }
     }
-    if (engCfg && engCfg.engine === 'mangareader') {
+    if (engCfg && (engCfg.engine === 'mangareader' || engCfg.engine === 'mangathemesia')) {
+      if (/\/chapter|[-_/]ch(?:apter)?[-_/]?\d+/i.test(targetUrl)) {
+        const directPages = await fetchMangaReaderChapterPages(targetUrl);
+        if (directPages && directPages.length > 0) return directPages;
+      }
       const mrChapters = await fetchMangaReaderChapterList(targetUrl);
       const mrTarget = matchResolvedChapter(mrChapters, chapterNumber);
       if (mrTarget) {

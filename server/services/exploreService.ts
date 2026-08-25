@@ -712,13 +712,13 @@ export function parseUniversalCatalogCards(
         const cover = extractCover(card.find('img').first(), card);
 
         let chNum = 10;
-        const chText = card.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
-        const chMatch = chText.match(/(?:ch(?:apter)?\.?\s*|ep\.?\s*)(\d+(?:\.\d+)?)/i);
+        const chText = card.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"], a[href*="chap-"], a[href*="/ch-"]').first().text();
+        const chMatch = chText.match(/(?:ch(?:ap(?:ter)?)?\.?\s*|ep(?:isode)?\.?\s*)(\d+(?:\.\d+)?)/i) || (card.find('a[href*="chap"]').first().attr('href') || '').match(/(?:chapter|chap|ch)[-_/]?(\d+(?:\.\d+)?)/i);
         if (chMatch) chNum = parseFloat(chMatch[1]) || 10;
 
         if (href && title) pushItem(href, title, cover, chNum);
       }
-      if (scrapedItems.length >= 2) return scrapedItems;
+      if (scrapedItems.length > 0) return scrapedItems;
     }
   }
 
@@ -736,8 +736,8 @@ export function parseUniversalCatalogCards(
     const cover = extractCover(a.find('img').first().length ? a.find('img').first() : parent.find('img').first(), parent);
 
     let chNum = 10;
-    const chText = parent.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"]').first().text();
-    const chMatch = chText.match(/(?:ch(?:apter)?\.?\s*|ep\.?\s*)(\d+(?:\.\d+)?)/i);
+    const chText = parent.find('.epx, .chapter, .font-meta, .chapter-item, .fres-chapter, a[href*="chapter"], a[href*="chap-"]').first().text();
+    const chMatch = chText.match(/(?:ch(?:ap(?:ter)?)?\.?\s*|ep(?:isode)?\.?\s*)(\d+(?:\.\d+)?)/i);
     if (chMatch) chNum = parseFloat(chMatch[1]) || 10;
 
     if (title && title.length >= 2) {

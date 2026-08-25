@@ -18,15 +18,6 @@
     "baseUrlReliable": true
   },
   {
-    "id": "adult_webtoon",
-    "name": "Adult Webtoon",
-    "baseUrl": "https://blacksacam.com",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
     "id": "adumanga",
     "name": "AduManga",
     "baseUrl": "https://storyofspringfield.com",
@@ -1998,15 +1989,6 @@
     "baseUrlReliable": true
   },
   {
-    "id": "freemanga",
-    "name": "FreeManga",
-    "baseUrl": "https://blacksacam.com",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
     "id": "freemangatop",
     "name": "FreeMangaTop",
     "baseUrl": "https://freemangatop.com",
@@ -2547,15 +2529,6 @@
     "baseUrlReliable": true
   },
   {
-    "id": "hentaimanga",
-    "name": "HentaiManga",
-    "baseUrl": "https://bluesacam.com",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
     "id": "hentainexus",
     "name": "HentaiNexus",
     "baseUrl": "https://hentainexus.com",
@@ -2678,15 +2651,6 @@
     "baseUrl": "https://hentaivn.su",
     "engineType": "custom_html",
     "lang": "vi",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
-    "id": "hentaiwebtoon",
-    "name": "HentaiWebtoon",
-    "baseUrl": "https://bluesacam.com",
-    "engineType": "madara",
-    "lang": "en",
     "isNsfw": false,
     "baseUrlReliable": true
   },
@@ -4851,15 +4815,6 @@
     "baseUrlReliable": true
   },
   {
-    "id": "mangahentai",
-    "name": "MangaHentai",
-    "baseUrl": "https://blacksacam.com",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
     "id": "mangahona",
     "name": "MangaHona",
     "baseUrl": "https://mangahona.pl",
@@ -6363,15 +6318,6 @@
     "baseUrlReliable": true
   },
   {
-    "id": "manhwaraw_com",
-    "name": "ManhwaRaw.com",
-    "baseUrl": "https://bluesacam.com",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
     "id": "manhwas_es",
     "name": "Manhwas.es",
     "baseUrl": "https://manhwas.es",
@@ -6483,15 +6429,6 @@
     "id": "manytoon",
     "name": "ManyToon",
     "baseUrl": "https://manytoon.org",
-    "engineType": "madara",
-    "lang": "en",
-    "isNsfw": false,
-    "baseUrlReliable": true
-  },
-  {
-    "id": "manytoonme",
-    "name": "ManyToon.me",
-    "baseUrl": "https://bluesacam.com",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
