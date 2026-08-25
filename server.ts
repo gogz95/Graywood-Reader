@@ -498,6 +498,23 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
+  // Global Express Error Handler Middleware (Phase 5: Structured Centralized Errors)
+  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || 'Internal Server Error';
+    logger.error('UnhandledError', `${req.method} ${req.originalUrl || req.url} failed: ${message}`, {
+      status,
+      stack: err.stack,
+      path: req.path,
+    });
+    if (res.headersSent) return;
+    res.status(status).json({
+      error: message,
+      status,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   httpServer = app.listen(PORT, HOST, () => {
     logger.info('Startup', `Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
     logger.info('Startup', `SQLite database ready (${mangaDatabase.length} series, ${userProfiles.length} users)`);

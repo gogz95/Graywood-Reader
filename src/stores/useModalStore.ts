@@ -27,6 +27,8 @@ export type ModalName =
 interface ModalData {
   /** Manga being edited in AddEditModal */
   editingManga: MangaItem | null;
+  /** Currently selected manga detail drawer */
+  selectedMangaDetail: MangaItem | null;
   /** Pre-filled data for SubmitBugModal */
   bugReportInitialData: BugReportInitialData | undefined;
   /** Auth modal mode */
@@ -53,6 +55,7 @@ export const useModalStore = create<ModalStore>((set, get) => ({
   openModals: new Set(),
   data: {
     editingManga: null,
+    selectedMangaDetail: null,
     bugReportInitialData: undefined,
     authModalMode: 'login',
   },
