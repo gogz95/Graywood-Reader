@@ -65,16 +65,16 @@ interface LibraryViewProps {
 
 /** Memoized Shimmer Placeholder Card for smooth loading */
 export const MangaSkeletonCard = React.memo(() => (
-  <div className="bg-surface/80 border border-edge/60 rounded-xl overflow-hidden shadow-lg flex flex-col">
+  <div className="bg-surface/90 border border-edge/80 rounded-2xl overflow-hidden shadow-lg flex flex-col">
     <div className="aspect-[3/4] w-full skeleton-shimmer" />
     <div className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
       <div className="space-y-2">
-        <div className="h-4 w-3/4 skeleton-shimmer rounded" />
-        <div className="h-3 w-1/2 skeleton-shimmer rounded" />
+        <div className="h-4 w-3/4 skeleton-shimmer rounded-lg" />
+        <div className="h-3 w-1/2 skeleton-shimmer rounded-lg" />
       </div>
       <div className="space-y-2 pt-1 border-t border-edge/60">
         <div className="h-1.5 w-full skeleton-shimmer rounded-full" />
-        <div className="h-7 w-full skeleton-shimmer rounded-lg" />
+        <div className="h-8 w-full skeleton-shimmer rounded-xl" />
       </div>
     </div>
   </div>
@@ -113,7 +113,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
       : 0;
 
   return (
-    <div className="group card-interactive bg-surface border border-edge/80 hover:border-edge-strong rounded-xl overflow-hidden shadow-lg flex flex-col relative">
+    <div className="group card-interactive bg-surface/95 border border-edge/80 hover:border-accent/50 rounded-2xl overflow-hidden shadow-xl flex flex-col relative transition-all duration-300">
       {/* Cover Image Container */}
       <div
         onClick={() => {
@@ -125,16 +125,16 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
         <img
           src={manga.coverImage}
           alt={manga.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
           loading="lazy"
           decoding="async"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors" />
 
         {/* Multi-Select Checkbox Badge */}
         {isSelectMode && (
           <div className="absolute top-2.5 right-2.5 z-20">
-            <div className={`w-6 h-6 rounded-lg flex items-center justify-center border shadow-lg transition-all ${
+            <div className={`w-6 h-6 rounded-xl flex items-center justify-center border shadow-lg transition-all ${
               isSelected
                 ? 'bg-accent border-accent text-accent-fg scale-110'
                 : 'bg-surface/80 border-edge text-transparent backdrop-blur-md'
@@ -147,7 +147,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
         {/* Badges Overlay */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
           <span
-            className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border backdrop-blur-md shadow-md ${
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold tracking-wide uppercase border backdrop-blur-md shadow-md ${
               manga.type === 'manhwa'
                 ? 'bg-blue-950/80 text-info border-info/30'
                 : manga.type === 'manhua'
@@ -159,19 +159,19 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
           </span>
 
           {hasNewChapter && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md">
+            <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md shadow-accent/20 animate-pulse">
               +{manga.latestChapter - manga.currentChapter} New
             </span>
           )}
 
           {isNsfwManga(manga) && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-md">
+            <span className="px-1.5 py-0.5 rounded-lg text-[10px] font-black bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-md">
               🔞 18+
             </span>
           )}
 
           {manga.isFlagged ? (
-            <span className={`px-2 py-0.5 rounded text-[10px] font-black border shadow-md flex items-center gap-1 ${
+            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border shadow-md flex items-center gap-1 ${
               manga.flagReason?.toLowerCase().includes('missing source')
                 ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
                 : 'bg-danger/90 text-white border-danger'
@@ -180,7 +180,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
               <span>{manga.flagReason?.toLowerCase().includes('missing source') ? 'NO SOURCE' : 'FLAGGED'}</span>
             </span>
           ) : !isReaderAvailable ? (
-            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-950/80 text-amber-400 border border-amber-500/30 shadow-md flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-950/80 text-amber-400 border border-amber-500/30 shadow-md flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
               <span>NO SOURCE</span>
             </span>
@@ -188,7 +188,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
         </div>
 
         {/* Rating Badge */}
-        <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-app/80 backdrop-blur-md px-2 py-0.5 rounded border border-edge text-xs font-bold text-accent">
+        <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-app/85 backdrop-blur-md px-2 py-0.5 rounded-lg border border-edge/80 text-xs font-bold text-accent shadow-sm">
           <Star className="w-3 h-3 fill-accent text-accent" />
           <span>{manga.rating}</span>
         </div>
@@ -199,26 +199,26 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
         <div className="space-y-1">
           <h4
             onClick={() => onSelectManga(manga)}
-            className="text-sm font-bold text-primary line-clamp-1 hover:text-accent cursor-pointer transition-colors"
+            className="text-sm font-bold font-display text-primary line-clamp-1 hover:text-accent cursor-pointer transition-colors"
             title={manga.title}
           >
             {manga.title}
           </h4>
-          <p className="text-[11px] text-secondary line-clamp-1">
+          <p className="text-[11px] text-secondary line-clamp-1 font-medium">
             {manga.altTitles[0] || manga.sourceName}
           </p>
         </div>
 
         {/* Chapter Progress */}
-        <div className="space-y-1.5 pt-1 border-t border-edge/80">
-          <div className="flex items-center justify-between text-xs font-medium">
+        <div className="space-y-1.5 pt-1 border-t border-edge/70">
+          <div className="flex items-center justify-between text-xs font-semibold">
             <span className="text-secondary">Ch. {manga.currentChapter}</span>
-            <span className="text-muted text-[11px]">of {manga.latestChapter}</span>
+            <span className="text-muted text-[11px] font-mono">of {manga.latestChapter}</span>
           </div>
 
-          <div className="w-full h-1.5 rounded-full bg-app overflow-hidden">
+          <div className="w-full h-1.5 rounded-full bg-app/90 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
+              className={`h-full rounded-full transition-all duration-500 ${
                 progress === 100
                   ? 'bg-success'
                   : hasNewChapter
@@ -235,7 +235,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
           {isReaderAvailable ? (
             <button
               onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-extrabold text-xs transition-all shadow-md active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs transition-all shadow-md shadow-accent/20 hover:shadow-accent/40 active:scale-[0.97]"
               title="Open Webtoon Reader for next chapter"
             >
               <BookOpen className="w-3.5 h-3.5 fill-accent-fg" />
@@ -244,7 +244,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
           ) : (
             <button
               onClick={() => onSelectManga(manga)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-elevated hover:bg-elevated text-primary font-bold text-xs transition-all border border-edge-strong active:scale-[0.98]"
+              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-elevated hover:bg-elevated/80 text-primary font-bold text-xs transition-all border border-edge-strong active:scale-[0.97]"
             >
               <BookOpen className="w-3.5 h-3.5 text-accent" />
               <span>View Info</span>
@@ -254,15 +254,15 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
           <div className="flex items-center gap-1">
             <button
               onClick={() => onOpenChapters(manga)}
-              className="flex-1 py-1 rounded-md bg-elevated hover:bg-elevated text-secondary hover:text-white text-[11px] font-semibold transition-colors border border-edge-strong/80 active:scale-[0.98]"
+              className="flex-1 py-1.5 rounded-lg bg-elevated hover:bg-elevated/80 text-secondary hover:text-white text-[11px] font-bold transition-colors border border-edge-strong/80 active:scale-[0.97]"
               title="View full chapter list"
             >
-              All Chapters
+              Chapters
             </button>
 
             <button
               onClick={() => onIncrementChapter(manga.id)}
-              className="px-2 py-1 rounded-md bg-elevated hover:bg-success hover:text-accent-fg text-secondary text-[11px] font-bold transition-all border border-edge-strong/80 active:scale-[0.98]"
+              className="px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-success hover:text-accent-fg text-secondary text-[11px] font-black transition-all border border-edge-strong/80 active:scale-[0.97]"
               title="Quick mark +1 read without opening reader"
             >
               +1
@@ -270,7 +270,7 @@ const MangaGridCard = React.memo<MangaGridCardProps>(({
 
             <button
               onClick={() => onQuickEdit(manga)}
-              className="p-1 rounded-md bg-elevated/80 hover:bg-elevated text-secondary hover:text-primary transition-colors border border-edge active:scale-[0.98]"
+              className="p-1.5 rounded-lg bg-elevated/80 hover:bg-elevated text-secondary hover:text-primary transition-colors border border-edge active:scale-[0.97]"
               title="Edit series"
             >
               <Edit2 className="w-3 h-3" />
@@ -1250,7 +1250,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Control Bar: Filters, Sort, View toggle */}
-      <div className="bg-surface/90 border border-edge rounded-2xl p-4 space-y-3.5 shadow-sm">
+      <div className="glass-panel rounded-3xl p-4 sm:p-5 space-y-4 shadow-xl">
         {/* Row 1: Primary Status Tabs & View Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-semibold max-w-full pb-0.5">
@@ -1259,9 +1259,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('all');
               }}
-              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                 activeCategory === null && statusFilter === 'all'
-                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
               }`}
             >
@@ -1273,9 +1273,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('reading');
               }}
-              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                 activeCategory === null && statusFilter === 'reading'
-                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
               }`}
             >
@@ -1287,13 +1287,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('favorites');
               }}
-              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                 activeCategory === null && statusFilter === 'favorites'
-                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
               }`}
             >
-              <Star className="w-3.5 h-3.5 fill-accent-fg" />
+              <Star className="w-3.5 h-3.5 fill-current" />
               <span>Favorites ({mangaList.filter((m) => m.isFavorite).length})</span>
             </button>
             <button
@@ -1301,9 +1301,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('flagged');
               }}
-              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                 activeCategory === null && statusFilter === 'flagged'
-                  ? 'bg-danger text-accent-fg font-black shadow-sm'
+                  ? 'bg-danger text-white font-black shadow-md shadow-danger/20'
                   : 'bg-elevated/70 text-danger hover:bg-elevated'
               }`}
             >
@@ -1315,9 +1315,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('completed');
               }}
-              className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
                 activeCategory === null && statusFilter === 'completed'
-                  ? 'bg-accent text-accent-fg font-black shadow-sm'
+                  ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
               }`}
             >
@@ -1333,10 +1333,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setIsSelectMode(!isSelectMode);
                 if (isSelectMode) setSelectedIds(new Set());
               }}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 border ${
+              className={`px-3 py-2 rounded-2xl font-bold transition-all flex items-center gap-1.5 border active:scale-95 ${
                 isSelectMode
-                  ? 'bg-accent text-accent-fg border-accent shadow-sm'
-                  : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
+                  ? 'bg-accent text-accent-fg border-accent shadow-md shadow-accent/20'
+                  : 'bg-app/80 border-edge text-secondary hover:text-primary hover:bg-elevated'
               }`}
             >
               {isSelectMode ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
@@ -1347,7 +1347,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <select
                 value={sortBy}
                 onChange={(e: any) => setSortBy(e.target.value)}
-                className="bg-app border border-edge rounded-xl px-2.5 py-1.5 text-primary text-xs font-bold focus:outline-none focus:border-accent"
+                className="bg-app/80 border border-edge hover:border-edge-strong rounded-2xl px-3 py-2 text-primary text-xs font-bold focus:outline-none focus:border-accent shadow-inner transition-colors"
               >
                 <option value="unread">⚡ Unread Ahead</option>
                 <option value="lastRead">🕒 Recently Read</option>
@@ -1360,11 +1360,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center bg-app border border-edge rounded-xl p-0.5">
+            <div className="flex items-center bg-app/80 border border-edge rounded-2xl p-1 shadow-inner">
               <button
                 onClick={() => setViewMode('shelves')}
-                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
-                  viewMode === 'shelves' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                  viewMode === 'shelves' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Cinematic Shelves & Spotlight Hub"
               >
@@ -1373,8 +1373,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
-                  viewMode === 'grid' ? 'bg-elevated text-accent shadow-xs' : 'text-secondary hover:text-primary'
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                  viewMode === 'grid' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Grid View"
               >
@@ -1383,8 +1383,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-bold ${
-                  viewMode === 'table' ? 'bg-elevated text-accent' : 'text-secondary hover:text-primary'
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                  viewMode === 'table' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Table View"
               >

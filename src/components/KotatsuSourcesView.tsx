@@ -86,7 +86,7 @@ const SourceRow = React.memo<SourceRowProps>(({
         isDisabled
           ? 'bg-app/30 border-edge opacity-60 grayscale'
           : isSelected
-          ? 'bg-purple-950/40 border-accent-2/60 shadow-lg shadow-accent-2/10'
+          ? 'bg-accent/15 border-accent shadow-md shadow-accent/10'
           : 'bg-app/60 border-edge/80 hover:bg-surface hover:border-edge-strong'
       }`}
     >
@@ -94,7 +94,7 @@ const SourceRow = React.memo<SourceRowProps>(({
         <span className="text-base">{meta.icon}</span>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className={`font-bold text-xs truncate ${isDisabled ? 'text-muted line-through' : isSelected ? 'text-accent-2' : 'text-primary'}`}>
+            <span className={`font-bold text-xs truncate ${isDisabled ? 'text-muted line-through' : isSelected ? 'text-accent' : 'text-primary'}`}>
               {s.name}
             </span>
             {isPinned && <Pin className="w-3 h-3 text-accent fill-accent shrink-0" />}

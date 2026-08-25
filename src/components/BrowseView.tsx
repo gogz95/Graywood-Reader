@@ -92,16 +92,16 @@ const BrowseCard = React.memo<BrowseCardProps>(({
   return (
     <div
       onClick={onSelect}
-      className="group bg-app border border-edge rounded-2xl overflow-hidden hover:border-accent-2/60 hover:shadow-xl transition-all flex flex-col cursor-pointer card-interactive"
+      className="group bg-surface/95 border border-edge/80 rounded-2xl overflow-hidden hover:border-accent/60 hover:shadow-2xl transition-all duration-300 flex flex-col cursor-pointer card-interactive"
     >
-      <div className="relative aspect-[3/4] bg-surface overflow-hidden">
+      <div className="relative aspect-[3/4] bg-app overflow-hidden">
         {r.coverImage ? (
           <img
             src={r.coverImage}
             alt={r.title}
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
             onError={(e) => {
               (e.target as HTMLImageElement).src = FALLBACK_COVER;
             }}
@@ -111,42 +111,44 @@ const BrowseCard = React.memo<BrowseCardProps>(({
             <BookOpen className="w-10 h-10 text-accent-2/40" />
           </div>
         )}
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none z-10">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm bg-app/80 text-secondary truncate max-w-[65%]">
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 pointer-events-none z-10">
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border backdrop-blur-md bg-app/85 text-secondary truncate max-w-[65%] shadow-xs">
             {r.__sourceName || r.sourceName}
           </span>
           {r.type && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-app/90 text-secondary border border-edge shrink-0 uppercase">
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-app/90 text-primary border border-edge/80 shrink-0 uppercase shadow-xs">
               {r.type}
             </span>
           )}
         </div>
       </div>
 
-      <div className="p-3 flex flex-col gap-2 flex-1">
-        <p className="font-bold text-primary text-sm leading-tight line-clamp-2 group-hover:text-accent-2 transition-colors">
-          {r.title}
-        </p>
-        {r.latestChapter ? (
-          <div className="text-[11px] text-secondary flex items-center gap-1">
-            <Layers className="w-3 h-3 text-accent" /> Ch. {r.latestChapter}+
-          </div>
-        ) : null}
-        <div className="flex gap-2 mt-auto pt-2">
+      <div className="p-3.5 flex flex-col gap-2 flex-1 justify-between">
+        <div>
+          <p className="font-bold font-display text-primary text-sm leading-tight line-clamp-2 group-hover:text-accent transition-colors">
+            {r.title}
+          </p>
+          {r.latestChapter ? (
+            <div className="text-[11px] text-secondary flex items-center gap-1 mt-1 font-medium">
+              <Layers className="w-3 h-3 text-accent" /> Ch. {r.latestChapter}+
+            </div>
+          ) : null}
+        </div>
+        <div className="flex gap-2 pt-2 border-t border-edge/60">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onTrack();
             }}
             disabled={isTracked}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
               isTracked
                 ? 'bg-success/20 text-success border border-success/30 cursor-default'
-                : 'bg-accent-2/20 hover:bg-accent-2/40 text-accent-2 border border-accent-2/30'
+                : 'bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 shadow-xs'
             }`}
           >
-            {isTracked ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            {isTracked ? 'Tracked' : 'Track'}
+            {isTracked ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {isTracked ? 'In Library' : 'Track'}
           </button>
           <button
             title={readable ? 'Read now' : 'View info'}
@@ -154,9 +156,9 @@ const BrowseCard = React.memo<BrowseCardProps>(({
               e.stopPropagation();
               onRead();
             }}
-            className="flex items-center justify-center px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl bg-elevated hover:bg-elevated text-accent border border-edge font-bold transition-all"
+            className="flex items-center justify-center px-3 py-2 rounded-xl bg-elevated hover:bg-edge-strong text-primary border border-edge font-bold transition-all active:scale-95"
           >
-            {readable ? <Play className="w-3.5 h-3.5 fill-accent" /> : <Star className="w-3.5 h-3.5" />}
+            {readable ? <Play className="w-3.5 h-3.5 fill-current text-accent" /> : <Star className="w-3.5 h-3.5 text-accent" />}
           </button>
         </div>
       </div>

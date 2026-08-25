@@ -251,7 +251,14 @@ export function snapshotMetadataOverrides(manga: MangaItem): Record<string, unkn
   for (const field of OVERRIDEABLE_METADATA_FIELDS) {
     if (overridden.includes(field)) {
       const value = (manga as unknown as Record<string, unknown>)[field];
-      snap[field] = Array.isArray(value) ? [...value] : value;
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== '' &&
+        !(Array.isArray(value) && value.length === 0)
+      ) {
+        snap[field] = Array.isArray(value) ? [...value] : value;
+      }
     }
   }
   return snap;
@@ -268,7 +275,14 @@ export function restoreMetadataOverrides(
   for (const field of OVERRIDEABLE_METADATA_FIELDS) {
     if (!(field in snap)) continue;
     const value = snap[field];
-    (manga as unknown as Record<string, unknown>)[field] = Array.isArray(value) ? [...value] : value;
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== '' &&
+      !(Array.isArray(value) && value.length === 0)
+    ) {
+      (manga as unknown as Record<string, unknown>)[field] = Array.isArray(value) ? [...value] : value;
+    }
   }
 }
 

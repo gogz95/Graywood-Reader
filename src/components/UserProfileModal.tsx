@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { UserProfile } from '../types';
-import { X, User, Plus, Trash2, Key, Check, LogIn, LogOut, Shield, Settings, Mail, Sparkles } from 'lucide-react';
+import { UserProfile, AppTheme } from '../types';
+import { X, User, Plus, Trash2, Key, Check, LogIn, LogOut, Shield, Settings, Mail, Sparkles, Palette } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
 interface UserProfileModalProps {
@@ -9,7 +9,7 @@ interface UserProfileModalProps {
   isHostComputer?: boolean;
   onSelectProfile: (profileId: string) => void;
   onOpenAuthModal: (mode?: 'login' | 'register') => void;
-  onUpdateProfile: (updates: { name?: string; avatar?: string; email?: string }) => Promise<boolean>;
+  onUpdateProfile: (updates: { name?: string; avatar?: string; email?: string; theme?: AppTheme }) => Promise<boolean>;
   onLogout: () => void;
   onDeleteProfile: (profileId: string) => void;
   onClose: () => void;
@@ -38,6 +38,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
   const [editName, setEditName] = useState(activeProfile?.name || '');
   const [editAvatar, setEditAvatar] = useState(activeProfile?.avatar || '🥷');
   const [editEmail, setEditEmail] = useState(activeProfile?.email || '');
+  const [editTheme, setEditTheme] = useState<AppTheme>((activeProfile?.theme as AppTheme) || 'amber');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -56,6 +57,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
         name: editName.trim(),
         avatar: editAvatar,
         email: editEmail.trim() || undefined,
+        theme: editTheme,
       });
       if (ok) {
         setStatusMsg({ type: 'success', text: 'Profile details saved successfully!' });
@@ -324,6 +326,38 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
                       }`}
                     >
                       {av}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-bold text-secondary flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-accent" />
+                  <span>Personal Theme:</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'amber', name: 'Cyber Amber', color: 'bg-amber-500' },
+                    { id: 'emerald', name: 'Kotatsu Emerald', color: 'bg-emerald-500' },
+                    { id: 'violet', name: 'Royal Violet', color: 'bg-purple-500' },
+                    { id: 'cyberpunk', name: 'Neon Cyber', color: 'bg-cyan-500' },
+                    { id: 'crimson', name: 'Crimson Velvet', color: 'bg-rose-500' },
+                    { id: 'nord', name: 'Nord Frost', color: 'bg-sky-400' },
+                    { id: 'amoled', name: 'AMOLED Dark', color: 'bg-zinc-800' },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setEditTheme(t.id as AppTheme)}
+                      className={`p-2 rounded-xl border text-xs font-bold transition flex items-center gap-2 active:scale-95 ${
+                        editTheme === t.id
+                          ? 'border-accent bg-accent/15 text-accent shadow-sm'
+                          : 'border-edge bg-surface text-secondary hover:text-primary'
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 rounded-full ${t.color} shrink-0 shadow-xs`} />
+                      <span className="truncate">{t.name}</span>
                     </button>
                   ))}
                 </div>

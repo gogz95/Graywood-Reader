@@ -22,6 +22,7 @@ import {
   fetchMangaDex,
   calculateStringSimilarity,
   purgeDisabledSourcesAndRefreshMetadata,
+  refreshSingleMangaMetadata,
 } from '../services/metadataService';
 
 export const trackerRouter = Router();
@@ -63,6 +64,81 @@ trackerRouter.get('/api/tracker/status', (_req, res) => {
     lastScanTimestamp: autoUpdateStatus.lastScanTimestamp,
     logs: autoUpdateLogs,
   });
+});
+
+trackerRouter.post('/api/tracker/auto-update', async (_req, res) => {
+  if (autoUpdateStatus.isScanning) {
+    return res.json({
+      success: true,
+      message: 'Scan already in progress',
+      isScanning: true,
+      scannedCount: autoUpdateStatus.scannedCount,
+      totalCount: autoUpdateStatus.totalCount,
+    });
+  }
+
+  autoUpdateStatus.isScanning = true;
+  autoUpdateStatus.scannedCount = 0;
+  autoUpdateStatus.totalCount = mangaDatabase.length;
+  autoUpdateStatus.newReleasesFound = 0;
+
+  try {
+    const toUpdate = mangaDatabase.filter((m) => m.autoUpdateEnabled !== false);
+    autoUpdateStatus.totalCount = toUpdate.length;
+
+    const batchSize = 4;
+    for (let i = 0; i < toUpdate.length; i += batchSize) {
+      const batch = toUpdate.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (m) => {
+          const oldLatest = m.latestChapter || 0;
+          autoUpdateStatus.currentSource = m.sourceName || 'Crawler';
+          try {
+            const updated = await refreshSingleMangaMetadata(m);
+            autoUpdateStatus.scannedCount++;
+            if (updated.latestChapter > oldLatest) {
+              autoUpdateStatus.newReleasesFound++;
+              autoUpdateLogs.unshift({
+                id: `log-${Date.now()}-${m.id}`,
+                timestamp: new Date().toISOString(),
+                source: m.sourceName || 'Live Source',
+                mangaTitle: m.title,
+                status: 'updated',
+                message: `New chapter available: Ch. ${updated.latestChapter} (was Ch. ${oldLatest})`,
+                oldChapter: oldLatest,
+                newChapter: updated.latestChapter,
+              });
+            }
+          } catch (err: any) {
+            autoUpdateStatus.scannedCount++;
+            autoUpdateLogs.unshift({
+              id: `log-${Date.now()}-${m.id}`,
+              timestamp: new Date().toISOString(),
+              source: m.sourceName || 'Live Source',
+              mangaTitle: m.title,
+              status: 'error',
+              message: `Refresh failed: ${err.message}`,
+            });
+          }
+        })
+      );
+    }
+
+    if (autoUpdateLogs.length > 50) autoUpdateLogs.splice(50);
+    autoUpdateStatus.lastScanTimestamp = new Date().toISOString();
+    saveDatabaseToDisk();
+
+    res.json({
+      success: true,
+      scannedCount: autoUpdateStatus.scannedCount,
+      newReleasesFound: autoUpdateStatus.newReleasesFound,
+      message: `Auto-update completed. Scanned ${autoUpdateStatus.scannedCount} series, found ${autoUpdateStatus.newReleasesFound} new releases.`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Auto update failed', details: err.message });
+  } finally {
+    autoUpdateStatus.isScanning = false;
+  }
 });
 
 trackerRouter.get('/api/tracker/logs', (_req, res) => {

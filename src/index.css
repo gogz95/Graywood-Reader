@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Graywood Reader Adaptive Design System
+   Graywood Reader Adaptive Design System (v2.0 Visual Excellence)
    Every surface, border, text level and interactive color is driven by CSS
    custom properties re-defined per theme class on <body>. Tailwind utilities
    (bg-app, bg-surface, text-primary, bg-accent, …) are wired to these
@@ -13,29 +13,34 @@
   color-scheme: dark;
 
   /* ── Default theme · Cyber Amber ─────────────────────────────────────── */
-  --bg-app: #020617;
-  --bg-surface: #0f172a;
-  --bg-elevated: #1e293b;
-  --bg-inset: #0b1120;
+  --bg-app: #030712;
+  --bg-surface: #0b1329;
+  --bg-elevated: #111c38;
+  --bg-inset: #02050e;
 
   --edge: #1e293b;
   --edge-strong: #334155;
 
-  --text-1: #f1f5f9; /* primary   */
-  --text-2: #c3cfdf; /* secondary */
+  --text-1: #f8fafc; /* primary   */
+  --text-2: #cbd5e1; /* secondary */
   --text-3: #64748b; /* muted     */
 
   --accent: #f59e0b;
   --accent-bright: #fbbf24;
   --accent-deep: #d97706;
   --accent-2: #f97316;
-  --accent-fg: #0d1322; /* text/icons placed on top of accent fills */
+  --accent-fg: #030712; /* text/icons placed on top of accent fills */
 
   /* Semantic status colors (stable across themes) */
   --ok: #34d399;
   --bad: #f87171;
   --warn: #fbbf24;
   --info: #38bdf8;
+
+  /* Typography variables */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   /* Device safe-area insets (notch / home indicator) */
   --safe-area-top: env(safe-area-inset-top, 0px);
@@ -46,78 +51,118 @@
 
 /* ── Kotatsu Emerald ─────────────────────────────────────────────────────── */
 body.theme-emerald {
-  --bg-app: #050f0b;
-  --bg-surface: #0a1a13;
-  --bg-elevated: #12261c;
-  --bg-inset: #06130e;
-  --edge: #17372a;
-  --edge-strong: #245540;
-  --text-1: #edf7f2;
-  --text-2: #c5ddd1;
-  --text-3: #6d8f80;
+  --bg-app: #020c08;
+  --bg-surface: #071912;
+  --bg-elevated: #0f2b20;
+  --bg-inset: #010805;
+  --edge: #15382b;
+  --edge-strong: #235843;
+  --text-1: #f0fdf4;
+  --text-2: #bbf7d0;
+  --text-3: #5e8d75;
   --accent: #10b981;
   --accent-bright: #34d399;
   --accent-deep: #059669;
   --accent-2: #14b8a6;
-  --accent-fg: #05130d;
+  --accent-fg: #01130a;
 }
 
 /* ── AMOLED Dark ─────────────────────────────────────────────────────────── */
 body.theme-amoled {
   --bg-app: #000000;
-  --bg-surface: #0b0b0d;
-  --bg-elevated: #18181b;
-  --bg-inset: #050506;
-  --edge: #212125;
-  --edge-strong: #34343a;
-  --text-1: #f4f4f5;
-  --text-2: #c6c6cd;
-  --text-3: #77777f;
-  --accent: #e4e4e7;
+  --bg-surface: #09090b;
+  --bg-elevated: #141417;
+  --bg-inset: #000000;
+  --edge: #212126;
+  --edge-strong: #36363f;
+  --text-1: #fafafa;
+  --text-2: #d4d4d8;
+  --text-3: #71717a;
+  --accent: #f4f4f5;
   --accent-bright: #ffffff;
   --accent-deep: #a1a1aa;
-  --accent-2: #a1a1aa;
-  --accent-fg: #0a0a0c;
+  --accent-2: #e4e4e7;
+  --accent-fg: #09090b;
 }
 
 /* ── Royal Violet ────────────────────────────────────────────────────────── */
 body.theme-violet {
-  --bg-app: #0b0618;
-  --bg-surface: #140c28;
-  --bg-elevated: #1e1338;
-  --bg-inset: #0e081e;
-  --edge: #2b1d4f;
-  --edge-strong: #3f2c70;
-  --text-1: #f2edfb;
-  --text-2: #cfc5e8;
-  --text-3: #867aae;
+  --bg-app: #090514;
+  --bg-surface: #120a26;
+  --bg-elevated: #1d123b;
+  --bg-inset: #05020c;
+  --edge: #2e1a54;
+  --edge-strong: #45287d;
+  --text-1: #fbf8ff;
+  --text-2: #d8ccf2;
+  --text-3: #8774b0;
   --accent: #a855f7;
   --accent-bright: #c084fc;
   --accent-deep: #7e22ce;
   --accent-2: #6366f1;
-  --accent-fg: #150826;
+  --accent-fg: #0d041e;
 }
 
 /* ── Neon Cyber ──────────────────────────────────────────────────────────── */
 body.theme-cyberpunk {
-  --bg-app: #03101a;
-  --bg-surface: #081b28;
-  --bg-elevated: #0f2937;
-  --bg-inset: #04141f;
-  --edge: #133a4d;
-  --edge-strong: #1d546d;
-  --text-1: #e8f6fc;
-  --text-2: #c0dfeb;
-  --text-3: #6c92a5;
+  --bg-app: #020c17;
+  --bg-surface: #07192b;
+  --bg-elevated: #0d2843;
+  --bg-inset: #01070e;
+  --edge: #13395b;
+  --edge-strong: #1e5282;
+  --text-1: #f0f9ff;
+  --text-2: #bae6fd;
+  --text-3: #6290b3;
   --accent: #06b6d4;
   --accent-bright: #22d3ee;
   --accent-deep: #0891b2;
-  --accent-2: #3b82f6;
-  --accent-fg: #041018;
+  --accent-2: #38bdf8;
+  --accent-fg: #020d18;
 }
 
-/* ── Expose tokens as Tailwind color utilities ───────────────────────────── */
+/* ── Crimson Velvet / Sunset ─────────────────────────────────────────────── */
+body.theme-crimson {
+  --bg-app: #0e0408;
+  --bg-surface: #190a12;
+  --bg-elevated: #28111e;
+  --bg-inset: #090205;
+  --edge: #3c192d;
+  --edge-strong: #5a2644;
+  --text-1: #faedf2;
+  --text-2: #e0c2ce;
+  --text-3: #95687a;
+  --accent: #f43f5e;
+  --accent-bright: #fb7185;
+  --accent-deep: #e11d48;
+  --accent-2: #fb923c;
+  --accent-fg: #180308;
+}
+
+/* ── Nord Frost ──────────────────────────────────────────────────────────── */
+body.theme-nord {
+  --bg-app: #060b13;
+  --bg-surface: #0c1524;
+  --bg-elevated: #142137;
+  --bg-inset: #04080e;
+  --edge: #1e3352;
+  --edge-strong: #2c4a75;
+  --text-1: #edf4fc;
+  --text-2: #bfd4ed;
+  --text-3: #6b8bb3;
+  --accent: #38bdf8;
+  --accent-bright: #7dd3fc;
+  --accent-deep: #0284c7;
+  --accent-2: #2dd4bf;
+  --accent-fg: #030d17;
+}
+
+/* ── Expose tokens as Tailwind color & font utilities ────────────────────── */
 @theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
   --color-app: var(--bg-app);
   --color-surface: var(--bg-surface);
   --color-elevated: var(--bg-elevated);
@@ -149,16 +194,26 @@ body.theme-cyberpunk {
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     background-color: var(--bg-app);
+    font-family: var(--font-sans);
   }
 
   body {
     background-color: var(--bg-app);
     color: var(--text-1);
+    font-family: var(--font-sans);
+    letter-spacing: -0.012em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     padding-top: var(--safe-area-top);
     padding-bottom: var(--safe-area-bottom);
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
   }
 
   ::selection {
@@ -200,12 +255,12 @@ body.theme-cyberpunk {
   scrollbar-color: var(--edge-strong) transparent;
 }
 *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: var(--edge-strong);
-  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--edge-strong) 80%, transparent);
+  border-radius: 9999px;
 }
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--accent);
@@ -263,48 +318,24 @@ img {
     min-height: 40px;
   }
 
-  /* Scale icons and compact controls proportionally */
   .modal-content select,
   .modal-content input {
-    font-size: 0.875rem; /* ~14px on desktop */
+    font-size: 0.875rem;
   }
 
-  /* Bump icon sizes slightly on larger viewports */
   .icon-scale-up {
     width: 1.25rem;
     height: 1.25rem;
   }
 }
 
-/* Large desktop refinements */
-@media (min-width: 1280px) {
-  body {
-    font-size: 1rem;
-  }
-
-  .modal-content select,
-  .modal-content input {
-    font-size: 0.9375rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-  }
-
-  /* Ensure buttons have comfortable targets on big screens */
-  button,
-  a.btn {
-    min-height: 44px;
-  }
-}
-
 /* ── Rendering performance optimizations ─────────────────────────────────── */
-/* Isolate heavy grid cards to prevent unnecessary full-page reflows */
 .view-card,
 .library-grid > *,
 .browse-grid > * {
   contain: layout style paint;
 }
 
-/* Tell the browser images outside the viewport don't need decoding yet */
 img[loading="lazy"] {
   content-visibility: auto;
   contain-intrinsic-size: auto 300px;
@@ -317,7 +348,6 @@ img[loading="lazy"] {
   perspective: 1000px;
 }
 
-/* Reader image container containment for ultra-smooth webtoon/long-strip scrolling */
 .reader-page-panel {
   contain: layout style paint;
   content-visibility: auto;
@@ -326,39 +356,53 @@ img[loading="lazy"] {
 }
 
 /* ── Modern Glassmorphism & Micro-Interaction Utility Tokens ──────────────── */
+.glass-nav {
+  background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid color-mix(in srgb, var(--edge) 75%, transparent);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
 .glass-panel {
   background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
   border: 1px solid color-mix(in srgb, var(--edge) 70%, transparent);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   transform: translateZ(0);
 }
 
 .glass-modal {
-  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
-  backdrop-filter: blur(12px) saturate(150%);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid color-mix(in srgb, var(--edge-strong) 60%, transparent);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
   transform: translateZ(0);
   will-change: transform, opacity;
 }
 
 .glass-dropdown {
   background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--edge);
-  box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--edge-strong) 70%, transparent);
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
   transform: translateZ(0);
   will-change: transform, opacity;
 }
 
 .glow-accent {
-  box-shadow: 0 0 20px -3px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 24px -3px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .glow-accent-sm {
-  box-shadow: 0 0 10px -2px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: 0 0 12px -2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.glow-accent-2 {
+  box-shadow: 0 0 24px -3px color-mix(in srgb, var(--accent-2) 40%, transparent);
 }
 
 /* ── Hardware Accelerated Shakes & Animations ─────────────────────────────── */
@@ -389,7 +433,7 @@ img[loading="lazy"] {
   background: linear-gradient(
     90deg,
     color-mix(in srgb, var(--bg-elevated) 80%, transparent) 25%,
-    color-mix(in srgb, var(--edge-strong) 40%, var(--bg-elevated)) 37%,
+    color-mix(in srgb, var(--edge-strong) 50%, var(--bg-elevated)) 37%,
     color-mix(in srgb, var(--bg-elevated) 80%, transparent) 63%
   );
   background-size: 200% 100%;
@@ -398,17 +442,17 @@ img[loading="lazy"] {
 
 /* Card hover lift & active press micro-animations */
 .card-interactive {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
   transform: translateZ(0);
 }
 
 .card-interactive:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.5), 0 0 20px -4px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .card-interactive:active {
-  transform: translateY(-1px) scale(0.995);
+  transform: translateY(-1px) scale(0.99);
 }
 
 /* ── E-Ink E-Reader Hardware Display Mode ─────────────────────────────────── */
@@ -447,8 +491,8 @@ body.e-ink-mode *,
 .hero-ambient-glow {
   background: radial-gradient(
     circle at 75% 35%,
-    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
-    color-mix(in srgb, var(--accent-2) 14%, transparent) 40%,
+    color-mix(in srgb, var(--accent) 25%, transparent) 0%,
+    color-mix(in srgb, var(--accent-2) 16%, transparent) 40%,
     transparent 70%
   );
 }
@@ -474,7 +518,7 @@ body.e-ink-mode *,
 }
 
 .glow-card:hover {
-  box-shadow: 0 14px 40px -4px rgba(0, 0, 0, 0.7), 0 0 25px -1px color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 16px 45px -4px rgba(0, 0, 0, 0.7), 0 0 30px -1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 /* Wide horizontal Jump-Back-In card */
@@ -484,7 +528,6 @@ body.e-ink-mode *,
 }
 
 .card-wide-resume:hover {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 0 20px -2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
-
-

@@ -1,7 +1,7 @@
 export type ReaderViewMode = 'webtoon' | 'webtoon-seamless' | 'single' | 'double' | 'rtl' | 'ltr' | 'vertical-paged' | 'reflowable-text';
 export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
 export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'warm-amber' | 'invert' | 'brightness' | 'oled' | 'e-ink' | 'sharpener' | 'high-contrast';
-export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk';
+export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk' | 'crimson' | 'nord';
 export type MangaType = 'manga' | 'manhwa' | 'manhua' | 'novel';
 export type AppNavTab = 'library' | 'browse' | 'sources' | 'settings' | 'autoupdate' | 'duplicates' | 'openapi';
 

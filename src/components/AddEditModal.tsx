@@ -41,15 +41,7 @@ function computeMetadataOverrides(
   }
 ): string[] {
   if (!prev) {
-    const overridden = new Set<string>();
-    if (next.title) overridden.add('title');
-    if (next.altTitles && next.altTitles.length > 0) overridden.add('altTitles');
-    if (next.description) overridden.add('description');
-    if (next.coverImage) overridden.add('coverImage');
-    if (next.genres && next.genres.length > 0) overridden.add('genres');
-    if (next.rating) overridden.add('rating');
-    if (next.isNsfw) overridden.add('isNsfw');
-    return OVERRIDEABLE_METADATA.filter((field) => overridden.has(field));
+    return [];
   }
   const overridden = new Set<string>(prev.metadataOverrides || []);
 

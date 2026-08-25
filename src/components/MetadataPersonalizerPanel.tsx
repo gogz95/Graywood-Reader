@@ -181,23 +181,23 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
   const overrides = new Set(manga.metadataOverrides || []);
 
   return (
-    <div className="bg-app/60 border border-edge rounded-xl overflow-hidden">
+    <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
       {/* Panel header / toggle */}
-      <div className="w-full flex items-center justify-between px-4 py-2.5 bg-app/80">
+      <div className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800">
         <button
           type="button"
           onClick={() => setIsOpen((o) => !o)}
           className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
         >
-          <Wand2 className="w-4 h-4 text-accent-2" />
-          <span className="text-xs font-bold text-primary">Metadata & Source Personalizer</span>
-          <span className="text-[10px] font-semibold text-muted bg-elevated px-1.5 py-0.5 rounded">
+          <Wand2 className="w-4 h-4 text-amber-400" />
+          <span className="text-xs font-bold text-white">Metadata & Source Personalizer</span>
+          <span className="text-[10px] font-semibold text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
             {sources.length} source{sources.length !== 1 ? 's' : ''}
           </span>
           {isOpen ? (
-            <ChevronUp className="w-3.5 h-3.5 text-secondary" />
+            <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-secondary" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           )}
         </button>
 
@@ -214,16 +214,16 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
       </div>
 
       {isOpen && (
-        <div className="border-t border-edge divide-y divide-edge/50">
+        <div className="border-t border-slate-800 divide-y divide-slate-800">
           {/* Legend */}
-          <div className="px-4 py-2.5 bg-elevated/20 flex items-center gap-3 text-[10px] text-muted flex-wrap">
+          <div className="px-4 py-2.5 bg-slate-900/60 flex items-center gap-3 text-[10px] text-slate-400 flex-wrap">
             <span className="flex items-center gap-1">
-              <Lock className="w-3 h-3 text-accent" /> = currently locked (user-overridden)
+              <Lock className="w-3 h-3 text-amber-400" /> = currently locked (user-overridden)
             </span>
             <span className="flex items-center gap-1">
-              <Unlock className="w-3 h-3 text-secondary" /> = auto-refreshed by source
+              <Unlock className="w-3 h-3 text-slate-300" /> = auto-refreshed by source
             </span>
-            <span className="ml-auto text-muted italic">
+            <span className="ml-auto text-slate-400 italic">
               Tick fields, then click Apply to pull them from that source.
             </span>
           </div>
@@ -239,12 +239,12 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
                 {/* Source name + URL */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-primary truncate">{source.sourceName}</p>
+                    <p className="text-xs font-bold text-white truncate">{source.sourceName}</p>
                     <a
                       href={source.sourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-info hover:underline truncate block max-w-xs"
+                      className="text-[10px] text-sky-400 hover:underline truncate block max-w-xs"
                     >
                       {source.sourceUrl}
                     </a>
@@ -253,15 +253,15 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
                     <button
                       type="button"
                       onClick={() => selectAllForSource(source.sourceUrl)}
-                      className="text-[10px] font-semibold text-accent hover:text-accent-bright transition-colors"
+                      className="text-[10px] font-semibold text-amber-400 hover:text-amber-300 transition-colors"
                     >
                       All
                     </button>
-                    <span className="text-muted text-[10px]">/</span>
+                    <span className="text-slate-500 text-[10px]">/</span>
                     <button
                       type="button"
                       onClick={() => clearAllForSource(source.sourceUrl)}
-                      className="text-[10px] font-semibold text-secondary hover:text-primary transition-colors"
+                      className="text-[10px] font-semibold text-slate-400 hover:text-white transition-colors"
                     >
                       None
                     </button>
@@ -280,8 +280,8 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
                         onClick={() => toggleField(source.sourceUrl, key)}
                         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all ${
                           isChecked
-                            ? 'bg-accent/20 text-accent border-accent/50 shadow-sm'
-                            : 'bg-surface border-edge text-secondary hover:text-primary hover:border-edge-strong'
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-sm'
+                            : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white hover:border-slate-500'
                         }`}
                         title={
                           atomic
@@ -294,7 +294,7 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
                         <Icon className="w-3 h-3" />
                         <span>{label}</span>
                         {isOverridden && (
-                          <Lock className="w-2.5 h-2.5 text-accent ml-0.5" />
+                          <Lock className="w-2.5 h-2.5 text-amber-400 ml-0.5" />
                         )}
                       </button>
                     );
@@ -309,8 +309,8 @@ export const MetadataPersonalizerPanel: React.FC<MetadataPersonalizerPanelProps>
                     disabled={!hasSelection || isLoading}
                     className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                       hasSelection && !isLoading
-                        ? 'bg-gradient-to-r from-accent-2 to-accent text-white shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]'
-                        : 'bg-elevated text-muted cursor-not-allowed opacity-60'
+                        ? 'bg-amber-500 hover:bg-amber-400 text-black border border-amber-300 shadow-sm hover:scale-[1.02] active:scale-[0.98]'
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
                     }`}
                   >
                     {isLoading ? (

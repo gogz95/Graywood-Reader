@@ -140,21 +140,21 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   ];
 
   const searchInput = (
-    <div className="relative w-full">
-      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+    <div className="relative w-full group">
+      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted group-focus-within:text-accent transition-colors pointer-events-none" />
       <input
         ref={searchInputRef}
         type="search"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Search series, author, or genre..."
-        className="w-full pl-9.5 pr-20 py-2 text-xs rounded-xl bg-surface/80 border border-edge hover:border-edge-strong focus:border-accent text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent/40 transition-all"
+        placeholder="Search series, author, genre, or source..."
+        className="w-full pl-10 pr-20 py-2.5 text-xs rounded-2xl bg-app/60 border border-edge/80 hover:border-edge-strong focus:border-accent focus:bg-app/90 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/25 transition-all shadow-inner"
       />
       {searchQuery ? (
         <button
           onClick={() => setSearchQuery('')}
           aria-label="Clear search"
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-secondary hover:text-primary bg-elevated hover:bg-edge-strong rounded-md px-1.5 py-0.5 transition-colors"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-secondary hover:text-primary bg-elevated hover:bg-edge-strong rounded-lg px-2 py-0.5 transition-colors"
         >
           Clear
         </button>
@@ -162,10 +162,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
         <button
           type="button"
           onClick={() => onOpenCommandPalette?.()}
-          title="Open Quick Command & Search Spotlight (⌘K)"
-          className="hidden sm:flex items-center gap-0.5 absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-elevated/70 border border-edge/60 hover:bg-elevated hover:text-accent transition-colors"
+          title="Open Quick Command & Search Spotlight (⌘K / Ctrl+K)"
+          className="hidden sm:flex items-center gap-1 absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-lg text-[10px] font-mono text-muted bg-elevated/80 border border-edge/60 hover:bg-elevated hover:text-accent transition-colors shadow-xs"
         >
-          <span className="text-[11px]">⌘</span>K
+          <span className="text-[10px] font-bold">⌘K</span>
         </button>
       )}
     </div>
@@ -173,39 +173,39 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-surface/85 backdrop-blur-xl border-b border-edge text-primary shadow-lg shadow-black/20">
-        {/* â”€â”€ Row 1 Â· Brand Â· Search Â· Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <header className="sticky top-0 z-40 glass-nav text-primary">
+        {/* ── Row 1 · Brand · Search · Actions ───────────────────────── */}
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-2 sm:gap-4 h-14 sm:h-16">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 h-15 sm:h-16">
             {/* Brand */}
             <button
               onClick={() => setActiveTab('library')}
-              className="flex items-center gap-2.5 min-w-0 shrink-0"
+              className="flex items-center gap-3 min-w-0 shrink-0 group text-left cursor-pointer active:scale-[0.98] transition-transform"
               aria-label="Go to library"
             >
-              <div className="p-2 sm:p-2.5 bg-accent-grad rounded-xl shadow-md shadow-accent/25 text-accent-fg flex items-center justify-center shrink-0">
+              <div className="p-2 sm:p-2.5 bg-accent-grad rounded-2xl shadow-lg shadow-accent/25 text-accent-fg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300">
                 <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
               </div>
               <div className="min-w-0 text-left">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm sm:text-lg font-bold tracking-tight text-primary truncate">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight font-display text-primary truncate group-hover:text-accent transition-colors">
                     Graywood Reader
                   </h1>
                   {isIncognito ? (
-                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-accent-2/20 text-accent-2 border border-accent-2/30">
+                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-accent-2/20 text-accent-2 border border-accent-2/30">
                       <EyeOff className="w-3 h-3 mr-1" />
                       Incognito
                     </span>
                   ) : (
-                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-success/10 text-success border border-success/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse mr-1.5" />
-                      Live
+                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-success/15 text-success border border-success/25 shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse mr-1.5 shadow-sm" />
+                      Live Sync
                     </span>
                   )}
                 </div>
-                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted">
+                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted font-medium">
                   <Globe className="w-3 h-3 text-accent shrink-0" />
-                  <span className="font-mono text-accent/90 truncate">{subdomain}</span>
+                  <span className="font-mono text-accent/80 truncate">{subdomain}</span>
                 </div>
               </div>
             </button>
@@ -492,39 +492,48 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           </div>
         )}
 
-        {/* â”€â”€ Row 2 Â· Desktop tab navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <div className="hidden md:block border-t border-edge/70">
+        {/* ── Row 2 · Desktop tab navigation ───────────────────────── */}
+        <div className="hidden md:block border-t border-edge/60 bg-app/30">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2 text-xs sm:text-sm font-medium" aria-label="Primary">
-              {tabs.map(({ id, label, icon: Icon, badge }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  aria-current={activeTab === id ? 'page' : undefined}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all whitespace-nowrap ${
-                    activeTab === id
-                      ? 'bg-accent/15 text-accent border-accent/30 font-semibold shadow-sm'
-                      : 'text-secondary hover:text-primary hover:bg-elevated/60 border-transparent'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{label}</span>
-                  {badge ? <Badge count={badge} /> : null}
-                </button>
-              ))}
+            <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 text-xs sm:text-sm font-medium" aria-label="Primary">
+              {tabs.map(({ id, label, icon: Icon, badge }) => {
+                const isActive = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      isActive
+                        ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
+                        : 'text-secondary hover:text-primary hover:bg-elevated/70'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : ''}`} />
+                    <span>{label}</span>
+                    {badge ? (
+                      <span className={`min-w-[1.15rem] h-[1.15rem] px-1 rounded-full text-[10px] font-black flex items-center justify-center leading-none ${
+                        isActive ? 'bg-black text-white' : 'bg-accent text-accent-fg'
+                      }`}>
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
 
               <button
                 onClick={onOpenSettingsModal}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
                   activeTab === 'settings'
-                    ? 'bg-accent/15 text-accent border-accent/30 font-semibold shadow-sm'
-                    : 'text-secondary hover:text-primary hover:bg-elevated/60 border-transparent'
+                    ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
+                    : 'text-secondary hover:text-primary hover:bg-elevated/70'
                 }`}
               >
                 <Sliders className="w-4 h-4" />
                 <span>Settings &amp; Tools</span>
                 {duplicateCount > 0 && (
-                  <span className="min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-danger/20 text-danger border border-danger/30 text-[10px] font-black flex items-center justify-center leading-none">
+                  <span className="min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-danger/25 text-danger border border-danger/30 text-[10px] font-black flex items-center justify-center leading-none">
                     {duplicateCount}
                   </span>
                 )}
@@ -534,9 +543,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 <button
                   onClick={onOpenSubmitBugModal}
                   title="Submit a bug report"
-                  className="ml-auto flex items-center gap-2 px-3.5 py-2 rounded-xl text-secondary hover:text-danger hover:bg-danger/10 transition-all whitespace-nowrap"
+                  className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl text-secondary hover:text-danger hover:bg-danger/10 text-xs font-semibold transition-all whitespace-nowrap"
                 >
-                  <Bug className="w-4 h-4" />
+                  <Bug className="w-3.5 h-3.5" />
                   <span>Report Bug</span>
                 </button>
               )}

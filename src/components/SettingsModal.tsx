@@ -1204,26 +1204,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
                   <Palette className="w-4 h-4 text-accent-2" />
                   Primary Application Theme:
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
                   {[
-                    { id: 'amber', name: 'Cyber Amber', color: 'bg-amber-500' }, // NO-THEME (literal preview swatch)
-                    { id: 'emerald', name: 'Kotatsu Emerald', color: 'bg-emerald-500' }, // NO-THEME (literal preview swatch)
-                    { id: 'amoled', name: 'AMOLED Dark', color: 'bg-zinc-800' }, // NO-THEME (literal preview swatch)
-                    { id: 'violet', name: 'Royal Violet', color: 'bg-purple-500' }, // NO-THEME (literal preview swatch)
-                    { id: 'cyberpunk', name: 'Neon Cyber', color: 'bg-cyan-500' }, // NO-THEME (literal preview swatch)
+                    { id: 'amber', name: 'Cyber Amber', color: 'bg-amber-500', desc: 'Warm slate' },
+                    { id: 'emerald', name: 'Kotatsu Emerald', color: 'bg-emerald-500', desc: 'Forest jade' },
+                    { id: 'violet', name: 'Royal Violet', color: 'bg-purple-500', desc: 'Cosmic void' },
+                    { id: 'cyberpunk', name: 'Neon Cyber', color: 'bg-cyan-500', desc: 'Ocean cyan' },
+                    { id: 'crimson', name: 'Crimson Velvet', color: 'bg-rose-500', desc: 'Wine & rose' },
+                    { id: 'nord', name: 'Nord Frost', color: 'bg-sky-400', desc: 'Arctic ice' },
+                    { id: 'amoled', name: 'AMOLED Dark', color: 'bg-zinc-800', desc: 'Pure black' },
                   ].map((t) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => setFormData({ ...formData, appTheme: t.id as AppTheme })}
-                      className={`p-3.5 rounded-2xl border text-center font-bold transition-all flex flex-col items-center gap-2 ${
+                      className={`p-3 rounded-2xl border text-center font-bold transition-all flex flex-col items-center gap-1.5 active:scale-95 ${
                         formData.appTheme === t.id
-                          ? 'border-accent bg-accent/10 text-accent shadow-md'
-                          : 'border-edge bg-app text-secondary hover:bg-elevated'
+                          ? 'border-accent bg-accent/15 text-accent shadow-md ring-1 ring-accent/40'
+                          : 'border-edge bg-app/80 text-secondary hover:bg-elevated hover:text-primary'
                       }`}
                     >
-                      <div className={`w-7 h-7 rounded-full ${t.color} shadow-lg`} />
+                      <div className={`w-7 h-7 rounded-full ${t.color} shadow-md`} />
                       <span className="text-[11px] font-black">{t.name}</span>
+                      <span className="text-[9px] text-muted font-medium">{t.desc}</span>
                     </button>
                   ))}
                 </div>
