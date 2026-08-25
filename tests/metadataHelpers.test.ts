@@ -26,7 +26,7 @@ import { mergeMangaItems, dedupeCatalog, normalizeTitleKey } from '../src/utils/
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
-function makeManga(overrides: Partial<MangaItem> = {}): MangaItem {
+function makeManga(overrides: Record<string, any> = {}): MangaItem {
   return {
     id: 'test_1',
     title: 'Test Title',
@@ -38,7 +38,7 @@ function makeManga(overrides: Partial<MangaItem> = {}): MangaItem {
     status: 'reading',
     currentChapter: 1,
     totalChapters: 10,
-        latestChapter: 0,
+    latestChapter: 0,
     lastUpdated: new Date().toISOString(),
     rating: 7.5,
     sourceUrl: '',
@@ -47,7 +47,7 @@ function makeManga(overrides: Partial<MangaItem> = {}): MangaItem {
     notes: '',
     addedAt: new Date().toISOString(),
     lastReadAt: new Date().toISOString(),
-    ...overrides,
+    ...(overrides as any),
   };
 }
 
@@ -205,8 +205,10 @@ describe('scoreMangaItem', () => {
   });
 
   it('adds 10000 for favorite', () => {
-    expect(scoreMangaItem(makeManga({ isFavorite: true, rating: undefined }))).toBeGreaterThanOrEqual(10000);
-    expect(scoreMangaItem(makeManga({ isFavorite: false, rating: undefined }))).toBe(0);
+    const fav = makeManga({ isFavorite: true, rating: undefined });
+    expect(scoreMangaItem(fav)).toBeGreaterThanOrEqual(10000);
+    const notFav = makeManga({ isFavorite: false, rating: undefined });
+    expect(scoreMangaItem(notFav)).toBe(0);
   });
 
   it('adds 1000 per linked source', () => {
@@ -218,8 +220,10 @@ describe('scoreMangaItem', () => {
   });
 
   it('adds 500 for having an apiId or sourceUrl', () => {
-    expect(scoreMangaItem(makeManga({ apiId: '123', rating: undefined }))).toBe(500);
-    expect(scoreMangaItem(makeManga({ sourceUrl: 'https://example.com/test', rating: undefined }))).toBe(500);
+    const withApiId = makeManga({ apiId: '123', rating: undefined });
+    expect(scoreMangaItem(withApiId)).toBe(500);
+    const withUrl = makeManga({ sourceUrl: 'https://example.com/test', rating: undefined });
+    expect(scoreMangaItem(withUrl)).toBe(500);
   });
 
   it('adds latestChapter points', () => {
@@ -229,7 +233,8 @@ describe('scoreMangaItem', () => {
   });
 
   it('adds rating * 10 points', () => {
-    expect(scoreMangaItem(makeManga({ rating: 9 }))).toBe(90);
+    const rated = makeManga({ rating: 9 });
+    expect(scoreMangaItem(rated)).toBe(90);
   });
 });
 
