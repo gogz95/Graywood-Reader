@@ -1,3 +1,81 @@
+// ---------------------------------------------------------------------------
+// Category Preservation During Metadata Refresh
+// ---------------------------------------------------------------------------
+
+/**
+ * Preserve user-specific fields (categories, isFavorite, status, custom metadata overrides)
+ * while allowing remote metadata updates for series with live sources.
+ *
+ * When refreshing metadata for a series with a live source (not MangaDex), we want to:
+ * 1. Keep all user-assigned categories (shelf assignments)
+ * 2. Keep user reading progress (currentChapter, status, notes, isFavorite)
+ * 3. Keep custom metadata overrides (metadataOverrides)
+ * 4. Update other fields from live sources when available
+ *
+ * This prevents "breaking" user organization by clearing shelves or resetting reading progress
+ * during automated metadata refreshes.
+ */
+export function preserveUserSpecificFields(
+  original: any,
+  refreshed: any,
+  hasLiveSourceUrl: boolean,
+): any {
+  // For series with live sources, preserve ALL user-specific fields
+  if (hasLiveSourceUrl) {
+    // Always preserve user categories - these are per-user shelf assignments
+    if (Array.isArray(original.categories) && original.categories.length > 0) {
+      refreshed.categories = original.categories;
+    }
+
+    // Preserve user reading tracking
+    if (typeof original.currentChapter === 'number') {
+      refreshed.currentChapter = original.currentChapter;
+    }
+    if (original.status) {
+      refreshed.status = original.status;
+    }
+    if (original.isFavorite !== undefined) {
+      refreshed.isFavorite = original.isFavorite;
+    }
+    if (original.notes !== undefined) {
+      refreshed.notes = original.notes;
+    }
+
+    // Preserve custom metadata overrides - these are user-locked fields
+    if (Array.isArray(original.metadataOverrides) && original.metadataOverrides.length > 0) {
+      refreshed.metadataOverrides = original.metadataOverrides;
+    }
+
+    // Preserve other user-specific fields
+    if (typeof original.isNsfw === 'boolean') {
+      refreshed.isNsfw = original.isNsfw;
+    }
+    if (typeof original.flaggedAt === 'string' && original.isFlagged) {
+      refreshed.flaggedAt = original.flaggedAt;
+    }
+    if (original.flagReason !== undefined) {
+      refreshed.flagReason = original.flagReason;
+    }
+
+    // Preserve user-specific source associations
+    if (Array.isArray(original.availableSources) && original.availableSources.length > 0) {
+      refreshed.availableSources = original.availableSources;
+    }
+
+    // Preserve other custom fields that shouldn't be overwritten by live sources
+    if (original.lastReadAt !== undefined) {
+      refreshed.lastReadAt = original.lastReadAt;
+    }
+    if (original.addedAt !== undefined) {
+      refreshed.addedAt = original.addedAt;
+    }
+    if (original.sourceName !== undefined) {
+      refreshed.sourceName = original.sourceName;
+    }
+  }
+
+  return refreshed;
+}
 /**
  * metadataHelpers.ts
  *
