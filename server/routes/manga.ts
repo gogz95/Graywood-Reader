@@ -30,12 +30,23 @@ import { searchWeebCentral, fetchWeebCentralSeriesMetadata } from '../scrapers/w
 import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive, isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { APP_USER_AGENT } from '../version';
-import {
-  getLibraryCacheStatus,
-  refreshLibraryCache,
-} from '../services/libraryCacheService';
+import { getLibraryCacheStatus, refreshLibraryCache } from '../services/libraryCacheService';
+import { searchIndexer } from '../services/searchIndexer';
 
 export const mangaRouter = Router();
+
+// Full-text search endpoint across all library fields
+mangaRouter.get('/api/search/full-text', (req, res) => {
+  const query = (req.query.q as string || '').trim();
+  if (!query) {
+    return res.json({ query: '', totalMatches: 0, results: [] });
+  }
+
+  const allowNsfw = isNsfwAccessAllowed(req);
+  const allManga = SqliteDb.getAllManga().filter((m) => allowNsfw || !isNsfwManga(m));
+  const results = searchIndexer.search(query, allManga);
+  res.json({ query, totalMatches: results.length, results });
+});
 
 // Whitelisted fields a client is allowed to set when creating a manga.
 const MANGA_CREATE_FIELDS = {

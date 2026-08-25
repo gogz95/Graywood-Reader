@@ -21,6 +21,7 @@ import { imageCacheService } from '../services/imageCache';
 import { eventBus } from '../services/eventBus';
 import { fetchMangaDex } from '../services/metadataService';
 import { KOTATSU_SOURCES } from '../sources/sourcesCatalog';
+import { parseOptimizationParams, optimizeImageBuffer } from '../services/imageOptimizer';
 import {
   kotatsuImageEngine,
   matchLiveDomain,
@@ -150,11 +151,14 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
       return res.status(304).end();
     }
 
-    res.setHeader('Content-Type', cached.contentType);
+    const optParams = parseOptimizationParams(req);
+    const optimized = await optimizeImageBuffer(cached.buffer, cached.contentType, optParams);
+
+    res.setHeader('Content-Type', optimized.contentType);
     res.setHeader('ETag', cached.etag);
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('Content-Disposition', 'inline');
-    res.end(cached.buffer);
+    res.end(optimized.buffer);
   } catch (err: any) {
     console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {
