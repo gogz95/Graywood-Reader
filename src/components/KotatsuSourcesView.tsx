@@ -205,7 +205,10 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('enabled');
   const [nsfwVisible, setNsfwVisible] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  // Tracks items flagged as NSFW in this browse session
+  const [nsfwTaggedIds, setNsfwTaggedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+
 
   // Search filter for the sources sidebar list
   const [sourceFilterQuery, setSourceFilterQuery] = useState('');
@@ -558,6 +561,56 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     };
     onOpenReader(tempManga, 1);
   };
+  const handleMarkNsfwSource = async (r: KotatsuSourceResult, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isGuest) {
+      onOpenAuthModal?.();
+      return;
+    }
+    const isAlreadyAdded = addedIds.has(r.id);
+    if (!isAlreadyAdded) {
+      // Add to tracker AND mark NSFW simultaneously
+      onAddToTracker({
+        title: r.title,
+        altTitles: [],
+        type: (r.type as MangaItem['type']) || 'manhwa',
+        coverImage: r.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+        description: r.description || `From ${r.sourceName}`,
+        genres: (r.genres && r.genres.length > 0) ? r.genres : ['Action'],
+        status: 'reading',
+        currentChapter: 0,
+        latestChapter: r.latestChapter || 1,
+        totalChapters: r.latestChapter || null,
+        rating: 9.0,
+        sourceUrl: r.sourceUrl,
+        sourceName: r.sourceName || selectedSource?.name || 'Kotatsu Engine',
+        autoUpdateEnabled: true,
+        notes: 'Added from Sources browser',
+        isNsfw: true,
+      });
+      setAddedIds(prev => new Set(prev).add(r.id));
+    } else {
+      // Already tracked — find and patch isNsfw via API
+      try {
+        const res = await apiFetch('/api/manga');
+        if (res.ok) {
+          const all: MangaItem[] = await res.json();
+          const existing = all.find((m) => m.sourceUrl === r.sourceUrl || m.title.toLowerCase() === r.title.toLowerCase());
+          if (existing) {
+            await apiFetch(`/api/manga/${existing.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...existing, isNsfw: true }),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Sources] NSFW patch failed:', e);
+      }
+    }
+    setNsfwTaggedIds(prev => new Set(prev).add(r.id));
+    showToast(`🔞 "${r.title}" tagged as 18+!`);
+  };
 
   const [selectedLangFilter, setSelectedLangFilter] = useState<string>('en');
 
@@ -715,6 +768,24 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               <Plus className={`w-3.5 h-3.5 ${isAdded ? 'text-success' : ''}`} />
               {isAdded ? 'Tracked' : 'Track'}
             </button>
+            {/* NSFW Quick-Tag button */}
+            {() => {
+              const isNsfwTagged = nsfwTaggedIds.has(r.id);
+              return (
+                <button
+                  onClick={(e) => handleMarkNsfwSource(r, e)}
+                  disabled={isNsfwTagged}
+                  title={isNsfwTagged ? 'Already marked 18+' : 'Mark as 18+ / NSFW'}
+                  className={`flex items-center justify-center px-2.5 py-2 rounded-xl text-xs font-black transition-all border ${
+                    isNsfwTagged
+                      ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 cursor-default'
+                      : 'bg-surface hover:bg-rose-900/30 text-secondary hover:text-rose-400 border-edge hover:border-rose-500/50'
+                  }`}
+                >
+                  {isNsfwTagged ? '✓' : '🔞'}
+                </button>
+              );
+            }}
             <button
               onClick={(e) => readNow(r, e)}
               title="Open in Reader"
@@ -724,6 +795,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               <span>Read</span>
             </button>
           </div>
+
         </div>
       </div>
     );

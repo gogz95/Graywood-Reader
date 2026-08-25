@@ -152,7 +152,9 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   }, []);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const naturalH = e.currentTarget.clientHeight;
+    // Use naturalHeight (intrinsic pixel size) rather than clientHeight (rendered
+    // CSS size) so the cached placeholder stays correct after zoom or layout changes.
+    const naturalH = e.currentTarget.naturalHeight || e.currentTarget.clientHeight;
     if (naturalH > 50) {
       setCachedHeight(naturalH);
     }

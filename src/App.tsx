@@ -47,6 +47,8 @@ import {
 import { apiFetch } from './utils/api';
 import { useAuth, GUEST_PROFILE, getDeviceId } from './hooks/useAuth';
 import { useRouting, TAB_PATHS } from './hooks/useRouting';
+import { useLibraryState } from './hooks/useLibraryState';
+import { useSettingsState } from './hooks/useSettingsState';
 import {
   saveClientSessionProgress,
   getClientSessionHistory,
@@ -94,8 +96,26 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
-  // Manga Library Database State
-  const [mangaList, setMangaList] = useState<MangaItem[]>([]);
+  // ── Library State (extracted to useLibraryState hook) ────────────────────
+  const {
+    mangaList, setMangaList, fetchMangaList,
+    logs, setLogs, fetchLogs,
+    duplicates, setDuplicates,
+    config, setConfig, fetchConfig,
+    isUpdating, setIsUpdating,
+    isScanningDuplicates,
+    scanDuplicates,
+  } = useLibraryState();
+
+  // ── Settings State (extracted to useSettingsState hook) ──────────────────
+  const {
+    appSettings, setAppSettings, fetchSettings,
+    handleSaveSettings: _handleSaveSettingsBase,
+    settingsLoaded,
+    pendingChallengesCount, setPendingChallengesCount,
+    fetchChallengeCount,
+    activeDownloadsCount, setActiveDownloadsCount,
+  } = useSettingsState();
 
   // Modals state
   const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);
@@ -104,14 +124,13 @@ export default function App() {
   const [submitBugModalOpen, setSubmitBugModalOpen] = useState(false);
   const [bugModalInitialData, setBugModalInitialData] = useState<BugReportInitialData | undefined>(undefined);
   const [challengeModalOpen, setChallengeModalOpen] = useState(false);
-  const [pendingChallengesCount, setPendingChallengesCount] = useState(0);
   const [achievementsOpen, setAchievementsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const [bulkScrapeModalOpen, setBulkScrapeModalOpen] = useState(false);
   const [downloadManagerOpen, setDownloadManagerOpen] = useState(false);
   const [readlistsOpen, setReadlistsOpen] = useState(false);
-  const [activeDownloadsCount, setActiveDownloadsCount] = useState(0);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Non-blocking Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -180,171 +199,22 @@ export default function App() {
     return displayMangaList.filter((item) => item.isFavorite === true);
   }, [displayMangaList]);
 
-  const [logs, setLogs] = useState<AutoUpdateLog[]>([]);
-  const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
-
-  const [config, setConfig] = useState<DatabaseSyncConfig>({
-    subdomain: 'tracker.manhuahub.app',
-    autoUpdateIntervalMinutes: 60,
-    enableWebCrawling: true,
-    sources: ['MangaDex API', 'AniList GraphQL', 'AsuraScans Feeds', 'FlameComics', 'WeebCentral', 'DemonicScans'],
-    lastSyncTime: new Date().toISOString(),
-    totalTracked: 0,
-  });
-
   const [searchQuery, setSearchQuery] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
-  // Fetch initial data from server
-  const fetchMangaList = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/manga');
-      if (res.ok) {
-        const data = await res.json();
-        setMangaList(data);
-      }
-    } catch (err) {
-      console.error('Fetch manga list error:', err);
-    }
-  }, []);
-
-  const fetchConfig = async () => {
-    try {
-      const res = await apiFetch('/api/config');
-      if (res.ok) {
-        const data = await res.json();
-        setConfig(data);
-      }
-    } catch (err) {
-      console.error('Fetch config error:', err);
-    }
-  };
-
-  const fetchLogs = async () => {
-    try {
-      const res = await apiFetch('/api/tracker/logs');
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data);
-      }
-    } catch (err) {
-      console.error('Fetch logs error:', err);
-    }
-  };
-
-  // Settings Modal State & Configs
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [appSettings, setAppSettings] = useState<AppSettings>({
-    appTheme: 'amber',
-    libraryLayout: 'grid',
-    gridColumns: 4,
-    autoMarkReadPercent: 80,
-    enableDownloadOffline: true,
-    sourceTimeoutSeconds: 15,
-    anilistConnected: true,
-    malConnected: false,
-    malAutoSync: false,
-    kitsuConnected: false,
-    kitsuAutoSync: false,
-    privateModeEnabled: false,
-    mangadexConnected: true,
-    mangadexMetadataEnabled: true,
-    anilistMetadataEnabled: true,
-    malEnabled: true,
-    kitsuMetadataEnabled: true,
-    mangaUpdatesEnabled: true,
-    mangaUpdatesUsername: '',
-    mangaUpdatesPassword: '',
-    openlibraryEnabled: true,
-    googleBooksEnabled: true,
-    customUserAgent: 'Kotatsu/4.8.2 (Android 14; Mobile; Graywood-Reader)',
-    enableCloudflareBypass: true,
-    flareSolverrUrl: 'http://localhost:8191/v1',
-    captchaSolverEnabled: true,
-    captchaApiKey: '',
-    stealthMode: true,
-    autoFormatReadingMode: true,
-    defaultMangaMode: 'rtl',
-    defaultManhwaMode: 'webtoon-seamless',
-    defaultManhuaMode: 'webtoon-seamless',
-    readerDefaults: {
-      viewMode: 'webtoon-seamless',
-      maxWidth: '850px',
-      pageGap: 0,
-      noPanelSpacing: true,
-      bgColor: 'slate',
-      zoomLevel: 100,
-      autoMarkRead: true,
-      imageFilter: 'normal',
-      autoScrollEnabled: false,
-      autoScrollSpeed: 2,
-      tapZonesEnabled: true,
-      cropWhiteMargins: true,
-      showPageNumberOverlay: true,
-      showPersistentPageBadge: true,
-      autoNextChapter: true,
-      mangaFitMode: 'fit-height',
-      preloadCount: 3,
-      autoFormatMode: true,
-      rememberPerSeries: true,
-    },
-  });
-
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await apiFetch('/api/settings');
-      if (res.ok) {
-        const data = await res.json();
-        setAppSettings(data);
-      }
-    } catch (err) {
-      console.error('Fetch settings error:', err);
-    } finally {
-      setSettingsLoaded(true);
-    }
-  };
-
-  const fetchChallengeCount = async () => {
-    try {
-      const res = await apiFetch('/api/challenges');
-      if (res.ok) {
-        const data = await res.json();
-        setPendingChallengesCount(data.count || 0);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const fetchDownloadsCount = async () => {
-    try {
-      const res = await apiFetch('/api/downloads/queue');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.jobs)) {
-          const active = data.jobs.filter((j: any) => j.status === 'downloading' || j.status === 'packaging' || j.status === 'queued').length;
-          setActiveDownloadsCount(active);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchSettings();
-    fetchChallengeCount();
-    fetchDownloadsCount();
-    const intervalChallenges = setInterval(fetchChallengeCount, 30000);
-    const intervalDownloads = setInterval(fetchDownloadsCount, 5000);
-    return () => {
-      clearInterval(intervalChallenges);
-      clearInterval(intervalDownloads);
-    };
-  }, []);
+  // Wrap _handleSaveSettingsBase to inject the profile theme updater
+  const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
+    const shouldUpdateProfileTheme =
+      newSettings.appTheme &&
+      activeProfile &&
+      activeProfile.id !== 'usr_guest' &&
+      activeProfile.theme !== newSettings.appTheme;
+    await _handleSaveSettingsBase(
+      newSettings,
+      shouldUpdateProfileTheme
+        ? async (theme) => { await handleUpdateProfile({ theme }); }
+        : undefined,
+    );
+  }, [_handleSaveSettingsBase, activeProfile, handleUpdateProfile]);
 
   // Initial Setup Wizard First-Run Trigger (Host Administrator)
   useEffect(() => {
@@ -411,44 +281,6 @@ export default function App() {
     }
   }, [appSettings.appLockEnabled, appSettings.appLockPinHash, appSettings.appLockTimeoutMinutes]);
 
-  const handleSaveSettings = async (newSettings: AppSettings) => {
-    setAppSettings((prev) => ({ ...prev, ...newSettings }));
-    // Persist the chosen UI theme to the signed-in user's profile too, so each
-    // account keeps its own theme across sessions / devices (falling back to the
-    // global default below when the user has never picked one).
-    if (
-      newSettings.appTheme &&
-      activeProfile &&
-      activeProfile.id !== 'usr_guest' &&
-      activeProfile.theme !== newSettings.appTheme
-    ) {
-      await handleUpdateProfile({ theme: newSettings.appTheme });
-    }
-    try {
-      await apiFetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
-      });
-    } catch (err) {
-      console.error('Save settings error:', err);
-    }
-  };
-
-  const scanDuplicates = async () => {
-    setIsScanningDuplicates(true);
-    try {
-      const res = await apiFetch('/api/tracker/detect-duplicates', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setDuplicates(data);
-      }
-    } catch (err) {
-      console.error('Scan duplicates error:', err);
-    } finally {
-      setIsScanningDuplicates(false);
-    }
-  };
 
   // Synchronize Client-Side Session Reading Progress when Guest profile is active
   useEffect(() => {

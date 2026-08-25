@@ -73,6 +73,9 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [activeCategoryIds, setActiveCategoryIds] = useState<string[]>(manga.categories || []);
+  // Collapsed by default — shows first 5 genres with an expand toggle
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+
 
   const handleSelectCoverArt = async (newCoverUrl: string, sourceName?: string) => {
     const nextOverrides = Array.from(new Set([...(manga.metadataOverrides || []), 'coverImage']));
@@ -345,17 +348,45 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                 </p>
               )}
 
-              {/* Genre Tags */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {manga.genres.map((g, idx) => (
-                  <span
-                    key={idx}
-                    className="px-3 py-1 rounded-xl text-xs font-semibold bg-app/80 border border-edge text-secondary hover:text-primary hover:border-accent/40 transition-colors shadow-xs"
-                  >
-                    {g}
-                  </span>
-                ))}
-              </div>
+              {/* Genre Tags — collapsed by default (first 5 visible) */}
+              {(() => {
+                const VISIBLE_COUNT = 5;
+                const hasMore = manga.genres.length > VISIBLE_COUNT;
+                const visibleGenres = tagsExpanded ? manga.genres : manga.genres.slice(0, VISIBLE_COUNT);
+                return (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5">
+                      {visibleGenres.map((g, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 rounded-xl text-xs font-semibold bg-app/80 border border-edge text-secondary hover:text-primary hover:border-accent/40 transition-colors shadow-xs"
+                        >
+                          {g}
+                        </span>
+                      ))}
+                      {hasMore && !tagsExpanded && (
+                        <button
+                          onClick={() => setTagsExpanded(true)}
+                          className="px-2.5 py-1 rounded-xl text-xs font-bold bg-elevated/80 hover:bg-elevated border border-edge text-muted hover:text-primary transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                        >
+                          +{manga.genres.length - VISIBLE_COUNT} more ▾
+                        </button>
+                      )}
+                    </div>
+                    {hasMore && tagsExpanded && (
+                      <button
+                        onClick={() => setTagsExpanded(false)}
+                        className="text-xs font-bold text-muted hover:text-primary transition-colors cursor-pointer flex items-center gap-1 ml-1"
+                      >
+                        Show less ▴
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+
+
 
               {/* 18+ / NSFW Guest Access Notice */}
               {isGuest && isNsfwManga(manga) && (

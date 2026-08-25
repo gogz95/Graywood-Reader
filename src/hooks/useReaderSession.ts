@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { apiFetch, getApiBaseUrl } from '../utils/api';
+import { apiFetch, getApiBaseUrl, getAuthToken } from '../utils/api';
+
 
 const CLIENT_SESSION_STORAGE_KEY = 'graywood_client_session_reading_history';
 
@@ -83,8 +84,14 @@ export function useLiveReadingSessionSync(
       if (!isMounted) return;
       try {
         const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/api/reader/sync/events`;
+        // EventSource cannot send Authorization headers; pass JWT as ?token=
+        // so the server can authenticate the SSE connection and route progress
+        // updates to the correct user instead of the shared guest bucket.
+        const authToken = getAuthToken();
+        const tokenParam = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+        const url = `${baseUrl}/api/reader/sync/events${tokenParam}`;
         evtSource = new EventSource(url);
+
 
         evtSource.onmessage = (e) => {
           try {

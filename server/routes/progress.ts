@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { resolveRequestUserId, mangaDatabase } from '../appState';
+import { verifyAuthToken } from '../security';
+
 
 // ============================================================================
 // READING PROGRESS & ACTIVITY PERSISTENCE API
@@ -40,6 +42,7 @@ export function broadcastProgressSync(event: {
 }
 
 // GET /api/reader/sync/events - Real-time SSE channel for live cross-device session synchronization
+// Accepts ?token= query parameter since EventSource cannot send custom headers.
 progressRouter.get("/api/reader/sync/events", (req, res) => {
   const userId = resolveProgressUserId(req);
 
@@ -69,6 +72,7 @@ progressRouter.get("/api/reader/sync/events", (req, res) => {
   });
 });
 
+
 // ------------------------------------------------------------
 // GET /api/reader/progress?sourceId=...&slug=...
 // Returns reading progress for a specific manga identified by its source ID and slug.
@@ -94,10 +98,26 @@ progressRouter.get("/api/reader/progress", async (req, res) => {
 });
 
 function resolveProgressUserId(req: any): string {
-  // Anonymous remote writes land in the shared guest bucket — NEVER on the
-  // host admin's personal progress/favorites.
-  return resolveRequestUserId(req) || 'usr_guest';
+  // 1. Check Authorization header (set by Express auth middleware)
+  const fromHeader = resolveRequestUserId(req);
+  if (fromHeader) return fromHeader;
+
+  // 2. Fallback: check ?token= query param (required for EventSource, which
+  //    cannot send custom headers in any browser). Verify and extract sub.
+  const queryToken = (req.query?.token as string || '').trim();
+  if (queryToken) {
+    try {
+      const payload = verifyAuthToken(queryToken);
+      if (payload?.sub) return payload.sub as string;
+    } catch {
+      // Invalid / expired token — treat as anonymous
+    }
+  }
+
+  // 3. Truly anonymous connections fall into the shared guest bucket.
+  return 'usr_guest';
 }
+
 
 // Save (or update) the current reading position for a manga/chapter.
 progressRouter.post("/api/reader/progress", (req, res) => {

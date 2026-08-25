@@ -75,17 +75,21 @@ function computeLimit(): number {
 interface BrowseCardProps {
   item: ExploreItem;
   isTracked: boolean;
+  isNsfwTagged: boolean;
   onSelect: () => void;
   onTrack: () => void;
   onRead: () => void;
+  onMarkNsfw: () => void;
 }
 
 const BrowseCard = React.memo<BrowseCardProps>(({
   item: r,
   isTracked,
+  isNsfwTagged,
   onSelect,
   onTrack,
   onRead,
+  onMarkNsfw,
 }) => {
   const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
 
@@ -150,6 +154,22 @@ const BrowseCard = React.memo<BrowseCardProps>(({
             {isTracked ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {isTracked ? 'In Library' : 'Track'}
           </button>
+          {/* NSFW Quick-Tag: one click to track + flag as 18+ */}
+          <button
+            title={isNsfwTagged ? 'Already marked 18+' : 'Mark as 18+ / NSFW (will track if not already)'}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isNsfwTagged) onMarkNsfw();
+            }}
+            disabled={isNsfwTagged}
+            className={`flex items-center justify-center px-2.5 py-2 rounded-xl text-xs font-black transition-all active:scale-95 border ${
+              isNsfwTagged
+                ? 'bg-rose-950/60 text-rose-400 border-rose-500/40 cursor-default'
+                : 'bg-elevated hover:bg-rose-900/30 text-secondary hover:text-rose-400 border-edge hover:border-rose-500/50'
+            }`}
+          >
+            {isNsfwTagged ? '✓' : '🔞'}
+          </button>
           <button
             title={readable ? 'Read now' : 'View info'}
             onClick={(e) => {
@@ -161,6 +181,7 @@ const BrowseCard = React.memo<BrowseCardProps>(({
             {readable ? <Play className="w-3.5 h-3.5 fill-current text-accent" /> : <Star className="w-3.5 h-3.5 text-accent" />}
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -186,7 +207,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trackedKeys, setTrackedKeys] = useState<Set<string>>(new Set());
+  // Tracks IDs that have been marked as NSFW during this browse session
+  const [nsfwTaggedIds, setNsfwTaggedIds] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(true);
+
   const [metaLoaded, setMetaLoaded] = useState(false);
 
   // Tri-State Genre Filter map: 'include' | 'exclude'
@@ -291,7 +315,59 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     setTrackedKeys((prev) => new Set(prev).add(item.title.trim().toLowerCase()));
   };
 
+  const handleMarkNsfw = useCallback(async (item: ExploreItem) => {
+    if (isGuest) {
+      onOpenAuthModal?.();
+      return;
+    }
+    // 1. Track the series if it isn't already in the library
+    const titleKey = item.title.trim().toLowerCase();
+    if (!trackedKeys.has(titleKey)) {
+      onTrack({
+        title: item.title,
+        altTitles: [],
+        type: (item.type as MangaItem['type']) || 'manhwa',
+        coverImage: item.coverImage || FALLBACK_COVER,
+        description: item.description || `Live series from ${item.__sourceName || item.sourceName}`,
+        genres: item.genres && item.genres.length ? item.genres : ['Action'],
+        status: 'reading',
+        currentChapter: 0,
+        latestChapter: item.latestChapter || 1,
+        totalChapters: item.latestChapter || null,
+        rating: 9.0,
+        sourceUrl: item.sourceUrl,
+        sourceName: item.__sourceName || item.sourceName || 'Browse',
+        autoUpdateEnabled: true,
+        notes: 'Added from Browse',
+        isFavorite: true,
+        isNsfw: true,
+      });
+      setTrackedKeys((prev) => new Set(prev).add(titleKey));
+    } else {
+      // 2. If already tracked, look it up by URL and patch isNsfw
+      try {
+        const res = await apiFetch('/api/manga');
+        if (res.ok) {
+          const all: MangaItem[] = await res.json();
+          const existing = all.find((m) => m.sourceUrl === item.sourceUrl || m.title.toLowerCase() === titleKey);
+          if (existing) {
+            await apiFetch(`/api/manga/${existing.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...existing, isNsfw: true }),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Browse] NSFW patch failed:', e);
+      }
+    }
+    // 3. Update local badge state
+    setNsfwTaggedIds((prev) => new Set(prev).add(item.id || item.title));
+  }, [isGuest, onOpenAuthModal, onTrack, trackedKeys]);
+
   // Seed search from the navbar search box when it changes.
+
   useEffect(() => {
     if (seedSearch !== undefined) {
       setQuery(seedSearch);
@@ -595,13 +671,16 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 md:gap-5">
             {results.map((r) => {
               const isTracked = trackedKeys.has(String(r.title).trim().toLowerCase());
+              const isNsfwTagged = nsfwTaggedIds.has(r.id || r.title);
               return (
                 <BrowseCard
                   key={r.id || r.title}
                   item={r}
                   isTracked={isTracked}
+                  isNsfwTagged={isNsfwTagged}
                   onSelect={() => onSelectManga(toManga(r, false))}
                   onTrack={() => handleTrack(r)}
+                  onMarkNsfw={() => handleMarkNsfw(r)}
                   onRead={() => {
                     const readable = hasWorkingReaderSource({ sourceUrl: r.sourceUrl, sourceName: r.sourceName });
                     if (readable) onOpenReader(toManga(r, true), 1);
@@ -611,6 +690,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
               );
             })}
           </div>
+
 
           {totalPages > 1 && (
             <div className="sticky bottom-4 z-20 flex items-center justify-between gap-3 p-4 bg-surface/95 backdrop-blur-md border border-edge rounded-2xl shadow-2xl">
