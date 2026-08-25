@@ -16,6 +16,7 @@ import {
   syncBulkAddOrUpdateManga,
   getGeminiClient,
   autoUpdateLogs,
+  resolveRequestUserId,
 } from '../appState';
 import { isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
 import {

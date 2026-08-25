@@ -49,6 +49,7 @@ import { useAuth, GUEST_PROFILE, getDeviceId } from './hooks/useAuth';
 import { useRouting, TAB_PATHS } from './hooks/useRouting';
 import { useLibraryState } from './hooks/useLibraryState';
 import { useSettingsState } from './hooks/useSettingsState';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
 import {
   saveClientSessionProgress,
   getClientSessionHistory,
@@ -116,6 +117,13 @@ export default function App() {
     fetchChallengeCount,
     activeDownloadsCount, setActiveDownloadsCount,
   } = useSettingsState();
+
+  // ── Real-Time Multi-Device Sync ──────────────────────────────────────────
+  useRealtimeSync(['chapter_read', 'progress_updated', 'library_updated', 'auto_update'], (event) => {
+    if (event.type === 'chapter_read' || event.type === 'progress_updated' || event.type === 'library_updated' || event.type === 'auto_update') {
+      fetchMangaList();
+    }
+  });
 
   // Modals state
   const [selectedMangaDetail, setSelectedMangaDetail] = useState<MangaItem | null>(null);

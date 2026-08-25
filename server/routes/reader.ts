@@ -18,6 +18,7 @@ import {
   MAX_PROXY_IMAGE_BYTES,
 } from '../security';
 import { imageCacheService } from '../services/imageCache';
+import { eventBus } from '../services/eventBus';
 import { fetchMangaDex } from '../services/metadataService';
 import { KOTATSU_SOURCES } from '../sources/sourcesCatalog';
 import {
@@ -763,6 +764,16 @@ readerRouter.post('/api/reader/mark-read', (req, res) => {
   }
 
   const overlay = SqliteDb.applyUserOverlay([manga], userId)[0];
+  try {
+    eventBus.publish('chapter_read', {
+      mangaId: manga.id,
+      chapterNumber: newChapterNum,
+      manga: overlay,
+    }, userId);
+  } catch (err) {
+    console.error('[EventBus] Failed to publish chapter_read event:', err);
+  }
+
   res.json({
     success: true,
     manga: overlay,

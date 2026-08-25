@@ -966,6 +966,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (settings.imageFilter === 'invert') return { filter: 'invert(100%) hue-rotate(180deg)' };
     if (settings.imageFilter === 'brightness') return { filter: 'contrast(120%) brightness(110%)' };
     if (settings.imageFilter === 'e-ink') return { filter: 'grayscale(100%) contrast(175%) brightness(105%)' };
+    if (settings.imageFilter === 'dithered-1bit') return { filter: 'grayscale(100%) contrast(250%) brightness(110%) drop-shadow(0px 0px 1px #000)' };
     if (settings.imageFilter === 'sharpener') return { filter: 'contrast(125%) brightness(98%) drop-shadow(0px 0px 0.5px rgba(0,0,0,0.8))' };
     if (settings.imageFilter === 'high-contrast') return { filter: 'contrast(140%) brightness(100%)' };
     return {};

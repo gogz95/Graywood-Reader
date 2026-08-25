@@ -769,7 +769,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
               {isAdded ? 'Tracked' : 'Track'}
             </button>
             {/* NSFW Quick-Tag button */}
-            {() => {
+            {(() => {
               const isNsfwTagged = nsfwTaggedIds.has(r.id);
               return (
                 <button
@@ -785,7 +785,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
                   {isNsfwTagged ? '✓' : '🔞'}
                 </button>
               );
-            }}
+            })()}
             <button
               onClick={(e) => readNow(r, e)}
               title="Open in Reader"

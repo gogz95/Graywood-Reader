@@ -170,6 +170,7 @@ opdsRouter.get('/api/opds/series/:id', (req: Request, res: Response) => {
     <link rel="http://opds-spec.org/image" href="${cover}" type="image/jpeg"/>
     <link rel="http://opds-spec.org/image/thumbnail" href="${cover}" type="image/jpeg"/>
     <link rel="http://opds-spec.org/acquisition" href="/api/opds/download/${encodeURIComponent(manga.id)}/${ch}.cbz" type="application/vnd.comicbook+zip"/>
+    <link rel="http://vaemendis.net/opds-pse/stream" href="/api/opds/stream/${encodeURIComponent(manga.id)}/${ch}/{pageNumber}" type="image/jpeg"/>
     <link rel="http://opds-spec.org/acquisition/web" href="/reader/${encodeURIComponent(manga.id)}/${ch}" type="text/html"/>
   </entry>
 `;
@@ -261,6 +262,66 @@ opdsRouter.get(['/api/opds/download/:id/:ch.cbz', '/api/opds/download/:id/:ch'],
     res.send(zipBuffer);
   } catch (err: any) {
     res.status(500).send(`Failed to generate CBZ: ${err.message}`);
+  }
+});
+
+// GET /api/opds/stream/:id/:ch/:page - OPDS-PSE (Page Streaming Extension) single-page streamer
+opdsRouter.get('/api/opds/stream/:id/:ch/:page', async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const ch = Math.max(1, Number(req.params.ch) || 1);
+    const pageNum = Math.max(1, Number(req.params.page) || 1);
+    const manga = SqliteDb.getMangaById(id);
+    if (!manga) return res.status(404).send('Series not found');
+
+    let targetUrl = manga.sourceUrl || '';
+    if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {
+      if (manga.availableSources && manga.availableSources.length > 0) {
+        const alt = manga.availableSources.find(
+          (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+        );
+        if (alt) targetUrl = alt.sourceUrl;
+      }
+      if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {
+        const auto = await autoDiscoverLiveSourceForManga(manga);
+        if (auto) targetUrl = auto.sourceUrl;
+      }
+    }
+
+    let realPages: string[] = [];
+    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      const matched = matchLiveDomain(targetUrl);
+      const domainId = matched ? matched.id : 'general';
+      try {
+        realPages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, ch);
+      } catch {
+        realPages = [];
+      }
+    }
+
+    const pageIndex = pageNum - 1;
+    if (realPages && realPages[pageIndex]) {
+      const pageUrl = realPages[pageIndex];
+      const fetchRes = await fetchWithSsrfGuard(pageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': targetUrl,
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (fetchRes.ok) {
+        const contentType = fetchRes.headers.get('content-type') || 'image/jpeg';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        const arrayBuf = await fetchRes.arrayBuffer();
+        return res.send(Buffer.from(arrayBuf));
+      }
+    }
+
+    // Fallback: Redirect to reader panel generator
+    return res.redirect(`/api/reader/panel-image?manga=${encodeURIComponent(manga.title)}&chapter=${ch}&page=${pageNum}`);
+  } catch (err: any) {
+    res.status(500).send(`Failed to stream page: ${err.message}`);
   }
 });
 

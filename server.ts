@@ -60,6 +60,8 @@ import { categoriesRouter } from "./server/routes/categories";
 import { challengesRouter } from "./server/routes/challenges";
 import { downloadsRouter } from "./server/routes/downloads";
 import { readlistsRouter } from "./server/routes/readlists";
+import { eventsRouter } from "./server/routes/events";
+import { eventBus } from "./server/services/eventBus";
 import { mangaRouter, isContentPath, isNavText } from "./server/routes/manga";
 import {
   readerRouter,
@@ -319,6 +321,7 @@ app.use(trackerRouter);
 app.use(challengesRouter);
 app.use(downloadsRouter);
 app.use(readlistsRouter);
+app.use('/api/events', eventsRouter);
 
 // ── Base Server Health, Version & Config Endpoints ────────────────────────────
 app.get("/api/health", (req, res) => {

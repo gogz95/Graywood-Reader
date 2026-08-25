@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { resolveRequestUserId, mangaDatabase } from '../appState';
 import { verifyAuthToken } from '../security';
+import { eventBus } from '../services/eventBus';
 
 
 // ============================================================================

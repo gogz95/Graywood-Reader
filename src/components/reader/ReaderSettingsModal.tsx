@@ -208,6 +208,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
               { id: 'oled', name: '🌑 OLED Ultra-Dark' },
               { id: 'sepia', name: '📜 Parchment Sepia' },
               { id: 'e-ink', name: '📖 E-Ink E-Paper' },
+              { id: 'dithered-1bit', name: '🔳 1-Bit Dithered' },
               { id: 'high-contrast', name: '⚡ High Contrast' },
               { id: 'grayscale', name: '🔘 Monochrome B&W' },
               { id: 'invert', name: '🔄 Invert Colors' },
