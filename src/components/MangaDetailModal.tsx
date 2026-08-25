@@ -213,7 +213,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
             <X className="w-5 h-5" />
           </button>
 
-          <div className="flex flex-col sm:flex-row gap-5 items-start">
+          <div className="relative z-10 flex flex-col sm:flex-row gap-5 items-start">
             <div
               className="relative group cursor-pointer shrink-0"
               onClick={() => setIsCoverPickerOpen(true)}
