@@ -199,17 +199,17 @@ describe('preferEnglishTitle', () => {
 });
 
 describe('scoreMangaItem', () => {
-    it('gives a base score of ~0 for a bare item', () => {
+  it('gives a base score of ~0 for a bare item', () => {
     const bare = makeManga({ availableSources: [], rating: undefined, latestChapter: 0, sourceUrl: '', apiId: null });
     expect(scoreMangaItem(bare)).toBe(0);
   });
 
-  it('adds 10 000 for favorite', () => {
-        expect(scoreMangaItem(makeManga({ isFavorite: true, rating: undefined }))).toBeGreaterThanOrEqual(10000);
+  it('adds 10000 for favorite', () => {
+    expect(scoreMangaItem(makeManga({ isFavorite: true, rating: undefined }))).toBeGreaterThanOrEqual(10000);
     expect(scoreMangaItem(makeManga({ isFavorite: false, rating: undefined }))).toBe(0);
   });
 
-  it('adds 1 000 per linked source', () => {
+  it('adds 1000 per linked source', () => {
     const with2 = makeManga({
       rating: undefined,
       availableSources: [{ sourceName: 'A', sourceUrl: 'https://a.com' }, { sourceName: 'B', sourceUrl: 'https://b.com' }],
@@ -217,7 +217,7 @@ describe('scoreMangaItem', () => {
     expect(scoreMangaItem(with2)).toBe(2000);
   });
 
-    it('adds 500 for having an apiId or sourceUrl', () => {
+  it('adds 500 for having an apiId or sourceUrl', () => {
     expect(scoreMangaItem(makeManga({ apiId: '123', rating: undefined }))).toBe(500);
     expect(scoreMangaItem(makeManga({ sourceUrl: 'https://example.com/test', rating: undefined }))).toBe(500);
   });
