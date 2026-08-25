@@ -8,10 +8,13 @@ import {
   applySyncConfigPatch,
   syncBulkAddOrUpdateManga,
   saveDatabaseToDisk,
+  flushStateNow,
+  userProfiles,
   sanitizeIncomingSettings,
   sanitizeIncomingConfig,
   MASKED_SECRET,
 } from '../appState';
+import { hashPassword, toPublicUser } from '../security';
 
 // ============================================================================
 // APP SETTINGS & BACKUP IMPORT/EXPORT ROUTES
@@ -55,6 +58,89 @@ settingsRouter.post("/api/settings", (req, res) => {
       discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
       telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
     },
+  });
+});
+
+// POST Initial Setup Wizard Complete (host-only; atomically configures admin & server settings in SQLite)
+settingsRouter.post("/api/settings/initial-setup", (req, res) => {
+  const {
+    adminName,
+    adminUsername,
+    adminPassword,
+    selectedLanguage,
+    nsfwPolicy,
+    defaultReaderMode,
+    flareSolverrUrl,
+    autoUpdateInterval,
+    enableCloudflareBypass,
+    pinnedSources,
+  } = req.body || {};
+
+  // 1. Update Host Admin Profile in SQLite
+  const adminIdx = userProfiles.findIndex((p) => p.id === 'usr_admin');
+  if (adminIdx !== -1) {
+    if (adminName && typeof adminName === 'string' && adminName.trim()) {
+      userProfiles[adminIdx].name = adminName.trim();
+    }
+    if (adminUsername && typeof adminUsername === 'string' && adminUsername.trim()) {
+      userProfiles[adminIdx].username = adminUsername.trim();
+    }
+    if (adminPassword && typeof adminPassword === 'string' && adminPassword.length >= 6) {
+      userProfiles[adminIdx].password = hashPassword(adminPassword);
+    }
+  }
+
+  // 2. Update Sync Config (Crawler Interval)
+  if (typeof autoUpdateInterval === 'number' && autoUpdateInterval > 0) {
+    syncConfig.autoUpdateIntervalMinutes = autoUpdateInterval;
+  }
+
+  // 3. Update App Settings
+  const updatedSettings: any = {
+    ...appSettings,
+    initialSetupCompleted: true,
+    initialSetupTimestamp: new Date().toISOString(),
+  };
+
+  if (flareSolverrUrl !== undefined) {
+    updatedSettings.flareSolverrUrl = flareSolverrUrl;
+    updatedSettings.enableCloudflareBypass = enableCloudflareBypass ?? !!flareSolverrUrl;
+  }
+  if (nsfwPolicy) {
+    updatedSettings.privateModeEnabled = nsfwPolicy === 'safe';
+  }
+  if (selectedLanguage) {
+    updatedSettings.preferredLanguage = selectedLanguage;
+  }
+  if (defaultReaderMode) {
+    updatedSettings.readerDefaults = {
+      ...(appSettings.readerDefaults || {}),
+      viewMode: defaultReaderMode,
+    };
+  }
+  if (Array.isArray(pinnedSources)) {
+    updatedSettings.pinnedSources = pinnedSources;
+  }
+
+  setAppSettings(updatedSettings);
+
+  // 4. Synchronously flush to SQLite
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+
+  res.json({
+    success: true,
+    message: 'Initial setup configuration successfully saved to server database.',
+    settings: {
+      ...appSettings,
+      captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
+      discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
+      telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
+    },
+    adminUser: adminIdx !== -1 ? toPublicUser(userProfiles[adminIdx]) : null,
   });
 });
 

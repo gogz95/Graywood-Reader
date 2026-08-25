@@ -344,12 +344,12 @@ export default function App() {
   // Initial Setup Wizard First-Run Trigger (Host Administrator)
   useEffect(() => {
     try {
-      const isCompleted = localStorage.getItem('graywood_setup_completed');
+      const isCompleted = localStorage.getItem('graywood_setup_completed') || appSettings.initialSetupCompleted;
       if (!isCompleted && isHostComputer) {
         setSetupWizardOpen(true);
       }
     } catch (_) {}
-  }, [isHostComputer]);
+  }, [isHostComputer, appSettings.initialSetupCompleted]);
 
   // App Lock Lifecycle & Inactivity Timeout
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);

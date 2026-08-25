@@ -195,6 +195,9 @@ export interface AppSettings {
   ambientSoundVolume?: number;
   pageTurnSfxEnabled?: boolean;
   magnifierEnabled?: boolean;
+  initialSetupCompleted?: boolean;
+  initialSetupTimestamp?: string;
+  pinnedSources?: string[];
   readerDefaults: ReaderSettings;
 }
 

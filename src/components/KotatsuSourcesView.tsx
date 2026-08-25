@@ -287,12 +287,36 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
     showToast(`✓ Activated top 12 curated sources!`);
   };
 
-  // Save pinned sources to localStorage
+  // Save pinned sources to localStorage & persist to server settings
   useEffect(() => {
+    const pinnedArray = Array.from(pinnedSourceIds);
     try {
-      localStorage.setItem('kotatsu_pinned_sources', JSON.stringify(Array.from(pinnedSourceIds)));
+      localStorage.setItem('kotatsu_pinned_sources', JSON.stringify(pinnedArray));
     } catch (e) {}
-  }, [pinnedSourceIds]);
+
+    if (!isGuest) {
+      apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinnedSources: pinnedArray }),
+      }).catch(() => {});
+    }
+  }, [pinnedSourceIds, isGuest]);
+
+  // Hydrate pinned sources from server settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.pinnedSources) && data.pinnedSources.length > 0) {
+            setPinnedSourceIds(new Set(data.pinnedSources));
+          }
+        }
+      } catch {}
+    })();
+  }, []);
 
   // Fetch sources list from server & sync disabled state from server
   useEffect(() => {

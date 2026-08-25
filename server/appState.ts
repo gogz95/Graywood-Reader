@@ -619,6 +619,8 @@ export const SETTINGS_ALLOWED_KEYS = new Set<string>([
   // Ambient Soundscapes & Polish
   'ambientSoundEnabled', 'ambientSoundPreset', 'ambientSoundVolume',
   'pageTurnSfxEnabled', 'magnifierEnabled',
+  // System Initial Setup & Pinned Sources
+  'initialSetupCompleted', 'initialSetupTimestamp', 'pinnedSources',
 ]);
 export const READER_DEFAULTS_ALLOWED_KEYS = new Set<string>([
   'viewMode', 'maxWidth', 'pageGap', 'bgColor', 'zoomLevel', 'autoMarkRead',
@@ -630,6 +632,7 @@ export const READER_DEFAULTS_ALLOWED_KEYS = new Set<string>([
 export const CONFIG_ALLOWED_KEYS = new Set<string>([
   'subdomain', 'autoUpdateIntervalMinutes', 'enableWebCrawling', 'sources',
   'disabledSources', 'removedSources', 'reactivatedSources', 'lastSyncTime', 'totalTracked',
+  'pinnedSources',
 ]);
 // Sentinel returned in place of secrets whenever settings
 // leave the server. Clients/backup files that send it back mean "no change".
@@ -731,6 +734,9 @@ export let appSettings = {
   ambientSoundVolume: 0.5,
   pageTurnSfxEnabled: true,
   magnifierEnabled: true,
+  initialSetupCompleted: false,
+  initialSetupTimestamp: '',
+  pinnedSources: ['asurascans', 'flamecomics', 'weebcentral', 'manhwa18'],
   readerDefaults: {
     viewMode: 'webtoon' as const,
     maxWidth: '850px',

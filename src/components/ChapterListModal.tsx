@@ -199,26 +199,27 @@ export const ChapterListModal: React.FC<ChapterListModalProps> = React.memo(({
                 onClick={handleDownloadUnread}
                 disabled={chapters.filter((c) => c.chapterNumber > manga.currentChapter).length === 0}
                 className="px-3 py-2 rounded-xl bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Download all unread chapters in background as CBZ files"
+                title="Download unread chapters to server filesystem as CBZ archives (/api/downloads/queue)"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download Unread ({chapters.filter((c) => c.chapterNumber > manga.currentChapter).length})</span>
+                <span>Server CBZ ({chapters.filter((c) => c.chapterNumber > manga.currentChapter).length})</span>
               </button>
 
               <button
                 onClick={handleDownloadAll}
                 disabled={isDownloadingAll || chapters.length === 0}
                 className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-elevated border border-edge-strong/60 hover:bg-elevated/80 text-secondary font-bold text-xs sm:text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Save chapters into browser IndexedDB for offline web reading"
               >
                 {isDownloadingAll ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
                 ) : (
-                  <Download className="w-3.5 h-3.5 text-accent" />
+                  <HardDrive className="w-3.5 h-3.5 text-accent" />
                 )}
                 <span>
                   {isDownloadingAll
-                    ? `Downloading ${downloadStatus.done}/${downloadStatus.total}...`
-                    : `Download All (${chapters.length})`}
+                    ? `Caching ${downloadStatus.done}/${downloadStatus.total}...`
+                    : `Offline Cache (${chapters.length})`}
                 </span>
               </button>
 

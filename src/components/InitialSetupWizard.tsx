@@ -115,20 +115,50 @@ export const InitialSetupWizard: React.FC<InitialSetupWizardProps> = ({
   const handleFinish = async () => {
     setIsSaving(true);
     try {
-      // 1. Save preferences
-      if (onSaveSettings) {
-        onSaveSettings({
-          readerDefaults: {
-            ...(appSettings?.readerDefaults || {}),
-            viewMode: defaultReaderMode,
-          } as any,
-          flareSolverrUrl,
-          enableCloudflareBypass: !!flareSolverrUrl,
-          privateModeEnabled: nsfwPolicy === 'safe',
+      // 1. Post complete initial setup configuration to server SQLite database
+      const setupPayload = {
+        adminName,
+        adminUsername,
+        adminPassword: adminPassword || undefined,
+        allowGuestAccess,
+        selectedLanguage,
+        nsfwPolicy,
+        defaultReaderMode,
+        flareSolverrUrl,
+        autoUpdateInterval,
+        enableCloudflareBypass: !!flareSolverrUrl,
+      };
+
+      try {
+        const res = await apiFetch('/api/settings/initial-setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(setupPayload),
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.settings && onSaveSettings) {
+            onSaveSettings(data.settings);
+          }
+        }
+      } catch (e) {
+        console.warn('[Setup Wizard] Failed to post initial-setup to server, falling back to onSaveSettings:', e);
+        if (onSaveSettings) {
+          onSaveSettings({
+            readerDefaults: {
+              ...(appSettings?.readerDefaults || {}),
+              viewMode: defaultReaderMode,
+            } as any,
+            flareSolverrUrl,
+            enableCloudflareBypass: !!flareSolverrUrl,
+            privateModeEnabled: nsfwPolicy === 'safe',
+            initialSetupCompleted: true,
+            initialSetupTimestamp: new Date().toISOString(),
+          });
+        }
       }
 
-      // 2. Mark setup completed in localStorage
+      // 2. Mark setup completed in localStorage as fast client-side cache
       localStorage.setItem('graywood_setup_completed', 'true');
       localStorage.setItem('graywood_setup_timestamp', new Date().toISOString());
 

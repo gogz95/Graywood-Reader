@@ -111,13 +111,21 @@ export function getSavedFormatReadingMode(format: MangaType): Partial<ReaderSett
 }
 
 /**
- * Persist format-specific reading settings to localStorage.
+ * Persist format-specific reading settings to localStorage & server appSettings.
  */
 export function saveFormatReadingMode(format: MangaType, settings: Partial<ReaderSettings>): void {
   try {
     localStorage.setItem(`${STORAGE_KEY_FORMAT_PREFIX}${format}`, JSON.stringify(settings));
   } catch {
     // silent fail
+  }
+  if (settings.viewMode) {
+    const key = format === 'manga' ? 'defaultMangaMode' : format === 'manhwa' ? 'defaultManhwaMode' : 'defaultManhuaMode';
+    apiFetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: settings.viewMode }),
+    }).catch(() => {});
   }
 }
 
@@ -134,13 +142,20 @@ export function getLastUsedReadingMode(): Partial<ReaderSettings> | null {
 }
 
 /**
- * Persist the last used global reading settings to localStorage.
+ * Persist the last used global reading settings to localStorage & server appSettings.
  */
 export function saveLastUsedReadingMode(settings: Partial<ReaderSettings>): void {
   try {
     localStorage.setItem(STORAGE_KEY_LAST_GLOBAL, JSON.stringify(settings));
   } catch {
     // silent fail
+  }
+  if (settings.viewMode) {
+    apiFetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readerDefaults: { viewMode: settings.viewMode } }),
+    }).catch(() => {});
   }
 }
 

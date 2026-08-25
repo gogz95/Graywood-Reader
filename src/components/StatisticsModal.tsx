@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { MangaItem } from '../types';
+import { apiFetch } from '../utils/api';
 import {
   BarChart3,
   BookOpen,
@@ -20,6 +21,20 @@ interface StatisticsModalProps {
 }
 
 export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onClose }) => {
+  const [serverAnalytics, setServerAnalytics] = useState<{ totalTimeMinutes?: number; totalChaptersRead?: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/reader/analytics');
+        if (res.ok) {
+          const data = await res.json();
+          setServerAnalytics(data);
+        }
+      } catch {}
+    })();
+  }, []);
+
   const importedKotatsuStats = useMemo(() => {
     try {
       const raw = localStorage.getItem('kotatsu_imported_statistics');
@@ -29,11 +44,16 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({ mangaList, onC
   }, []);
 
   const totalSeries = mangaList.length;
-  const totalChaptersRead = mangaList.reduce((acc, m) => acc + (m.currentChapter || 0), 0);
+  const listChaptersRead = mangaList.reduce((acc, m) => acc + (m.currentChapter || 0), 0);
+  const totalChaptersRead = serverAnalytics?.totalChaptersRead && serverAnalytics.totalChaptersRead > 0
+    ? serverAnalytics.totalChaptersRead
+    : listChaptersRead;
   
-  // Calculate total reading minutes including actual imported Kotatsu time
+  // Calculate total reading minutes including server analytics or imported Kotatsu time
   const importedSeconds = importedKotatsuStats?.totalReadingTimeSeconds || 0;
-  const totalEstMinutes = importedSeconds > 0 
+  const totalEstMinutes = serverAnalytics?.totalTimeMinutes && serverAnalytics.totalTimeMinutes > 0
+    ? serverAnalytics.totalTimeMinutes
+    : importedSeconds > 0 
     ? Math.round(importedSeconds / 60)
     : totalChaptersRead * 4.5;
 

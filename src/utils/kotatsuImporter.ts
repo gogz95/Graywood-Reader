@@ -783,15 +783,32 @@ export async function parseKotatsuBackup(
     }
   }
 
-  // Save imported statistics summary to localStorage if in browser
-  if (typeof window !== 'undefined' && window.localStorage && (totalImportedReadingTime > 0 || statisticsMap.size > 0)) {
+  // Save imported statistics summary to localStorage & server SQLite if in browser
+  if (typeof window !== 'undefined' && (totalImportedReadingTime > 0 || statisticsMap.size > 0)) {
+    if (window.localStorage) {
+      try {
+        window.localStorage.setItem('kotatsu_imported_statistics', JSON.stringify({
+          importedAt: new Date().toISOString(),
+          totalReadingTimeSeconds: totalImportedReadingTime,
+          totalChaptersRead: totalImportedChaptersStat,
+          seriesCount: statisticsMap.size || (rawFavouritesList.length + rawMangaList.length),
+        }));
+      } catch {}
+    }
+
     try {
-      window.localStorage.setItem('kotatsu_imported_statistics', JSON.stringify({
-        importedAt: new Date().toISOString(),
-        totalReadingTimeSeconds: totalImportedReadingTime,
-        totalChaptersRead: totalImportedChaptersStat,
-        seriesCount: statisticsMap.size || (rawFavouritesList.length + rawMangaList.length),
-      }));
+      const token = window.localStorage ? window.localStorage.getItem('graywood_auth_token') : null;
+      fetch('/api/progress/import-statistics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          totalReadingTimeMinutes: Math.round(totalImportedReadingTime / 60),
+          totalChaptersRead: totalImportedChaptersStat,
+        }),
+      }).catch(() => {});
     } catch {}
   }
 

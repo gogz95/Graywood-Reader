@@ -260,6 +260,32 @@ progressRouter.get("/api/reader/analytics", (req, res) => {
   });
 });
 
+// POST /api/progress/import-statistics - Ingest reading activity & statistics from Kotatsu/Tachiyomi imports into SQLite
+progressRouter.post("/api/progress/import-statistics", (req, res) => {
+  const userId = resolveProgressUserId(req);
+  const { totalReadingTimeMinutes, totalChaptersRead, entries } = req.body || {};
+
+  if (totalReadingTimeMinutes || totalChaptersRead) {
+    SqliteDb.recordReadingActivity(userId, {
+      chaptersRead: Number(totalChaptersRead) || 0,
+      minutesSpent: Number(totalReadingTimeMinutes) || 0,
+    });
+  }
+
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      if (entry.mangaId && (entry.chaptersRead || entry.currentChapter)) {
+        try {
+          const ch = Number(entry.currentChapter || entry.chaptersRead) || 0;
+          SqliteDb.setUserLibraryChapter(userId, String(entry.mangaId), ch);
+        } catch {}
+      }
+    }
+  }
+
+  res.json({ success: true, message: 'Reading statistics synced to server database.' });
+});
+
 function prevDate(iso: string): string {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() - 1);
