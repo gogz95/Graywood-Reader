@@ -8,43 +8,27 @@ import {
   UserCategory,
   isNsfwManga,
 } from '../types';
-import { ManageCategoriesModal, renderCategoryIcon } from './ManageCategoriesModal';
+import { ManageCategoriesModal } from './ManageCategoriesModal';
 import { apiFetch } from '../utils/api';
-
 import {
-  Plus,
   BookOpen,
   CheckCircle,
   Clock,
-  PauseCircle,
-  XCircle,
   Star,
   Flame,
-  ArrowUpDown,
-  ExternalLink,
   Zap,
-  Edit2,
-  Trash2,
-  Sparkles,
-  Layers,
   AlertTriangle,
-  Flag,
   CheckSquare,
   Square,
-  Download,
-  Check,
-  Folder,
-  Settings,
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  SlidersHorizontal,
-  Grid3X3,
-  List,
-  Play,
-  ArrowRight,
-  LayoutGrid,
+  Plus,
+  Layers,
 } from 'lucide-react';
+import { MangaGridCard, MangaListRow } from './library/LibraryCard';
+import { HeroSpotlightBanner } from './library/HeroSpotlightBanner';
+import { JumpBackInShelf, FreshReleasesShelf } from './library/LibraryShelves';
+import { LibraryBatchBar } from './library/LibraryBatchBar';
+import { LibraryCategoryRibbon } from './library/LibraryCategoryRibbon';
+import { LibraryFiltersDrawer } from './library/LibraryFiltersDrawer';
 
 interface LibraryViewProps {
   mangaList: MangaItem[];
@@ -62,780 +46,6 @@ interface LibraryViewProps {
   onOpenAuthModal?: () => void;
   onRefreshLibrary?: () => void;
 }
-
-/** Memoized Shimmer Placeholder Card for smooth loading */
-export const MangaSkeletonCard = React.memo(() => (
-  <div className="bg-surface/90 border border-edge/80 rounded-2xl overflow-hidden shadow-lg flex flex-col">
-    <div className="aspect-[3/4] w-full skeleton-shimmer" />
-    <div className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
-      <div className="space-y-2">
-        <div className="h-4 w-3/4 skeleton-shimmer rounded-lg" />
-        <div className="h-3 w-1/2 skeleton-shimmer rounded-lg" />
-      </div>
-      <div className="space-y-2 pt-1 border-t border-edge/60">
-        <div className="h-1.5 w-full skeleton-shimmer rounded-full" />
-        <div className="h-8 w-full skeleton-shimmer rounded-xl" />
-      </div>
-    </div>
-  </div>
-));
-
-interface MangaGridCardProps {
-  manga: MangaItem;
-  isSelectMode: boolean;
-  isSelected: boolean;
-  isReaderAvailable: boolean;
-  onToggleSelect: (id: string) => void;
-  onSelectManga: (manga: MangaItem) => void;
-  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
-  onOpenChapters: (manga: MangaItem) => void;
-  onIncrementChapter: (id: string) => void;
-  onQuickEdit: (manga: MangaItem) => void;
-}
-
-/** Memoized Manga Grid Card to eliminate redundant re-renders on large libraries */
-const MangaGridCard = React.memo<MangaGridCardProps>(({
-  manga,
-  isSelectMode,
-  isSelected,
-  isReaderAvailable,
-  onToggleSelect,
-  onSelectManga,
-  onOpenReader,
-  onOpenChapters,
-  onIncrementChapter,
-  onQuickEdit,
-}) => {
-  const hasNewChapter = manga.latestChapter > manga.currentChapter;
-  const progress =
-    manga.latestChapter > 0
-      ? Math.min(100, Math.round((manga.currentChapter / manga.latestChapter) * 100))
-      : 0;
-
-  return (
-    <div className="group card-interactive bg-surface/95 border border-edge/80 hover:border-accent/50 rounded-2xl overflow-hidden shadow-xl flex flex-col relative transition-all duration-300">
-      {/* Cover Image Container */}
-      <div
-        onClick={() => {
-          if (isSelectMode) onToggleSelect(manga.id);
-          else onSelectManga(manga);
-        }}
-        className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
-      >
-        <img
-          src={manga.coverImage}
-          alt={manga.title}
-          className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
-          loading="lazy"
-          decoding="async"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors" />
-
-        {/* Multi-Select Checkbox Badge */}
-        {isSelectMode && (
-          <div className="absolute top-2.5 right-2.5 z-20">
-            <div className={`w-6 h-6 rounded-xl flex items-center justify-center border shadow-lg transition-all ${
-              isSelected
-                ? 'bg-accent border-accent text-accent-fg scale-110'
-                : 'bg-surface/80 border-edge text-transparent backdrop-blur-md'
-            }`}>
-              <Check className="w-4 h-4 stroke-[3]" />
-            </div>
-          </div>
-        )}
-
-        {/* Badges Overlay */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1">
-          <span
-            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold tracking-wide uppercase border backdrop-blur-md shadow-md ${
-              manga.type === 'manhwa'
-                ? 'bg-blue-950/80 text-info border-info/30'
-                : manga.type === 'manhua'
-                ? 'bg-red-950/80 text-danger border-danger/30'
-                : 'bg-purple-950/80 text-accent-2 border-accent-2/30'
-            }`}
-          >
-            {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
-          </span>
-
-          {hasNewChapter && (
-            <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md shadow-accent/20 animate-pulse">
-              +{manga.latestChapter - manga.currentChapter} New
-            </span>
-          )}
-
-          {isNsfwManga(manga) && (
-            <span className="px-1.5 py-0.5 rounded-lg text-[10px] font-black bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-md">
-              🔞 18+
-            </span>
-          )}
-
-          {manga.isFlagged ? (
-            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border shadow-md flex items-center gap-1 ${
-              manga.flagReason?.toLowerCase().includes('missing source')
-                ? 'bg-amber-950/90 text-amber-300 border-amber-500/50'
-                : 'bg-danger/90 text-white border-danger'
-            }`}>
-              <AlertTriangle className="w-3 h-3" />
-              <span>{manga.flagReason?.toLowerCase().includes('missing source') ? 'NO SOURCE' : 'FLAGGED'}</span>
-            </span>
-          ) : !isReaderAvailable ? (
-            <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-950/80 text-amber-400 border border-amber-500/30 shadow-md flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" />
-              <span>NO SOURCE</span>
-            </span>
-          ) : null}
-        </div>
-
-        {/* Rating Badge */}
-        <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-app/85 backdrop-blur-md px-2 py-0.5 rounded-lg border border-edge/80 text-xs font-bold text-accent shadow-sm">
-          <Star className="w-3 h-3 fill-accent text-accent" />
-          <span>{manga.rating}</span>
-        </div>
-      </div>
-
-      {/* Card Content */}
-      <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
-        <div className="space-y-1">
-          <h4
-            onClick={() => onSelectManga(manga)}
-            className="text-sm font-bold font-display text-primary line-clamp-1 hover:text-accent cursor-pointer transition-colors"
-            title={manga.title}
-          >
-            {manga.title}
-          </h4>
-          <p className="text-[11px] text-secondary line-clamp-1 font-medium">
-            {manga.altTitles[0] || manga.sourceName}
-          </p>
-        </div>
-
-        {/* Chapter Progress */}
-        <div className="space-y-1.5 pt-1 border-t border-edge/70">
-          <div className="flex items-center justify-between text-xs font-semibold">
-            <span className="text-secondary">Ch. {manga.currentChapter}</span>
-            <span className="text-muted text-[11px] font-mono">of {manga.latestChapter}</span>
-          </div>
-
-          <div className="w-full h-1.5 rounded-full bg-app/90 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                progress === 100
-                  ? 'bg-success'
-                  : hasNewChapter
-                  ? 'bg-gradient-to-r from-accent-2 to-accent-bright'
-                  : 'bg-accent'
-              }`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="space-y-1.5 pt-1">
-          {isReaderAvailable ? (
-            <button
-              onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs transition-all shadow-md shadow-accent/20 hover:shadow-accent/40 active:scale-[0.97]"
-              title="Open Webtoon Reader for next chapter"
-            >
-              <BookOpen className="w-3.5 h-3.5 fill-accent-fg" />
-              <span>Read Ch. {manga.currentChapter + 1}</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => onSelectManga(manga)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-elevated hover:bg-elevated/80 text-primary font-bold text-xs transition-all border border-edge-strong active:scale-[0.97]"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-accent" />
-              <span>View Info</span>
-            </button>
-          )}
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onOpenChapters(manga)}
-              className="flex-1 py-1.5 rounded-lg bg-elevated hover:bg-elevated/80 text-secondary hover:text-white text-[11px] font-bold transition-colors border border-edge-strong/80 active:scale-[0.97]"
-              title="View full chapter list"
-            >
-              Chapters
-            </button>
-
-            <button
-              onClick={() => onIncrementChapter(manga.id)}
-              className="px-2.5 py-1.5 rounded-lg bg-elevated hover:bg-success hover:text-accent-fg text-secondary text-[11px] font-black transition-all border border-edge-strong/80 active:scale-[0.97]"
-              title="Quick mark +1 read without opening reader"
-            >
-              +1
-            </button>
-
-            <button
-              onClick={() => onQuickEdit(manga)}
-              className="p-1.5 rounded-lg bg-elevated/80 hover:bg-elevated text-secondary hover:text-primary transition-colors border border-edge active:scale-[0.97]"
-              title="Edit series"
-            >
-              <Edit2 className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-interface MangaListRowProps {
-  manga: MangaItem;
-  isSelectMode: boolean;
-  isSelected: boolean;
-  isReaderAvailable: boolean;
-  onToggleSelect: (id: string) => void;
-  onSelectManga: (manga: MangaItem) => void;
-  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
-  onOpenChapters: (manga: MangaItem) => void;
-  onIncrementChapter: (id: string) => void;
-  onQuickEdit: (manga: MangaItem) => void;
-  onDeleteManga: (id: string) => void;
-}
-
-/** Memoized Manga List Row for high-performance table view */
-const MangaListRow = React.memo<MangaListRowProps>(({
-  manga,
-  isSelectMode,
-  isSelected,
-  isReaderAvailable,
-  onToggleSelect,
-  onSelectManga,
-  onOpenReader,
-  onOpenChapters,
-  onIncrementChapter,
-  onQuickEdit,
-  onDeleteManga,
-}) => {
-  const hasNew = manga.latestChapter > manga.currentChapter;
-
-  return (
-    <tr
-      onClick={() => {
-        if (isSelectMode) onToggleSelect(manga.id);
-      }}
-      className={`hover:bg-elevated/40 transition-colors ${
-        isSelected ? 'bg-accent/10' : ''
-      } ${isSelectMode ? 'cursor-pointer' : ''}`}
-    >
-      {isSelectMode && (
-        <td className="py-3 px-3">
-          <div className={`w-5 h-5 rounded flex items-center justify-center border ${
-            isSelected ? 'bg-accent border-accent text-accent-fg' : 'border-edge bg-surface text-transparent'
-          }`}>
-            <Check className="w-3.5 h-3.5 stroke-[3]" />
-          </div>
-        </td>
-      )}
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-3">
-          <img
-            src={manga.coverImage}
-            alt={manga.title}
-            loading="lazy"
-            decoding="async"
-            className="w-9 h-12 rounded object-cover bg-app"
-          />
-          <div>
-            <div
-              onClick={() => {
-                if (!isSelectMode) onSelectManga(manga);
-              }}
-              className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1 flex items-center gap-1.5"
-            >
-              <span>{manga.title}</span>
-              {isNsfwManga(manga) && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
-                  🔞 18+
-                </span>
-              )}
-            </div>
-            <div className="text-[11px] text-secondary line-clamp-1">
-              {manga.altTitles[0] || 'No alt title'}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td className="py-3 px-4 font-medium uppercase">
-        <span
-          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-            manga.type === 'manhwa'
-              ? 'bg-blue-950 text-info border border-info/20'
-              : manga.type === 'manhua'
-              ? 'bg-red-950 text-danger border border-danger/20'
-              : 'bg-purple-950 text-accent-2 border border-accent-2/20'
-          }`}
-        >
-          {manga.type === 'manga' ? '🇯🇵 Manga' : manga.type === 'manhwa' ? '🇰🇷 Manhwa' : manga.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
-        </span>
-      </td>
-      <td className="py-3 px-4 capitalize">
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] bg-elevated text-secondary">
-          {manga.status.replace(/_/g, ' ')}
-        </span>
-      </td>
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-primary">Ch. {manga.currentChapter}</span>
-          <span className="text-muted">/ {manga.latestChapter}</span>
-          {hasNew && (
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-accent-2 text-accent-fg font-bold">
-              NEW
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="py-3 px-4 font-bold text-accent">★ {manga.rating}</td>
-      <td className="py-3 px-4 text-secondary">
-        <div className="flex items-center gap-1.5">
-          <span>{manga.sourceName}</span>
-          {(manga.isFlagged && manga.flagReason?.toLowerCase().includes('missing source')) || !isReaderAvailable ? (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40" title="Missing reading source">
-              No Source
-            </span>
-          ) : manga.isFlagged ? (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger/80 text-white" title={manga.flagReason}>
-              Flagged
-            </span>
-          ) : null}
-        </div>
-      </td>
-      <td className="py-3 px-4 text-right">
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenReader(manga, manga.currentChapter + 1);
-            }}
-            className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs sm:text-sm flex items-center gap-1"
-          >
-            <BookOpen className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-accent-fg" />
-            Read Ch. {manga.currentChapter + 1}
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenChapters(manga);
-            }}
-            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-secondary hover:text-white transition-all text-xs sm:text-sm"
-          >
-            Chapters
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onIncrementChapter(manga.id);
-            }}
-            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-success hover:bg-emerald-950 transition-all text-xs sm:text-sm font-bold"
-            title="Quick mark +1 read"
-          >
-            +1
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onQuickEdit(manga);
-            }}
-            className="p-1 rounded bg-elevated text-secondary hover:text-white"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteManga(manga.id);
-            }}
-            className="p-1 rounded bg-elevated text-danger hover:bg-red-950"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-});
-
-interface HeroSpotlightProps {
-  items: MangaItem[];
-  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
-  onSelectManga: (manga: MangaItem) => void;
-}
-
-export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOpenReader, onSelectManga }) => {
-  const [index, setIndex] = useState(0);
-
-  if (!items || items.length === 0) return null;
-  const current = items[Math.min(index, items.length - 1)];
-  const progress = current.latestChapter > 0 ? Math.min(100, Math.round((current.currentChapter / current.latestChapter) * 100)) : 0;
-  const hasNew = current.latestChapter > current.currentChapter;
-
-  return (
-    <div className="relative rounded-3xl overflow-hidden border border-edge/80 shadow-2xl bg-surface/90 text-primary min-h-[300px] sm:min-h-[340px] flex flex-col justify-between group">
-      {/* Blurred ambient backdrop art */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <img
-          src={current.coverImage}
-          alt=""
-          className="w-full h-full object-cover blur-3xl opacity-25 scale-125 transition-all duration-700"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-app via-app/90 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/50" />
-        <div className="hero-ambient-glow absolute inset-0" />
-      </div>
-
-      {/* Main Hero Content */}
-      <div className="relative z-10 p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-        <div className="space-y-3.5 max-w-2xl">
-          {/* Badges */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black tracking-wide uppercase bg-accent/20 text-accent border border-accent/30 shadow-xs">
-              ★ SPOTLIGHT
-            </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
-              current.type === 'manhwa' ? 'bg-blue-950/80 text-info border-info/30' :
-              current.type === 'manhua' ? 'bg-red-950/80 text-danger border-danger/30' :
-              'bg-purple-950/80 text-accent-2 border-accent-2/30'
-            }`}>
-              {current.type === 'manga' ? '🇯🇵 Manga' : current.type === 'manhwa' ? '🇰🇷 Manhwa' : current.type === 'novel' ? '📖 Novel' : '🇨🇳 Manhua'}
-            </span>
-            {hasNew && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-sm">
-                +{current.latestChapter - current.currentChapter} New Chapters
-              </span>
-            )}
-            <div className="flex items-center gap-1 text-xs font-bold text-accent bg-app/60 px-2 py-0.5 rounded-full border border-edge">
-              <Star className="w-3 h-3 fill-accent text-accent" />
-              <span>{current.rating || '9.5'}</span>
-            </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <h2
-              onClick={() => onSelectManga(current)}
-              className="text-2xl sm:text-4xl font-black text-primary hover:text-accent cursor-pointer transition-colors tracking-tight line-clamp-1 sm:line-clamp-2"
-            >
-              {current.title}
-            </h2>
-            {current.altTitles && current.altTitles.length > 0 && (
-              <p className="text-xs text-secondary/80 font-medium line-clamp-1 mt-0.5">
-                {current.altTitles[0]}
-              </p>
-            )}
-          </div>
-
-          {/* Synopsis */}
-          {current.description && (
-            <p className="text-xs sm:text-sm text-secondary line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-xl">
-              {current.description}
-            </p>
-          )}
-
-          {/* Progress Indicator */}
-          <div className="space-y-1.5 pt-1 max-w-md">
-            <div className="flex items-center justify-between text-xs font-semibold text-secondary">
-              <span>Chapter {current.currentChapter} of {current.latestChapter}</span>
-              <span className="text-accent font-bold">{progress}% read</span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-app/80 border border-edge/60 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-accent to-accent-2 rounded-full transition-all duration-500 shadow-sm"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Action CTAs */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              onClick={() => onOpenReader(current, current.currentChapter + 1)}
-              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-accent/25 hover:shadow-accent/40 transition-all hover:scale-105 active:scale-95"
-            >
-              <Play className="w-4 h-4 fill-accent-fg" />
-              <span>Resume Chapter {current.currentChapter + 1}</span>
-            </button>
-
-            <button
-              onClick={() => onSelectManga(current)}
-              className="px-4 py-2.5 rounded-2xl bg-elevated/80 hover:bg-elevated text-primary font-bold text-xs sm:text-sm border border-edge-strong flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
-            >
-              <BookOpen className="w-4 h-4 text-accent" />
-              <span>View Series Info</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3D Floating Cover Card (Desktop) */}
-        <div
-          onClick={() => onSelectManga(current)}
-          className="hidden sm:block relative shrink-0 cursor-pointer group/cover"
-        >
-          <div className="relative aspect-[3/4] w-40 sm:w-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group-hover/cover:scale-105 group-hover/cover:border-accent transition-all duration-300">
-            <img
-              src={current.coverImage}
-              alt={current.title}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end p-3">
-              <span className="text-xs font-bold text-white flex items-center gap-1">
-                <BookOpen className="w-3.5 h-3.5 text-accent" /> View Details
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Slide Navigation Dots */}
-      {items.length > 1 && (
-        <div className="relative z-10 px-6 py-2.5 bg-app/40 backdrop-blur-md border-t border-edge/60 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            {items.slice(0, 6).map((item, idx) => (
-              <button
-                key={item.id}
-                onClick={() => setIndex(idx)}
-                aria-label={`Slide to ${item.title}`}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  index === idx ? 'w-8 bg-accent' : 'w-2 bg-edge-strong hover:bg-muted'
-                }`}
-              />
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setIndex((prev) => (prev > 0 ? prev - 1 : Math.min(5, items.length - 1)))}
-              className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors"
-              title="Previous featured series"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIndex((prev) => (prev < Math.min(5, items.length - 1) ? prev + 1 : 0))}
-              className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors"
-              title="Next featured series"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
-interface JumpBackInShelfProps {
-  items: MangaItem[];
-  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
-  onSelectManga: (manga: MangaItem) => void;
-}
-
-export const JumpBackInShelf = React.memo<JumpBackInShelfProps>(({ items, onOpenReader, onSelectManga }) => {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  if (!items || items.length === 0) return null;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-accent/15 text-accent border border-accent/25">
-            <Flame className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-base font-black text-primary tracking-tight">Jump Back In</h3>
-            <p className="text-[11px] text-secondary">Continue where you left off</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => scrollRef.current?.scrollBy({ left: -340, behavior: 'smooth' })}
-            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
-            title="Scroll left"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => scrollRef.current?.scrollBy({ left: 340, behavior: 'smooth' })}
-            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
-            title="Scroll right"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div
-        ref={scrollRef}
-        className="shelf-carousel gap-4 no-scrollbar py-1"
-      >
-        {items.map((manga) => {
-          const progress = manga.latestChapter > 0 ? Math.min(100, Math.round((manga.currentChapter / manga.latestChapter) * 100)) : 0;
-          const hasNew = manga.latestChapter > manga.currentChapter;
-
-          return (
-            <div
-              key={manga.id}
-              onClick={() => onSelectManga(manga)}
-              className="w-80 sm:w-96 card-wide-resume bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl p-3.5 flex gap-3.5 shadow-lg group cursor-pointer shrink-0"
-            >
-              <div className="relative w-20 sm:w-24 aspect-[3/4] rounded-xl overflow-hidden bg-app shrink-0">
-                <img
-                  src={manga.coverImage}
-                  alt={manga.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                />
-                {hasNew && (
-                  <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded text-[9px] font-black bg-accent-2 text-accent-fg shadow-md">
-                    +{manga.latestChapter - manga.currentChapter}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2">
-                <div>
-                  <h4 className="font-bold text-sm text-primary group-hover:text-accent transition-colors line-clamp-1">
-                    {manga.title}
-                  </h4>
-                  <p className="text-[11px] text-secondary line-clamp-1">
-                    {manga.altTitles[0] || manga.sourceName}
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-secondary">
-                    <span>Ch. {manga.currentChapter} of {manga.latestChapter}</span>
-                    <span className="text-accent font-bold">{progress}%</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-app overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-accent to-accent-2 rounded-full"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenReader(manga, manga.currentChapter + 1);
-                  }}
-                  className="w-full py-1.5 rounded-xl bg-accent text-accent-fg font-black text-xs flex items-center justify-center gap-1.5 shadow-sm hover:bg-accent-bright transition-all active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 fill-accent-fg" />
-                  <span>Resume Ch. {manga.currentChapter + 1}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-});
-
-interface FreshReleasesShelfProps {
-  items: MangaItem[];
-  onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
-  onSelectManga: (manga: MangaItem) => void;
-}
-
-export const FreshReleasesShelf = React.memo<FreshReleasesShelfProps>(({ items, onOpenReader, onSelectManga }) => {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  if (!items || items.length === 0) return null;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-accent-2/15 text-accent-2 border border-accent-2/25">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-base font-black text-primary tracking-tight">Fresh Releases & Updates</h3>
-            <p className="text-[11px] text-secondary">Series with new chapters waiting for you</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => scrollRef.current?.scrollBy({ left: -340, behavior: 'smooth' })}
-            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
-            title="Scroll left"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => scrollRef.current?.scrollBy({ left: 340, behavior: 'smooth' })}
-            className="p-1.5 rounded-xl bg-surface border border-edge hover:border-edge-strong text-secondary hover:text-primary transition-colors"
-            title="Scroll right"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div
-        ref={scrollRef}
-        className="shelf-carousel gap-4 no-scrollbar py-1"
-      >
-        {items.map((manga) => (
-          <div
-            key={manga.id}
-            onClick={() => onSelectManga(manga)}
-            className="w-36 sm:w-44 card-interactive bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl overflow-hidden shadow-lg flex flex-col shrink-0 cursor-pointer group"
-          >
-            <div className="relative aspect-[3/4] w-full overflow-hidden bg-app">
-              <img
-                src={manga.coverImage}
-                alt={manga.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/40" />
-
-              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-md">
-                +{manga.latestChapter - manga.currentChapter} New
-              </span>
-
-              <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-app/80 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-edge text-[10px] font-bold text-accent">
-                <Star className="w-2.5 h-2.5 fill-accent text-accent" />
-                <span>{manga.rating || '9.0'}</span>
-              </div>
-            </div>
-
-            <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
-              <div>
-                <h4 className="font-bold text-xs text-primary group-hover:text-accent transition-colors line-clamp-1">
-                  {manga.title}
-                </h4>
-                <p className="text-[10px] text-secondary line-clamp-1">
-                  Ch. {manga.currentChapter} / {manga.latestChapter}
-                </p>
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenReader(manga, manga.currentChapter + 1);
-                }}
-                className="w-full py-1 rounded-lg bg-accent text-accent-fg font-black text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-accent-bright transition-all"
-              >
-                <Play className="w-3 h-3 fill-accent-fg" />
-                <span>Read Ch. {manga.currentChapter + 1}</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-});
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   mangaList,
@@ -1259,7 +469,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('all');
               }}
-              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 cursor-pointer ${
                 activeCategory === null && statusFilter === 'all'
                   ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
@@ -1273,7 +483,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('reading');
               }}
-              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 cursor-pointer ${
                 activeCategory === null && statusFilter === 'reading'
                   ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
@@ -1287,7 +497,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('favorites');
               }}
-              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 cursor-pointer ${
                 activeCategory === null && statusFilter === 'favorites'
                   ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
@@ -1301,7 +511,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('flagged');
               }}
-              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 cursor-pointer ${
                 activeCategory === null && statusFilter === 'flagged'
                   ? 'bg-danger text-white font-black shadow-md shadow-danger/20'
                   : 'bg-elevated/70 text-danger hover:bg-elevated'
@@ -1315,7 +525,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setActiveCategory(null);
                 setStatusFilter('completed');
               }}
-              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+              className={`px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 active:scale-95 cursor-pointer ${
                 activeCategory === null && statusFilter === 'completed'
                   ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
                   : 'bg-elevated/70 text-secondary hover:bg-elevated hover:text-primary'
@@ -1333,7 +543,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 setIsSelectMode(!isSelectMode);
                 if (isSelectMode) setSelectedIds(new Set());
               }}
-              className={`px-3 py-2 rounded-2xl font-bold transition-all flex items-center gap-1.5 border active:scale-95 ${
+              className={`px-3 py-2 rounded-2xl font-bold transition-all flex items-center gap-1.5 border active:scale-95 cursor-pointer ${
                 isSelectMode
                   ? 'bg-accent text-accent-fg border-accent shadow-md shadow-accent/20'
                   : 'bg-app/80 border-edge text-secondary hover:text-primary hover:bg-elevated'
@@ -1363,7 +573,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="flex items-center bg-app/80 border border-edge rounded-2xl p-1 shadow-inner">
               <button
                 onClick={() => setViewMode('shelves')}
-                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 cursor-pointer ${
                   viewMode === 'shelves' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Cinematic Shelves & Spotlight Hub"
@@ -1373,7 +583,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 cursor-pointer ${
                   viewMode === 'grid' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Grid View"
@@ -1383,7 +593,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 ${
+                className={`px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 font-bold active:scale-95 cursor-pointer ${
                   viewMode === 'table' ? 'bg-accent text-accent-fg shadow-sm' : 'text-secondary hover:text-primary'
                 }`}
                 title="Table View"
@@ -1396,376 +606,46 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Row 2: Dedicated Custom Shelves Ribbon */}
-        <div className="pt-2.5 border-t border-edge/60 space-y-2 min-w-0">
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-secondary shrink-0">
-              <Bookmark className="w-3.5 h-3.5 text-accent" />
-              <span>Shelves</span>
-              {categories.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-elevated text-primary border border-edge">
-                  {categories.length}
-                </span>
-              )}
-            </div>
+        <LibraryCategoryRibbon
+          categories={categories}
+          activeCategory={activeCategory}
+          setActiveCategory={setActiveCategory}
+          setStatusFilter={setStatusFilter}
+          mangaList={mangaList}
+          categoryCounts={categoryCounts}
+          isShelvesExpanded={isShelvesExpanded}
+          setIsShelvesExpanded={setIsShelvesExpanded}
+          canScrollLeft={canScrollLeft}
+          canScrollRight={canScrollRight}
+          scrollShelves={scrollShelves}
+          handleShelfWheel={handleShelfWheel}
+          checkShelfScroll={checkShelfScroll}
+          shelvesRef={shelvesRef}
+          onOpenManageCategories={() => setIsManageCategoriesOpen(true)}
+        />
 
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto text-xs">
-              {/* Scroll buttons (visible when single row and scrollable) */}
-              {!isShelvesExpanded && categories.length > 2 && (
-                <div className="flex items-center gap-0.5 bg-app border border-edge rounded-xl p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => scrollShelves('left')}
-                    disabled={!canScrollLeft}
-                    className={`p-1 rounded-lg transition-colors ${
-                      canScrollLeft ? 'text-primary hover:bg-elevated hover:text-accent' : 'text-muted/40 cursor-not-allowed'
-                    }`}
-                    title="Scroll shelves left"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => scrollShelves('right')}
-                    disabled={!canScrollRight}
-                    className={`p-1 rounded-lg transition-colors ${
-                      canScrollRight ? 'text-primary hover:bg-elevated hover:text-accent' : 'text-muted/40 cursor-not-allowed'
-                    }`}
-                    title="Scroll shelves right"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              {/* Expand / Wrap Grid Toggle */}
-              {categories.length > 2 && (
-                <button
-                  type="button"
-                  onClick={() => setIsShelvesExpanded(!isShelvesExpanded)}
-                  className={`px-2 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all border ${
-                    isShelvesExpanded
-                      ? 'bg-accent text-accent-fg border-accent shadow-xs'
-                      : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
-                  }`}
-                  title={isShelvesExpanded ? 'Collapse shelves to single scrollable row' : 'Expand all shelves'}
-                >
-                  {isShelvesExpanded ? <List className="w-3 h-3" /> : <Grid3X3 className="w-3 h-3" />}
-                  <span>{isShelvesExpanded ? 'Row' : 'All'}</span>
-                </button>
-              )}
-
-              {/* Manage Shelves Button */}
-              <button
-                onClick={() => setIsManageCategoriesOpen(true)}
-                className="px-2.5 py-1 rounded-xl bg-accent-2/15 hover:bg-accent-2/25 text-accent-2 border border-accent-2/30 text-[11px] font-bold flex items-center gap-1 transition-all shadow-xs"
-                title="Add or organize custom shelves"
-              >
-                <Plus className="w-3 h-3" />
-                <span>{categories.length === 0 ? 'Create Shelf' : 'Manage'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Shelves Container */}
-          <div
-            ref={shelvesRef}
-            onWheel={handleShelfWheel}
-            onScroll={checkShelfScroll}
-            className={`transition-all duration-200 min-w-0 ${
-              isShelvesExpanded
-                ? 'flex flex-wrap items-center gap-1.5 py-1 max-h-48 overflow-y-auto'
-                : 'flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth'
-            }`}
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'var(--color-edge, rgba(255,255,255,0.15)) transparent'
-            }}
-          >
-            {/* All Shelves Pill */}
-            <button
-              onClick={() => {
-                setActiveCategory(null);
-                setStatusFilter('all');
-              }}
-              className={`px-2.5 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
-                activeCategory === null
-                  ? 'bg-accent text-accent-fg font-black shadow-sm ring-1 ring-white/20'
-                  : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60'
-              }`}
-            >
-              <Folder className="w-3 h-3" />
-              <span>All Shelves</span>
-              <span
-                className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  activeCategory === null ? 'bg-black/25 text-black' : 'bg-surface text-muted'
-                }`}
-              >
-                {mangaList.length}
-              </span>
-            </button>
-
-            {/* Individual Custom Category Shelves */}
-            {categories.map((cat) => {
-              const isCatActive = activeCategory === cat.id;
-              const count = categoryCounts.get(cat.id) || 0;
-
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    if (activeCategory === cat.id) {
-                      setActiveCategory(null);
-                    } else {
-                      setActiveCategory(cat.id);
-                      setStatusFilter('all');
-                    }
-                  }}
-                  className={`px-2.5 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 text-xs shrink-0 ${
-                    isCatActive
-                      ? 'font-black shadow-md ring-2 ring-white/40 scale-[1.02]'
-                      : 'bg-elevated/60 text-secondary hover:bg-elevated hover:text-primary border border-edge/60 hover:border-edge'
-                  }`}
-                  style={
-                    isCatActive
-                      ? { backgroundColor: cat.color || '#f59e0b', color: '#000' }
-                      : undefined
-                  }
-                >
-                  <span style={!isCatActive ? { color: cat.color || '#f59e0b' } : undefined}>
-                    {renderCategoryIcon(cat.icon, 'w-3 h-3')}
-                  </span>
-                  <span className="font-semibold">{cat.name}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                      isCatActive ? 'bg-black/25 text-black' : 'bg-surface text-muted'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-
-            {categories.length === 0 && (
-              <span className="text-xs text-muted italic py-0.5">No custom shelves created yet. Click "+ Create Shelf" to make one!</span>
-            )}
-          </div>
-        </div>
-
-        {/* Row 3: Secondary Filter Bar (Origin Type, 18+ Filter & Tri-State Genres) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-t border-edge/60 pt-2.5 min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Origin Type Filter */}
-            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5">
-              <button
-                type="button"
-                onClick={() => setTypeFilter('all')}
-                className={`px-2.5 py-1 rounded-lg transition-all font-bold ${
-                  typeFilter === 'all'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-secondary hover:text-primary'
-                }`}
-              >
-                All Formats
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter('manhwa')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
-                  typeFilter === 'manhwa'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-secondary hover:text-primary'
-                }`}
-              >
-                <span>🇰🇷</span> Manhwa
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter('manga')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
-                  typeFilter === 'manga'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-secondary hover:text-primary'
-                }`}
-              >
-                <span>🇯🇵</span> Manga
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter('manhua')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
-                  typeFilter === 'manhua'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-secondary hover:text-primary'
-                }`}
-              >
-                <span>🇨🇳</span> Manhua
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter('novel')}
-                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold ${
-                  typeFilter === 'novel'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-secondary hover:text-primary'
-                }`}
-              >
-                <span>📖</span> Novel
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsGenreFilterOpen(!isGenreFilterOpen)}
-              className={`px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 transition-all border ${
-                genreStates.size > 0
-                  ? 'bg-accent/20 border-accent text-accent shadow-xs'
-                  : 'bg-app border-edge text-secondary hover:text-primary hover:bg-elevated'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Genre Filters {genreStates.size > 0 ? `(${genreStates.size})` : ''}</span>
-            </button>
-          </div>
-
-            {/* 18+ NSFW Content Toggle */}
-            <div className="flex items-center gap-1 bg-app/80 border border-edge rounded-xl p-0.5 shadow-inner">
-              <button
-                type="button"
-                onClick={() => setNsfwFilter('all')}
-                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs ${
-                  nsfwFilter === 'all'
-                    ? 'bg-elevated text-primary shadow-xs'
-                    : 'text-muted hover:text-secondary'
-                }`}
-                title="Show all content"
-              >
-                All Content
-              </button>
-              <button
-                type="button"
-                onClick={() => setNsfwFilter('safe')}
-                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs ${
-                  nsfwFilter === 'safe'
-                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-xs'
-                    : 'text-muted hover:text-secondary'
-                }`}
-                title="Hide 18+ / Adult series"
-              >
-                Safe
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isGuest) {
-                    onOpenAuthModal?.();
-                  } else {
-                    setNsfwFilter('18+');
-                  }
-                }}
-                className={`px-2 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 ${
-                  !isGuest && nsfwFilter === '18+'
-                    ? 'bg-rose-950 text-rose-300 border border-rose-500/50 shadow-xs'
-                    : 'text-muted hover:text-rose-400'
-                }`}
-                title={isGuest ? 'Sign in to access 18+ content' : 'Show only 18+ / Mature series'}
-              >
-                <span>🔞 18+</span>
-                {isGuest ? (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-edge-strong text-muted flex items-center gap-0.5">🔒 Login</span>
-                ) : (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-900/60 text-rose-300">
-                    {nsfwCount}
-                  </span>
-                )}
-              </button>
-
-              {!isGuest && (
-                <button
-                  type="button"
-                  onClick={handleAutoTagNsfw}
-                  disabled={isAutoTagging}
-                  className="px-2 py-1 rounded-lg font-bold transition-all text-xs flex items-center gap-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 border border-amber-500/40 shadow-xs ml-1 disabled:opacity-50"
-                  title="Scan library and auto-tag untagged 18+ NSFW series based on source, genres, and title keywords"
-                >
-                  <Sparkles className={`w-3 h-3 text-amber-400 ${isAutoTagging ? 'animate-spin' : ''}`} />
-                  <span>{isAutoTagging ? 'Scanning...' : 'Auto-Tag 18+'}</span>
-                </button>
-              )}
-            </div>
-
-          {autoTagToast && (
-            <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{autoTagToast}</span>
-            </div>
-          )}
-
-          {activeCategory && (
-            <div className="flex items-center gap-1.5 text-xs text-secondary bg-elevated/80 border border-edge/80 px-2.5 py-1 rounded-xl">
-              <span>Active Shelf:</span>
-              <span className="font-black text-accent-2">
-                {categories.find((c) => c.id === activeCategory)?.name || 'Custom Shelf'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setActiveCategory(null)}
-                className="ml-1 text-[10px] px-1.5 py-0.5 rounded-lg bg-surface hover:bg-danger/20 text-muted hover:text-danger font-bold transition-all"
-                title="Clear shelf filter"
-              >
-                ✕ Clear
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Row 4: Tri-State Genre Filtering Panel */}
-        {isGenreFilterOpen && (
-          <div className="pt-3 border-t border-edge/60 space-y-2 animate-in fade-in duration-150">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-bold text-secondary flex items-center gap-2">
-                <span>Tri-State Filter (Click: <strong>+Include</strong> &rarr; <strong>-Exclude</strong> &rarr; <strong>Neutral</strong>):</span>
-                {genreStates.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearGenreTags}
-                    className="text-[10px] text-danger hover:underline font-bold"
-                  >
-                    Clear All ({genreStates.size})
-                  </button>
-                )}
-              </div>
-              <span className="text-[10px] text-muted">{libraryGenres.length} tags in library</span>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto no-scrollbar p-1 bg-app/50 border border-edge/50 rounded-xl">
-              {libraryGenres.map((tag) => {
-                const state = genreStates.get(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleGenreTag(tag)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                      state === 'include'
-                        ? 'bg-success text-black shadow-xs font-black'
-                        : state === 'exclude'
-                        ? 'bg-danger text-white shadow-xs font-black'
-                        : 'bg-surface hover:bg-elevated text-secondary hover:text-primary border border-edge'
-                    }`}
-                  >
-                    {state === 'include' && <span>+</span>}
-                    {state === 'exclude' && <span>&minus;</span>}
-                    <span>{tag}</span>
-                  </button>
-                );
-              })}
-              {libraryGenres.length === 0 && (
-                <span className="text-xs text-muted p-2 italic">No genre tags found in library</span>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Row 3 & 4: Filters Drawer */}
+        <LibraryFiltersDrawer
+          typeFilter={typeFilter}
+          setTypeFilter={setTypeFilter}
+          nsfwFilter={nsfwFilter}
+          setNsfwFilter={setNsfwFilter}
+          isGuest={isGuest}
+          onOpenAuthModal={onOpenAuthModal}
+          nsfwCount={nsfwCount}
+          handleAutoTagNsfw={handleAutoTagNsfw}
+          isAutoTagging={isAutoTagging}
+          autoTagToast={autoTagToast}
+          activeCategory={activeCategory}
+          setActiveCategory={setActiveCategory}
+          categories={categories}
+          isGenreFilterOpen={isGenreFilterOpen}
+          setIsGenreFilterOpen={setIsGenreFilterOpen}
+          genreStates={genreStates}
+          toggleGenreTag={toggleGenreTag}
+          clearGenreTags={clearGenreTags}
+          libraryGenres={libraryGenres}
+        />
       </div>
 
       {/* Main Manga List */}
@@ -1777,12 +657,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <div className="space-y-1">
             <h3 className="text-lg font-bold text-primary">No series found</h3>
             <p className="text-sm text-secondary max-w-sm mx-auto">
-              No Manhwa or Manhua matched your current filters or search query "{searchQuery}".
+              No Manhwa or Manhua matched your current filters or search query &quot;{searchQuery}&quot;.
             </p>
           </div>
           <button
             onClick={onAddNew}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-fg hover:bg-accent-bright transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-accent text-accent-fg hover:bg-accent-bright transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Add New Series
@@ -1936,122 +816,25 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* Floating Bulk Actions Toolbar */}
       {isSelectMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-surface/95 backdrop-blur-md border border-edge-strong rounded-2xl shadow-2xl p-3 px-5 flex flex-wrap items-center justify-center gap-3">
-          <div className="flex items-center gap-2 pr-3 border-r border-edge">
-            <span className="w-6 h-6 rounded-full bg-accent text-accent-fg font-black text-xs flex items-center justify-center">
-              {selectedIds.size}
-            </span>
-            <span className="text-xs font-bold text-primary">Selected</span>
-          </div>
-
-          <button
-            onClick={selectAll}
-            className="px-3 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold text-xs transition-all"
-          >
-            {selectedIds.size === sortedList.length ? 'Deselect All' : 'Select All'}
-          </button>
-
-          {/* Bulk Mark Read */}
-          <button
-            onClick={() => {
-              if (onBulkUpdateStatus) {
-                onBulkUpdateStatus(Array.from(selectedIds), 'completed');
-                setSelectedIds(new Set());
-                setIsSelectMode(false);
-              }
-            }}
-            className="px-3.5 py-1.5 rounded-xl bg-success/20 hover:bg-success/30 text-success border border-success/30 font-bold text-xs flex items-center gap-1.5 transition-all"
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>Mark as Read</span>
-          </button>
-
-          {/* Bulk Status Select */}
-          <select
-            onChange={(e) => {
-              if (e.target.value && onBulkUpdateStatus) {
-                onBulkUpdateStatus(Array.from(selectedIds), e.target.value as any);
-                setSelectedIds(new Set());
-                setIsSelectMode(false);
-              }
-            }}
-            defaultValue=""
-            className="bg-app border border-edge rounded-xl px-3 py-1.5 text-xs text-primary font-bold focus:outline-none"
-          >
-            <option value="" disabled>Set Status...</option>
-            <option value="reading">Reading</option>
-            <option value="completed">Completed</option>
-            <option value="plan_to_read">Plan to Read</option>
-            <option value="on_hold">On Hold</option>
-            <option value="dropped">Dropped</option>
-          </select>
-
-          {/* Bulk Shelf Assignment */}
-          {categories.length > 0 && (
-            <select
-              onChange={async (e) => {
-                const catId = e.target.value;
-                if (catId) {
-                  try {
-                    await apiFetch('/api/categories/bulk-assign', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        mangaIds: Array.from(selectedIds),
-                        categoryId: catId,
-                        action: 'add',
-                      }),
-                    });
-                    fetchCategories();
-                    setSelectedIds(new Set());
-                    setIsSelectMode(false);
-                  } catch {}
-                }
-              }}
-              defaultValue=""
-              className="bg-app border border-edge rounded-xl px-3 py-1.5 text-xs text-primary font-bold focus:outline-none"
-            >
-              <option value="" disabled>Add to Shelf...</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  📁 {cat.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Bulk Delete */}
-          <button
-            onClick={() => {
-              if (onBulkDelete) {
-                onBulkDelete(Array.from(selectedIds));
-                setSelectedIds(new Set());
-                setIsSelectMode(false);
-              }
-            }}
-            className="px-3.5 py-1.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-bold text-xs flex items-center gap-1.5 transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Delete Selected</span>
-          </button>
-
-          {/* Done */}
-          <button
-            onClick={() => {
-              setSelectedIds(new Set());
-              setIsSelectMode(false);
-            }}
-            className="px-3 py-1.5 rounded-xl bg-elevated hover:bg-elevated text-secondary hover:text-white text-xs font-bold"
-          >
-            Done
-          </button>
-        </div>
+        <LibraryBatchBar
+          selectedIds={selectedIds}
+          totalCount={sortedList.length}
+          categories={categories}
+          onSelectAll={selectAll}
+          onClearSelection={() => {
+            setSelectedIds(new Set());
+            setIsSelectMode(false);
+          }}
+          onBulkUpdateStatus={onBulkUpdateStatus}
+          onBulkDelete={onBulkDelete}
+          onRefreshCategories={fetchCategories}
+        />
       )}
 
       {/* Smart AI Recommendations Section */}
       <RecommendationsView
         mangaList={mangaList}
-        onAddRecommended={(rec) => {
+        onAddRecommended={() => {
           onAddNew();
         }}
       />

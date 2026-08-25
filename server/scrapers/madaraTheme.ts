@@ -10,6 +10,7 @@
 
 import * as cheerio from 'cheerio';
 import { stripAdElements } from '../adFilter';
+import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
 
 export interface MadaraThemeConfig {
   /** Unique lowercase source id (must match the catalog entry). */
@@ -176,7 +177,7 @@ function parseMadaraCards(
     });
 
     cards.push({
-      title: rawTitle.replace(/\s+/g, ' ').trim(),
+      title: cleanMangaTitle(rawTitle),
       href: fullUrl,
       slug,
       cover,

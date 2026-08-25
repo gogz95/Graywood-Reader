@@ -23,7 +23,7 @@ import {
   fetchMangaDex,
   isMangaDexSourceLink,
 } from '../services/metadataService';
-import { preferEnglishTitle } from '../../src/utils/metadataHelpers';
+import { preferEnglishTitle, cleanMangaTitle } from '../../src/utils/metadataHelpers';
 import { fetchAsuraSeriesMetadata, ASURA_API_HEADERS } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
 import { searchWeebCentral, fetchWeebCentralSeriesMetadata } from '../scrapers/weebCentral';
@@ -39,7 +39,7 @@ export const mangaRouter = Router();
 
 // Whitelisted fields a client is allowed to set when creating a manga.
 const MANGA_CREATE_FIELDS = {
-  title: (v: any) => String(v || 'Untitled Series'),
+  title: (v: any) => cleanMangaTitle(String(v || 'Untitled Series')),
   altTitles: (v: any) => (Array.isArray(v) ? v : []),
   type: (v: any) => (['manga', 'manhwa', 'manhua'].includes(v) ? v : 'manhwa'),
   coverImage: (v: any) => String(v || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500&auto=format&fit=crop&q=80'),
@@ -84,35 +84,35 @@ mangaRouter.get('/', (req, res) => {
   const hasPagination =
     (req.query.limit !== undefined || req.query.offset !== undefined) &&
     (Number.isFinite(limitRaw) || Number.isFinite(offsetRaw));
-  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 200;
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : (hasPagination ? 200 : 10000);
   const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
-
-  let allManga = SqliteDb.getAllManga();
-  allManga = allManga.filter((m) => !isSeriesFromDisabledSource(m));
-
-  // Gate 18+ / NSFW titles: Guests/unauthenticated users cannot view NSFW items
-  if (!isNsfwAccessAllowed(req)) {
-    allManga = allManga.filter((m) => !isNsfwManga(m));
-  }
-
+  const isNsfwAllowed = isNsfwAccessAllowed(req);
   const overlayUserId = resolveRequestUserId(req);
-  if (overlayUserId) {
-    allManga = SqliteDb.applyUserOverlay(allManga, overlayUserId);
-  } else {
-    allManga = allManga.map((m) => ({
-      ...m,
-      isFavorite: false,
-      currentChapter: 0,
-      categories: [],
-    }));
-  }
+  const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+  const type = typeof req.query.type === 'string' ? req.query.type : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const sortBy = req.query.sortBy as 'lastUpdated' | 'title' | 'rating' | 'lastReadAt' | undefined;
+  const order = req.query.order as 'asc' | 'desc' | undefined;
+
+  const result = SqliteDb.queryManga({
+    limit,
+    offset,
+    isNsfwAllowed,
+    search,
+    type,
+    status,
+    userId: overlayUserId || undefined,
+    sortBy,
+    order,
+  });
+
+  const filteredItems = result.items.filter((m) => !isSeriesFromDisabledSource(m));
 
   if (hasPagination) {
-    const paged = allManga.slice(offset, offset + limit);
-    res.setHeader('X-Total-Count', String(allManga.length));
-    return res.json(paged);
+    res.setHeader('X-Total-Count', String(result.total));
+    return res.json(filteredItems);
   }
-  res.json(allManga);
+  res.json(filteredItems);
 });
 
 // ── GET /api/manga/:id - Get Single Series with User Overlay ──────────────────
@@ -210,6 +210,7 @@ mangaRouter.post('/bulk-import', (req, res) => {
     syncedFromApi: MANGA_CREATE_FIELDS.syncedFromApi(body.syncedFromApi),
     apiId: MANGA_CREATE_FIELDS.apiId(body.apiId),
     isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
+    isNsfw: MANGA_CREATE_FIELDS.isNsfw(body.isNsfw, body),
     categories: Array.isArray(body.categories) ? body.categories : [],
     userId: uid || 'usr_admin',
   }));
@@ -1131,6 +1132,42 @@ mangaRouter.post('/auto-tag-nsfw', (req, res) => {
     scanned: allManga.length,
     newlyTaggedCount: newlyTagged.length,
     newlyTagged,
+  });
+});
+
+// ── POST /api/manga/sanitize-titles - Batch Clean Naming Faults from Titles ────
+mangaRouter.post('/sanitize-titles', (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+
+  const allManga = SqliteDb.getAllManga();
+  const sanitizedList: Array<{ id: string; oldTitle: string; newTitle: string }> = [];
+
+  for (const manga of allManga) {
+    const overrides = Array.isArray(manga.metadataOverrides) ? manga.metadataOverrides : [];
+    // Skip if user explicitly locked title in metadataOverrides
+    if (overrides.includes('title')) continue;
+
+    const cleaned = cleanMangaTitle(manga.title);
+    if (cleaned && cleaned !== manga.title) {
+      const updatedItem: MangaItem = {
+        ...manga,
+        title: cleaned,
+        lastUpdated: new Date().toISOString(),
+      };
+      syncAddOrUpdateManga(updatedItem);
+      sanitizedList.push({
+        id: manga.id,
+        oldTitle: manga.title,
+        newTitle: cleaned,
+      });
+    }
+  }
+
+  res.json({
+    success: true,
+    scanned: allManga.length,
+    sanitizedCount: sanitizedList.length,
+    sanitized: sanitizedList,
   });
 });
 

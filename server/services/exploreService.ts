@@ -11,6 +11,7 @@ import {
   appSettings,
   saveDatabaseToDisk,
 } from '../appState';
+import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { sourceCircuitBreaker } from '../circuitBreaker';
 import {
@@ -662,12 +663,7 @@ export function parseUniversalCatalogCards(
     const normUrl = absUrl.toLowerCase();
     if (seenUrls.has(normUrl)) return;
 
-    const cleanTitle = title
-      .replace(/\s+/g, ' ')
-      .replace(/\s*Chapter\s*\d+.*$/i, '')
-      .replace(/\s*Ch\.\s*\d+.*$/i, '')
-      .replace(/\s*Ep\.\s*\d+.*$/i, '')
-      .trim();
+    const cleanTitle = cleanMangaTitle(title);
 
     if (!cleanTitle || cleanTitle.length < 2 || isChapterTitle(cleanTitle)) return;
 

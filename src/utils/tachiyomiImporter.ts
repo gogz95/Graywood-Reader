@@ -4,6 +4,7 @@
  */
 
 import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../types';
+import { cleanMangaTitle } from './metadataHelpers';
 
 export interface TachiyomiMangaEntry {
   title?: string;
@@ -155,6 +156,7 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       }
     }
 
+    title = cleanMangaTitle(title);
     if (!title) continue;
 
     // Calculate read chapters from chapter list if present

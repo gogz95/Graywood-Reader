@@ -302,13 +302,90 @@ export function applyOverrides(
 // Safety net for empty core fields
 // ---------------------------------------------------------------------------
 
+export function decodeHtmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&hellip;/g, '…')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+/**
+ * Filter common naming faults, status badges, and source watermarks from series titles
+ * so that ONLY the clean, genuine series name is retained.
+ *
+ * Handles:
+ *  - Status badges: Hot, New, 18+, +18, R-18, Mature, Adult (in brackets [], parens (), or standalone)
+ *  - Release tags: [Official], (Official English), [RAW], (HD), [Colored], [Uncensored], etc.
+ *  - Source watermarks: "Read at Asura Scans", "Read on Website", "Read Free at ...", " - Read Manga Online"
+ *  - Source suffixes: " - Asura Scans", " | MangaDex", " : Flame Comics", " - MangaClash", " - AsuraComic.net"
+ *  - Domain name suffixes: .com, .net, .xyz, .top, .io, .org, .me, .to, .cc, etc.
+ *  - Leaked chapter suffixes: " - Chapter 5", " Ch. 12"
+ */
+export function cleanMangaTitle(rawTitle: string): string {
+  if (!rawTitle || typeof rawTitle !== 'string') return '';
+
+  // 1. Strip XML/HTML tags and decode entities
+  let title = decodeHtmlEntities(rawTitle.replace(/<[^>]*>/g, ' '));
+
+  // 2. Normalize whitespace
+  title = title.replace(/\s+/g, ' ').trim();
+  if (!title) return '';
+
+  // 3. Strip bracketed & parenthetical badges/tags anywhere in the string
+  title = title
+    .replace(/\[(?:hot|new|18\+|\+18|r-?18|mature|adult|official|official\s+english|english|eng|raw|raw\s+hd|hd|hq|4k|uncensored|censored|color|colored|full\s+color|reboot|remake|end|complete|completed|hiatus|webtoon|manhwa|manhua|manga|novel|scan|scanlation)[^\]]*\]/gi, ' ')
+    .replace(/\((?:hot|new|18\+|\+18|r-?18|mature|adult|official|official\s+english|english|eng|raw|raw\s+hd|hd|hq|4k|uncensored|censored|color|colored|full\s+color|reboot|remake|end|complete|completed|hiatus|webtoon|manhwa|manhua|manga|novel|scan|scanlation)[^)]*\)/gi, ' ')
+    .replace(/【(?:hot|new|18\+|\+18|r-?18|mature|adult|official|raw|hd|colored|uncensored)[^】]*】/gi, ' ');
+
+  // 4. Strip standalone tag prefixes/suffixes (e.g. "HOT! Title", "NEW - Title", "18+ Title", "(18+) Title")
+  title = title.replace(/^(?:hot|new|18\+|\+18|r-?18)\s*[-–—:|!]\s*/gi, '');
+  title = title.replace(/\s*[-–—:|!]\s*(?:hot|new|18\+|\+18|r-?18)$/gi, '');
+  title = title.replace(/(?:^|\s)(?:18\+|\+18|r-?18)(?:\s|$)/gi, ' ');
+
+  // 5. Strip promotional "Read at / Read on / Read Free at <website>"
+  title = title.replace(/(?:[-–—|:]\s*)?read\s+(?:free\s+)?(?:online\s+)?(?:manga|manhwa|manhua|comic|chapters?)?\s*(?:free\s+)?(?:at|on)\s+["']?[a-z0-9\s._-]+["']?/gi, '');
+  title = title.replace(/read\s+(?:free\s+)?(?:online\s+)?(?:manga|manhwa|manhua|comic)?\s*(?:at|on)\s+.*$/gi, '');
+  title = title.replace(/\s*[-–—|:]\s*read\s+(?:free\s+)?(?:manga|manhwa|manhua|comic)?\s*(?:online)?\s*(?:free)?.*$/gi, '');
+  title = title.replace(/\s*[-–—|:]\s*free\s+(?:online\s+)?(?:manga|manhwa|comic).*$/gi, '');
+
+  // 6. Strip "at <SiteName>" or "@ <SiteName>" suffix
+  title = title.replace(/\s+(?:at|@)\s+(?:asurascans?|flamecomics?|reaperscans?|manhuaplus|manhwa18|mangadex|weebcentral|mangaread|kunmanga|topmanhua|batoto|bato\.to|mangakakalot|manganato|manga[\w]+)\b.*$/gi, '');
+
+  // 7. Strip known site names and scanlation group suffixes
+  title = title.replace(/\s*[-–—|:]\s*(?:Asura\s*Scans?|Flame\s*Comics?|Reaper\s*Scans?|Manhwa18|Manhua\s*Plus|Aqua\s*Manga|Hari\s*Manga|Weeb\s*Central|Manga\s*Read|Hiperdex|Adult\s*Webtoon|Top\s*Manhua|Bato(?:\.to)?|MangaDex|Dynasty(?:\s*Scans)?|Kun\s*Manga|Manga\s*Buddy|Manga\s*Clash|Manga\s*TX|Manga\s*Kakalot|Manga\s*Nato|Toon\s*Top|Demonic\s*Scans?|Raven\s*Scans?|Anisa\s*Scans?|Luminous\s*Scans?|Zero\s*Scans?|Night\s*Scans?|Drake\s*Scans?|Vortex\s*Scans?|Void\s*Scans?|Immortal\s*Updates?|ComicK|Webtoon(?:\.com)?)\b.*$/gi, '');
+
+  // 8. Strip generic domain name suffixes (.com, .net, .xyz, etc.)
+  title = title.replace(/\s*[-–—|:]\s*[a-z0-9-]+\.(?:com|org|net|xyz|top|io|me|to|cc|gg|in|tv|fun|co|site|online)\b.*$/gi, '');
+
+  // 9. Strip chapter / episode numbers appended to title
+  title = title.replace(/(?:\s*[-–—:]\s*)?(?:(?:Chapter|Chapitre|Capitulo|Ch\.?|Episode|Ep\.?|Season|S)\s*\d+).*$/i, '');
+
+  // 10. Clean up dangling leading/trailing punctuation and trim whitespace
+  title = title
+    .replace(/^[\s\-–—:|/.,]+|[\s\-–—:|/.,]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return title || rawTitle.trim();
+}
+
 /**
  * Ensure all core fields required by MangaItem are populated with valid defaults.
  */
 export function ensureCoreFields(item: Partial<MangaItem>): MangaItem {
+  const cleanedTitle = cleanMangaTitle(item.title || '');
   const out: MangaItem = {
     id: item.id || `m_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-    title: item.title || '',
+    title: cleanedTitle,
     altTitles: item.altTitles || [],
     type: item.type || 'manhwa',
     coverImage: item.coverImage || '',
@@ -319,7 +396,7 @@ export function ensureCoreFields(item: Partial<MangaItem>): MangaItem {
     latestChapter: item.latestChapter || 1,
     totalChapters: item.totalChapters,
     lastUpdated: item.lastUpdated || new Date().toISOString(),
-        rating: item.rating !== undefined ? item.rating : DEFAULT_UNKNOWN_RATING,
+    rating: item.rating !== undefined ? item.rating : DEFAULT_UNKNOWN_RATING,
     sourceUrl: item.sourceUrl || '',
     sourceName: item.sourceName || 'Unknown Source',
     autoUpdateEnabled: item.autoUpdateEnabled !== undefined ? item.autoUpdateEnabled : true,

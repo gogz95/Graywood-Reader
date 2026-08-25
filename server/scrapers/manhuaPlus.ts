@@ -12,6 +12,7 @@
 // ============================================================================
 
 import * as cheerio from 'cheerio';
+import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
 import { stripAdElements } from '../adFilter';
 import { extractMadaraSlug, MadaraSeriesItem, MadaraScrapeResult } from './madaraTheme';
 
@@ -68,7 +69,7 @@ export function parseManhuaPlusCards(html: string): ManhuaPlusSeriesItem[] {
     // Honest metadata only — no fabricated ratings, genres, or descriptions.
     items.push({
       id: `manhuaplus_${slug}`,
-      title: title.replace(/\s+/g, ' ').trim(),
+      title: cleanMangaTitle(title),
       sourceUrl: fullUrl,
       coverImage: cover,
       sourceName: 'ManhuaPlus',

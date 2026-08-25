@@ -380,13 +380,33 @@ export class KotatsuImageLoader {
         return;
       }
 
-      // Fix #4: Don't double-proxy URLs that are already proxied
-      const isAlreadyProxied = rawUrl.startsWith('/api/') || rawUrl.startsWith('/api/reader/proxy-image');
-      const fetchUrl = isAlreadyProxied
-        ? rawUrl
-        : `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
-      
-      const response = await fetch(fetchUrl);
+      let response: Response | null = null;
+      const isAlreadyProxied = rawUrl.startsWith('/api/') || rawUrl.startsWith('/api/reader/proxy-image') || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:');
+
+      // Smart Direct Client Image Streaming: Try direct client fetch first for CORS-friendly CDNs (e.g. MangaDex @home)
+      if (!isAlreadyProxied && (rawUrl.startsWith('https://') || rawUrl.startsWith('http://'))) {
+        try {
+          const directController = new AbortController();
+          const timeoutId = setTimeout(() => directController.abort(), 2500);
+          const directRes = await fetch(rawUrl, {
+            mode: 'cors',
+            signal: directController.signal,
+          });
+          clearTimeout(timeoutId);
+          if (directRes.ok) {
+            response = directRes;
+          }
+        } catch {
+          // Direct fetch failed due to CORS, hotlink protection, or timeout -> transparently fallback to server proxy
+        }
+      }
+
+      if (!response) {
+        const fetchUrl = isAlreadyProxied
+          ? rawUrl
+          : `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
+        response = await fetch(fetchUrl);
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Failed to fetch image panel`);

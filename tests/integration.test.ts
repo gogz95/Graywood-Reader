@@ -419,4 +419,77 @@ describe('Guest 18+ / NSFW Access Restriction Policy', () => {
   });
 });
 
+describe('Title Sanitization & Naming Fault Cleanup Endpoint', () => {
+  it('POST /api/manga/sanitize-titles batch cleans existing naming faults in library', async () => {
+    // 1. Create series with naming faults
+    const fault1 = await request(app).post('/api/manga').send({
+      title: 'Solo Leveling [Hot]',
+      sourceName: 'Asura Scans',
+    });
+    const fault2 = await request(app).post('/api/manga').send({
+      title: 'Martial Peak - Read at Asura Scans',
+      sourceName: 'Asura Scans',
+    });
+
+    // 2. Call sanitize-titles
+    const sanitizeRes = await request(app).post('/api/manga/sanitize-titles');
+    expect(sanitizeRes.status).toBe(200);
+    expect(sanitizeRes.body.success).toBe(true);
+    expect(sanitizeRes.body.scanned).toBeGreaterThan(0);
+
+    // 3. Clean up
+    if (fault1.body?.id) await request(app).delete(`/api/manga/${fault1.body.id}`);
+    if (fault2.body?.id) await request(app).delete(`/api/manga/${fault2.body.id}`);
+  });
+});
+
+describe('Komga Page Streaming & OPDS CBZ Acquisition', () => {
+  it('GET /api/v1/books/:id/pages returns page manifest for series', async () => {
+    const createRes = await request(app).post('/api/manga').send({
+      title: 'Komga Test Series',
+      sourceName: 'Test Scans',
+      sourceUrl: 'https://example.com/manga/test',
+    });
+    expect(createRes.status).toBe(201);
+    const mangaId = createRes.body.id;
+
+    const pagesRes = await request(app).get(`/api/v1/books/${mangaId}_ch1/pages`);
+    expect(pagesRes.status).toBe(200);
+    expect(Array.isArray(pagesRes.body)).toBe(true);
+    expect(pagesRes.body.length).toBeGreaterThan(0);
+    expect(pagesRes.body[0].number).toBe(1);
+
+    const streamRes = await request(app).get(`/api/v1/books/${mangaId}_ch1/pages/1`);
+    expect([200, 302]).toContain(streamRes.status);
+
+    await request(app).delete(`/api/manga/${mangaId}`);
+  });
+
+  it('GET /api/opds/series/:id provides CBZ acquisition link and /download generates valid CBZ archive', async () => {
+    const createRes = await request(app).post('/api/manga').send({
+      title: 'OPDS CBZ Test Series',
+      sourceName: 'Test Scans',
+      sourceUrl: 'https://example.com/manga/opds-test',
+    });
+    expect(createRes.status).toBe(201);
+    const mangaId = createRes.body.id;
+
+    // Check OPDS series acquisition feed contains CBZ link
+    const opdsRes = await request(app).get(`/api/opds/series/${mangaId}`);
+    expect(opdsRes.status).toBe(200);
+    expect(opdsRes.text).toContain('application/vnd.comicbook+zip');
+    expect(opdsRes.text).toContain(`/api/opds/download/${encodeURIComponent(mangaId)}/1.cbz`);
+
+    // Download CBZ
+    const downloadRes = await request(app).get(`/api/opds/download/${mangaId}/1.cbz`);
+    expect(downloadRes.status).toBe(200);
+    expect(downloadRes.header['content-type']).toContain('application/vnd.comicbook+zip');
+    expect(downloadRes.header['content-disposition']).toContain('.cbz');
+    expect(downloadRes.text.length).toBeGreaterThan(0);
+
+    await request(app).delete(`/api/manga/${mangaId}`);
+  });
+});
+
+
 

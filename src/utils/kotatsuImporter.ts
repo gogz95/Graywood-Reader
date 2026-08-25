@@ -4,7 +4,7 @@
  */
 
 import { MangaItem, MangaType, ReadingStatus, isMangaDexSourceLink } from '../types';
-import { isAdSeries } from './metadataHelpers';
+import { isAdSeries, cleanMangaTitle } from './metadataHelpers';
 
 export interface KotatsuChapter {
   id?: number | string;
@@ -1034,7 +1034,7 @@ export async function parseKotatsuBackup(
   for (let i = 0; i < uniqueEntries.length; i++) {
     const { manga: m, favourite: entry, isFavorite } = uniqueEntries[i];
     const rawTitle = m.title || m.name || entry?.title || entry?.name;
-    const title = (rawTitle && String(rawTitle).trim()) || `Series #${i + 1}`;
+    const title = cleanMangaTitle((rawTitle && String(rawTitle).trim()) || `Series #${i + 1}`);
     if (!title || (title.startsWith('Series #') && !m.url && !m.publicUrl && !m.source)) {
       // Skip pure junction stubs with zero metadata
       continue;

@@ -12,6 +12,7 @@
 
 import * as cheerio from 'cheerio';
 import { stripAdElements } from '../adFilter';
+import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
 
 const BASE_URL = 'https://demonicscans.org';
 
@@ -94,7 +95,7 @@ function parseUpdatesCards($: cheerio.CheerioAPI): DemonicScansSeriesItem[] {
     // Honest metadata only — no fabricated ratings, genres, or descriptions.
     items.push({
       id: `demonicscans_${slug}`,
-      title: title.replace(/\s+/g, ' ').trim(),
+      title: cleanMangaTitle(title),
       sourceUrl: fullUrl,
       coverImage: resolveCover(img.attr('src') || ''),
       sourceName: 'Demonic Scans',
@@ -128,7 +129,7 @@ function parseAdvancedSearchCards($: cheerio.CheerioAPI): DemonicScansSeriesItem
 
     items.push({
       id: `demonicscans_${slug}`,
-      title: title.replace(/\s+/g, ' ').trim(),
+      title: cleanMangaTitle(title),
       sourceUrl: fullUrl,
       coverImage: resolveCover(img.attr('src') || ''),
       sourceName: 'Demonic Scans',

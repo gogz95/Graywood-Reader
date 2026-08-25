@@ -153,4 +153,7 @@ This document outlines the implemented milestones, architectural enhancements, a
 - ✅ **FlameComics `buildId` cache & atomic promise deduplication**.
 - ✅ **WeebCentral exact chapter count parser & numeric sorter**.
 - ✅ **Structured logger migration in SQLite engine** (standardized log levels to `logger.info`).
+- ✅ **Pure SQL Filtering & Pagination with Indexed NSFW Gate** (`SqliteDb.queryManga` + `idx_manga_isNsfw` migration).
+- ✅ **Frontend Giant Component Decomposition** (`SettingsModal.tsx` and `LibraryView.tsx` modularized into `src/components/settings/` and `src/components/library/`).
+- ✅ **Smart Direct Client Image Streaming with Automated Proxy Fallback** (Direct CDN streaming in `KotatsuImageLoader.ts` reducing server bandwidth).
 

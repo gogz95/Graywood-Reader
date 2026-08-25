@@ -7,6 +7,7 @@ import {
   restoreMetadataOverrides,
   preferEnglishTitle,
   DEFAULT_UNKNOWN_RATING,
+  cleanMangaTitle,
 } from '../../src/utils/metadataHelpers';
 import { fetchAsuraSeriesMetadata } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
@@ -307,14 +308,16 @@ export function parseGenericLiveSeriesMetadata(html: string, pageUrl: string): P
       $('meta[name="twitter:title"]').attr('content') ||
       $('title').text().trim() ||
       '';
-
-    title = title
-      .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua).*$/i, '')
-      .replace(/\s*(?:Raw|Full|Uncensored|Read\s+Online|Chapter\s+\d+).*$/i, '')
-      .trim();
   }
 
-  if (isAdSeries(title, pageUrl) || isAdUrl(pageUrl) || isAdTitle(title)) {
+  if (title) {
+    title = cleanMangaTitle(title);
+    if (isAdSeries(title, pageUrl) || isAdTitle(title)) {
+      return null;
+    }
+  }
+
+  if (isAdUrl(pageUrl)) {
     return null;
   }
 
@@ -804,14 +807,11 @@ export function cleanHtml(raw: string): string {
 }
 
 export function sanitizeTitleForSearch(rawTitle: string): string {
-    if (!rawTitle) return '';
-  return decodeHtmlEntities(rawTitle)
+  if (!rawTitle) return '';
+  const cleaned = cleanMangaTitle(rawTitle);
+  return cleaned
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\[(?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^\]]*\]/gi, ' ')
-    .replace(/\((?:official|color|raw|scan|uncensored|hd|reboot|end|completed|webtoon|novel)[^)]*\)/gi, ' ')
-    .replace(/\s*[-–|:]\s*(?:Manhwa18|ManhuaPlus|Aqua Manga|Hari Manga|Asura Scans|Flame Comics|Weeb Central|MangaRead|Hiperdex|Adult Webtoon|Top Manhua|Bato|MangaDex|Dynasty|Kun Manga).*$/i, '')
-    .replace(/(?:\s*-\s*)?(?:(?:Chapter|Chapitre|Capitulo|Ch\.?|Episode|Ep\.?|Season|S)\s*\d+).*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

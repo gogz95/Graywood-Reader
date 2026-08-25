@@ -7,10 +7,41 @@
 import { Router, Request, Response } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { MangaItem } from '../../src/types';
-import { resolveRequestUserId } from '../appState';
+import { resolveRequestUserId, mangaDatabase } from '../appState';
 import { scanStorage, getArchiveEntry } from './localLibrary';
+import { kotatsuImageEngine, matchLiveDomain, autoDiscoverLiveSourceForManga } from '../services/crawlerEngine';
 
 export const komgaCompatRouter = Router();
+
+async function resolveChapterPageUrls(manga: MangaItem, chapterNum: number): Promise<string[]> {
+  let targetUrl = manga.sourceUrl || '';
+  if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {
+    if (manga.availableSources && manga.availableSources.length > 0) {
+      const alt = manga.availableSources.find(
+        (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+      );
+      if (alt) targetUrl = alt.sourceUrl;
+    }
+    if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {
+      const auto = await autoDiscoverLiveSourceForManga(manga);
+      if (auto) targetUrl = auto.sourceUrl;
+    }
+  }
+
+  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+    const matched = matchLiveDomain(targetUrl);
+    const domainId = matched ? matched.id : 'general';
+    try {
+      const pages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, chapterNum);
+      if (pages && pages.length > 0) {
+        return pages;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  return [];
+}
 
 // Map internal MangaItem to Komga Series DTO
 function toKomgaSeriesDto(manga: MangaItem, libraryId = 'lib_main') {
@@ -254,13 +285,13 @@ komgaCompatRouter.get('/api/v1/series/:id/thumbnail', (req: Request, res: Respon
 });
 
 // GET /api/v1/books/:id/pages - Komga Page Streaming Manifest
-komgaCompatRouter.get('/api/v1/books/:id/pages', (req: Request, res: Response) => {
+komgaCompatRouter.get('/api/v1/books/:id/pages', async (req: Request, res: Response) => {
   const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
   const chNum = Number(parts[1]) || 1;
 
-  const manga = SqliteDb.getMangaById(mangaId);
+  const manga = SqliteDb.getMangaById(mangaId) || mangaDatabase.find((m) => m.id === mangaId);
   if (!manga) return res.status(404).json({ error: 'Book not found' });
 
   // If local archive
@@ -278,8 +309,10 @@ komgaCompatRouter.get('/api/v1/books/:id/pages', (req: Request, res: Response) =
     return res.json(pages);
   }
 
-  // Standard online chapter pages
-  const pages = Array.from({ length: 18 }, (_, i) => ({
+  // Resolve real online chapter pages
+  const realPages = await resolveChapterPageUrls(manga, chNum);
+  const count = realPages.length > 0 ? realPages.length : 15;
+  const pages = Array.from({ length: count }, (_, i) => ({
     number: i + 1,
     fileName: `page_${i + 1}.jpg`,
     mediaType: 'image/jpeg',
@@ -290,19 +323,32 @@ komgaCompatRouter.get('/api/v1/books/:id/pages', (req: Request, res: Response) =
 });
 
 // GET /api/v1/books/:id/pages/:pageNumber - Komga Stream Single Page
-komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', (req: Request, res: Response) => {
+komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', async (req: Request, res: Response) => {
   const rawId = String(req.params.id);
   const parts = rawId.split('_ch');
   const mangaId = parts[0];
+  const chNum = Number(parts[1]) || 1;
   const pageNum = Number(req.params.pageNumber) || 1;
 
-  const manga = SqliteDb.getMangaById(mangaId);
+  const manga = SqliteDb.getMangaById(mangaId) || mangaDatabase.find((m) => m.id === mangaId);
   if (manga?.sourceUrl?.startsWith('local://')) {
     const archiveId = manga.sourceUrl.replace('local://', '');
     return res.redirect(`/api/local/library/${archiveId}/page/${pageNum - 1}`);
   }
 
-  // Generate standard high-contrast page frame for stream clients
+  if (manga) {
+    const realPages = await resolveChapterPageUrls(manga, chNum);
+    const pageIdx = pageNum - 1;
+    if (realPages && realPages[pageIdx]) {
+      const pageUrl = realPages[pageIdx];
+      if (pageUrl.startsWith('/api/reader/panel-image')) {
+        return res.redirect(pageUrl);
+      }
+      return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(pageUrl)}&sourceUrl=${encodeURIComponent(manga.sourceUrl || '')}`);
+    }
+  }
+
+  // Fallback SVG if real page could not be fetched
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200">
     <rect width="800" height="1200" fill="#0b0f19" />
     <text x="400" y="580" font-family="sans-serif" font-size="28" font-weight="bold" fill="#f8fafc" text-anchor="middle">${manga?.title || 'Chapter'}</text>

@@ -17,6 +17,7 @@ import {
   ensureCoreFields,
   DEFAULT_UNKNOWN_RATING,
   preferEnglishTitle,
+  cleanMangaTitle,
   ATOMIC_METADATA_FIELDS,
   AGGREGATIVE_METADATA_FIELDS,
   OVERRIDEABLE_METADATA_FIELDS,
@@ -88,6 +89,62 @@ describe('calculateStringSimilarity', () => {
     expect(score).toBe(100);
     const score2 = calculateStringSimilarity('Côco Pockets', 'Coco Pockets');
     expect(score2).toBe(100);
+  });
+});
+
+describe('cleanMangaTitle', () => {
+  it('strips [Hot], (Hot), and 【HOT】 badges', () => {
+    expect(cleanMangaTitle('Solo Leveling [Hot]')).toBe('Solo Leveling');
+    expect(cleanMangaTitle('[HOT] Return of the Mount Hua Sect')).toBe('Return of the Mount Hua Sect');
+    expect(cleanMangaTitle('Great Doctor Ling Ran 【HOT】')).toBe('Great Doctor Ling Ran');
+    expect(cleanMangaTitle('HOT! Omniscient Reader')).toBe('Omniscient Reader');
+    expect(cleanMangaTitle('Solo Leveling (Hot)')).toBe('Solo Leveling');
+  });
+
+  it('strips [New], (New), and 【NEW】 badges', () => {
+    expect(cleanMangaTitle('Solo Leveling [New]')).toBe('Solo Leveling');
+    expect(cleanMangaTitle('[NEW] Return of the Mount Hua Sect')).toBe('Return of the Mount Hua Sect');
+    expect(cleanMangaTitle('NEW - Reincarnation of the Battle God')).toBe('Reincarnation of the Battle God');
+    expect(cleanMangaTitle('Legend of the Northern Blade 【NEW】')).toBe('Legend of the Northern Blade');
+  });
+
+  it('strips 18+, [18+], (18+), [+18], and [Mature] badges', () => {
+    expect(cleanMangaTitle('Martial Peak (18+)')).toBe('Martial Peak');
+    expect(cleanMangaTitle('18+ Secret Class')).toBe('Secret Class');
+    expect(cleanMangaTitle('Secret Class [18+]')).toBe('Secret Class');
+    expect(cleanMangaTitle('[+18] Peerless Dad')).toBe('Peerless Dad');
+    expect(cleanMangaTitle('Queen Bee [Mature]')).toBe('Queen Bee');
+    expect(cleanMangaTitle('Sister Neighbors [Adult]')).toBe('Sister Neighbors');
+  });
+
+  it('strips "Read at website name" promotional watermarks', () => {
+    expect(cleanMangaTitle('Magic Emperor - Read at Asura Scans')).toBe('Magic Emperor');
+    expect(cleanMangaTitle('Tower of God - Read on Webtoon.com')).toBe('Tower of God');
+    expect(cleanMangaTitle('Nano Machine - Read at "ReaperScans"')).toBe('Nano Machine');
+    expect(cleanMangaTitle('Eleceed - Read Free Online at Flame Comics')).toBe('Eleceed');
+    expect(cleanMangaTitle('Solo Leveling - Read Manga Online Free')).toBe('Solo Leveling');
+    expect(cleanMangaTitle('Martial Peak @ ManhuaPlus')).toBe('Martial Peak');
+  });
+
+  it('strips known site names and domain suffixes', () => {
+    expect(cleanMangaTitle('Solo Leveling - Asura Scans')).toBe('Solo Leveling');
+    expect(cleanMangaTitle('Solo Leveling - AsuraComic.net')).toBe('Solo Leveling');
+    expect(cleanMangaTitle('Omniscient Reader | MangaDex')).toBe('Omniscient Reader');
+    expect(cleanMangaTitle('Eleceed : Flame Comics')).toBe('Eleceed');
+    expect(cleanMangaTitle('Nano Machine - FlameComics.xyz')).toBe('Nano Machine');
+  });
+
+  it('strips release quality and scanlation tags', () => {
+    expect(cleanMangaTitle('The Beginning After The End [Official]')).toBe('The Beginning After The End');
+    expect(cleanMangaTitle('Eleceed (Official English)')).toBe('Eleceed');
+    expect(cleanMangaTitle('Demon Slayer [Colored] [RAW]')).toBe('Demon Slayer');
+    expect(cleanMangaTitle('Solo Max-Level Newbie [Uncensored]')).toBe('Solo Max-Level Newbie');
+  });
+
+  it('preserves legitimate words like Hot, New in genuine titles', () => {
+    expect(cleanMangaTitle('The New Gate')).toBe('The New Gate');
+    expect(cleanMangaTitle('Hot Springs in Another World')).toBe('Hot Springs in Another World');
+    expect(cleanMangaTitle('New Game!')).toBe('New Game!');
   });
 });
 

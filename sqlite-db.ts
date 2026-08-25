@@ -843,6 +843,79 @@ export const SqliteDb = {
     return _mangaCache;
   },
 
+  queryManga(options: {
+    limit?: number;
+    offset?: number;
+    isNsfwAllowed?: boolean;
+    search?: string;
+    type?: string;
+    status?: string;
+    userId?: string;
+    sortBy?: 'lastUpdated' | 'title' | 'rating' | 'lastReadAt';
+    order?: 'asc' | 'desc';
+  } = {}): { items: MangaItem[]; total: number } {
+    const clauses: string[] = [];
+    const params: Record<string, any> = {};
+
+    if (options.isNsfwAllowed === false) {
+      clauses.push('(isNsfw = 0 OR isNsfw IS NULL)');
+    }
+
+    if (options.type) {
+      clauses.push('type = @type');
+      params.type = options.type;
+    }
+
+    if (options.status) {
+      clauses.push('status = @status');
+      params.status = options.status;
+    }
+
+    if (options.search && options.search.trim()) {
+      clauses.push('(title LIKE @search OR altTitles LIKE @search)');
+      params.search = `%${options.search.trim()}%`;
+    }
+
+    const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+    const countSql = `SELECT COUNT(*) as total FROM manga ${whereSql}`;
+    const countRow = db.prepare(countSql).get(params) as { total: number } | undefined;
+    const total = countRow ? countRow.total : 0;
+
+    const sortField =
+      options.sortBy === 'title'
+        ? 'title'
+        : options.sortBy === 'rating'
+        ? 'rating'
+        : options.sortBy === 'lastReadAt'
+        ? 'lastReadAt'
+        : 'lastUpdated';
+    const sortOrder = (options.order || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const limit = typeof options.limit === 'number' && options.limit > 0 ? Math.floor(options.limit) : 200;
+    const offset = typeof options.offset === 'number' && options.offset >= 0 ? Math.floor(options.offset) : 0;
+
+    params.limit = limit;
+    params.offset = offset;
+
+    const dataSql = `SELECT * FROM manga ${whereSql} ORDER BY ${sortField} ${sortOrder} LIMIT @limit OFFSET @offset`;
+    const rows = db.prepare(dataSql).all(params);
+    let items = rows.map(mapRowToMangaItem);
+
+    if (options.userId) {
+      items = this.applyUserOverlay(items, options.userId);
+    } else {
+      items = items.map((m) => ({
+        ...m,
+        isFavorite: false,
+        currentChapter: 0,
+        categories: [],
+      }));
+    }
+
+    return { items, total };
+  },
+
   invalidateMangaCache() {
     _mangaCache = null;
   },
@@ -2227,8 +2300,36 @@ export function optimizeDatabase(): void {
   }
 }
 
+function populateIsNsfwIndex() {
+  try {
+    const done = stmtGetSetting.get('migrated_is_nsfw_v1') as { value: string } | undefined;
+    if (done?.value === '1') return;
+    const rows = db.prepare('SELECT * FROM manga WHERE isNsfw = 0 OR isNsfw IS NULL').all() as any[];
+    const upd = db.prepare('UPDATE manga SET isNsfw = 1 WHERE id = ?');
+    const tx = db.transaction(() => {
+      let count = 0;
+      for (const r of rows) {
+        const item = mapRowToMangaItem(r);
+        if (isNsfwManga(item)) {
+          upd.run(r.id);
+          count++;
+        }
+      }
+      stmtSetSetting.run({ key: 'migrated_is_nsfw_v1', value: '1' });
+      if (count > 0) {
+        logger.info('SQLite', `Indexed ${count} NSFW titles in database for fast indexed lookups`);
+      }
+    });
+    tx();
+  } catch (err) {
+    console.error('[SQLite Engine] isNsfw index migration failed:', err);
+  }
+}
+
 // Execute migration check on startup
 migrateJsonToSqlite();
 migrateGlobalLibraryToUserTables();
+populateIsNsfwIndex();
 optimizeDatabase();
+
 

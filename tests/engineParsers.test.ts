@@ -404,7 +404,7 @@ describe('Automated Engine Parser Test Harness', () => {
 
       const cards = parseUniversalCatalogCards(manhwa18Html, sourceDef, 'https://manhwa18.com');
       expect(cards.length).toBe(1);
-      expect(cards[0].title).toBe('Chamber of Secrets (Uncensored)');
+      expect(cards[0].title).toBe('Chamber of Secrets');
       expect(cards[0].sourceUrl).toBe('https://manhwa18.com/manga/chamber-of-secrets-uncensored');
       expect(cards[0].coverImage).toBe('https://min.manhwa18.net/chapters/manga/covers/secret.webp');
       expect(cards[0].latestChapter).toBe(5);
