@@ -27,6 +27,25 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-047] [Does not load pages] My Wife Is A Demon Queen
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Darkmodes (2026-08-25)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: My Wife Is A Demon Queen (kotatsu_1787654104826_550_mywifeisademonqu)
+Source: Mangaxyz
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "My Wife Is A Demon Queen"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 ### [BUG-045] ManhuaPlus catalogue/search returned 0 results after site theme migration
 - **Status**: `fixed`
 - **Priority**: `high`
