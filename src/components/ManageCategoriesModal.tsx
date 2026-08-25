@@ -206,6 +206,7 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
       if (res.ok) {
         onCategoriesChanged(categories.filter((c) => c.id !== id));
         if (editingId === id) resetForm();
+        window.dispatchEvent(new CustomEvent('refresh-categories'));
       }
     } catch (err: any) {
       alert(`Failed to delete category: ${err.message}`);
@@ -409,22 +410,35 @@ export const ManageCategoriesModal: React.FC<ManageCategoriesModalProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-edge">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2 rounded-xl bg-surface hover:bg-elevated text-secondary text-xs font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center gap-1.5 shadow-md disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                  <span>{editingId ? 'Save Changes' : 'Create Shelf'}</span>
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-edge">
+                {editingId ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(editingId)}
+                    className="px-3 py-2 rounded-xl bg-danger/15 hover:bg-danger/25 text-danger border border-danger/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Delete this custom shelf"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Shelf</span>
+                  </button>
+                ) : <div />}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-4 py-2 rounded-xl bg-surface hover:bg-elevated text-secondary text-xs font-bold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>{editingId ? 'Save Changes' : 'Create Shelf'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           ) : (

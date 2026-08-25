@@ -159,7 +159,7 @@ settingsRouter.get("/api/settings/backup/export", (_req, res) => {
   const backup = {
     version: `${APP_VERSION}-kotatsu`,
     exportedAt: new Date().toISOString(),
-    mangaDatabase: SqliteDb.getAllManga(),
+    mangaDatabase: SqliteDb.applyUserOverlay(SqliteDb.getAllManga(), 'usr_admin'),
     config: syncConfig,
     // Secret material is masked in exports; import keeps the existing key.
     appSettings: {
@@ -181,6 +181,14 @@ settingsRouter.post("/api/settings/backup/import", (req, res) => {
     const { mangaDatabase: importedManga, config: importedConfig, appSettings: importedSettings } = req.body;
     if (Array.isArray(importedManga)) {
       syncBulkAddOrUpdateManga(importedManga);
+      const userStateBatch = importedManga.map((item: any) => ({
+        id: item.id,
+        isFavorite: item.isFavorite,
+        currentChapter: item.currentChapter,
+        status: item.status,
+        categoryIds: item.categories,
+      }));
+      SqliteDb.bulkApplyUserImportState('usr_admin', userStateBatch);
     }
     if (importedConfig) {
       applySyncConfigPatch(sanitizeIncomingConfig(importedConfig));
@@ -207,7 +215,7 @@ settingsRouter.post("/api/settings/backup/import", (req, res) => {
 settingsRouter.get("/api/settings/backup/export-kotatsu", async (_req, res) => {
   try {
     const { exportToKotatsuBackup } = await import('../../src/utils/kotatsuImporter');
-    const mangaList = SqliteDb.getAllManga();
+    const mangaList = SqliteDb.applyUserOverlay(SqliteDb.getAllManga(), 'usr_admin');
     const jsonStr = exportToKotatsuBackup(mangaList);
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', 'attachment; filename="kotatsu_backup.json"');

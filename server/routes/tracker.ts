@@ -396,6 +396,9 @@ Return JSON array of { title, type, reason }.`,
 // ── Database Export, Import, Reset, Refresh ──────────────────────────────────
 trackerRouter.get('/api/db/export', (req, res) => {
   const format = req.query.format || 'json';
+  const uid = resolveRequestUserId(req) || 'usr_admin';
+  const exportItems = SqliteDb.applyUserOverlay(mangaDatabase, uid);
+
   if (format === 'csv') {
     const headers = "id,title,type,currentChapter,latestChapter,status,rating,sourceName\n";
     const csvCell = (v: unknown) => {
@@ -403,7 +406,7 @@ trackerRouter.get('/api/db/export', (req, res) => {
       const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
       return `"${safe.replace(/"/g, '""')}"`;
     };
-    const rows = mangaDatabase.map((m) =>
+    const rows = exportItems.map((m) =>
       `${csvCell(m.id)},${csvCell(m.title)},${csvCell(m.type)},${m.currentChapter},${m.latestChapter},${csvCell(m.status)},${m.rating},${csvCell(m.sourceName)}`
     ).join("\n");
     res.setHeader('Content-Type', 'text/csv');
@@ -416,8 +419,8 @@ trackerRouter.get('/api/db/export', (req, res) => {
     app: "ManhuaHub Subdomain Tracker",
     exportedAt: new Date().toISOString(),
     subdomain: syncConfig.subdomain,
-    count: mangaDatabase.length,
-    data: mangaDatabase,
+    count: exportItems.length,
+    data: exportItems,
   });
 });
 
@@ -427,16 +430,33 @@ trackerRouter.post('/api/db/import', (req, res) => {
     return res.status(400).json({ error: "Invalid payload: 'data' must be an array of manga items." });
   }
 
+  const uid = resolveRequestUserId(req) || 'usr_admin';
+  const itemsToImport: MangaItem[] = data.map((item: any) => ({
+    ...item,
+    userId: item.userId || uid,
+    currentChapter: Math.max(0, Number(item.currentChapter) || 0),
+  }));
+
   if (replaceExisting) {
-    syncResetManga(data);
+    syncResetManga(itemsToImport);
   } else {
-    const itemsToImport: MangaItem[] = [];
-    data.forEach((item: MangaItem) => {
+    const freshItems: MangaItem[] = [];
+    itemsToImport.forEach((item: MangaItem) => {
       const exists = mangaDatabase.some((m) => m.id === item.id || m.title.toLowerCase() === item.title.toLowerCase());
-      if (!exists) itemsToImport.push(item);
+      if (!exists) freshItems.push(item);
     });
-    if (itemsToImport.length > 0) syncBulkAddOrUpdateManga(itemsToImport);
+    if (freshItems.length > 0) syncBulkAddOrUpdateManga(freshItems);
   }
+
+  // Restore user reading progress and categories
+  const userStateBatch = itemsToImport.map((item) => ({
+    id: item.id,
+    isFavorite: item.isFavorite,
+    currentChapter: item.currentChapter,
+    status: item.status,
+    categoryIds: item.categories,
+  }));
+  SqliteDb.bulkApplyUserImportState(uid, userStateBatch);
 
   res.json({ success: true, totalTracked: mangaDatabase.length });
 });

@@ -536,6 +536,8 @@ const stmtUpdateCategory = db.prepare(`
 `);
 const stmtDeleteCategoryMangaLinks = db.prepare('DELETE FROM manga_categories WHERE category_id = ? AND user_id = ?');
 const stmtDeleteCategory = db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?');
+const stmtDeleteCategoryMangaLinksAdmin = db.prepare('DELETE FROM manga_categories WHERE category_id = ?');
+const stmtDeleteCategoryAdmin = db.prepare('DELETE FROM categories WHERE id = ?');
 const stmtGetMangaCategories = db.prepare('SELECT category_id FROM manga_categories WHERE manga_id = ? AND user_id = ?');
 const stmtGetMangaCategoriesAllForUser = db.prepare('SELECT manga_id, category_id FROM manga_categories WHERE user_id = ?');
 const stmtInsertMangaCategory = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
@@ -955,9 +957,44 @@ export const SqliteDb = {
 
   bulkUpsertManga(items: MangaItem[]) {
     _mangaCache = null;
+    const now = new Date().toISOString();
     const transaction = db.transaction((list: MangaItem[]) => {
       for (const item of list) {
         stmtUpsertManga.run(mapMangaItemToRow(item));
+        const itemUid = item.userId || 'usr_admin';
+        if (item.currentChapter !== undefined || item.status !== undefined || item.lastReadAt !== undefined) {
+          stmtUpsertUserLibraryState.run({
+            user_id: itemUid,
+            manga_id: item.id,
+            current_chapter: Math.max(0, Number(item.currentChapter) || 0),
+            last_read_at: item.lastReadAt || now,
+            status: item.status || null,
+          });
+        }
+        if (item.isFavorite) {
+          stmtUpsertUserFavorite.run({
+            user_id: itemUid,
+            manga_id: item.id,
+            is_favorite: 1,
+            updated_at: now,
+          });
+        }
+        if (item.currentChapter && Number(item.currentChapter) > 0) {
+          stmtUpsertReadingProgress.run({
+            manga_id: item.id,
+            user_id: itemUid,
+            chapter_number: Number(item.currentChapter),
+            page_index: 0,
+            page_count: 0,
+            percent: 100,
+            last_read_at: item.lastReadAt || now,
+          });
+        }
+        if (Array.isArray(item.categories) && item.categories.length > 0) {
+          for (const cat of item.categories) {
+            stmtInsertMangaCategory.run(item.id, String(cat), itemUid);
+          }
+        }
       }
     });
     transaction(items);
@@ -1432,10 +1469,15 @@ export const SqliteDb = {
     };
   },
 
-  deleteCategory(id: string, userId: string): boolean {
+  deleteCategory(id: string, userId?: string): boolean {
     const tx = db.transaction(() => {
-      stmtDeleteCategoryMangaLinks.run(id, userId);
-      stmtDeleteCategory.run(id, userId);
+      if (!userId || userId === 'usr_admin') {
+        stmtDeleteCategoryMangaLinksAdmin.run(id);
+        stmtDeleteCategoryAdmin.run(id);
+      } else {
+        stmtDeleteCategoryMangaLinks.run(id, userId);
+        stmtDeleteCategory.run(id, userId);
+      }
     });
     tx();
     return true;
@@ -1843,10 +1885,53 @@ export const SqliteDb = {
         ? dump.data
         : [];
 
+      const hasExplicitUserLibraryState = Array.isArray(dump.userLibraryState) && dump.userLibraryState.length > 0;
+      const hasExplicitUserFavorites = Array.isArray(dump.userFavorites) && dump.userFavorites.length > 0;
+      const now = new Date().toISOString();
+
       for (const item of mangaList) {
         if (item && item.id) {
           stmtUpsertManga.run(mapMangaItemToRow(item));
           mangaCount++;
+
+          const itemUid = item.userId || 'usr_admin';
+          if (!hasExplicitUserLibraryState && (item.currentChapter !== undefined || item.status || item.lastReadAt)) {
+            stmtUpsertUserLibraryState.run({
+              user_id: itemUid,
+              manga_id: item.id,
+              current_chapter: Math.max(0, Number(item.currentChapter) || 0),
+              last_read_at: item.lastReadAt || now,
+              status: item.status || null,
+            });
+            progressCount++;
+          }
+
+          if (!hasExplicitUserFavorites && item.isFavorite) {
+            stmtUpsertUserFavorite.run({
+              user_id: itemUid,
+              manga_id: item.id,
+              is_favorite: 1,
+              updated_at: now,
+            });
+          }
+
+          if (item.currentChapter && Number(item.currentChapter) > 0) {
+            stmtUpsertReadingProgress.run({
+              manga_id: item.id,
+              user_id: itemUid,
+              chapter_number: Number(item.currentChapter),
+              page_index: 0,
+              page_count: 0,
+              percent: 100,
+              last_read_at: item.lastReadAt || now,
+            });
+          }
+
+          if (Array.isArray(item.categories) && item.categories.length > 0) {
+            for (const catIdOrName of item.categories) {
+              stmtInsertMangaCategory.run(item.id, String(catIdOrName), itemUid);
+            }
+          }
         }
       }
 

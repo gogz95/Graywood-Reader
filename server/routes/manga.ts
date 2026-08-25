@@ -1026,11 +1026,26 @@ mangaRouter.put('/:id', (req, res) => {
 
   syncAddOrUpdateManga(updatedItem);
   const uid = resolveRequestUserId(req) || 'usr_guest';
-  if (body.isFavorite !== undefined) {
-    SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(body.isFavorite));
+  if (body.isFavorite !== undefined || updatedItem.isFavorite !== undefined) {
+    SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(updatedItem.isFavorite));
   }
   if (body.categories !== undefined && Array.isArray(body.categories)) {
     SqliteDb.setMangaCategories(updatedItem.id, body.categories, uid);
+  } else if (Array.isArray(updatedItem.categories)) {
+    SqliteDb.setMangaCategories(updatedItem.id, updatedItem.categories, uid);
+  }
+  if (body.currentChapter !== undefined || body.status !== undefined || updatedItem.currentChapter !== undefined) {
+    SqliteDb.setUserLibraryChapter(uid, updatedItem.id, updatedItem.currentChapter || 0, {
+      status: updatedItem.status,
+    });
+    if (updatedItem.currentChapter > 0) {
+      SqliteDb.upsertReadingProgress({
+        manga_id: updatedItem.id,
+        user_id: uid,
+        chapter_number: updatedItem.currentChapter,
+        percent: 100,
+      });
+    }
   }
   res.json(uid ? SqliteDb.applyUserOverlay([updatedItem], uid)[0] : updatedItem);
 });

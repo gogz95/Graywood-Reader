@@ -159,20 +159,35 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     title = cleanMangaTitle(title);
     if (!title) continue;
 
-    // Calculate read chapters from chapter list if present
+    // Calculate read chapters and highest chapter number from chapter list if present
     const chapters = entry.chapters || entry.manga?.chapters;
     if (Array.isArray(chapters) && chapters.length > 0) {
-      totalChapters = chapters.length;
-      const readChapters = chapters.filter((c: any) => c.read || (c.last_page_read && c.last_page_read > 0));
-      currentChapter = readChapters.length;
+      let maxReadCh = 0;
+      let maxTotalCh = chapters.length;
+      let readCount = 0;
+      for (const c of chapters) {
+        const chNum = Number(c.chapter_number ?? c.number ?? c.chapterNumber);
+        if (Number.isFinite(chNum) && chNum > maxTotalCh) {
+          maxTotalCh = chNum;
+        }
+        if (c.read || (c.last_page_read && c.last_page_read > 0)) {
+          readCount++;
+          if (Number.isFinite(chNum) && chNum > maxReadCh) {
+            maxReadCh = chNum;
+          }
+        }
+      }
+      totalChapters = maxTotalCh || chapters.length;
+      currentChapter = maxReadCh > 0 ? maxReadCh : readCount;
     }
 
     // Check history list
     const historyList = entry.history || entry.manga?.history;
     if (Array.isArray(historyList) && historyList.length > 0) {
       for (const h of historyList) {
-        if (h && typeof h.chapter_number === 'number' && h.chapter_number > currentChapter) {
-          currentChapter = Math.floor(h.chapter_number);
+        const hNum = Number(h?.chapter_number ?? h?.chapterNumber ?? h?.number);
+        if (Number.isFinite(hNum) && hNum > currentChapter) {
+          currentChapter = Math.floor(hNum);
         }
       }
     }
@@ -189,6 +204,9 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     }
     if (typeof (entry.manga as any)?.last_chapter_read === 'number' && (entry.manga as any).last_chapter_read > currentChapter) {
       currentChapter = Math.floor((entry.manga as any).last_chapter_read);
+    }
+    if (typeof (entry as any)?.progress === 'number' && (entry as any).progress > currentChapter) {
+      currentChapter = Math.floor((entry as any).progress);
     }
 
     const type: MangaType = detectFormatFromGenres(genres, title);
