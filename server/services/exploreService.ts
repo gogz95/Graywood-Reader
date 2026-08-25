@@ -186,23 +186,37 @@ export async function scrapeManhwa18(page: number, limit: number): Promise<any[]
     const results: any[] = [];
     const seen = new Set<string>();
 
-    let cards = $('.card-body .thumb-item-flow').toArray();
+    let cards = $('.card-body .thumb-item-flow, .thumb-item-flow').toArray();
     if (cards.length === 0) cards = $('.thumb_attr.series-title').parent().toArray();
 
     for (const el of cards) {
       if (results.length >= limit) break;
       const card = $(el);
-      const titleA = card.find('.thumb_attr.series-title > a').first();
-      const href = titleA.attr('href') || '';
-      const title = titleA.text().trim();
+      const titleA = card.find('.thumb_attr.series-title > a, .series-title a').first();
+      const href = titleA.attr('href') || card.find('a[href*="/manga/"]').not('[href*="chapter"]').not('[href*="chap-"]').first().attr('href') || '';
+      const title = titleA.text().trim() || titleA.attr('title') || '';
       if (!href || !title) continue;
       const absUrl = href.startsWith('http') ? href : `https://manhwa18.com${href.startsWith('/') ? '' : '/'}${href}`;
       if (!/\/manga\/[^/]+$/i.test(absUrl.replace(/\/+$/, ''))) continue;
       const key = absUrl.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      const thumb = card.find('.thumb img').first();
-      const cover = thumb.attr('data-src') || thumb.attr('src') || '';
+
+      const bgEl = card.find('[data-bg], [data-background], [data-src], [data-original], [data-lazy-src], img').first();
+      let cover = bgEl.attr('data-bg') || bgEl.attr('data-background') || bgEl.attr('data-src') || bgEl.attr('data-original') || bgEl.attr('data-lazy-src') || bgEl.attr('src') || '';
+      if (!cover) {
+        const style = card.find('[style*="background"]').attr('style') || card.attr('style') || '';
+        const m = style.match(/background(?:-image)?:\s*url\(['"]?([^'")]+)['"]?\)/i);
+        if (m && m[1]) cover = m[1];
+      }
+      if (cover.startsWith('//')) cover = `https:${cover}`;
+      else if (cover.startsWith('/')) cover = `https://manhwa18.com${cover}`;
+
+      let latestCh = 1;
+      const chText = card.find('.thumb_attr.chapter-title a, a[href*="chapter"]').first().text().trim();
+      const chMatch = chText.match(/chapter[-_\.\s]*(\d+(?:\.\d+)?)|ch\.?\s*(\d+(?:\.\d+)?)/i);
+      if (chMatch) latestCh = parseFloat(chMatch[1] || chMatch[2]) || 1;
+
       results.push({
         id: generateSourceScrapeId('manhwa18', absUrl),
         title,
@@ -211,43 +225,179 @@ export async function scrapeManhwa18(page: number, limit: number): Promise<any[]
         sourceName: 'Manhwa18',
         description: 'Adult manhwa series from Manhwa18',
         genres: ['Adult', 'Manhwa'],
-        latestChapter: 1,
+        latestChapter: latestCh,
         type: 'manhwa',
       });
-    }
-
-    if (results.length === 0) {
-      const titleRx = /<div class="thumb_attr series-title">\s*<a href="([^"]+)" title="([^"]+)"/gi;
-      const bgRx = /data-bg="([^"]+)"/gi;
-      const covers: string[] = [];
-      let bg: RegExpExecArray | null;
-      while ((bg = bgRx.exec(html)) !== null) covers.push(bg[1]);
-      let t: RegExpExecArray | null;
-      let idx = 0;
-      while ((t = titleRx.exec(html)) !== null && results.length < limit) {
-        let href = t[1];
-        if (!href.startsWith('http')) href = `https://manhwa18.com${href.startsWith('/') ? '' : '/'}${href}`;
-        href = href.replace(/\/+$/, '');
-        if (!/\/manga\/[^/]+$/i.test(href) || seen.has(href)) continue;
-        seen.add(href);
-        results.push({
-          id: generateSourceScrapeId('manhwa18', href),
-          title: (t[2] || '').trim() || 'Untitled',
-          sourceUrl: href,
-          coverImage: covers[idx] || '',
-          sourceName: 'Manhwa18',
-          description: 'Adult manhwa from Manhwa18',
-          genres: ['Adult', 'Manhwa'],
-          latestChapter: 1,
-          type: 'manhwa',
-        });
-        idx++;
-      }
     }
     return results;
   } catch (e) {
     console.error('[Scraper] Manhwa18 failed:', (e as Error).message);
     return [];
+  }
+}
+
+export async function searchManhwa18(query: string, page: number = 1, limit: number = 24): Promise<{ items: any[]; totalCount: number }> {
+  try {
+    const encQ = encodeURIComponent(query);
+    const url = `https://manhwa18.com/tim-kiem?q=${encQ}&page=${page}`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html', 'Referer': 'https://manhwa18.com/' },
+    });
+    if (!res.ok) return { items: [], totalCount: 0 };
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    let cards = $('.card-body .thumb-item-flow, .thumb-item-flow').toArray();
+    for (const el of cards) {
+      if (results.length >= limit) break;
+      const card = $(el);
+      const titleA = card.find('.thumb_attr.series-title > a, .series-title a').first();
+      const href = titleA.attr('href') || card.find('a[href*="/manga/"]').not('[href*="chapter"]').not('[href*="chap-"]').first().attr('href') || '';
+      const title = titleA.text().trim() || titleA.attr('title') || '';
+      if (!href || !title) continue;
+      const absUrl = href.startsWith('http') ? href : `https://manhwa18.com${href.startsWith('/') ? '' : '/'}${href}`;
+      if (!/\/manga\/[^/]+$/i.test(absUrl.replace(/\/+$/, ''))) continue;
+      const key = absUrl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const bgEl = card.find('[data-bg], [data-background], [data-src], [data-original], [data-lazy-src], img').first();
+      let cover = bgEl.attr('data-bg') || bgEl.attr('data-background') || bgEl.attr('data-src') || bgEl.attr('data-original') || bgEl.attr('data-lazy-src') || bgEl.attr('src') || '';
+      if (cover.startsWith('//')) cover = `https:${cover}`;
+      else if (cover.startsWith('/')) cover = `https://manhwa18.com${cover}`;
+
+      let latestCh = 1;
+      const chText = card.find('.thumb_attr.chapter-title a, a[href*="chapter"]').first().text().trim();
+      const chMatch = chText.match(/chapter[-_\.\s]*(\d+(?:\.\d+)?)|ch\.?\s*(\d+(?:\.\d+)?)/i);
+      if (chMatch) latestCh = parseFloat(chMatch[1] || chMatch[2]) || 1;
+
+      results.push({
+        id: generateSourceScrapeId('manhwa18', absUrl),
+        title,
+        sourceUrl: absUrl,
+        coverImage: cover.startsWith('http') ? cover : '',
+        sourceName: 'Manhwa18',
+        description: 'Adult manhwa series from Manhwa18',
+        genres: ['Adult', 'Manhwa'],
+        latestChapter: latestCh,
+        type: 'manhwa',
+      });
+    }
+    return { items: results, totalCount: results.length };
+  } catch (e) {
+    console.error('[Search Engine] Manhwa18 search failed:', (e as Error).message);
+    return { items: [], totalCount: 0 };
+  }
+}
+
+export async function scrapeManhwa18CC(page: number, limit: number): Promise<any[]> {
+  try {
+    const url = `https://manhwa18.cc/webtoons?page=${page}`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html', 'Referer': 'https://manhwa18.cc/' },
+    });
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    let cards = $('.manga-item, .item, .entry, .card, .thumb-item-flow').toArray();
+    for (const el of cards) {
+      if (results.length >= limit) break;
+      const card = $(el);
+      const titleA = card.find('.manga-name a, .post-title a, h3 a, h2 a, a[href*="/webtoon/"]').not('[href*="chapter"]').first();
+      const href = titleA.attr('href') || '';
+      const rawTitle = titleA.attr('title') || titleA.text().trim() || '';
+      const title = rawTitle.replace(/^18\+\s*/, '').trim();
+      if (!href || !title || title === '18+') continue;
+      const absUrl = href.startsWith('http') ? href : `https://manhwa18.cc${href.startsWith('/') ? '' : '/'}${href}`;
+      if (!/\/webtoon\/[^/]+$/i.test(absUrl.replace(/\/+$/, ''))) continue;
+      const key = absUrl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const bgEl = card.find('img, [data-bg], [data-src], [data-original]').first();
+      let cover = bgEl.attr('data-src') || bgEl.attr('data-original') || bgEl.attr('data-bg') || bgEl.attr('src') || '';
+      if (cover.startsWith('//')) cover = `https:${cover}`;
+      else if (cover.startsWith('/')) cover = `https://manhwa18.cc${cover}`;
+
+      results.push({
+        id: generateSourceScrapeId('manhwa18cc', absUrl),
+        title,
+        sourceUrl: absUrl,
+        coverImage: cover.startsWith('http') ? cover : '',
+        sourceName: 'Manhwa18.cc',
+        description: 'Adult manhwa series from Manhwa18.cc',
+        genres: ['Adult', 'Webtoon'],
+        latestChapter: 1,
+        type: 'manhwa',
+      });
+    }
+    return results;
+  } catch (e) {
+    console.error('[Scraper] Manhwa18CC failed:', (e as Error).message);
+    return [];
+  }
+}
+
+export async function searchManhwa18CC(query: string, page: number = 1, limit: number = 24): Promise<{ items: any[]; totalCount: number }> {
+  try {
+    const encQ = encodeURIComponent(query);
+    const url = `https://manhwa18.cc/search?q=${encQ}&page=${page}`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'User-Agent': SCRAPER_UA, 'Accept': 'text/html', 'Referer': 'https://manhwa18.cc/' },
+    });
+    if (!res.ok) return { items: [], totalCount: 0 };
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    let cards = $('.manga-item, .item, .entry, .card, .thumb-item-flow').toArray();
+    for (const el of cards) {
+      if (results.length >= limit) break;
+      const card = $(el);
+      const titleA = card.find('.manga-name a, .post-title a, h3 a, h2 a, a[href*="/webtoon/"]').not('[href*="chapter"]').first();
+      const href = titleA.attr('href') || '';
+      const rawTitle = titleA.attr('title') || titleA.text().trim() || '';
+      const title = rawTitle.replace(/^18\+\s*/, '').trim();
+      if (!href || !title || title === '18+') continue;
+      const absUrl = href.startsWith('http') ? href : `https://manhwa18.cc${href.startsWith('/') ? '' : '/'}${href}`;
+      if (!/\/webtoon\/[^/]+$/i.test(absUrl.replace(/\/+$/, ''))) continue;
+      const key = absUrl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const bgEl = card.find('img, [data-bg], [data-src], [data-original]').first();
+      let cover = bgEl.attr('data-src') || bgEl.attr('data-original') || bgEl.attr('data-bg') || bgEl.attr('src') || '';
+      if (cover.startsWith('//')) cover = `https:${cover}`;
+      else if (cover.startsWith('/')) cover = `https://manhwa18.cc${cover}`;
+
+      results.push({
+        id: generateSourceScrapeId('manhwa18cc', absUrl),
+        title,
+        sourceUrl: absUrl,
+        coverImage: cover.startsWith('http') ? cover : '',
+        sourceName: 'Manhwa18.cc',
+        description: 'Adult manhwa series from Manhwa18.cc',
+        genres: ['Adult', 'Webtoon'],
+        latestChapter: 1,
+        type: 'manhwa',
+      });
+    }
+    return { items: results, totalCount: results.length };
+  } catch (e) {
+    console.error('[Search Engine] Manhwa18CC search failed:', (e as Error).message);
+    return { items: [], totalCount: 0 };
   }
 }
 
@@ -286,6 +436,16 @@ export async function searchSourceDirectly(
   if (lowerName.includes('demonic') || lowerId.includes('demonic')) {
     const results = await searchDemonicScans(cleanQ, limit);
     if (results.length > 0) return { items: results, totalCount: results.length };
+  }
+
+  if (lowerId === 'manhwa18' || (lowerName.includes('manhwa18') && !lowerId.includes('cc') && !lowerName.includes('.cc'))) {
+    const results = await searchManhwa18(cleanQ, page, limit);
+    if (results.items.length > 0) return results;
+  }
+
+  if (lowerId.includes('manhwa18cc') || lowerName.includes('manhwa18.cc') || lowerName.includes('manhwa18 cc')) {
+    const results = await searchManhwa18CC(cleanQ, page, limit);
+    if (results.items.length > 0) return results;
   }
 
   if (lowerName.includes('asura') || lowerId.includes('asura')) {
@@ -347,10 +507,10 @@ export async function searchSourceDirectly(
     if (lowerId.includes('demonic') || baseOrigin.includes('demonicscans')) {
       searchCandidates.push(`${baseOrigin}/advanced.php?search=${encQ}`);
     }
-    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
-    searchCandidates.push(`${baseOrigin}/search?q=${encQ}`);
-    searchCandidates.push(`${baseOrigin}/browse?q=${encQ}`);
     searchCandidates.push(`${baseOrigin}/tim-kiem?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/search?q=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/?s=${encQ}`);
+    searchCandidates.push(`${baseOrigin}/browse?q=${encQ}`);
     searchCandidates.push(`${baseOrigin}/series?q=${encQ}`);
   }
 
@@ -419,11 +579,12 @@ export function parseUniversalCatalogCards(
   const extractCover = (el: any, cardParent?: any): string => {
     if (!el || !el.length) {
       if (cardParent && cardParent.length) {
-        const bgStyle = cardParent.attr('style') || '';
+        const bgEl = cardParent.find('[data-bg], [data-background], [data-src], [data-original], [data-lazy-src]').first();
+        const dataBg = bgEl.attr('data-bg') || bgEl.attr('data-background') || bgEl.attr('data-src') || cardParent.attr('data-bg') || cardParent.attr('data-background') || '';
+        if (dataBg && !isPlaceholderCover(dataBg)) return dataBg.trim();
+        const bgStyle = bgEl.attr('style') || cardParent.attr('style') || '';
         const bgMatch = bgStyle.match(/background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
         if (bgMatch && bgMatch[1] && !isPlaceholderCover(bgMatch[1])) return bgMatch[1].trim();
-        const dataBg = cardParent.attr('data-bg') || cardParent.attr('data-background') || cardParent.attr('data-src') || '';
-        if (dataBg && !isPlaceholderCover(dataBg)) return dataBg.trim();
       }
       return '';
     }
@@ -544,9 +705,10 @@ export function parseUniversalCatalogCards(
     if (cards.length > 0) {
       for (const el of cards) {
         const card = $(el);
-        const a = card.is('a') ? card : card.find('.post-title a, .tt a, h3 a, h4 a, h2 a, .title a, a[title], a[href*="/manga/"], a[href*="/series/"], a[href*="/comic/"], a').first();
-        const href = a.attr('href') || '';
-        const title = (card.find('.tt, .bigor .tt, h3, h2, h4, .post-title, .series-title, .title').first().text() || a.attr('title') || a.text()).trim();
+        const a = card.is('a') ? card : card.find('.series-title a, .thumb_attr.series-title > a, .manga-name a, .post-title a, .tt a, h3 a, h4 a, h2 a, .title a, a[href*="/manga/"], a[href*="/series/"], a[href*="/comic/"], a[href*="/webtoon/"]').not('[href*="chapter"]').not('[href*="chap-"]').first();
+        const href = a.attr('href') || (card.is('a') ? card.attr('href') : '') || '';
+        const rawTitle = (card.find('.series-title a, .thumb_attr.series-title > a, .manga-name, .post-title, .tt, .bigor .tt, h3, h2, h4, .title').first().text() || a.attr('title') || a.text()).trim();
+        const title = rawTitle.replace(/^18\+\s*/, '').trim();
         const cover = extractCover(card.find('img').first(), card);
 
         let chNum = 10;
@@ -567,7 +729,8 @@ export function parseUniversalCatalogCards(
     if (!href || !isSeriesContentPath(href)) return;
 
     const parent = a.closest('div, li, article, section');
-    const title = (a.attr('title') || parent.find('h2, h3, h4, h5, .title, .series-title, .name').first().text() || a.text()).trim();
+    const rawTitle = (a.attr('title') || parent.find('h2, h3, h4, h5, .title, .series-title, .name').first().text() || a.text()).trim();
+    const title = rawTitle.replace(/^18\+\s*/, '').trim();
     if (isChapterTitle(title)) return;
 
     const cover = extractCover(a.find('img').first().length ? a.find('img').first() : parent.find('img').first(), parent);
@@ -617,8 +780,12 @@ export async function getSourcePopularSeries(
       return { items, totalCount: estimatedTotal };
     }
   }
-  if (lowerName.includes('manhwa18') || lowerId.includes('manhwa18')) {
+  if (lowerId === 'manhwa18' || (lowerName.includes('manhwa18') && !lowerId.includes('cc') && !lowerName.includes('.cc'))) {
     const items = await scrapeManhwa18(page, limit);
+    if (items.length > 0) return { items, totalCount: 90 * limit };
+  }
+  if (lowerId.includes('manhwa18cc') || lowerName.includes('manhwa18.cc') || lowerName.includes('manhwa18 cc')) {
+    const items = await scrapeManhwa18CC(page, limit);
     if (items.length > 0) return { items, totalCount: 90 * limit };
   }
   if (lowerName.includes('mangaread') || lowerId.includes('mangaread')) {
@@ -641,6 +808,7 @@ export async function getSourcePopularSeries(
     const result = await scrapeKunManga(page, limit);
     if (result.items.length > 0) return result;
   }
+
 
   const scrapedItems: any[] = [];
 

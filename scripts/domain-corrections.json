@@ -9,16 +9,16 @@
   {
     "id": "manhwa18",
     "baseUrl": "https://manhwa18.com",
-    "engineType": "madara",
+    "engineType": "custom_html",
     "name": "Manhwa18",
-    "reason": "Canonical domain (manhwa18.net -> manhwa18.com per DOMAIN_MIRRORS). Catalog entry was custom_html/manhwa18.net which shadowed the curated madara default."
+    "reason": "Canonical domain (manhwa18.net/manhwa18.org -> manhwa18.com per DOMAIN_MIRRORS). Uses custom HTML theme."
   },
   {
     "id": "manhwa18cc",
     "baseUrl": "https://manhwa18.cc",
-    "engineType": "madara",
+    "engineType": "custom_html",
     "name": "Manhwa18.cc",
-    "reason": "Separate Madara site (must NOT be rewritten to manhwa18.com)."
+    "reason": "Separate active 18+ webtoon catalog at manhwa18.cc with direct HTML parsing."
   },
   {
     "id": "flamecomics",
@@ -85,10 +85,10 @@
   },
   {
     "id": "harimanga",
-    "baseUrl": "https://harimanga.me",
+    "baseUrl": "https://harimanga.com",
     "engineType": "madara",
     "name": "Hari Manga",
-    "reason": "Canonical domain from curated engine registry."
+    "reason": "Canonical domain (harimanga.me timeout/dead -> harimanga.com per DOMAIN_MIRRORS)."
   },
   {
     "id": "anisascans",
@@ -98,10 +98,17 @@
     "reason": "Canonical domain from curated engine registry."
   },
   {
-    "id": "adultwebtoon",
-    "baseUrl": "https://adultwebtoon.com",
+    "id": "hentai20",
+    "baseUrl": "https://hentai20.io",
+    "engineType": "mangathemesia",
+    "name": "Hentai20",
+    "reason": "Official working mirror (hentai20.com dead -> hentai20.io per DOMAIN_MIRRORS)."
+  },
+  {
+    "id": "beehentai",
+    "baseUrl": "https://toontop.io",
     "engineType": "madara",
-    "name": "Adult Webtoon",
-    "reason": "Canonical domain (underscore-prefixed id resolved to clean domain)."
+    "name": "ToonTop",
+    "reason": "Official site migration (beehentai.com -> toontop.io per DOMAIN_MIRRORS)."
   }
 ]

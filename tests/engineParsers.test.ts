@@ -274,6 +274,77 @@ describe('Automated Engine Parser Test Harness', () => {
       expect(cards[0].sourceUrl).toBe('https://themesiasource.example/manga/nano-machine');
       expect(cards[0].latestChapter).toBe(210);
     });
+
+    it('extracts series cards from Manhwa18 .thumb-item-flow layouts with lazy-bg covers', () => {
+      const manhwa18Html = `
+        <div class="card-body">
+          <div class="thumb-item-flow col-6 col-md-3">
+            <div class="thumb-wrapper">
+              <a href="https://manhwa18.com/manga/chamber-of-secrets-uncensored">
+                <div class="a6-ratio">
+                  <div class="content img-in-ratio lazy-bg" data-bg="https://min.manhwa18.net/chapters/manga/covers/secret.webp"></div>
+                </div>
+              </a>
+              <div class="thumb-detail">
+                <div class="thumb_attr chapter-title text-truncate" title="Chapter 5 - Episode 05">
+                  <a href="https://manhwa18.com/manga/chamber-of-secrets-uncensored/chapter-5-net-123" title="Chapter 5 - Episode 05">Chapter 5 - Episode 05</a>
+                </div>
+              </div>
+            </div>
+            <div class="thumb_attr series-title">
+              <a href="https://manhwa18.com/manga/chamber-of-secrets-uncensored" title="Chamber of Secrets (Uncensored)">Chamber of Secrets (Uncensored)</a>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const sourceDef = {
+        id: 'manhwa18',
+        name: 'Manhwa18',
+        baseUrl: 'https://manhwa18.com',
+        engineType: 'custom_html' as const,
+        lang: 'en',
+        isNsfw: true,
+      };
+
+      const cards = parseUniversalCatalogCards(manhwa18Html, sourceDef, 'https://manhwa18.com');
+      expect(cards.length).toBe(1);
+      expect(cards[0].title).toBe('Chamber of Secrets (Uncensored)');
+      expect(cards[0].sourceUrl).toBe('https://manhwa18.com/manga/chamber-of-secrets-uncensored');
+      expect(cards[0].coverImage).toBe('https://min.manhwa18.net/chapters/manga/covers/secret.webp');
+      expect(cards[0].latestChapter).toBe(5);
+    });
+
+    it('extracts series cards from Manhwa18.cc .manga-item layouts and cleans 18+ prefix', () => {
+      const ccHtml = `
+        <div class="manga-item">
+          <div class="manga-thumb">
+            <a href="/webtoon/secret-class-01" title="Secret Class">
+              <span class="badge-adult">18+</span>
+              <img data-src="https://manhwa18.cc/manga/secret-class.jpg" src="/images/loading.gif" alt="Secret Class">
+            </a>
+          </div>
+          <div class="manga-name">
+            <a href="/webtoon/secret-class-01" title="18+ Secret Class">18+ Secret Class</a>
+          </div>
+        </div>
+      `;
+
+      const sourceDef = {
+        id: 'manhwa18cc',
+        name: 'Manhwa18.cc',
+        baseUrl: 'https://manhwa18.cc',
+        engineType: 'custom_html' as const,
+        lang: 'en',
+        isNsfw: true,
+      };
+
+      const cards = parseUniversalCatalogCards(ccHtml, sourceDef, 'https://manhwa18.cc');
+      expect(cards.length).toBe(1);
+      expect(cards[0].title).toBe('Secret Class');
+      expect(cards[0].sourceUrl).toBe('https://manhwa18.cc/webtoon/secret-class-01');
+      expect(cards[0].coverImage).toBe('https://manhwa18.cc/manga/secret-class.jpg');
+    });
   });
 
   describe('Resilience and Error Handling', () => {

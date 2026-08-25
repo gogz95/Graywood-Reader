@@ -56,7 +56,7 @@ export interface ResolvedChapter {
   pageCount: number;
 }
 
-export type SourceEngine = 'madara' | 'manhwa18' | 'mangareader' | 'hotcomics' | 'custom' | 'foolslide';
+export type SourceEngine = 'madara' | 'manhwa18' | 'manhwa18cc' | 'mangareader' | 'hotcomics' | 'custom' | 'foolslide';
 
 export interface EngineSourceConfig {
   id: string;
@@ -86,6 +86,11 @@ export const DOMAIN_MIRRORS: Record<string, string> = {
   'manhwa18.net': 'manhwa18.com',
   'manhwa18.org': 'manhwa18.com',
   'manhwa18.cc': 'manhwa18.cc',
+  'hentai20.com': 'hentai20.io',
+  'hentai20.net': 'hentai20.io',
+  'harimanga.me': 'harimanga.com',
+  'harimanga.org': 'harimanga.com',
+  'beehentai.com': 'toontop.io',
   'mangatx.to': 'mangatx.com',
   'mangatx.unblockit.ch': 'mangatx.com',
   'manhuaplus.org': 'manhuaplus.top',
@@ -99,18 +104,14 @@ export const UA_HEADERS = {
 
 export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'manhwa18', name: 'Manhwa18', domain: 'manhwa18.com', engine: 'manhwa18', lang: 'en', isNsfw: true },
-  {
-    id: 'manhwa18cc', name: 'Manhwa18.cc', domain: 'manhwa18.cc', engine: 'madara', lang: 'en', isNsfw: true,
-    madaraSelectTestAsync: 'ul.row-content-chapter', madaraSelectChapter: 'li.a-h', madaraSelectBodyPage: 'div.read-content',
-  },
+  { id: 'manhwa18cc', name: 'Manhwa18.cc', domain: 'manhwa18.cc', engine: 'manhwa18cc', lang: 'en', isNsfw: true },
   { id: 'aquamanga', name: 'Aqua Manga', domain: 'aquareader.org', engine: 'madara', lang: 'en', isNsfw: false },
   // ManhuaPlus migrated off Madara (2026-08): WPComics-style theme with the
   // chapter list inlined at #nt_listchapter — no wp-admin AJAX exists anymore.
   { id: 'manhuaplus', name: 'Manhua Plus', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
   { id: 'manhuaplusorg', name: 'ManhuaPlus.org', domain: 'manhuaplus.top', engine: 'madara', lang: 'en', isNsfw: false, madaraWithoutAjax: true },
-  { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.me', engine: 'madara', lang: 'en', isNsfw: false, madaraPageSize: 10 },
+  { id: 'harimanga', name: 'Hari Manga', domain: 'harimanga.com', engine: 'madara', lang: 'en', isNsfw: false, madaraPageSize: 10 },
   { id: 'anisascans', name: 'Anisa Scans', domain: 'anisascans.in', engine: 'madara', lang: 'en', isNsfw: false, madaraDatePattern: 'dd MMM, yyyy' },
-  { id: 'adultwebtoon', name: 'Adult Webtoon', domain: 'adultwebtoon.com', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'mangaread', name: 'MangaRead', domain: 'www.mangaread.org', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'manhwabuddy', name: 'Manhwa Buddy', domain: 'manhwabuddy.com', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'manhuafast', name: 'Manhua Fast', domain: 'manhuafast.com', engine: 'madara', lang: 'en', isNsfw: false },
@@ -126,10 +127,10 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'atsumoe', name: 'Atsu Moe', domain: 'atsu.moe', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'demonicscans', name: 'Demonic Scans', domain: 'demonicscans.org', engine: 'custom', lang: 'en', isNsfw: false },
   { id: 'hiperdex', name: 'Hiperdex', domain: 'hiperdex.com', engine: 'madara', lang: 'en', isNsfw: true },
-  { id: 'beehentai', name: 'BeeHentai', domain: 'beehentai.com', engine: 'madara', lang: 'en', isNsfw: true },
+  { id: 'beehentai', name: 'ToonTop', domain: 'toontop.io', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'mangatx', name: 'Manga TX', domain: 'mangatx.com', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.net', engine: 'mangareader', lang: 'en', isNsfw: false },
-  { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.com', engine: 'mangareader', lang: 'en', isNsfw: true },
+  { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.io', engine: 'mangareader', lang: 'en', isNsfw: true },
 ];
 
 export const ENGINE_SOURCE_REGISTRY: EngineSourceConfig[] = [...CURATED_ENGINE_SOURCES];
@@ -844,9 +845,10 @@ export async function fetchManhwa18ChapterList(seriesUrl: string, domain: string
       if (!/\/(chap|chapter)[-_/]/i.test(abs) && !/\/manga\/[^/]+\/[^/]+/i.test(abs)) continue;
       if (seen.has(abs)) continue;
       seen.add(abs);
-      const name = el.find('.chapter-name').text().trim() || el.text().trim();
-      const num = extractManhwa18ChapterNumber(href, name, anchors.length - i);
-      chapters.push({ number: num, id: abs, slug: abs, title: name || `Chapter ${num}`, url: abs, pageCount: 0 });
+      const rawName = el.find('.chapter-name').text().trim() || el.text().trim();
+      const cleanName = rawName.replace(/\s*\d+\s+view.*$/i, '').trim();
+      const num = extractManhwa18ChapterNumber(href, cleanName || rawName, anchors.length - i);
+      chapters.push({ number: num, id: abs, slug: abs, title: cleanName || `Chapter ${num}`, url: abs, pageCount: 0 });
     }
     return chapters;
   } catch (e: any) {
@@ -875,7 +877,7 @@ export async function fetchManhwa18ChapterPages(chapterUrl: string, domain: stri
     const pushSrc = (raw: string) => {
       const src = (raw || '').trim();
       if (!src) return;
-      if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src) && !/cdn\.manhwa18/i.test(src)) return;
+      if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src) && !/cdn\.manhwa18/i.test(src) && !/min\.manhwa18/i.test(src)) return;
       if (/logo|avatar|icon|banner|favicon|\/covers\//i.test(src)) return;
       const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
       if (!pages.includes(abs)) pages.push(abs);
@@ -891,6 +893,89 @@ export async function fetchManhwa18ChapterPages(chapterUrl: string, domain: stri
     return pages.length > 0 ? pages : null;
   } catch (e: any) {
     console.warn('[Manhwa18 Engine] Page extraction failed:', e.message);
+    return null;
+  }
+}
+
+export async function fetchManhwa18CCChapterList(seriesUrl: string, domain: string): Promise<ResolvedChapter[]> {
+  try {
+    const normalized = normalizeLiveTargetUrl(seriesUrl);
+    const origin = (() => { try { return new URL(normalized).origin; } catch { return `https://${domain}`; } })();
+    const bypassRes = await fetchWithChallengeBypass(normalized, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+    });
+    if (!bypassRes.ok || !bypassRes.html) return [];
+    const html = bypassRes.html;
+    const $ = cheerio.load(html);
+    let anchors = $('ul.row-content-chapter li.a-h a, .chapter-name, a[href*="/chapter-"]').toArray();
+    if (anchors.length === 0) anchors = $('a[href*="/chapter"]').toArray();
+    if (anchors.length === 0) return [];
+    const chapters: ResolvedChapter[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < anchors.length; i++) {
+      const el = $(anchors[i]);
+      const href = el.attr('href') || '';
+      if (!href || href.startsWith('javascript') || href.startsWith('#')) continue;
+      const rawText = el.text().trim();
+      if (/read\s+(first|last)/i.test(rawText) || /all\s+chapters/i.test(rawText)) continue;
+      const abs = (href.startsWith('http') ? href : `${origin}${href.startsWith('/') ? '' : '/'}${href}`).replace(/\/+$/, '');
+      if (!/\/chapter[-_/]/i.test(abs) && !/\/webtoon\/[^/]+\/chapter/i.test(abs)) continue;
+      if (seen.has(abs)) continue;
+      seen.add(abs);
+      const name = el.find('.chapter-name').text().trim() || rawText;
+      const num = extractManhwa18ChapterNumber(href, name, anchors.length - i);
+      chapters.push({ number: num, id: abs, slug: abs, title: `Chapter ${num}`, url: abs, pageCount: 0 });
+    }
+    return chapters;
+  } catch (e: any) {
+    console.warn('[Manhwa18CC Engine] Chapter list failed:', e.message);
+    return [];
+  }
+}
+
+export async function fetchManhwa18CCChapterPages(chapterUrl: string, domain: string): Promise<string[] | null> {
+  try {
+    const origin = (() => { try { return new URL(chapterUrl).origin; } catch { return `https://${domain}`; } })();
+    const bypassRes = await fetchWithChallengeBypass(chapterUrl, {
+      headers: { ...UA_HEADERS, 'Referer': origin + '/' },
+      enableCloudflareBypass: appSettings.enableCloudflareBypass,
+      flareSolverrUrl: appSettings.flareSolverrUrl,
+      captchaSolverEnabled: appSettings.captchaSolverEnabled,
+      captchaApiKey: appSettings.captchaApiKey,
+      timeoutMs: 15000,
+      sourceId: domain || origin,
+      onCookieUpdate: (sid: string, cookies: string[]) => sourceCookieJar.setCookies(sid, cookies),
+    });
+    if (!bypassRes.ok || !bypassRes.html) return null;
+    const html = bypassRes.html;
+    const $ = cheerio.load(html);
+    const pages: string[] = [];
+    const pushSrc = (raw: string) => {
+      const src = (raw || '').trim();
+      if (!src) return;
+      if (!/\.(jpg|jpeg|png|webp)(\?|$)/i.test(src) && !/img\d*\.manhwa18/i.test(src) && !/cdn/i.test(src)) return;
+      if (/logo|avatar|icon|banner|favicon|loading/i.test(src)) return;
+      const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
+      if (!pages.includes(abs)) pages.push(abs);
+    };
+    $('.read-content img, #chapter-content img, .chapter-content img, .page-break img').each((_, el) => {
+      pushSrc($(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-original') || $(el).attr('src') || '');
+    });
+    if (pages.length === 0) {
+      $('img.lazy, img[data-src]').each((_, el) => {
+        pushSrc($(el).attr('data-src') || $(el).attr('src') || '');
+      });
+    }
+    return pages.length > 0 ? pages : null;
+  } catch (e: any) {
+    console.warn('[Manhwa18CC Engine] Page extraction failed:', e.message);
     return null;
   }
 }
@@ -1161,6 +1246,14 @@ export async function fetchLiveChapterList(rawTargetUrl: string, domainId: strin
   const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
   
   const engineConfig = getEngineConfig(domainId);
+  if (engineConfig && engineConfig.engine === 'manhwa18') {
+    const chapters = await fetchManhwa18ChapterList(targetUrl, engineConfig.domain || domainId);
+    if (chapters.length > 0) return chapters;
+  }
+  if (engineConfig && engineConfig.engine === 'manhwa18cc') {
+    const chapters = await fetchManhwa18CCChapterList(targetUrl, engineConfig.domain || domainId);
+    if (chapters.length > 0) return chapters;
+  }
   if (engineConfig && engineConfig.engine === 'madara') {
     const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
     if (chapters.length > 0) return chapters;
@@ -1300,10 +1393,26 @@ export async function extractLiveDomainChapterPages(
 
     const engCfg = getEngineConfig(domainId);
     if (engCfg && engCfg.engine === 'manhwa18') {
-      const mhChapters = await fetchManhwa18ChapterList(targetUrl, engCfg.domain);
+      if (/\/chapter|[-_/]ch(?:apter)?[-_/]?\d+/i.test(targetUrl)) {
+        const directPages = await fetchManhwa18ChapterPages(targetUrl, engCfg.domain || domainId);
+        if (directPages && directPages.length > 0) return directPages;
+      }
+      const mhChapters = await fetchManhwa18ChapterList(targetUrl, engCfg.domain || domainId);
       const mhTarget = matchResolvedChapter(mhChapters, chapterNumber);
       if (mhTarget) {
-        const mhPages = await fetchManhwa18ChapterPages(mhTarget.url, engCfg.domain);
+        const mhPages = await fetchManhwa18ChapterPages(mhTarget.url, engCfg.domain || domainId);
+        if (mhPages && mhPages.length > 0) return mhPages;
+      }
+    }
+    if (engCfg && engCfg.engine === 'manhwa18cc') {
+      if (/\/chapter|[-_/]ch(?:apter)?[-_/]?\d+/i.test(targetUrl)) {
+        const directPages = await fetchManhwa18CCChapterPages(targetUrl, engCfg.domain || domainId);
+        if (directPages && directPages.length > 0) return directPages;
+      }
+      const mhChapters = await fetchManhwa18CCChapterList(targetUrl, engCfg.domain || domainId);
+      const mhTarget = matchResolvedChapter(mhChapters, chapterNumber);
+      if (mhTarget) {
+        const mhPages = await fetchManhwa18CCChapterPages(mhTarget.url, engCfg.domain || domainId);
         if (mhPages && mhPages.length > 0) return mhPages;
       }
     }
