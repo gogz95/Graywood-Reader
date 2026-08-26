@@ -1,8 +1,7 @@
 // Graywood Reader Service Worker
-// - v2: network-first navigations + stale-while-revalidate static assets so
-//   deploys propagate (v1 used cache-first with a fixed name -> stale app).
-// - Install must not hard-fail on a transient cache miss.
-const CACHE_VERSION = 'graywood-pwa-v2';
+// - v3: network-first navigations + stale-while-revalidate static assets & fonts
+// - Supports offline reading shell and typography caching.
+const CACHE_VERSION = 'graywood-pwa-v3';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -30,6 +29,26 @@ self.addEventListener('fetch', (event) => {
   // Never intercept non-GET or API/proxy traffic.
   if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
 
+  // Google Fonts caching (stylesheets and woff2 font files)
+  if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') {
+    event.respondWith(
+      caches.open(CACHE_VERSION).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const res = await fetch(event.request);
+          if (res && res.status === 200) {
+            cache.put(event.request, res.clone());
+          }
+          return res;
+        } catch {
+          return cached || new Response('', { status: 408, statusText: 'Offline Font' });
+        }
+      })
+    );
+    return;
+  }
+
   // Navigation: network-first with the app shell as an offline fallback.
   if (event.request.mode === 'navigate') {
     event.respondWith(
@@ -46,9 +65,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets: stale-while-revalidate. Return the cached copy
-  // immediately (if any) and refresh the cache in the background so updates
-  // roll out without a full cache flush.
+  // Same-origin static assets: stale-while-revalidate.
   event.respondWith(
     (async () => {
       const cached = await caches.match(event.request);

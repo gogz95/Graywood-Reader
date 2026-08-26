@@ -59,6 +59,30 @@ adminRouter.post("/api/admin/users/promote", (req, res) => {
   res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
 });
 
+// Admin User Permissions & Age Gate Setting
+adminRouter.post("/api/admin/users/permissions", (req, res) => {
+  const { userId, allowNsfw, maxAgeRating } = req.body || {};
+  if (!userId) return res.status(400).json({ error: "userId is required" });
+
+  const idx = userProfiles.findIndex((u) => u.id === userId);
+  if (idx === -1) return res.status(404).json({ error: "User not found" });
+
+  if (allowNsfw !== undefined) {
+    userProfiles[idx].allowNsfw = Boolean(allowNsfw);
+  }
+  if (maxAgeRating && ['all', 'pg', 'pg13', '18+'].includes(maxAgeRating)) {
+    userProfiles[idx].maxAgeRating = maxAgeRating;
+  }
+
+  try {
+    flushStateNow();
+  } catch {
+    saveDatabaseToDisk();
+  }
+  logger.info('Admin', `Updated permissions for user "${userProfiles[idx].name}" (${userId}): allowNsfw=${userProfiles[idx].allowNsfw}, maxAgeRating=${userProfiles[idx].maxAgeRating}`);
+  res.json({ success: true, user: toPublicUser(userProfiles[idx]) });
+});
+
 // Admin Reset User Password
 adminRouter.post("/api/admin/users/:userId/reset-password", (req, res) => {
   const { userId } = req.params;

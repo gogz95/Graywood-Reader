@@ -23,7 +23,10 @@ const AchievementsModal = lazy(() => import('../components/AchievementsModal').t
 const AdminPanelModal = lazy(() => import('../components/AdminPanelModal').then((m) => ({ default: m.AdminPanelModal })));
 const ChallengeNotificationModal = lazy(() => import('../components/ChallengeNotificationModal').then((m) => ({ default: m.ChallengeNotificationModal })));
 const ReaderView = lazy(() => import('../components/ReaderView').then((m) => ({ default: m.ReaderView })));
+const PwaInstallPrompt = lazy(() => import('../components/PwaInstallPrompt').then((m) => ({ default: m.PwaInstallPrompt })));
 
+import { OfflineIndicator } from '../components/OfflineIndicator';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 import { MangaItem, AppTheme, AppSettings, AppNavTab } from '../types';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import {
@@ -126,6 +129,8 @@ export function AppLayout() {
 
   const { openModals, isOpen, openModal, closeModal, data: modalData, setModalData } = useModalStore();
 
+  const { canInstall } = usePwaInstall();
+  const [pwaModalOpen, setPwaModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAppLocked, setIsAppLocked] = useState<boolean>(false);
 
@@ -297,6 +302,8 @@ export function AppLayout() {
         onOpenSubmitBugModal={handleOpenSubmitBug}
         onOpenExtensionManager={() => openModal('extensionManager')}
         onOpenCommandPalette={() => openModal('commandPalette')}
+        onOpenPwaInstall={() => setPwaModalOpen(true)}
+        canInstallPwa={canInstall}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
@@ -646,6 +653,19 @@ export function AppLayout() {
                 openReader(targetManga, startItem.chapterNumber);
               }
             }}
+          />
+        </Suspense>
+      )}
+
+      {/* Offline Connectivity Status Toast */}
+      <OfflineIndicator />
+
+      {/* PWA App Installation Dialog */}
+      {pwaModalOpen && (
+        <Suspense fallback={null}>
+          <PwaInstallPrompt
+            isOpen={pwaModalOpen}
+            onClose={() => setPwaModalOpen(false)}
           />
         </Suspense>
       )}

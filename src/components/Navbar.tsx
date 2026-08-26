@@ -52,6 +52,8 @@ interface NavbarProps {
   onOpenSubmitBugModal?: () => void;
   onOpenExtensionManager?: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenPwaInstall?: () => void;
+  canInstallPwa?: boolean;
 }
 
 /** Small count pill used on tabs / nav items */
@@ -91,6 +93,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onOpenSubmitBugModal,
   onOpenExtensionManager,
   onOpenCommandPalette,
+  onOpenPwaInstall,
+  canInstallPwa,
 }) => {
   const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -321,6 +325,18 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 <RefreshCw className={`w-4 h-4 text-accent ${isUpdating ? 'animate-spin' : ''}`} />
               </button>
 
+              {/* Install App (PWA) */}
+              {canInstallPwa && onOpenPwaInstall && (
+                <button
+                  onClick={onOpenPwaInstall}
+                  title="Install Graywood App (Standalone PWA)"
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-all active:scale-95 shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden lg:inline">Install App</span>
+                </button>
+              )}
+
               {/* Profile / Sign-in */}
               {isGuest ? (
                 <button
@@ -386,6 +402,16 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               <EyeOff className="w-4 h-4" />
               <span>{isIncognito ? 'Incognito ON' : 'Incognito OFF'}</span>
             </button>
+
+            {canInstallPwa && onOpenPwaInstall && (
+              <button
+                onClick={() => closeQuickMenu(onOpenPwaInstall)}
+                className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-2"
+              >
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>Install App</span>
+              </button>
+            )}
 
             {onOpenDownloadManager && (
               <button

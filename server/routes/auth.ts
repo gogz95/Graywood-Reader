@@ -238,7 +238,7 @@ authRouter.put("/api/auth/profile", (req, res) => {
     return res.status(404).json({ error: 'Not Found', message: 'User profile not found.' });
   }
 
-  const { name, avatar, email, theme } = req.body || {};
+  const { name, avatar, email, theme, allowNsfw, maxAgeRating } = req.body || {};
   const current = userProfiles[userIdx];
 
   if (name && typeof name === 'string' && name.trim()) {
@@ -249,6 +249,12 @@ authRouter.put("/api/auth/profile", (req, res) => {
   }
   if (theme && typeof theme === 'string' && ['amber', 'emerald', 'amoled', 'violet', 'cyberpunk'].includes(theme)) {
     current.theme = theme as any;
+  }
+  if (allowNsfw !== undefined && typeof allowNsfw === 'boolean') {
+    current.allowNsfw = allowNsfw;
+  }
+  if (maxAgeRating && ['all', 'pg', 'pg13', '18+'].includes(maxAgeRating)) {
+    current.maxAgeRating = maxAgeRating;
   }
   if (email && typeof email === 'string' && email.trim()) {
     const cleanEmail = email.trim().toLowerCase();

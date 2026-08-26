@@ -358,6 +358,8 @@ export interface UserProfile {
   name: string;
   avatar: string; // Emoji or avatar icon
   role: UserRole; // 'admin' (Host/Administrator) or 'user' (Individual User)
+  allowNsfw?: boolean; // Explicit NSFW/18+ content permission gate
+  maxAgeRating?: 'all' | 'pg' | 'pg13' | '18+'; // Granular content rating filter
   storageFolderPath?: string; // Encrypted at rest (AES-256-GCM PII)
   theme?: AppTheme;
   createdAt: string;

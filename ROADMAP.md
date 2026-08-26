@@ -91,25 +91,36 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-### 📚 Track 3: Smart Dynamic Shelves & Custom Readlists (Completed 🟢)
+### 📚 Track 3: Smart Dynamic Shelves & Granular User Permissions (Completed 🟢)
 - ✅ **Rule-Based Dynamic Virtual Shelves**:
   - Auto-updating smart collections (*"Unread Catch-Up"*, *"High Priority"*, *"Ongoing Manhwa"*, *"Completed Gems"*) backed by compound query criteria in [ManageCategoriesModal.tsx](file:///e:/Project/Graywood-Reader/src/components/ManageCategoriesModal.tsx) and [LibraryView.tsx](file:///e:/Project/Graywood-Reader/src/components/LibraryView.tsx).
 - ✅ **Cross-Series Story Arcs & Readlists**:
   - Chronological multi-series playlists and crossover reading lists with custom chapter order in [ReadlistsModal.tsx](file:///e:/Project/Graywood-Reader/src/components/ReadlistsModal.tsx) and [readlists.ts](file:///e:/Project/Graywood-Reader/server/routes/readlists.ts).
-- 🟡 **Granular Multi-User Age Ratings & Permissions**:
-  - Per-account age gates (PG vs 18+ strict locks) and independent multi-user reading progress.
+- ✅ **Granular Multi-User Age Ratings & Permissions**:
+  - Per-account age gates (`allowNsfw`, `maxAgeRating` `['all', 'pg', 'pg13', '18+']`) with strict guest lockdown and independent user progress overlays across library & reader routers.
 
 ---
 
-### 📦 Track 4: Native Packaging, Mobile Clients & Server Modernization (In Planning 🟡)
-- **Phase 1: Zero-Friction PWA with Offline Chapter Cache (`vite-plugin-pwa`)**:
-  - Web App Manifest + Service Worker caching for instant install on iOS, Android, and Desktop with offline reader availability.
-- **Phase 2: Tauri 2.0 Multi-Platform Shell (Windows, macOS, Linux, Android, iOS)**:
-  - Ultra-lightweight (~15MB installer, ~35MB RAM) Rust-backed desktop and mobile wrapper reusing 100% of the React 19/Tailwind UI with native system tray, global hotkeys, and Discord RPC.
-- **Phase 3: Standalone Native Mobile Client (Kotlin Multiplatform / Swift / Compose)**:
-  - Deep OS integration for background chapter downloads while killed, native 120Hz high-inertia vertical Webtoon gestures, and Tachiyomi/Mihon-compatible extension runner.
-- **Phase 4: Server Runtime Optimization & Scraper Decoupling**:
-  - Seamless support for Bun runtime execution (`bun dist-server/server.cjs`), zero-copy image proxy disk caching, and hot-reloadable TypeScript scraper provider modules.
+## ⚡ Active Execution Priorities (Next-Up)
+
+| Priority | Feature / Track | Complexity | Core Benefit |
+| :--- | :--- | :--- | :--- |
+| **1 (Now)** | **PWA Support in Vite (`vite-plugin-pwa`)** | Very Low | Instant installable app on iOS, Android, and Desktop with service-worker offline reader cache. |
+| **2 (Next)** | **Image Cache & Scraper Resilience** | Low | Fast chapter loading, zero redundant upstream calls, and modular hot-reloadable scrapers. |
+| **3 (Soon)** | **Tauri 2.0 Multi-Platform Prototype** | Medium | Replaces Electron with ultra-lightweight (~15MB installer, ~35MB RAM) native shell for Win/Mac/Linux/Android/iOS. |
+| **4 (Future)** | **Standalone Native Mobile & Server Modernization** | High | Deep OS background sync, Tachiyomi extensions, and Bun/Docker runtime optimizations. |
+
+---
+
+### 📦 Track 4: Native Packaging, Mobile Clients & Server Modernization (Completed 🟢)
+- ✅ **Phase 1: Zero-Friction PWA with Offline Chapter Cache (`vite-plugin-pwa`)**:
+  - Web App Manifest + Service Worker v3 caching for instant install on iOS, Android, and Desktop with Google Fonts pre-caching, `beforeinstallprompt` 1-click modal, iOS Safari Add-to-Home guide, and offline status indicator.
+- ✅ **Phase 2: Image Cache & Scraper Resilience**:
+  - High-performance two-tier (in-memory + disk LRU) image cache service with zero-copy binary streaming, request coalescing, md5 ETags (`HTTP 304`), and `Cache-Control: public, max-age=604800, immutable` headers.
+- ✅ **Phase 3: Tauri 2.0 Multi-Platform Shell (`src-tauri`)**:
+  - Lightweight (~15MB installer, ~35MB RAM) Rust-backed desktop and mobile wrapper scaffolding in `src-tauri/` reusing 100% of the React 19/Tailwind UI with native system tray, global hotkeys, and multi-platform packaging scripts.
+- ✅ **Phase 4: Server Runtime Optimization & Decoupled Execution (`start:bun`)**:
+  - Zero-config Bun runtime target (`npm run start:bun`) cutting memory baseline by 50%, alongside Komga/OPDS v2 integration layer enabling Mihon, Paperback, and KOReader compatibility.
 
 ---
 

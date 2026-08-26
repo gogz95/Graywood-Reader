@@ -95,6 +95,10 @@ export function isNsfwAccessAllowed(req: express.Request): boolean {
     if (user.id === 'usr_guest' || user.role === 'guest') {
       return false;
     }
+    // Granular age ratings & explicit NSFW gate per account
+    if (user.allowNsfw === false || user.maxAgeRating === 'pg' || user.maxAgeRating === 'pg13') {
+      return false;
+    }
     return true;
   }
 

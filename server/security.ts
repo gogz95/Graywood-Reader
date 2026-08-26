@@ -245,6 +245,8 @@ export function toPublicUser(u: UserProfile) {
     email: u.email,
     avatar: u.avatar,
     role: u.role,
+    allowNsfw: u.allowNsfw !== undefined ? u.allowNsfw : (u.role === 'admin' || u.id !== 'usr_guest'),
+    maxAgeRating: u.maxAgeRating || 'all',
     theme: u.theme,
     createdAt: u.createdAt,
   };
