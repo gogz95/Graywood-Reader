@@ -54,6 +54,7 @@ export const SqliteDb = {
   toggleFavorite: mangaDb.toggleFavorite,
   toggleFlag: mangaDb.toggleFlag,
   deleteManga: mangaDb.deleteManga,
+  bulkDeleteManga: mangaDb.bulkDeleteManga,
   deleteMangaByUserId: mangaDb.deleteMangaByUserId,
   purgeReaperScans: mangaDb.purgeReaperScans,
   deleteAllManga: mangaDb.deleteAllManga,

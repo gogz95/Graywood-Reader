@@ -10,6 +10,7 @@ import {
   syncAddOrUpdateManga,
   syncBulkAddOrUpdateManga,
   syncDeleteManga,
+  syncBulkDeleteManga,
   resolveRequestUserId,
   canWriteCatalog,
   canModifyManga,
@@ -1287,4 +1288,34 @@ mangaRouter.post('/bulk-update-status', (req, res) => {
     status,
   });
 });
+
+// ── POST /api/manga/bulk-delete - Batch Series Deletion ─────────────────────────
+mangaRouter.post('/bulk-delete', (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Missing or empty ids array' });
+  }
+
+  // Filter for permissions
+  const allowedIds: string[] = [];
+  for (const id of ids) {
+    const existing = SqliteDb.getMangaById(String(id));
+    if (!existing) continue;
+    if (canModifyManga(req, existing)) {
+      allowedIds.push(existing.id);
+    }
+  }
+
+  if (allowedIds.length > 0) {
+    syncBulkDeleteManga(allowedIds);
+  }
+
+  res.json({
+    success: true,
+    deletedCount: allowedIds.length,
+    requestedCount: ids.length,
+  });
+});
+
 

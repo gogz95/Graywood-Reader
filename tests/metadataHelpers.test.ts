@@ -200,7 +200,7 @@ describe('cleanHtml', () => {
   });
 
   it('decodes HTML entities', () => {
-    expect(cleanHtml('Tom &amp; Jerry &lt;3')).toBe('Tom & Jerry \u003c3');
+    expect(cleanHtml('Tom &amp; Jerry &lt;3')).toBe('Tom & Jerry <3');
   });
 
   it('converts tags to spaces (not concatenation)', () => {
@@ -223,8 +223,8 @@ describe('decodeHtmlEntities', () => {
     expect(decodeHtmlEntities('&amp;')).toBe('&');
     expect(decodeHtmlEntities('&quot;')).toBe('"');
     expect(decodeHtmlEntities('&#039;')).toBe("'");
-    expect(decodeHtmlEntities('&lt;')).toBe('\u003c');
-    expect(decodeHtmlEntities('&gt;')).toBe('\u003e');
+    expect(decodeHtmlEntities('&lt;')).toBe('<');
+    expect(decodeHtmlEntities('&gt;')).toBe('>');
     expect(decodeHtmlEntities('&mdash;')).toBe('—');
     expect(decodeHtmlEntities('&hellip;')).toBe('…');
   });

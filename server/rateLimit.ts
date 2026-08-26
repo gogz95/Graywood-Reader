@@ -195,16 +195,20 @@ export function clearAccountFailures(identifier: string): void {
 
 export function rateLimitMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   // Allow all requests on localhost or host IP
-  const clientIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
-  if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1') {
+  const clientIp = (req.ip || req.socket?.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
+  if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
     return next();
   }
 
-  // Exempt backup restoration and batch operations
+  // Exempt backup restoration, batch operations, database reset, and category management
   if (
     req.path === '/api/manga/bulk-import' ||
+    req.path === '/api/manga/bulk-delete' ||
+    req.path === '/api/manga/bulk-update-status' ||
+    req.path.startsWith('/api/categories') ||
     req.path.startsWith('/api/settings/backup') ||
     req.path.startsWith('/api/db/import') ||
+    req.path.startsWith('/api/db/reset') ||
     req.path.startsWith('/api/gdpr')
   ) {
     return next();
@@ -213,7 +217,10 @@ export function rateLimitMiddleware(req: express.Request, res: express.Response,
   const now = Date.now();
   const proxy = isImageProxyPath(req.path);
   const bucket = proxy ? ipProxyRequestCounts : ipRequestCounts;
-  const max = proxy ? RATE_LIMIT_PROXY_MAX : RATE_LIMIT_MAX;
+  // Authenticated requests have 2x headroom over unauthenticated anonymous traffic
+  const hasAuth = Boolean(req.headers.authorization);
+  const baseMax = proxy ? RATE_LIMIT_PROXY_MAX : RATE_LIMIT_MAX;
+  const max = hasAuth ? baseMax * 2 : baseMax;
   const record = bucket.get(clientIp);
 
   if (!record || now > record.resetTime) {

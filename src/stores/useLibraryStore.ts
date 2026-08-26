@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { apiFetch } from '../utils/api';
-import { MangaItem, AutoUpdateLog, DatabaseSyncConfig, DuplicateCandidate, OpenApiManga, ReadingStatus, isNsfwManga } from '../types';
+import { MangaItem, AutoUpdateLog, DatabaseSyncConfig, DuplicateCandidate, OpenApiManga, ReadingStatus, UserProfile, isNsfwManga } from '../types';
 import { useAuthStore } from './useAuthStore';
 import { saveClientSessionProgress } from '../hooks/useReaderSession';
 
@@ -324,11 +324,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   bulkDelete: async (ids) => {
+    if (!ids || ids.length === 0) return;
+    const idSet = new Set(ids);
     set((state) => ({
-      mangaList: state.mangaList.filter((m) => !ids.includes(m.id)),
+      mangaList: state.mangaList.filter((m) => !idSet.has(m.id)),
     }));
-    for (const id of ids) {
-      apiFetch(`/api/manga/${id}`, { method: 'DELETE' }).catch(() => {});
+    try {
+      await apiFetch('/api/manga/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+    } catch (err) {
+      console.error('[Library] Bulk delete error:', err);
+      get().fetchMangaList();
     }
   },
 

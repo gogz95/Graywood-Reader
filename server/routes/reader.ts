@@ -30,6 +30,7 @@ import {
   parseSrcsetCandidate,
   isValidPanelImageUrl,
 } from '../services/crawlerEngine';
+import { eventBus } from '../services/eventBus';
 
 export const readerRouter = Router();
 

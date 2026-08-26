@@ -432,6 +432,34 @@ export function toggleFlag(id: string, isFlagged: boolean, flagReason?: string) 
 export function deleteManga(id: string) {
   _mangaCache = null;
   stmtDeleteManga.run(id);
+  try {
+    db.prepare('DELETE FROM user_favorites WHERE manga_id = ?').run(id);
+    db.prepare('DELETE FROM user_library_state WHERE manga_id = ?').run(id);
+    db.prepare('DELETE FROM reading_progress WHERE manga_id = ?').run(id);
+    db.prepare('DELETE FROM manga_categories WHERE manga_id = ?').run(id);
+    db.prepare('DELETE FROM readlist_items WHERE manga_id = ?').run(id);
+  } catch {}
+}
+
+export function bulkDeleteManga(ids: string[]): number {
+  if (!ids || ids.length === 0) return 0;
+  _mangaCache = null;
+  const deleteTx = db.transaction((idList: string[]) => {
+    let count = 0;
+    for (const id of idList) {
+      const res = stmtDeleteManga.run(id);
+      count += res.changes;
+      try {
+        db.prepare('DELETE FROM user_favorites WHERE manga_id = ?').run(id);
+        db.prepare('DELETE FROM user_library_state WHERE manga_id = ?').run(id);
+        db.prepare('DELETE FROM reading_progress WHERE manga_id = ?').run(id);
+        db.prepare('DELETE FROM manga_categories WHERE manga_id = ?').run(id);
+        db.prepare('DELETE FROM readlist_items WHERE manga_id = ?').run(id);
+      } catch {}
+    }
+    return count;
+  });
+  return deleteTx(ids);
 }
 
 export function deleteMangaByUserId(userId: string): number {
@@ -443,6 +471,13 @@ export function deleteMangaByUserId(userId: string): number {
 export function deleteAllManga() {
   _mangaCache = null;
   db.prepare('DELETE FROM manga').run();
+  try {
+    db.prepare('DELETE FROM user_favorites').run();
+    db.prepare('DELETE FROM user_library_state').run();
+    db.prepare('DELETE FROM reading_progress').run();
+    db.prepare('DELETE FROM manga_categories').run();
+    db.prepare('DELETE FROM readlist_items').run();
+  } catch {}
 }
 
 export function getMangaCount(): number {

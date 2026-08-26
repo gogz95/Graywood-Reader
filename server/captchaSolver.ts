@@ -56,6 +56,8 @@ export interface FetchBypassResult {
   status: number;
   html: string;
   bypassed: boolean;
+  challengeDetected?: boolean;
+  challengeType?: string;
   methodUsed?: string;
   error?: string;
 }

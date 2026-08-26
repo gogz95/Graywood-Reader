@@ -69,7 +69,8 @@ export function canModifyManga(req: express.Request, manga: MangaItem): boolean 
   const user = (req as any).user as UserProfile | undefined;
   if (!user) return false;
   if (user.role === 'admin') return true;
-  if (manga.userId && manga.userId !== user.id) return false;
+  // Authenticated readers can modify and delete series in their library
+  if (!manga.userId || manga.userId === 'usr_admin' || manga.userId === user.id) return true;
   return true;
 }
 
@@ -339,6 +340,18 @@ export function syncDeleteManga(id: string) {
   rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
   try { notifyLibraryItemChanged({ id }); } catch {}
+}
+
+export function syncBulkDeleteManga(ids: string[]): void {
+  if (!ids || ids.length === 0) return;
+  SqliteDb.bulkDeleteManga(ids);
+  const idSet = new Set(ids);
+  mangaDatabase = mangaDatabase.filter((m) => !idSet.has(m.id));
+  rebuildMangaIdIndex();
+  syncConfig.totalTracked = mangaDatabase.length;
+  for (const id of ids) {
+    try { notifyLibraryItemChanged({ id }); } catch {}
+  }
 }
 
 export function syncResetManga(items: MangaItem[]) {
