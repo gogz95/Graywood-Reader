@@ -101,13 +101,15 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-### 📦 Track 4: Native Packaging & Local-First Browser Distribution (Future ⚪)
-- **Capacitor Mobile Shell (Android & iOS)**:
-  - Wrap React client with `@capacitor/core` and `@capacitor-community/sqlite` for direct APK and mobile app store distribution.
-- **Local-First PWA with Origin Private File System (OPFS)**:
-  - In-browser SQLite relational engine (`wa-sqlite`) for zero-server, 100% offline standalone usage.
-- **Tauri / Electron Native Desktop Distribution**:
-  - Standalone desktop bundle with native tray controls and file system hooks.
+### 📦 Track 4: Native Packaging, Mobile Clients & Server Modernization (In Planning 🟡)
+- **Phase 1: Zero-Friction PWA with Offline Chapter Cache (`vite-plugin-pwa`)**:
+  - Web App Manifest + Service Worker caching for instant install on iOS, Android, and Desktop with offline reader availability.
+- **Phase 2: Tauri 2.0 Multi-Platform Shell (Windows, macOS, Linux, Android, iOS)**:
+  - Ultra-lightweight (~15MB installer, ~35MB RAM) Rust-backed desktop and mobile wrapper reusing 100% of the React 19/Tailwind UI with native system tray, global hotkeys, and Discord RPC.
+- **Phase 3: Standalone Native Mobile Client (Kotlin Multiplatform / Swift / Compose)**:
+  - Deep OS integration for background chapter downloads while killed, native 120Hz high-inertia vertical Webtoon gestures, and Tachiyomi/Mihon-compatible extension runner.
+- **Phase 4: Server Runtime Optimization & Scraper Decoupling**:
+  - Seamless support for Bun runtime execution (`bun dist-server/server.cjs`), zero-copy image proxy disk caching, and hot-reloadable TypeScript scraper provider modules.
 
 ---
 
