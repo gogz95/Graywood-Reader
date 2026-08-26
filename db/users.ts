@@ -157,6 +157,10 @@ export function getUserLibraryStateMap(userId: string): Map<string, { currentCha
   return map;
 }
 
+export function getAllUserLibraryStates(userId: string): any[] {
+  return stmtGetUserLibraryState.all(userId) as any[];
+}
+
 // ── User Overlay Application ─────────────────────────────────────────────────
 export function applyUserOverlayOne(manga: MangaItem, userId: string | null | undefined): MangaItem {
   if (!userId) return manga;

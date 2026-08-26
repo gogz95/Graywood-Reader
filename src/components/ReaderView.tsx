@@ -587,7 +587,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         );
       }
 
-      // Resume mid-chapter page if the server has stored progress for this chapter
+      // Resume mid-chapter page if the server (or local storage fallback) has stored progress for this chapter
       let resumePage = 0;
       try {
         const histRes = await apiFetch(`/api/reader/history/${encodeURIComponent(manga.id)}`);
@@ -606,6 +606,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       } catch {
         /* resume is best-effort */
       }
+
+      // Offline / LocalStorage Progress Fallback (ensures progress restores even if offline or missing from database)
+      if (resumePage === 0) {
+        try {
+          const localStr = localStorage.getItem(`reader_progress_${manga.id}`);
+          if (localStr) {
+            const localData = JSON.parse(localStr);
+            if (Number(localData.chapterNumber) === Number(chNum) && Number(localData.pageIndex) > 0) {
+              resumePage = Math.min(
+                Number(localData.pageIndex) || 0,
+                Math.max(0, (data.pages?.length || 1) - 1)
+              );
+            }
+          }
+        } catch {}
+      }
+
       setCurrentPageIndex(resumePage);
 
       // Initialize Kotatsu Parallel Image Loader Engine
@@ -623,6 +640,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       // Persist open position so analytics/history stay warm
       if (!data.isPlaceholder && data.pages?.length) {
+        try {
+          localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
+            chapterNumber: chNum,
+            pageIndex: resumePage,
+            percent: data.pages.length ? Math.round((resumePage / data.pages.length) * 100) : 0,
+            timestamp: Date.now(),
+          }));
+        } catch {}
+
         apiFetch('/api/reader/progress', {
           method: 'POST',
           body: JSON.stringify({
@@ -631,6 +657,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             pageIndex: resumePage,
             pageCount: data.pages.length,
             percent: data.pages.length ? Math.round((resumePage / data.pages.length) * 100) : 0,
+            title: manga.title,
+            sourceName: manga.sourceName,
+            sourceUrl: manga.sourceUrl,
+            coverImage: manga.coverImage,
           }),
         }).catch(() => {});
       }
@@ -740,6 +770,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   useEffect(() => {
     if (!chapterData || chapterData.isPlaceholder || chapterData.contentUnavailable || !chapterData.pages?.length) return;
     const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
+          chapterNumber: currentChapterNum,
+          pageIndex: currentPageIndex,
+          percent: readProgressPercent,
+          timestamp: Date.now(),
+        }));
+      } catch {}
+
       apiFetch('/api/reader/progress', {
         method: 'POST',
         body: JSON.stringify({
@@ -748,11 +787,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           pageIndex: currentPageIndex,
           pageCount: chapterData.pages.length,
           percent: readProgressPercent,
+          title: manga.title,
+          sourceName: manga.sourceName,
+          sourceUrl: manga.sourceUrl,
+          coverImage: manga.coverImage,
         }),
       }).catch(() => {});
     }, 1200);
     return () => clearTimeout(timer);
-  }, [manga.id, currentChapterNum, currentPageIndex, readProgressPercent, chapterData]);
+  }, [manga.id, manga.title, manga.sourceName, manga.sourceUrl, manga.coverImage, currentChapterNum, currentPageIndex, readProgressPercent, chapterData]);
 
   // Toggle bookmark for page
   const toggleBookmarkPage = useCallback((pageIdx: number) => {

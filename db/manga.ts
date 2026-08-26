@@ -484,3 +484,47 @@ export function getMangaCount(): number {
   const row = db.prepare('SELECT COUNT(*) as count FROM manga').get() as { count: number };
   return row.count;
 }
+
+export function ensureMangaPlaceholder(item: {
+  id: string;
+  title?: string;
+  sourceName?: string;
+  sourceUrl?: string;
+  coverImage?: string;
+  type?: string;
+  userId?: string;
+  currentChapter?: number;
+}): MangaItem {
+  const existing = stmtGetMangaById.get(item.id) as any;
+  if (existing) {
+    return mapRowToMangaItem(existing);
+  }
+  const cleanTitle = (item.title && item.title.trim()) || item.id.replace(/^manga_|^m_/, '').replace(/[-_]/g, ' ') || 'Untracked Series';
+  const now = new Date().toISOString();
+  const placeholder: MangaItem = {
+    id: item.id,
+    title: cleanTitle,
+    altTitles: [],
+    type: (item.type as any) || 'manhwa',
+    coverImage: item.coverImage || '',
+    description: 'Auto-registered reading entry',
+    genres: [],
+    status: 'reading',
+    currentChapter: Number(item.currentChapter) || 0,
+    totalChapters: null,
+    latestChapter: Number(item.currentChapter) || 0,
+    lastUpdated: now,
+    rating: 0,
+    sourceUrl: item.sourceUrl || '',
+    sourceName: item.sourceName || 'External Source',
+    autoUpdateEnabled: false,
+    notes: '',
+    addedAt: now,
+    lastReadAt: now,
+    isFavorite: false,
+    categories: [],
+    userId: item.userId || 'usr_admin',
+  };
+  upsertManga(placeholder);
+  return placeholder;
+}

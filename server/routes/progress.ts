@@ -75,27 +75,47 @@ progressRouter.get("/api/reader/sync/events", (req, res) => {
 
 
 // ------------------------------------------------------------
-// GET /api/reader/progress?sourceId=...&slug=...
-// Returns reading progress for a specific manga identified by its source ID and slug.
+// GET /api/reader/progress?sourceId=...&slug=...&mangaId=...
+// Returns reading progress for a specific manga identified by ID, sourceId, or slug.
 // ------------------------------------------------------------
 progressRouter.get("/api/reader/progress", async (req, res) => {
   const sourceId = (req.query.sourceId as string || "").trim();
   const slug = (req.query.slug as string || "").trim();
-  if (!sourceId || !slug) {
-    return res.status(400).json({ error: "sourceId and slug are required" });
-  }
+  const mangaIdParam = (req.query.mangaId as string || "").trim();
   const userId = resolveProgressUserId(req);
-  // Find manga matching the sourceId and slug. We look at sourceName and sourceUrl.
-  const manga = mangaDatabase.find((m) => {
-    const nameMatch = m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase());
-    const urlMatch = m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase());
-    return nameMatch && urlMatch;
-  });
-  if (!manga) {
-    return res.status(404).json({ error: "Manga not found for given sourceId and slug" });
+
+  let targetMangaId: string | null = mangaIdParam || null;
+
+  if (!targetMangaId && (sourceId || slug)) {
+    // 1. Check in-memory mangaDatabase
+    const manga = mangaDatabase.find((m) => {
+      const nameMatch = !sourceId || (m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase()));
+      const urlMatch = !slug || (m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase()));
+      return nameMatch && urlMatch;
+    });
+    if (manga) {
+      targetMangaId = manga.id;
+    } else {
+      // 2. Check SqliteDb by sourceUrl / slug
+      const allManga = SqliteDb.getAllManga();
+      const sqliteMatch = allManga.find((m) => {
+        const nameMatch = !sourceId || (m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase()));
+        const urlMatch = !slug || (m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase()));
+        return nameMatch && urlMatch;
+      });
+      if (sqliteMatch) {
+        targetMangaId = sqliteMatch.id;
+      }
+    }
   }
-  const rows = SqliteDb.getReadingProgress(manga.id, userId);
-  return res.json(rows);
+
+  const lookupId = targetMangaId || slug || mangaIdParam;
+  if (!lookupId) {
+    return res.json([]);
+  }
+
+  const rows = SqliteDb.getReadingProgress(lookupId, userId);
+  return res.json(rows || []);
 });
 
 function resolveProgressUserId(req: any): string {
@@ -122,14 +142,30 @@ function resolveProgressUserId(req: any): string {
 
 // Save (or update) the current reading position for a manga/chapter.
 progressRouter.post("/api/reader/progress", (req, res) => {
-  const { mangaId, chapterNumber, pageIndex, pageCount, percent } = req.body || {};
+  const { mangaId, chapterNumber, pageIndex, pageCount, percent, title, sourceName, sourceUrl, coverImage } = req.body || {};
   if (!mangaId || chapterNumber === undefined) {
     return res.status(400).json({ error: 'mangaId and chapterNumber are required' });
   }
   const userId = resolveProgressUserId(req);
+  const mId = String(mangaId);
+
+  // Ensure manga entity exists in SQLite so reading progress is always persistent and accessible even if not in library
+  try {
+    SqliteDb.ensureMangaPlaceholder({
+      id: mId,
+      title,
+      sourceName,
+      sourceUrl,
+      coverImage,
+      userId,
+      currentChapter: Number(chapterNumber) || 0,
+    });
+  } catch (e) {
+    console.error('[Progress Engine] Failed to ensure manga placeholder:', e);
+  }
 
   SqliteDb.upsertReadingProgress({
-    manga_id: String(mangaId),
+    manga_id: mId,
     user_id: userId,
     chapter_number: Number(chapterNumber) || 0,
     page_index: Number(pageIndex),
@@ -140,8 +176,7 @@ progressRouter.post("/api/reader/progress", (req, res) => {
   // Per-user library chapter (do NOT clobber global catalog currentChapter)
   try {
     const ch = Number(chapterNumber) || 0;
-    SqliteDb.setUserLibraryChapter(userId, String(mangaId), ch);
-    SqliteDb.setUserFavorite(userId, String(mangaId), true);
+    SqliteDb.setUserLibraryChapter(userId, mId, ch);
   } catch (err) {
     console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
   }
@@ -150,7 +185,7 @@ progressRouter.post("/api/reader/progress", (req, res) => {
   try {
     broadcastProgressSync({
       userId,
-      mangaId: String(mangaId),
+      mangaId: mId,
       chapterNumber: Number(chapterNumber) || 0,
       pageIndex: Number(pageIndex),
       pageCount: Number(pageCount),
@@ -208,12 +243,36 @@ progressRouter.get("/api/reader/history", (req, res) => {
 
   for (const p of progRows) {
     if (!p.manga_id || map.has(p.manga_id)) continue;
-    const rawManga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
-    if (rawManga) {
-      const manga = SqliteDb.applyUserOverlayOne(rawManga, userId);
-      map.set(p.manga_id, { manga, progress: p });
-      if (map.size >= 50) break;
+    let rawManga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
+    if (!rawManga) {
+      // Create resilient fallback MangaItem for series read from browse/external sources with missing metadata
+      const cleanTitle = p.manga_id.replace(/^manga_|^m_/, '').replace(/[-_]/g, ' ') || 'External Series';
+      rawManga = {
+        id: p.manga_id,
+        title: cleanTitle,
+        altTitles: [],
+        coverImage: '',
+        description: 'Reading history entry (untracked or external series)',
+        status: 'reading',
+        currentChapter: Number(p.chapter_number) || 0,
+        totalChapters: null,
+        latestChapter: Number(p.chapter_number) || 0,
+        lastReadAt: p.last_read_at || new Date().toISOString(),
+        lastUpdated: p.last_read_at || new Date().toISOString(),
+        rating: 0,
+        type: 'manhwa',
+        genres: [],
+        sourceName: 'External Source',
+        sourceUrl: '',
+        autoUpdateEnabled: false,
+        notes: '',
+        addedAt: p.last_read_at || new Date().toISOString(),
+        isFavorite: false,
+      };
     }
+    const manga = SqliteDb.applyUserOverlayOne(rawManga, userId);
+    map.set(p.manga_id, { manga, progress: p });
+    if (map.size >= 50) break;
   }
 
   res.json([...map.values()]);

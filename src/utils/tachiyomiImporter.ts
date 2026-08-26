@@ -260,6 +260,49 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
     });
   }
 
+  // Also parse standalone history entries if present in backup (restores reading history for series not in library)
+  const rawHistory = (parsed as any).history || (parsed as any).backupHistory || [];
+  if (Array.isArray(rawHistory)) {
+    for (const h of rawHistory) {
+      const hUrl = h.url || h.mangaUrl || (Array.isArray(h.manga) ? h.manga[0] : '');
+      const hTitle = h.title || h.mangaTitle || (Array.isArray(h.manga) ? h.manga[1] : '');
+      const hChapter = Number(h.lastChapterRead ?? h.chapterNumber ?? h.chapter_number ?? h.chapter ?? 0);
+
+      const existing = importedItems.find((item) => (hUrl && item.sourceUrl === hUrl) || (hTitle && item.title.toLowerCase() === hTitle.toLowerCase()));
+      if (existing) {
+        if (hChapter > existing.currentChapter) {
+          existing.currentChapter = hChapter;
+        }
+      } else if (hTitle || hUrl) {
+        const cleanTitle = cleanMangaTitle(hTitle || 'External Series');
+        importedItems.push({
+          id: `tachi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          title: cleanTitle,
+          altTitles: [],
+          type: 'manhwa',
+          coverImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80',
+          description: 'Reading history imported from backup',
+          genres: ['Manhwa'],
+          status: 'reading',
+          currentChapter: hChapter,
+          totalChapters: Math.max(hChapter, 1),
+          latestChapter: Math.max(hChapter, 1),
+          lastUpdated: new Date().toISOString(),
+          rating: 8.0,
+          sourceUrl: hUrl || '',
+          sourceName: 'Tachiyomi History',
+          autoUpdateEnabled: false,
+          notes: 'Imported history entry',
+          addedAt: new Date().toISOString(),
+          lastReadAt: new Date().toISOString(),
+          userId,
+          isFavorite: false,
+          categories: [],
+        });
+      }
+    }
+  }
+
   return importedItems;
 }
 

@@ -1020,6 +1020,51 @@ export async function parseKotatsuBackup(
     registerAliases(canonicalKey!, m, f);
   }
 
+  // Merge entries from history table (restores reading history for series not in favourites/library)
+  for (let idx = 0; idx < rawHistoryList.length; idx++) {
+    const h = rawHistoryList[idx];
+    if (!h) continue;
+    const m = h.manga;
+    const mId = h.mangaId !== undefined ? h.mangaId : h.manga_id !== undefined ? h.manga_id : m?.id;
+    const title = m?.title || m?.name;
+    const url = m?.publicUrl || m?.public_url || m?.url;
+
+    let canonicalKey: string | undefined = undefined;
+    if (mId !== undefined && aliasToCanonicalKey.has(`id:${mId}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`id:${mId}`);
+    } else if (title && aliasToCanonicalKey.has(`title:${String(title).toLowerCase().trim()}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`title:${String(title).toLowerCase().trim()}`);
+    } else if (url && aliasToCanonicalKey.has(`url:${url.toLowerCase().trim()}`)) {
+      canonicalKey = aliasToCanonicalKey.get(`url:${url.toLowerCase().trim()}`);
+    } else {
+      const chId = h.chapterId !== undefined ? String(h.chapterId) : h.chapter_id !== undefined ? String(h.chapter_id) : (h.chapter?.id !== undefined ? String(h.chapter.id) : '');
+      if (chId && chapterByIdMap.has(chId)) {
+        const parentCh = chapterByIdMap.get(chId)!;
+        const parentMId = parentCh.manga_id !== undefined ? String(parentCh.manga_id) : parentCh.mangaId !== undefined ? String(parentCh.mangaId) : '';
+        if (parentMId && aliasToCanonicalKey.has(`id:${parentMId}`)) {
+          canonicalKey = aliasToCanonicalKey.get(`id:${parentMId}`);
+        }
+      }
+    }
+
+    if (!canonicalKey) {
+      const synthManga: KotatsuManga = {
+        id: mId,
+        title: title || (mId ? `Series #${mId}` : `Reading History #${idx + 1}`),
+        url: url || '',
+        publicUrl: url || '',
+        chapters: h.chapter ? [h.chapter] : [],
+        isFavorite: false,
+      };
+      canonicalKey = getCanonicalKey(synthManga, undefined, rawMangaList.length + rawFavouritesList.length + idx);
+      uniqueEntriesMap.set(canonicalKey, {
+        manga: synthManga,
+        isFavorite: false,
+      });
+      registerAliases(canonicalKey, synthManga);
+    }
+  }
+
   // Collect unique series to import
   const uniqueEntries = Array.from(uniqueEntriesMap.values());
 

@@ -59,6 +59,7 @@ export const SqliteDb = {
   purgeReaperScans: mangaDb.purgeReaperScans,
   deleteAllManga: mangaDb.deleteAllManga,
   getMangaCount: mangaDb.getMangaCount,
+  ensureMangaPlaceholder: mangaDb.ensureMangaPlaceholder,
 
   // Users & Profiles
   getAllProfiles: usersDb.getAllProfiles,
@@ -71,6 +72,7 @@ export const SqliteDb = {
   isUserFavorite: usersDb.isUserFavorite,
   setUserLibraryChapter: usersDb.setUserLibraryChapter,
   getUserLibraryStateMap: usersDb.getUserLibraryStateMap,
+  getAllUserLibraryStates: usersDb.getAllUserLibraryStates,
   applyUserOverlayOne: usersDb.applyUserOverlayOne,
   applyUserOverlay: usersDb.applyUserOverlay,
   purgeUserData: usersDb.purgeUserData,
