@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { MangaItem } from '../../types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MangaItem, isNsfwManga } from '../../types';
 import {
   Star,
   BookOpen,
   ChevronLeft,
   ChevronRight,
   Play,
+  Flame,
 } from 'lucide-react';
 
 export interface HeroSpotlightProps {
@@ -16,14 +17,41 @@ export interface HeroSpotlightProps {
 
 export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOpenReader, onSelectManga }) => {
   const [index, setIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const total = Math.min(items.length, 6);
+
+  const prevSlide = useCallback(() => {
+    setIndex((prev) => (prev > 0 ? prev - 1 : total - 1));
+  }, [total]);
+
+  const nextSlide = useCallback(() => {
+    setIndex((prev) => (prev < total - 1 ? prev + 1 : 0));
+  }, [total]);
+
+  // Auto-advance spotlight slide every 7 seconds when not hovered
+  useEffect(() => {
+    if (total <= 1 || isPaused) return;
+    const timer = setInterval(() => {
+      nextSlide();
+    }, 7000);
+    return () => clearInterval(timer);
+  }, [total, isPaused, nextSlide]);
 
   if (!items || items.length === 0) return null;
   const current = items[Math.min(index, items.length - 1)];
+  if (!current) return null;
+
   const progress = current.latestChapter > 0 ? Math.min(100, Math.round((current.currentChapter / current.latestChapter) * 100)) : 0;
   const hasNew = current.latestChapter > current.currentChapter;
+  const isAdult = isNsfwManga(current);
 
   return (
-    <div className="relative rounded-3xl overflow-hidden border border-edge/80 shadow-2xl bg-surface/90 text-primary min-h-[300px] sm:min-h-[340px] flex flex-col justify-between group">
+    <div
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      className="relative rounded-3xl overflow-hidden border border-edge/80 shadow-2xl bg-surface/90 text-primary min-h-[300px] sm:min-h-[340px] flex flex-col justify-between group transition-all"
+    >
       {/* Blurred ambient backdrop art */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <img
@@ -41,8 +69,9 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
         <div className="space-y-3.5 max-w-2xl">
           {/* Badges */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black tracking-wide uppercase bg-accent/20 text-accent border border-accent/30 shadow-xs">
-              ★ SPOTLIGHT
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black tracking-wide uppercase bg-accent/20 text-accent border border-accent/30 shadow-xs flex items-center gap-1">
+              <Flame className="w-3 h-3 fill-accent" />
+              <span>SPOTLIGHT</span>
             </span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
               current.type === 'manhwa' ? 'bg-blue-950/80 text-info border-info/30' :
@@ -54,6 +83,11 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
             {hasNew && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-accent-2 to-accent text-accent-fg shadow-sm">
                 +{current.latestChapter - current.currentChapter} New Chapters
+              </span>
+            )}
+            {isAdult && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-950 text-rose-300 border border-rose-500/40 shadow-sm">
+                🔞 18+ Mature
               </span>
             )}
             <div className="flex items-center gap-1 text-xs font-bold text-accent bg-app/60 px-2 py-0.5 rounded-full border border-edge">
@@ -101,6 +135,7 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
           {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
+              type="button"
               onClick={() => onOpenReader(current, current.currentChapter + 1)}
               className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-accent/25 hover:shadow-accent/40 transition-all hover:scale-105 active:scale-95 cursor-pointer"
             >
@@ -109,6 +144,7 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
             </button>
 
             <button
+              type="button"
               onClick={() => onSelectManga(current)}
               className="px-4 py-2.5 rounded-2xl bg-elevated/80 hover:bg-elevated text-primary font-bold text-xs sm:text-sm border border-edge-strong flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
             >
@@ -139,12 +175,13 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
       </div>
 
       {/* Slide Navigation Dots */}
-      {items.length > 1 && (
+      {total > 1 && (
         <div className="relative z-10 px-6 py-2.5 bg-app/40 backdrop-blur-md border-t border-edge/60 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            {items.slice(0, 6).map((item, idx) => (
+            {items.slice(0, total).map((item, idx) => (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => setIndex(idx)}
                 aria-label={`Slide to ${item.title}`}
                 className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
@@ -156,14 +193,16 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
 
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setIndex((prev) => (prev > 0 ? prev - 1 : Math.min(5, items.length - 1)))}
+              type="button"
+              onClick={prevSlide}
               className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
               title="Previous featured series"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setIndex((prev) => (prev < Math.min(5, items.length - 1) ? prev + 1 : 0))}
+              type="button"
+              onClick={nextSlide}
               className="p-1 rounded-lg bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
               title="Next featured series"
             >

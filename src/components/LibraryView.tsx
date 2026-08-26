@@ -66,7 +66,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
   const [nsfwFilter, setNsfwFilter] = useState<'all' | 'safe' | '18+'>('all');
-  const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'title' | 'rating' | 'chapter' | 'nsfwFirst' | 'sfwFirst'>('updated');
+  const [sortBy, setSortBy] = useState<'unread' | 'lastRead' | 'updated' | 'addedDesc' | 'title' | 'rating' | 'chapter' | 'nsfwFirst' | 'sfwFirst'>('updated');
   const [viewMode, setViewMode] = useState<'shelves' | 'grid' | 'table'>('shelves');
 
   const [isAutoTagging, setIsAutoTagging] = useState<boolean>(false);
@@ -314,6 +314,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       if (sortBy === 'updated') {
         return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
       }
+      if (sortBy === 'addedDesc') {
+        return new Date((b as any).addedAt || b.lastUpdated || 0).getTime() - new Date((a as any).addedAt || a.lastUpdated || 0).getTime();
+      }
       if (sortBy === 'title') {
         return a.title.localeCompare(b.title);
       }
@@ -388,31 +391,56 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return counts;
   }, [categories, mangaList]);
 
+  // Helper for applying NSFW filter across library views and shelves
+  const matchesNsfwFilter = React.useCallback((item: MangaItem) => {
+    const isAdult = isNsfwManga(item);
+    if (isGuest && isAdult) return false;
+    if (nsfwFilter === 'safe' && isAdult) return false;
+    if (nsfwFilter === '18+' && !isAdult) return false;
+    return true;
+  }, [isGuest, nsfwFilter]);
+
   // Spotlight items (active series / top favorites with unread or progress)
   const spotlightItems = React.useMemo(() => {
-    const list = [...mangaList].filter(m => !isGuest || !isNsfwManga(m));
+    const list = mangaList.filter(matchesNsfwFilter);
     return list.sort((a, b) => {
       const aScore = (a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0) + (a.isFavorite ? 100000000000 : 0) + ((a.latestChapter - a.currentChapter > 0) ? 50000000000 : 0);
       const bScore = (b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0) + (b.isFavorite ? 100000000000 : 0) + ((b.latestChapter - b.currentChapter > 0) ? 50000000000 : 0);
       return bScore - aScore;
     }).slice(0, 6);
-  }, [mangaList, isGuest]);
+  }, [mangaList, matchesNsfwFilter]);
 
   // Jump Back In items (actively in-progress reading)
   const jumpBackInItems = React.useMemo(() => {
     return mangaList
-      .filter((m) => m.status === 'reading' && m.currentChapter > 0 && (!isGuest || !isNsfwManga(m)))
+      .filter((m) => m.status === 'reading' && m.currentChapter > 0 && matchesNsfwFilter(m))
       .sort((a, b) => new Date(b.lastReadAt || 0).getTime() - new Date(a.lastReadAt || 0).getTime())
       .slice(0, 10);
-  }, [mangaList, isGuest]);
+  }, [mangaList, matchesNsfwFilter]);
 
-  // Fresh releases items (latestChapter > currentChapter)
+  // Fresh releases items (latestChapter > currentChapter) - strictly adheres to NSFW safe mode
   const freshReleasesItems = React.useMemo(() => {
     return mangaList
-      .filter((m) => m.latestChapter > m.currentChapter && (!isGuest || !isNsfwManga(m)))
+      .filter((m) => m.latestChapter > m.currentChapter && matchesNsfwFilter(m))
       .sort((a, b) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
       .slice(0, 12);
-  }, [mangaList, isGuest]);
+  }, [mangaList, matchesNsfwFilter]);
+
+  const hasActiveFilters =
+    statusFilter !== 'all' ||
+    typeFilter !== 'all' ||
+    nsfwFilter !== 'all' ||
+    activeCategory !== null ||
+    genreStates.size > 0 ||
+    Boolean(searchQuery && searchQuery.trim());
+
+  const handleResetFilters = () => {
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setNsfwFilter('all');
+    setActiveCategory(null);
+    setGenreStates(new Map());
+  };
 
   return (
     <div className="space-y-6">
@@ -562,6 +590,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <option value="unread">⚡ Unread Ahead</option>
                 <option value="lastRead">🕒 Recently Read</option>
                 <option value="updated">🔄 Updated</option>
+                <option value="addedDesc">🆕 Recently Added</option>
                 <option value="title">🔤 Title A-Z</option>
                 <option value="rating">★ Highest Rating</option>
                 <option value="chapter">📊 Progress</option>
@@ -604,6 +633,96 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Active Filters Quick Bar (Visible when any filter or search is active) */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-edge/60 text-xs">
+            <span className="text-muted font-bold text-[11px]">Active Filters:</span>
+
+            {statusFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-lg bg-elevated text-primary font-bold border border-edge flex items-center gap-1">
+                <span>Status: {statusFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className="hover:text-danger text-muted ml-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
+            {activeCategory && (
+              <span className="px-2 py-0.5 rounded-lg bg-accent-2/15 text-accent-2 font-bold border border-accent-2/30 flex items-center gap-1">
+                <span>Shelf: {categories.find((c) => c.id === activeCategory)?.name || 'Custom'}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveCategory(null)}
+                  className="hover:text-danger ml-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
+            {typeFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded-lg bg-elevated text-primary font-bold border border-edge flex items-center gap-1 uppercase">
+                <span>Format: {typeFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter('all')}
+                  className="hover:text-danger text-muted ml-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
+            {nsfwFilter !== 'all' && (
+              <span className={`px-2 py-0.5 rounded-lg font-bold border flex items-center gap-1 ${
+                nsfwFilter === 'safe'
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-950 text-rose-300 border-rose-500/40'
+              }`}>
+                <span>{nsfwFilter === 'safe' ? '🛡️ Safe Mode' : '🔞 18+ Only'}</span>
+                <button
+                  type="button"
+                  onClick={() => setNsfwFilter('all')}
+                  className="hover:text-danger ml-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
+            {genreStates.size > 0 && (
+              <span className="px-2 py-0.5 rounded-lg bg-accent/15 text-accent font-bold border border-accent/30 flex items-center gap-1">
+                <span>{genreStates.size} Genre Tags</span>
+                <button
+                  type="button"
+                  onClick={() => setGenreStates(new Map())}
+                  className="hover:text-danger ml-0.5 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
+            {searchQuery && (
+              <span className="px-2 py-0.5 rounded-lg bg-app text-secondary font-bold border border-edge flex items-center gap-1">
+                <span>&quot;{searchQuery}&quot;</span>
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="ml-auto text-[11px] font-black text-danger hover:underline px-2 py-0.5 rounded bg-danger/10 hover:bg-danger/20 transition-all cursor-pointer"
+            >
+              Reset All Filters
+            </button>
+          </div>
+        )}
 
         {/* Row 2: Dedicated Custom Shelves Ribbon */}
         <LibraryCategoryRibbon
@@ -834,6 +953,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {/* Smart AI Recommendations Section */}
       <RecommendationsView
         mangaList={mangaList}
+        nsfwFilter={nsfwFilter}
+        isGuest={isGuest}
         onAddRecommended={() => {
           onAddNew();
         }}
