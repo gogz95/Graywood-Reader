@@ -77,7 +77,7 @@ export default defineConfig(() => {
             if (id.includes('src/utils/kotatsuImporter')) {
               return 'kotatsu-importer';
             }
-            if (id.includes('src/utils/soundscapes') || id.includes('src/utils/ambientSoundEngine')) {
+            if (id.includes('src/utils/soundscapes')) {
               return 'soundscapes-engine';
             }
           },

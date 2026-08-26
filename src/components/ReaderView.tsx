@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch } from '../utils/api';
 import { KotatsuImageLoader, PageLoadState } from '../utils/KotatsuImageLoader';
-import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
+import { FlagCategory } from './FlagIssueModal';
 import {
   MangaItem,
   ChapterData,

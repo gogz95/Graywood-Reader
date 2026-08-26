@@ -60,7 +60,6 @@ import {
   saveDatabaseToDisk,
   flushStateNow,
   cancelPendingSave,
-  writeLegacyJsonSnapshot,
   loadDatabaseFromDisk,
   purgeReaperScansFromAllStorage,
   syncAddOrUpdateManga,
@@ -400,11 +399,10 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  logger.info('Shutdown', `Received ${signal}. Flushing state & writing legacy JSON backup...`);
+  logger.info('Shutdown', `Received ${signal}. Flushing state to SQLite...`);
   try {
     cancelPendingSave();
     flushStateNow();
-    writeLegacyJsonSnapshot(`graceful shutdown via ${signal}`);
     logger.flush();
   } catch (err) {
     logger.error('Shutdown', 'Error while flushing state', { error: String(err) });

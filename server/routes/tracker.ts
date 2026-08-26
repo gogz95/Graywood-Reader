@@ -463,15 +463,9 @@ trackerRouter.post('/api/db/import', (req, res) => {
 });
 
 trackerRouter.post('/api/db/reset', (req, res) => {
-  if (req.body?.empty === true) {
-    SqliteDb.deleteAllManga();
-    mangaDatabase.length = 0;
-    syncConfig.totalTracked = 0;
-    saveDatabaseToDisk();
-    return res.json({ success: true, count: 0, message: 'Database fully cleared for rebuild' });
-  }
   syncResetManga([]);
-  res.json({ success: true, count: mangaDatabase.length });
+  saveDatabaseToDisk();
+  res.json({ success: true, count: 0, message: 'Database fully cleared for rebuild' });
 });
 
 trackerRouter.post('/api/db/refresh-all', async (_req, res) => {
@@ -624,19 +618,6 @@ trackerRouter.post('/api/mangadex/import/:mangaDexId', async (req, res) => {
   }
 });
 
-trackerRouter.get('/api/mangadex/chapters/:mangaDexId', (_req, res) => {
-  res.status(403).json({
-    error: "MangaDex is metadata-only",
-    message: "MangaDex API is used exclusively for metadata enrichment, search, and covers. Reading functionality is permanently disabled.",
-  });
-});
-
-trackerRouter.get('/api/mangadex/chapter-pages/:chapterId', (_req, res) => {
-  res.status(403).json({
-    error: "MangaDex is metadata-only",
-    message: "MangaDex API is used exclusively for metadata enrichment, search, and covers. Reading functionality is permanently disabled.",
-  });
-});
 
 trackerRouter.post('/api/anilist/search', async (req, res) => {
   const { query } = req.body;
