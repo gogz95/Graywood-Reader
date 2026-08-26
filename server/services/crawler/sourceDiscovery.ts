@@ -82,7 +82,7 @@ export async function searchLiveSourcesForSeries(
     new Set([title, ...(altTitles || [])])
   )
     .map((t) => (t ? t.replace(/\s*\([^)]*\)/g, '').replace(/uncensored|reboot|hd|season \d+|ch \d+/gi, '').trim() : ''))
-    .filter((t) => t.length >= 2);
+    .filter((t) => t.length >= 2 && !/^[a-z0-9-]+\.(com|org|net|xyz|me|top|io|cc|co|info|biz)$/i.test(t));
 
   for (const q of candidateQueries.slice(0, 3)) {
     if (!disabledSourceIds.has('weebcentral') && isSourceAlive('weebcentral')) {

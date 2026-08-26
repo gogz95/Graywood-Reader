@@ -387,7 +387,12 @@ export async function fetchMadaraChapterPages(targetUrl: string, chapterNumber: 
         }
       });
     };
-    if (container) extractFrom(container); else extractFrom($);
+    if (container) extractFrom(container);
+    if (pages.length === 0) extractFrom($);
+    if (pages.length === 0) {
+      const fallbackPages = extractPanelImages(chHtml, origin);
+      if (fallbackPages.length > 0) return fallbackPages;
+    }
     if (pages.length > 0) {
       console.log(`[Madara Engine] ${pages.length} pages from ${config.name} Ch ${chapterNumber}`);
       return pages;

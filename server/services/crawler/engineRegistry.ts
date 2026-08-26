@@ -31,6 +31,10 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'hiperdex', name: 'Hiperdex', domain: 'hiperdex.com', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'beehentai', name: 'ToonTop', domain: 'toontop.io', engine: 'madara', lang: 'en', isNsfw: true },
   { id: 'mangatx', name: 'Manga TX', domain: 'mangatx.com', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'mangacute', name: 'MangaCute', domain: 'mangacute.com', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'mangaxyz', name: 'Mangaxyz', domain: 'mangaxyz.com', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'mangabuddy', name: 'MangaBuddy', domain: 'mangabuddy.com', engine: 'madara', lang: 'en', isNsfw: false },
+  { id: 'arvenscans', name: 'Arven Scans', domain: 'arvencomics.com', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.net', engine: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.io', engine: 'mangathemesia', lang: 'en', isNsfw: true },
 ];

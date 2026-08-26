@@ -124,12 +124,15 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
-### 🤖 Track 5: AI Deep Comic Intelligence & "Webtoonification" Engine (Backlog ⚪)
-- **Smart Vision Panel-by-Panel "Webtoonification" of Classic Manga**:
-  - Canvas/WASM and ONNX panel boundary segmentation to transform traditional multi-panel RTL/LTR pages into a seamless, mobile-optimized vertical webtoon continuous scroll.
-- **Context-Aware Comic Inpainting & Dialogue Auto-Translation**:
+### 🤖 Track 5: AI Deep Comic Intelligence & "Webtoonification" Engine (Backlog ⚪ — *Optional & User-Toggleable*)
+> [!IMPORTANT]
+> **Strictly Optional & User-Toggleable**: All Track 5 AI features must remain 100% optional, disabled by default, and independently toggleable by the user in both **Reader HUD Settings** and **App Settings** (`enableAiWebtoonification`, `enableAiInpainting`, `enableStoryCompanion`). The native reading pipeline remains pristine when toggled off.
+
+- **Smart Vision Panel-by-Panel "Webtoonification" of Classic Manga (Optional Toggle)**:
+  - Canvas/WASM and ONNX panel boundary segmentation to transform traditional multi-panel RTL/LTR pages into a seamless, mobile-optimized vertical webtoon continuous scroll on demand.
+- **Context-Aware Comic Inpainting & Dialogue Auto-Translation (Optional Toggle)**:
   - Seamless speech balloon text erasure with background inpainting and re-rendering of translated dialogue using dynamic manga typography.
-- **Spoiler-Safe Story Companion & Character Graph ("Who is this again?")**:
+- **Spoiler-Safe Story Companion & Character Graph ("Who is this again?") (Optional Toggle)**:
   - Chapter-gated vector summaries, character relationship diagrams, and catch-up recaps (Chapters 1 → Current) powered by LLM without spoiling future chapters.
 
 ---

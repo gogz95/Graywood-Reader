@@ -27,105 +27,49 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
-### [BUG-050] [Does not load pages] Mia Has Returned
-- **Status**: `open`
-- **Priority**: `high`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Host Administrator (2026-08-26)
-- **Description**: Flagged issue: Does not load pages.
-
-Series: Mia Has Returned (kotatsu_1787654104822_205_miahasreturned)
-Source: Aqua Manga
-Flag reason: Does not load pages
-- **Steps to Reproduce**:
-  1. 1. Open series "Mia Has Returned"
-2. Trigger reading / metadata load
-3. Observe: Does not load pages
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
-### [BUG-049] [Does not load pages] My Bias Gets on the Last Train
-- **Status**: `open`
-- **Priority**: `high`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Host Administrator (2026-08-26)
-- **Description**: Flagged issue: Does not load pages.
-
-Series: My Bias Gets on the Last Train (kotatsu_1787654104822_201_mybiasgetsonthel)
-Source: MangaCute
-Flag reason: Does not load pages
-- **Steps to Reproduce**:
-  1. 1. Open series "My Bias Gets on the Last Train"
-2. Trigger reading / metadata load
-3. Observe: Does not load pages
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
-### [BUG-048] [Missing source] paragonscans.com
-- **Status**: `open`
-- **Priority**: `high`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Host Administrator (2026-08-26)
-- **Description**: Flagged issue: Missing source.
-
-Series: paragonscans.com (kotatsu_1787654104826_525_konobijutsubuniw)
-Source: ParagonScans
-Flag reason: Missing source
-- **Steps to Reproduce**:
-  1. 1. Open series "paragonscans.com"
-2. Trigger reading / metadata load
-3. Observe: Missing source
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
-### [BUG-047] [Does not load pages] My Wife Is A Demon Queen
-- **Status**: `open`
-- **Priority**: `high`
-- **Auto-fix**: `ask`
-- **File(s)**: `server.ts (Live Source Extractor)`
-- **Submitted-By**: Darkmodes (2026-08-25)
-- **Description**: Flagged issue: Does not load pages.
-
-Series: My Wife Is A Demon Queen (kotatsu_1787654104826_550_mywifeisademonqu)
-Source: Mangaxyz
-Flag reason: Does not load pages
-- **Steps to Reproduce**:
-  1. 1. Open series "My Wife Is A Demon Queen"
-2. Trigger reading / metadata load
-3. Observe: Does not load pages
-- **Expected**: Action completes without error.
-- **Actual**: Issue occurs as described.
-
-
-### [BUG-045] ManhuaPlus catalogue/search returned 0 results after site theme migration
-- **Status**: `fixed`
-- **Priority**: `high`
-- **Auto-fix**: `yes`
-- **File(s)**: `server/scrapers/manhuaPlus.ts`, `server/services/crawlerEngine.ts`, `server/scrapers/madaraTheme.ts`
-- **Description**: manhuaplus.top migrated off the WordPress Madara theme. The old `/manga/?m_orderby=views` catalogue, wp-admin AJAX chapter endpoint, and `/?s=&post_type=wp-manga` search all return 404, so the Madara-theme list scraper yielded 0 items.
-- **Root cause**: scraper hard-coded the retired Madara markup/endpoints.
-- **Fixed in**: 2026-08-24 — Rebuilt `manhuaPlus.ts` for the new WPComics-style theme (`/all-manga/{page}/?sort=views` cards at `div.item > figure`, search via `/filter?keyword=`, inline chapter list `#nt_listchapter`); marked its engine configs `madaraWithoutAjax: true`; added WPComics chapter containers to the generic chapter parser. Verified live: scrape + search + latest-chapter extraction.
-
-### [BUG-046] Demonic Scans catalogue pagination param wrong & card markup changed
-- **Status**: `fixed`
-- **Priority**: `medium`
-- **Auto-fix**: `yes`
-- **File(s)**: `server/scrapers/demonicScans.ts`
-- **Description**: demonicscans.org redesigned; pages past 1 were requested with `?page=N` which the site silently ignores (correct param is `?list=N`), and the old `.item / .box_list .item / .media` selectors no longer match the new `.updates-element` cards.
-- **Fixed in**: 2026-08-24 — Rewrote listing parser for `.updates-element` cards with real latest-chapter extraction from `chaptered.php?...&chapter=N`, advanced-search parser for `/advanced.php?search=` (`.advanced-element`), correct `?list=` pagination, honest totalCount from the pagination widget, and URI-encoded cover URLs. Verified live.
+*No active bugs currently open.*
 
 ---
 
 ## Fixed Bugs (Archive)
 
-
 > Bugs that have been resolved are moved here for historical reference.
+
+### [BUG-050] [Does not load pages] Mia Has Returned
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/services/crawler/chapterParser.ts`, `server/services/crawler/types.ts`, `server/services/sourceHealthService.ts`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Does not load pages for Aqua Manga titles.
+- **Fixed in**: 2026-08-26 — Added `aquamanga.com` and `aquamanga.org` alias mappings into `DOMAIN_MIRRORS` and `KNOWN_SOURCE_MIRRORS`, added resilient fallback container extraction in `fetchMadaraChapterPages`.
+
+### [BUG-049] [Does not load pages] My Bias Gets on the Last Train
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/services/crawler/engineRegistry.ts`, `server/services/crawler/chapterParser.ts`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Does not load pages on MangaCute.
+- **Fixed in**: 2026-08-26 — Added `mangacute` to `CURATED_ENGINE_SOURCES` mapped to Madara engine with multi-container image extraction fallback.
+
+### [BUG-048] [Missing source] paragonscans.com
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/services/crawler/types.ts`, `server/services/crawler/sourceDiscovery.ts`, `server/services/sourceHealthService.ts`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Missing source for ParagonScans series.
+- **Fixed in**: 2026-08-26 — Added domain mirror resolver for `paragonscans.com` → `arvencomics.com`, sanitized candidate search queries in `searchLiveSourcesForSeries` to filter out raw domain strings and prioritize legitimate title/altTitle queries.
+
+### [BUG-047] [Does not load pages] My Wife Is A Demon Queen
+- **Status**: `fixed`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server/services/crawler/types.ts`, `server/services/crawler/engineRegistry.ts`, `server/services/sourceHealthService.ts`
+- **Submitted-By**: Darkmodes (2026-08-25)
+- **Description**: Flagged issue: Does not load pages on Mangaxyz.
+- **Fixed in**: 2026-08-26 — Mapped `mangaxyz.com` → `mangabuddy.com` in `DOMAIN_MIRRORS` and `KNOWN_SOURCE_MIRRORS`, added `mangaxyz` and `mangabuddy` to `CURATED_ENGINE_SOURCES`.
 
 ### [BUG-044] [Other Fault] ChristinaSiemone Cam Model: Free Live Sex Show & Chat (Popup Ad Injection)
 - **Status**: `fixed`

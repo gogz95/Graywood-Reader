@@ -121,6 +121,9 @@ const KNOWN_SOURCE_MIRRORS: Record<string, string[]> = {
   flamecomics: ['https://flamecomics.xyz', 'https://flamecomics.me', 'https://flamescans.org'],
   reaperscans: ['https://reaperscans.com', 'https://reaperscans.to', 'https://reapercomics.com'],
   weebcentral: ['https://weebcentral.com', 'https://weebcentral.net'],
+  aquamanga: ['https://aquareader.org', 'https://aquamanga.com', 'https://aquamanga.org'],
+  mangaxyz: ['https://mangaxyz.com', 'https://mangabuddy.com'],
+  paragonscans: ['https://arvencomics.com', 'https://arvenscans.com'],
 };
 
 /**

@@ -61,6 +61,11 @@ export const DOMAIN_MIRRORS: Record<string, string> = {
   'manhuaplus.com': 'manhuaplus.top',
   'aryascans.com': 'brainrotcomics.com',
   'comizy.io': 'mangabuddy.com',
+  'mangaxyz.com': 'mangabuddy.com',
+  'aquamanga.com': 'aquareader.org',
+  'aquamanga.org': 'aquareader.org',
+  'paragonscans.com': 'arvencomics.com',
+  'paragonscans.net': 'arvencomics.com',
 };
 
 export const UA_HEADERS = {
