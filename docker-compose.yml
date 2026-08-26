@@ -1,9 +1,9 @@
 services:
-  manhuasync:
+  graywood-reader:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: manhuasync-tracker
+    container_name: graywood-reader
     restart: unless-stopped
     ports:
       - "3000:3000"

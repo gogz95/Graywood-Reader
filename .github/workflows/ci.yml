@@ -20,5 +20,5 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
-      - name: Build server bundle
-        run: npm run build:server
+      - name: Build production bundle
+        run: npm run build

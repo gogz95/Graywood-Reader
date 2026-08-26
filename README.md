@@ -202,6 +202,8 @@ Graywood-Reader/
 └── tests/                       # 40+ Vitest test suites (380+ tests)
 ```
 
+For full details on data isolation, zero-data guarantees, and persistence paths, see [`STORAGE.md`](STORAGE.md).
+
 ---
 
 ## 📡 OPDS 1.2 Catalog Server

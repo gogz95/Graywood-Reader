@@ -1,12 +1,12 @@
 [Unit]
-Description=ManhuaSync & OmniManga Subdomain Tracking Server
+Description=Graywood Reader Server
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/var/www/manhuasync
-ExecStart=/usr/bin/npx tsx server.ts
+WorkingDirectory=/var/www/graywood-reader
+ExecStart=/usr/bin/node dist-server/server.cjs
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production

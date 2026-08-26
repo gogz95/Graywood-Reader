@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 Starting ManhuaSync Production Deployment for Linux..."
+echo "🚀 Starting Graywood Reader Production Deployment for Linux..."
 
 # 1. Pull latest changes if in git repo
 if [ -d ".git" ]; then
@@ -17,8 +17,8 @@ fi
 echo "📦 Installing production dependencies..."
 npm ci || npm install
 
-# 3. Build production frontend bundle
-echo "🔨 Building production Vite frontend bundle..."
+# 3. Build production frontend & server bundle
+echo "🔨 Building production bundle..."
 npm run build
 
 # 4. Ensure storage directory structure exists
@@ -34,5 +34,5 @@ else
 fi
 
 echo "=================================================================="
-echo "🎉 DEPLOYMENT COMPLETE! ManhuaSync running on http://localhost:3000"
+echo "🎉 DEPLOYMENT COMPLETE! Graywood Reader running on http://localhost:3000"
 echo "=================================================================="

@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'manhuasync-tracker',
+      name: 'graywood-reader',
       script: 'dist-server/server.cjs',
       interpreter: 'node',
       instances: 1,
