@@ -71,7 +71,7 @@ export function canModifyManga(req: express.Request, manga: MangaItem): boolean 
   if (user.role === 'admin') return true;
   // Authenticated readers can modify and delete series in their library
   if (!manga.userId || manga.userId === 'usr_admin' || manga.userId === user.id) return true;
-  return true;
+  return false;
 }
 
 export function rejectCatalogWrite(res: express.Response): void {
