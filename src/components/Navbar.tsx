@@ -538,17 +538,6 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   </span>
                 )}
               </button>
-
-              {onOpenSubmitBugModal && (
-                <button
-                  onClick={onOpenSubmitBugModal}
-                  title="Submit a bug report"
-                  className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl text-secondary hover:text-danger hover:bg-danger/10 text-xs font-semibold transition-all whitespace-nowrap"
-                >
-                  <Bug className="w-3.5 h-3.5" />
-                  <span>Report Bug</span>
-                </button>
-              )}
             </nav>
           </div>
         </div>
