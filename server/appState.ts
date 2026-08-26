@@ -135,6 +135,15 @@ export const DB_FILE_PATH = path.join(process.cwd(), "database.json");
 
 export let mangaDatabase: MangaItem[] = [];
 
+// O(1) index: id → array position. Rebuilt whenever mangaDatabase is reassigned;
+// maintained incrementally on add/update/delete.
+export let mangaIdIndex = new Map<string, number>();
+
+function rebuildMangaIdIndex(): void {
+  mangaIdIndex = new Map();
+  mangaDatabase.forEach((m, i) => mangaIdIndex.set(m.id, i));
+}
+
 export let userProfiles: UserProfile[] = [
   {
     id: 'usr_admin',
@@ -286,14 +295,17 @@ export function writeLegacyJsonSnapshot(reason: string) {
 
 export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
   SqliteDb.upsertManga(item);
-  const idx = mangaDatabase.findIndex((m) => m.id === item.id);
-  if (idx !== -1) {
-    mangaDatabase[idx] = item;
+  const existingIdx = mangaIdIndex.get(item.id);
+  if (existingIdx !== undefined) {
+    mangaDatabase[existingIdx] = item;
   } else {
-    mangaDatabase.unshift(item);
+    mangaIdIndex.set(item.id, mangaDatabase.length);
+    mangaDatabase.push(item);
   }
   syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
+  // Note: manga row is already persisted by SqliteDb.upsertManga() above.
+  // saveDatabaseToDisk() is intentionally NOT called here — it flushes
+  // profiles/settings/config/logs which haven't changed.
   try { notifyLibraryItemChanged(item); } catch {}
   return item;
 }
@@ -315,14 +327,13 @@ export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
     try { notifyLibraryItemChanged(item); } catch {}
   }
   syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
 }
 
 export function syncDeleteManga(id: string) {
   SqliteDb.deleteManga(id);
   mangaDatabase = mangaDatabase.filter((m) => m.id !== id);
+  rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
   try { notifyLibraryItemChanged({ id }); } catch {}
 }
 
@@ -330,28 +341,34 @@ export function syncResetManga(items: MangaItem[]) {
   SqliteDb.deleteAllManga();
   SqliteDb.bulkUpsertManga(items);
   mangaDatabase = [...items];
+  rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
-  saveDatabaseToDisk();
 }
 
 // Wholesale replacement seams used by admin/GDPR erasure & dead-source purge.
 export function replaceMangaDatabase(items: MangaItem[]): void {
   mangaDatabase = items;
+  rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
 }
 
 export function reloadMangaFromSql(): void {
   mangaDatabase = SqliteDb.getAllManga();
+  rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
 }
 
 /**
  * Canonical manga lookup: SQLite is the source of truth, with the in-memory
- * array as a fallback so handlers never disagree about which rows exist.
+ * index as a fast fallback so handlers never disagree about which rows exist.
  */
 export function resolveManga(id: string): MangaItem | undefined {
   if (!id) return undefined;
-  return SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id) || undefined;
+  // Fast path: O(1) in-memory index lookup
+  const idx = mangaIdIndex.get(id);
+  if (idx !== undefined && mangaDatabase[idx]) return mangaDatabase[idx];
+  // Fallback: SQLite (handles edge cases where array hasn't been synced)
+  return SqliteDb.getMangaById(id) || undefined;
 }
 
 
@@ -432,15 +449,19 @@ function ensureAdminPasswordBootstrap() {
 // Helper: Load App State from SQLite on Startup (with one-time legacy JSON migration)
 export function loadDatabaseFromDisk() {
   try {
-    // 0. One-time re-key of rows created by the old truncated-base64url source-ID
-    //    generator (which collapsed every series on a site into a single row).
-    //    Must run before mangaDatabase is loaded so the fixed IDs are used.
-    try { SqliteDb.rekeyCollidedSourceIds(); } catch (e) { console.warn("[SQLite Engine] rekeyCollidedSourceIds failed:", e); }
-    try { SqliteDb.purgeTestRemnants(); } catch (e) { console.warn("[SQLite Engine] purgeTestRemnants failed:", e); }
+    // 0. One-time row fixups that MUST run before getAllManga() loads data.
+    //    Gated by migration_version so they only execute once.
+    const preLoadVersion = parseInt(SqliteDb.getSetting('migration_version') || '0', 10);
+    if (preLoadVersion < 3) {
+      try { SqliteDb.rekeyCollidedSourceIds(); } catch (e) { console.warn("[SQLite Engine] rekeyCollidedSourceIds failed:", e); }
+      try { SqliteDb.purgeTestRemnants(); } catch (e) { console.warn("[SQLite Engine] purgeTestRemnants failed:", e); }
+      SqliteDb.setSetting('migration_version', String(Math.max(preLoadVersion, 3)));
+    }
 
     // 1. Manga library: SQLite is the canonical store.
     //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)
     mangaDatabase = SqliteDb.getAllManga();
+    rebuildMangaIdIndex();
     syncConfig.totalTracked = mangaDatabase.length;
 
     // 2. Detect whether app state already lives in SQLite; otherwise perform a
@@ -579,6 +600,7 @@ export function purgeReaperScansFromAllStorage() {
     }
     return true;
   });
+  rebuildMangaIdIndex();
   syncConfig.totalTracked = mangaDatabase.length;
 
   try {

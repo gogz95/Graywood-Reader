@@ -32,6 +32,7 @@ import { fetchWithChallengeBypass } from '../captchaSolver';
 import { APP_USER_AGENT } from '../version';
 import { getLibraryCacheStatus, refreshLibraryCache } from '../services/libraryCacheService';
 import { searchIndexer } from '../services/searchIndexer';
+import { generateStoryCompanion } from '../services/storyCompanion';
 
 export const mangaRouter = Router();
 
@@ -46,6 +47,15 @@ mangaRouter.get('/api/search/full-text', (req, res) => {
   const allManga = SqliteDb.getAllManga().filter((m) => allowNsfw || !isNsfwManga(m));
   const results = searchIndexer.search(query, allManga);
   res.json({ query, totalMatches: results.length, results });
+});
+
+// Spoiler-safe story companion endpoint
+mangaRouter.get('/api/manga/:id/story-companion', (req, res) => {
+  const manga = SqliteDb.getMangaById(req.params.id);
+  if (!manga) return res.status(404).json({ error: 'Manga not found' });
+  const chapter = parseInt(req.query.chapter as string || String(manga.currentChapter || 1), 10);
+  const data = generateStoryCompanion(manga, chapter);
+  res.json(data);
 });
 
 // Whitelisted fields a client is allowed to set when creating a manga.
@@ -1222,6 +1232,50 @@ mangaRouter.post('/cache/refresh', (req, res) => {
     success: true,
     message: `Library cache refreshed successfully (${refreshed.totalCount} series).`,
     status: getLibraryCacheStatus(),
+  });
+});
+// ── POST /api/manga/bulk-update-status - Batch Status Change ──────────────────
+mangaRouter.post('/bulk-update-status', (req, res) => {
+  if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
+  const { ids, status } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0 || !status) {
+    return res.status(400).json({ error: 'Missing ids array or status' });
+  }
+
+  const validStatuses = ['reading', 'completed', 'on_hold', 'dropped', 'plan_to_read'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const userId = resolveRequestUserId(req) || 'usr_guest';
+  let updatedCount = 0;
+
+  for (const id of ids) {
+    const existing = SqliteDb.getMangaById(String(id));
+    if (!existing) continue;
+    if (!canModifyManga(req, existing)) continue;
+
+    const updatedItem: MangaItem = {
+      ...existing,
+      status: status as MangaItem['status'],
+      currentChapter: status === 'completed' && existing.latestChapter
+        ? existing.latestChapter
+        : existing.currentChapter,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    syncAddOrUpdateManga(updatedItem);
+    SqliteDb.setUserLibraryChapter(userId, updatedItem.id, updatedItem.currentChapter || 0, {
+      status: updatedItem.status,
+    });
+    updatedCount++;
+  }
+
+  res.json({
+    success: true,
+    updatedCount,
+    requestedCount: ids.length,
+    status,
   });
 });
 

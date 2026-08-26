@@ -148,11 +148,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         if (res.ok) {
           const updated = await res.json().catch(() => null);
           if (updated && updated.id) {
+            // Patch the single item from the server response — no full refetch needed
             set((state) => ({
               mangaList: state.mangaList.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
             }));
           }
-          await get().fetchMangaList();
         }
       } else {
         const res = await apiFetch('/api/manga', {
@@ -161,7 +161,14 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           body: JSON.stringify(mangaData),
         });
         if (res.ok) {
-          await get().fetchMangaList();
+          const created = await res.json().catch(() => null);
+          if (created && created.id) {
+            // Add the new item to the list directly from server response
+            set((state) => ({ mangaList: [created, ...state.mangaList] }));
+          } else {
+            // Fallback: refetch if the response couldn't be parsed
+            await get().fetchMangaList();
+          }
         }
       }
     } catch (err) {
@@ -294,6 +301,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   bulkUpdateStatus: async (ids, status) => {
+    // Optimistic UI update
     set((state) => ({
       mangaList: state.mangaList.map((m) =>
         ids.includes(m.id)
@@ -307,14 +315,15 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       ),
     }));
 
-    for (const id of ids) {
-      const item = get().mangaList.find((m) => m.id === id);
-      if (item) {
-        apiFetch('/api/manga', {
-          method: 'POST',
-          body: JSON.stringify(item),
-        }).catch(() => {});
-      }
+    // Single batched request instead of N individual ones
+    try {
+      await apiFetch('/api/manga/bulk-update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, status }),
+      });
+    } catch (err) {
+      console.error('[Library] Bulk update status error:', err);
     }
   },
 

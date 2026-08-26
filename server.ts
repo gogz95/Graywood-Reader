@@ -468,13 +468,37 @@ function migrateStaleSourceUrlsInDatabase(): number {
 let httpServer: ReturnType<typeof app.listen> | null = null;
 let isShuttingDown = false;
 
+// ── Versioned One-Time Startup Migrations ──────────────────────────────────
+// Each migration runs only once, tracked by a monotonic version counter in
+// SQLite settings. Add new migrations at the end with the next version number.
+function runOnceStartupMigrations() {
+  const currentVersion = parseInt(SqliteDb.getSetting('migration_version') || '0', 10);
+  let nextVersion = currentVersion;
+
+  if (currentVersion < 1) {
+    // v1: Purge defunct Reaper Scans entries
+    try { purgeReaperScansFromAllStorage(); } catch {}
+    nextVersion = 1;
+  }
+  if (currentVersion < 2) {
+    // v2: Migrate stale source URLs to current live domains
+    try { migrateStaleSourceUrlsInDatabase(); } catch {}
+    nextVersion = 2;
+  }
+  // Future migrations: add `if (currentVersion < 3) { ... nextVersion = 3; }` etc.
+
+  if (nextVersion > currentVersion) {
+    SqliteDb.setSetting('migration_version', String(nextVersion));
+    logger.info('Migrations', `Ran startup migrations v${currentVersion} → v${nextVersion}`);
+  }
+}
+
 async function startServer() {
   loadDatabaseFromDisk();
   loadSourceHealthMap();
   syncEngineRegistryFromCatalog();
 
-  try { migrateStaleSourceUrlsInDatabase(); } catch {}
-  purgeReaperScansFromAllStorage();
+  runOnceStartupMigrations();
 
   const distPath = path.join(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
