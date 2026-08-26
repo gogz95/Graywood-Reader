@@ -9,13 +9,12 @@ import {
   ensureSourceInRegistry,
   rebuildDeadSourcesSet,
 } from '../server/sources/sourcesCatalog';
+import { isContentPath, isNavText } from '../server/routes/manga';
 import {
-  isContentPath,
-  isNavText,
   isValidPanelImageUrl,
   parseSrcsetCandidate,
   extractPanelImages,
-} from '../server';
+} from '../server/services/crawlerEngine';
 
 describe('Standalone Sources Catalog', () => {
   it('loads a comprehensive catalog of 1,000+ sources', () => {

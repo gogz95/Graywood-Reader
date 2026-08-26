@@ -169,9 +169,9 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
   }
 };
 
-// Image proxy endpoints
-readerRouter.get('/api/mangadex/image-proxy', handleImageProxyRequest);
+// Image proxy endpoints (canonical path + legacy aliases)
 readerRouter.get('/api/proxy/image', handleImageProxyRequest);
+readerRouter.get('/api/mangadex/image-proxy', handleImageProxyRequest);
 readerRouter.get('/api/reader/proxy-image', handleImageProxyRequest);
 
 // ── GET /api/reader/chapters/:mangaId - Get chapter list for a series ──────────

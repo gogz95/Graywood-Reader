@@ -32,6 +32,8 @@ import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
 import { QuickJumpModal } from './reader/QuickJumpModal';
 import { AmbientSoundModal } from './reader/AmbientSoundModal';
 import { MirrorSourceModal } from './reader/MirrorSourceModal';
+import { WebtoonRenderer } from './reader/WebtoonRenderer';
+import { PagedRenderer } from './reader/PagedRenderer';
 import { soundscapes } from '../utils/soundscapes';
 import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
 import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';

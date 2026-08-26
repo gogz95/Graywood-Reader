@@ -6,13 +6,15 @@ import {
   isValidPanelImageUrl,
   parseSrcsetCandidate,
   parseGenericChapterListFromHtml,
-  parseGenericLiveSeriesMetadata,
-  parseUniversalCatalogCards,
+} from '../server/services/crawlerEngine';
+import { parseGenericLiveSeriesMetadata } from '../server/services/metadataService';
+import { parseUniversalCatalogCards } from '../server/services/exploreService';
+import {
   isAdTitle,
   isAdUrl,
   isAdSeries,
   stripAdElements,
-} from '../server';
+} from '../server/adFilter';
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 

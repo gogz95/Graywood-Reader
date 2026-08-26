@@ -187,63 +187,8 @@ import {
 export const sourceCustomCookies = new Map<string, string[]>();
 export const sourceCustomUserAgents = new Map<string, string>();
 
-export {
-  app,
-  startServer,
-  encryptPII,
-  decryptPII,
-  hashPassword,
-  isAlreadyHashed,
-  verifyPassword,
-  verifyPasswordAsync,
-  isHostRequest,
-  KOTATSU_SOURCES,
-  ALL_SOURCES_CATALOG,
-  isSourceAlive,
-  disabledSourceIds,
-  isSeriesFromDisabledSource,
-  isContentPath,
-  isNavText,
-  isValidPanelImageUrl,
-  parseSrcsetCandidate,
-  extractPanelImages,
-  parseGenericChapterListFromHtml,
-  kotatsuImageEngine,
-  matchLiveDomain,
-  getLiveDomains,
-  getEngineConfig,
-  CURATED_ENGINE_SOURCES,
-  ENGINE_SOURCE_REGISTRY,
-  syncEngineRegistryFromCatalog,
-  fetchLiveChapterList,
-  normalizeLiveTargetUrl,
-  matchResolvedChapter,
-  autoDiscoverLiveSourceForManga,
-  searchLiveSourcesForSeries,
-  sourceHealthMap,
-  updateSourceHealth,
-  loadSourceHealthMap,
-  detectBlockedResponse,
-  sourceCookieJar,
-  resolveManga,
-  handleImageProxyRequest,
-  integrateKotatsuSourcesAndMerge,
-  updateDatabaseWithAllAvailableSeries,
-  probeSourceSeriesCount,
-  auditAndDisableEmptySources,
-  parseGenericLiveSeriesMetadata,
-  fetchLiveSeriesMetadata,
-  parseUniversalCatalogCards,
-  searchSourceDirectly,
-  isAdSeries,
-  isAdUrl,
-  isAdTitle,
-  isAdImageSrc,
-  stripAdElements,
-};
-
 // Initialize Express
-const app = express();
+export const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 
@@ -493,7 +438,7 @@ function runOnceStartupMigrations() {
   }
 }
 
-async function startServer() {
+export async function startServer() {
   loadDatabaseFromDisk();
   loadSourceHealthMap();
   syncEngineRegistryFromCatalog();

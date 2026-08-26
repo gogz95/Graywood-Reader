@@ -3,7 +3,7 @@
  * Usage: npm run db:rebuild  OR  npx tsx scripts/rebuild-db.ts
  */
 import { SqliteDb } from '../sqlite-db';
-import { updateDatabaseWithAllAvailableSeries } from '../server';
+import { updateDatabaseWithAllAvailableSeries } from '../server/routes/explore';
 
 async function main() {
   console.log('[Rebuild] Clearing all manga from database...');

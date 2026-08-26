@@ -359,15 +359,10 @@ export function reloadMangaFromSql(): void {
 }
 
 /**
- * Canonical manga lookup: SQLite is the source of truth, with the in-memory
- * index as a fast fallback so handlers never disagree about which rows exist.
+ * Canonical manga lookup: SQLite is the sole source of truth.
  */
 export function resolveManga(id: string): MangaItem | undefined {
   if (!id) return undefined;
-  // Fast path: O(1) in-memory index lookup
-  const idx = mangaIdIndex.get(id);
-  if (idx !== undefined && mangaDatabase[idx]) return mangaDatabase[idx];
-  // Fallback: SQLite (handles edge cases where array hasn't been synced)
   return SqliteDb.getMangaById(id) || undefined;
 }
 
