@@ -27,6 +27,63 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-050] [Does not load pages] Mia Has Returned
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: Mia Has Returned (kotatsu_1787654104822_205_miahasreturned)
+Source: Aqua Manga
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "Mia Has Returned"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-049] [Does not load pages] My Bias Gets on the Last Train
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Does not load pages.
+
+Series: My Bias Gets on the Last Train (kotatsu_1787654104822_201_mybiasgetsonthel)
+Source: MangaCute
+Flag reason: Does not load pages
+- **Steps to Reproduce**:
+  1. 1. Open series "My Bias Gets on the Last Train"
+2. Trigger reading / metadata load
+3. Observe: Does not load pages
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
+### [BUG-048] [Missing source] paragonscans.com
+- **Status**: `open`
+- **Priority**: `high`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts (Live Source Extractor)`
+- **Submitted-By**: Host Administrator (2026-08-26)
+- **Description**: Flagged issue: Missing source.
+
+Series: paragonscans.com (kotatsu_1787654104826_525_konobijutsubuniw)
+Source: ParagonScans
+Flag reason: Missing source
+- **Steps to Reproduce**:
+  1. 1. Open series "paragonscans.com"
+2. Trigger reading / metadata load
+3. Observe: Missing source
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 ### [BUG-047] [Does not load pages] My Wife Is A Demon Queen
 - **Status**: `open`
 - **Priority**: `high`

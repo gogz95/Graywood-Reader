@@ -119,8 +119,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onOpenCommandPalette]);
 
-  const isGuest = activeProfile.id === 'usr_guest';
-  const showAdmin = activeProfile.role === 'admin' && isHostComputer;
+  const isGuest = !activeProfile || activeProfile.id === 'usr_guest';
+  const showAdmin = activeProfile?.role === 'admin' && isHostComputer;
 
   const closeQuickMenu = (action?: () => void) => {
     setMobileQuickMenuOpen(false);
@@ -349,12 +349,12 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               ) : (
                 <button
                   onClick={onOpenProfileModal}
-                  title={`User Profile: ${activeProfile.name}`}
+                  title={`User Profile: ${activeProfile?.name || 'Reader'}`}
                   className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20 transition-all max-w-[38vw] sm:max-w-none"
                 >
-                  <span className="text-base leading-none">{activeProfile.avatar}</span>
-                  <span className="hidden md:inline truncate">{activeProfile.name}</span>
-                  {activeProfile.role === 'admin' && (
+                  <span className="text-base leading-none">{activeProfile?.avatar || '👤'}</span>
+                  <span className="hidden md:inline truncate">{activeProfile?.name || 'Reader'}</span>
+                  {activeProfile?.role === 'admin' && (
                     <span className="hidden md:inline px-1 py-0.5 rounded text-[9px] font-black bg-accent text-accent-fg">
                       ADMIN
                     </span>
@@ -501,8 +501,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 onClick={() => closeQuickMenu(onOpenProfileModal)}
                 className="p-2.5 rounded-xl bg-accent/10 text-accent border border-accent/30 flex items-center gap-2"
               >
-                <span className="text-base leading-none">{activeProfile.avatar}</span>
-                <span className="truncate">{activeProfile.name}</span>
+                <span className="text-base leading-none">{activeProfile?.avatar || '👤'}</span>
+                <span className="truncate">{activeProfile?.name || 'Reader'}</span>
               </button>
             )}
 

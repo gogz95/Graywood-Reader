@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { UserProfile, UserRole } from '../types';
 import { apiFetch, clearAuthToken, getAuthToken, logout } from '../utils/api';
 import { migrateClientSessionHistoryToUser } from '../hooks/useReaderSession';
+import { useLibraryStore } from './useLibraryStore';
 
 // ============================================================================
 // useAuthStore — Global authentication & profile state (Zustand)
@@ -50,9 +51,9 @@ interface AuthState {
   activeProfileId: string;
   isHostComputer: boolean;
 
-  /** Computed: the currently active user profile object */
+  /** Active user profile object */
   activeProfile: UserProfile;
-  /** Computed: true when the active user is the guest (unauthenticated) */
+  /** True when the active user is the guest (unauthenticated) */
   isGuestClient: boolean;
 
   // Actions
@@ -77,7 +78,7 @@ interface AuthState {
   handleDeleteProfile: (profileId: string) => void;
 }
 
-function resolveActiveProfile(profiles: UserProfile[], activeProfileId: string): UserProfile {
+export function resolveActiveProfile(profiles: UserProfile[], activeProfileId: string): UserProfile {
   return profiles.find((p) => p.id === activeProfileId) || profiles[0] || GUEST_PROFILE;
 }
 
@@ -90,25 +91,37 @@ function getInitialProfileId(): string {
   }
 }
 
+const initialProfiles = DEFAULT_PROFILES;
+const initialProfileId = getInitialProfileId();
+const initialActiveProfile = resolveActiveProfile(initialProfiles, initialProfileId);
+const initialIsGuest = initialProfileId === 'usr_guest';
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  profiles: DEFAULT_PROFILES,
-  activeProfileId: getInitialProfileId(),
+  profiles: initialProfiles,
+  activeProfileId: initialProfileId,
   isHostComputer: true,
+  activeProfile: initialActiveProfile,
+  isGuestClient: initialIsGuest,
 
-  get activeProfile() {
-    return resolveActiveProfile(get().profiles, get().activeProfileId);
-  },
-  get isGuestClient() {
-    return get().activeProfileId === 'usr_guest';
+  setProfiles: (profiles) => {
+    const { activeProfileId } = get();
+    const activeProfile = resolveActiveProfile(profiles, activeProfileId);
+    set({ profiles, activeProfile });
   },
 
-  setProfiles: (profiles) => set({ profiles }),
   setActiveProfileId: (id) => {
-    set({ activeProfileId: id });
+    const { profiles } = get();
+    const activeProfile = resolveActiveProfile(profiles, id);
+    set({
+      activeProfileId: id,
+      activeProfile,
+      isGuestClient: id === 'usr_guest',
+    });
     try {
       localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, id);
     } catch {}
   },
+
   setIsHostComputer: (isHost) => set({ isHostComputer: isHost }),
 
   fetchClientContext: async () => {
@@ -137,7 +150,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          set({ profiles: data.map((p: UserProfile) => ({ ...p, password: undefined })) });
+          const sanitizedProfiles: UserProfile[] = data.map((p: UserProfile) => ({ ...p, password: undefined }));
+          const { activeProfileId } = get();
+          const activeProfile = resolveActiveProfile(sanitizedProfiles, activeProfileId);
+          set({
+            profiles: sanitizedProfiles,
+            activeProfile,
+          });
         }
       }
     } catch (err) {
@@ -152,17 +171,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         if (data.authenticated && data.user?.id) {
-          get().setActiveProfileId(data.user.id);
-          set((state) => {
-            const exists = state.profiles.some((p) => p.id === data.user.id);
-            return {
-              profiles: exists
-                ? state.profiles.map((p) =>
-                    p.id === data.user.id ? { ...p, ...data.user, password: undefined } : p
-                  )
-                : [...state.profiles, { ...data.user, password: undefined }],
-            };
+          const u = data.user;
+          const { profiles } = get();
+          const exists = profiles.some((p) => p.id === u.id);
+          const newProfiles = exists
+            ? profiles.map((p) => (p.id === u.id ? { ...p, ...u, password: undefined } : p))
+            : [...profiles, { ...u, password: undefined }];
+          const activeProfile = resolveActiveProfile(newProfiles, u.id);
+          set({
+            profiles: newProfiles,
+            activeProfileId: u.id,
+            activeProfile,
+            isGuestClient: u.id === 'usr_guest',
           });
+          try {
+            localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, u.id);
+          } catch {}
+          migrateClientSessionHistoryToUser(u.id);
+          useLibraryStore.getState().fetchMangaList();
         } else {
           clearAuthToken();
         }
@@ -173,29 +199,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   handleRegisterUser: (newUser) => {
-    set((state) => {
-      const exists = state.profiles.some((p) => p.id === newUser.id);
-      return {
-        profiles: exists
-          ? state.profiles.map((p) => (p.id === newUser.id ? { ...p, ...newUser, password: undefined } : p))
-          : [...state.profiles, { ...newUser, password: undefined }],
-      };
+    const { profiles } = get();
+    const exists = profiles.some((p) => p.id === newUser.id);
+    const newProfiles = exists
+      ? profiles.map((p) => (p.id === newUser.id ? { ...p, ...newUser, password: undefined } : p))
+      : [...profiles, { ...newUser, password: undefined }];
+    const activeProfile = resolveActiveProfile(newProfiles, newUser.id);
+    set({
+      profiles: newProfiles,
+      activeProfileId: newUser.id,
+      activeProfile,
+      isGuestClient: newUser.id === 'usr_guest',
     });
-    get().setActiveProfileId(newUser.id);
+    try {
+      localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, newUser.id);
+    } catch {}
     migrateClientSessionHistoryToUser(newUser.id);
+    useLibraryStore.getState().fetchMangaList();
   },
 
   handleLoginUser: (user) => {
-    set((state) => {
-      const exists = state.profiles.some((p) => p.id === user.id);
-      return {
-        profiles: exists
-          ? state.profiles.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p))
-          : [...state.profiles, { ...user, password: undefined }],
-      };
+    const { profiles } = get();
+    const exists = profiles.some((p) => p.id === user.id);
+    const newProfiles = exists
+      ? profiles.map((p) => (p.id === user.id ? { ...p, ...user, password: undefined } : p))
+      : [...profiles, { ...user, password: undefined }];
+    const activeProfile = resolveActiveProfile(newProfiles, user.id);
+    set({
+      profiles: newProfiles,
+      activeProfileId: user.id,
+      activeProfile,
+      isGuestClient: user.id === 'usr_guest',
     });
-    get().setActiveProfileId(user.id);
+    try {
+      localStorage.setItem(`graywood_${getDeviceId()}_active_profile`, user.id);
+    } catch {}
     migrateClientSessionHistoryToUser(user.id);
+    useLibraryStore.getState().fetchMangaList();
   },
 
   handleLogoutUser: async () => {
@@ -203,6 +243,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     clearAuthToken();
     const fallbackId = get().isHostComputer ? 'usr_admin' : 'usr_guest';
     get().setActiveProfileId(fallbackId);
+    useLibraryStore.getState().fetchMangaList();
   },
 
   handleUpdateProfile: async (updates) => {
@@ -214,9 +255,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         const updated = data.user as UserProfile;
-        set((state) => ({
-          profiles: state.profiles.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)),
-        }));
+        const { profiles, activeProfileId } = get();
+        const newProfiles = profiles.map((p) => (p.id === updated.id ? { ...p, ...updated } : p));
+        const activeProfile = resolveActiveProfile(newProfiles, activeProfileId);
+        set({
+          profiles: newProfiles,
+          activeProfile,
+        });
         return true;
       }
       return false;
@@ -235,11 +280,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         const updated = data.user as UserProfile;
-        set((state) => ({
-          profiles: state.profiles.map((p) =>
-            p.id === userId ? { ...p, ...updated, password: undefined } : p
-          ),
-        }));
+        const { profiles, activeProfileId } = get();
+        const newProfiles = profiles.map((p) =>
+          p.id === userId ? { ...p, ...updated, password: undefined } : p
+        );
+        const activeProfile = resolveActiveProfile(newProfiles, activeProfileId);
+        set({
+          profiles: newProfiles,
+          activeProfile,
+        });
       }
     } catch (err) {
       console.error('Promote user error:', err);
@@ -250,10 +299,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { profiles, activeProfileId, setActiveProfileId } = get();
     if (profiles.length <= 1) return;
     const remaining = profiles.filter((p) => p.id !== profileId);
-    set({ profiles: remaining });
+    const fallbackId = activeProfileId === profileId ? (remaining[0]?.id || 'usr_guest') : activeProfileId;
+    const activeProfile = resolveActiveProfile(remaining, fallbackId);
+    set({
+      profiles: remaining,
+      activeProfileId: fallbackId,
+      activeProfile,
+      isGuestClient: fallbackId === 'usr_guest',
+    });
     if (activeProfileId === profileId) {
-      setActiveProfileId(remaining[0]?.id || 'usr_guest');
       clearAuthToken();
+      useLibraryStore.getState().fetchMangaList();
     }
   },
 }));
+
+export const useActiveProfile = () => useAuthStore((s) => s.activeProfile);
+export const useIsGuest = () => useAuthStore((s) => s.isGuestClient);

@@ -383,18 +383,30 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 // ── Derived Selectors (memoized via Zustand selector equality) ───────────────
 
 /**
- * Per-user privacy-isolated library view.
- * Admin sees all; standard user sees their own; guest is blocked from NSFW.
+ * Pure selector for per-user privacy-isolated library filtering.
+ */
+export function getDisplayMangaList(
+  mangaList: MangaItem[],
+  activeProfile?: UserProfile,
+  isGuestClient?: boolean
+): MangaItem[] {
+  return mangaList.filter((item) => {
+    if (isGuestClient && isNsfwManga(item)) return false;
+    if (activeProfile?.allowNsfw === false && isNsfwManga(item)) return false;
+    return true;
+  });
+}
+
+/**
+ * Per-user privacy-isolated library view hook.
+ * Blocks NSFW content for guests or accounts with NSFW restrictions.
  */
 export function useDisplayMangaList(): MangaItem[] {
   const mangaList = useLibraryStore((s) => s.mangaList);
-  const { activeProfile, isGuestClient } = useAuthStore();
+  const activeProfile = useAuthStore((s) => s.activeProfile);
+  const isGuestClient = useAuthStore((s) => s.isGuestClient);
 
-  return mangaList.filter((item) => {
-    if (isGuestClient && isNsfwManga(item)) return false;
-    if (activeProfile.role === 'admin') return true;
-    return !item.userId || item.userId === activeProfile.id;
-  });
+  return getDisplayMangaList(mangaList, activeProfile, isGuestClient);
 }
 
 /**
@@ -404,3 +416,5 @@ export function useMyLibraryList(): MangaItem[] {
   const displayList = useDisplayMangaList();
   return displayList.filter((item) => item.isFavorite === true);
 }
+
+

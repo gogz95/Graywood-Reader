@@ -27,12 +27,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = React.memo(({
   onClose,
 }) => {
   const [tab, setTab] = useState<'profiles' | 'settings'>('profiles');
-  const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
+  const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0] || {
+    id: 'usr_guest',
+    name: 'Guest Reader',
+    username: 'guest',
+    email: 'guest@graywood.app',
+    avatar: '👤',
+    role: 'user',
+    createdAt: new Date().toISOString(),
+  };
 
-  // Only show the active user in the switch active reader
+  // Show available profiles for switching (host sees all; client sees active, guest, admin if host)
   const visibleProfiles = React.useMemo(() => {
-    return activeProfile ? [activeProfile] : [];
-  }, [activeProfile]);
+    return profiles.filter((p) => {
+      if (isHostComputer) return true;
+      if (p.id === activeProfileId) return true;
+      if (p.id === 'usr_guest') return true;
+      return false;
+    });
+  }, [profiles, activeProfileId, isHostComputer]);
 
   // Settings tab form states
   const [editName, setEditName] = useState(activeProfile?.name || '');
