@@ -583,7 +583,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       if (data.isPlaceholder || data.loadError || data.contentUnavailable || !data.pages?.length) {
         setError(
           data.loadError ||
-            'Live chapter pages could not be loaded from the source. The chapter may be missing, the source may be blocking requests, or the series URL is stale.'
+            `Chapter ${chNum} is missing pages. Live chapter panels could not be loaded from the source. Please try another mirror or source.`
         );
       }
 
@@ -1218,7 +1218,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <AlertTriangle className="w-7 h-7" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-black text-primary">Content Unavailable</h3>
+              <h3 className="text-lg font-black text-primary">Missing Chapter Pages</h3>
               <p className="text-sm text-secondary leading-relaxed">{error}</p>
               <p className="text-xs text-muted">
                 Series: <span className="text-primary font-semibold">{manga.title}</span>

@@ -552,6 +552,18 @@ export async function fetchWithChallengeBypass(
 
     // Step 2: Challenge detected! Attempt automated bypass if enabled
     if (challenge.isChallenge) {
+      if (options.enableCloudflareBypass === false && !options.captchaSolverEnabled) {
+        return {
+          ok: false,
+          status: directRes.status,
+          html: '',
+          bypassed: false,
+          challengeDetected: true,
+          challengeType: challenge.type,
+          error: `Challenge ${challenge.type} detected and auto-bypass disabled for request`,
+        };
+      }
+
       console.warn(
         `[Challenge Solver] Source at ${origin} triggered ${challenge.type} challenge (HTTP ${directRes.status}). Attempting auto-bypass...`
       );

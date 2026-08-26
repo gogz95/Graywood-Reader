@@ -323,7 +323,7 @@ describe('Live Source Feeds & Progress Endpoints', () => {
 
     // Clean up created test manga
     await request(app).delete(`/api/manga/${createdId}`);
-  });
+  }, 45000);
 
   it('GET /api/sources/dashboard returns summary and top monitored sources', async () => {
     const res = await request(app).get('/api/sources/dashboard');

@@ -26,6 +26,7 @@ import {
   getAllSourcesWithExtensions,
   getSourceById,
   rebuildDeadSourcesSet,
+  DYNAMIC_DEAD_SOURCES,
   SourceDefinition,
 } from '../sources/sourcesCatalog';
 import {
@@ -394,6 +395,13 @@ export const handleFlagSourceBroken = (req: Request, res: Response) => {
   }
 
   disabledSourceIds.add(sourceId);
+  disabledSourceIds.add(sourceId.toLowerCase());
+  if (sourceName) {
+    disabledSourceIds.add(sourceName);
+    disabledSourceIds.add(sourceName.toLowerCase());
+  }
+  DYNAMIC_DEAD_SOURCES.add(sourceId.toLowerCase());
+  rebuildDeadSourcesSet(syncConfig);
   syncConfig.disabledSources = Array.from(disabledSourceIds);
   saveDatabaseToDisk();
 

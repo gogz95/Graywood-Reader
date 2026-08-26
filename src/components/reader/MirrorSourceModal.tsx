@@ -50,6 +50,36 @@ export const MirrorSourceModal: React.FC<MirrorSourceModalProps> = ({
     return list;
   });
 
+  useEffect(() => {
+    let isMounted = true;
+    apiFetch(`/api/reader/sources/${encodeURIComponent(manga.id)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        const validList: MangaSourceLink[] = [];
+        if (data.primarySource) {
+          validList.push({
+            sourceName: manga.sourceName || 'Primary Source',
+            sourceUrl: data.primarySource,
+          });
+        }
+        if (Array.isArray(data.sources)) {
+          for (const s of data.sources) {
+            if (s.sourceUrl && !validList.some((item) => item.sourceUrl === s.sourceUrl)) {
+              validList.push(s);
+            }
+          }
+        }
+        if (validList.length > 0) {
+          setSourcesList(validList);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [manga.id, manga.sourceName]);
+
   const [searchQuery, setSearchQuery] = useState<string>(manga.title || '');
   const [searching, setSearching] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);

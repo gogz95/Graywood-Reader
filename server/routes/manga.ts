@@ -27,7 +27,7 @@ import { preferEnglishTitle, cleanMangaTitle } from '../../src/utils/metadataHel
 import { fetchAsuraSeriesMetadata, ASURA_API_HEADERS } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
 import { searchWeebCentral, fetchWeebCentralSeriesMetadata } from '../scrapers/weebCentral';
-import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive, isSeriesFromDisabledSource } from '../sources/sourcesCatalog';
+import { KOTATSU_SOURCES, disabledSourceIds, isSourceAlive, isSeriesFromDisabledSource, isSourceUrlOrNameDisabled, isSourceVerified } from '../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../captchaSolver';
 import { APP_USER_AGENT } from '../version';
 import { getLibraryCacheStatus, refreshLibraryCache } from '../services/libraryCacheService';
@@ -154,7 +154,13 @@ mangaRouter.get('/:id', (req, res) => {
   }
 
   const uid = resolveRequestUserId(req);
-  res.json(uid ? SqliteDb.applyUserOverlay([existing], uid)[0] : existing);
+  const targetItem = uid ? SqliteDb.applyUserOverlay([existing], uid)[0] : { ...existing };
+  if (Array.isArray(targetItem.availableSources)) {
+    targetItem.availableSources = targetItem.availableSources.filter(
+      (s) => !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
+    );
+  }
+  res.json(targetItem);
 });
 
 // ── POST /api/manga - Create a New Manga Item ─────────────────────────────────
@@ -779,8 +785,8 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
   if (manga.sourceUrl) seenUrls.add(manga.sourceUrl.toLowerCase());
 
   const candidateSources = KOTATSU_SOURCES.filter(
-    (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
-  ).slice(0, 12);
+    (s) => s.id !== 'mangadex' && (s.lang === 'en' || !s.lang) && isSourceVerified(s) && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+  ).slice(0, 6);
 
   await Promise.allSettled(
     candidateSources.map(async (sourceDef) => {
@@ -799,7 +805,7 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
           const cleanQuery = query.replace(/^asura_/i, '').replace(/[-_]/g, ' ').trim();
           const asuraRes = await fetch(`https://api.asurascans.com/api/series?search=${encodeURIComponent(cleanQuery || query)}`, {
             headers: ASURA_API_HEADERS,
-            signal: AbortSignal.timeout(6000),
+            signal: AbortSignal.timeout(3500),
           });
           if (asuraRes.ok) {
             const json = await asuraRes.json();
@@ -825,7 +831,8 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
               'User-Agent': APP_USER_AGENT,
               Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             },
-            timeoutMs: 6000,
+            timeoutMs: 2500,
+            enableCloudflareBypass: false,
             sourceId: sourceDef.id,
           });
           if (bypassRes.ok && bypassRes.html) {
@@ -856,7 +863,7 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
         }
 
         for (const item of items) {
-          if (!item.sourceUrl) continue;
+          if (!item.sourceUrl || isSourceUrlOrNameDisabled(item.sourceName, item.sourceUrl, item.sourceId)) continue;
           const urlKey = item.sourceUrl.toLowerCase();
           if (seenUrls.has(urlKey)) continue;
           seenUrls.add(urlKey);
@@ -877,7 +884,7 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
   );
 
   const dbMatches = SqliteDb.getAllManga().filter((m) => {
-    if (m.id === manga.id || !m.sourceUrl) return false;
+    if (m.id === manga.id || !m.sourceUrl || isSeriesFromDisabledSource(m) || isSourceUrlOrNameDisabled(m.sourceName, m.sourceUrl)) return false;
     if (isMangaDexSourceLink(m.sourceName, m.sourceUrl)) return false;
     const mTitleNorm = m.title.toLowerCase().replace(/[^a-z0-9]/g, '');
     const qNorm = query.toLowerCase().replace(/[^a-z0-9]/g, '');

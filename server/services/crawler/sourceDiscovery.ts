@@ -5,7 +5,7 @@
 import { MangaItem } from '../../../src/types';
 import { SqliteDb } from '../../../sqlite-db';
 import { mangaDatabase, saveDatabaseToDisk } from '../../appState';
-import { disabledSourceIds, isSourceAlive } from '../../sources/sourcesCatalog';
+import { disabledSourceIds, isSourceAlive, isSourceUrlOrNameDisabled } from '../../sources/sourcesCatalog';
 import { calculateStringSimilarity } from '../metadataService';
 import { searchWeebCentral } from '../../scrapers/weebCentral';
 import { ASURA_API_HEADERS } from '../../scrapers/asuraScans';
@@ -156,10 +156,10 @@ export async function autoDiscoverLiveSourceForManga(
 ): Promise<{ sourceName: string; sourceUrl: string } | null> {
   if (Array.isArray(manga.availableSources) && manga.availableSources.length > 0) {
     const existingLive = manga.availableSources.find(
-      (s) => s && s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+      (s) => s && s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
     );
     if (existingLive) {
-      if (!manga.sourceUrl || manga.sourceUrl.toLowerCase().includes('mangadex.org')) {
+      if (!manga.sourceUrl || manga.sourceUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, manga.sourceUrl)) {
         manga.sourceUrl = existingLive.sourceUrl;
         manga.sourceName = existingLive.sourceName || manga.sourceName;
         SqliteDb.upsertManga(manga);

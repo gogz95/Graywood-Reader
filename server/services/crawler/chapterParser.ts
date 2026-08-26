@@ -369,10 +369,21 @@ export async function fetchMadaraChapterPages(targetUrl: string, chapterNumber: 
     const seenImg = new Set<string>();
     const extractFrom = (root: any) => {
       root.find('img').each((_: number, el: any) => {
-        const src = ($(el).attr('data-src') || $(el).attr('data-lazy-src') || $(el).attr('data-cfsrc') || $(el).attr('src') || '').trim();
-        if (src && /\.(jpg|jpeg|png|webp)/i.test(src) && !/\/covers\/|logo|avatar|icon/i.test(src)) {
+        const src = (
+          $(el).attr('data-src') ||
+          $(el).attr('data-lazy-src') ||
+          $(el).attr('data-cfsrc') ||
+          $(el).attr('data-full-url') ||
+          $(el).attr('data-original') ||
+          $(el).attr('src') ||
+          ''
+        ).trim();
+        if (src) {
           const abs = src.startsWith('http') ? src : `${origin}${src.startsWith('/') ? '' : '/'}${src}`;
-          if (!seenImg.has(abs)) { seenImg.add(abs); pages.push(abs); }
+          if (isValidPanelImageUrl(abs) && !seenImg.has(abs)) {
+            seenImg.add(abs);
+            pages.push(abs);
+          }
         }
       });
     };

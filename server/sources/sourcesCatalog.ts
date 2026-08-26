@@ -510,36 +510,61 @@ export function getSourceMetadataConfidence(sourceId: string): number {
 }
 
 /**
- * Check if a given series belongs to a disabled source using O(1) SOURCE_MAP lookups.
+ * Check if a source is disabled, dead, or flagged as broken by ID, name, or URL.
  */
-export function isSeriesFromDisabledSource(m: MangaItem): boolean {
-  if (disabledSourceIds.size === 0) return false;
+export function isSourceUrlOrNameDisabled(sourceName?: string, sourceUrl?: string, sourceId?: string): boolean {
+  if (disabledSourceIds.size === 0 && ALL_DEAD_SOURCES.size === 0) return false;
 
-  const sName = (m.sourceName || '').toLowerCase();
-  const sUrl = (m.sourceUrl || '').toLowerCase();
+  const sId = (sourceId || '').toLowerCase().trim();
+  const sName = (sourceName || '').toLowerCase().trim();
+  const sUrl = (sourceUrl || '').toLowerCase().trim();
+
+  if (sId && (disabledSourceIds.has(sId) || ALL_DEAD_SOURCES.has(sId))) return true;
 
   for (const disabledId of disabledSourceIds) {
+    const dLower = disabledId.toLowerCase();
+    if (sId && (sId === dLower || sId.includes(dLower))) return true;
+    if (sName && (sName === dLower || sName.includes(dLower))) return true;
+    if (sUrl && sUrl.includes(dLower)) return true;
+
     const sourceDef = getSourceById(disabledId);
-    if (!sourceDef) continue;
-
-    const sourceNameLower = sourceDef.name.toLowerCase();
-    const sourceIdLower = sourceDef.id.toLowerCase();
-    const baseDomain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
-
-    // Check if series belongs to this disabled source
-    const matchesName = sName.includes(sourceIdLower) || sName.includes(sourceNameLower);
-    const matchesUrl = sUrl && (sUrl.includes(sourceIdLower) || sUrl.includes(baseDomain));
-
-    if (matchesName || matchesUrl) {
-      // MangaDex API fallback exception: if MangaDex is enabled and item has apiId, keep it!
-      const mangadexIsEnabled = !disabledSourceIds.has('mangadex');
-      if (mangadexIsEnabled && (m.apiId || m.id.startsWith('md_') || (m.syncedFromApi && m.syncedFromApi.includes('MangaDex')))) {
-        return false;
-      }
-      return true;
+    if (sourceDef) {
+      const sourceNameLower = sourceDef.name.toLowerCase();
+      const baseDomain = sourceDef.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase();
+      if (sName && (sName === sourceNameLower || sName.includes(sourceNameLower) || sourceNameLower.includes(sName))) return true;
+      if (sUrl && (sUrl.includes(sourceNameLower) || (baseDomain && sUrl.includes(baseDomain)))) return true;
     }
   }
 
+  for (const dead of ALL_DEAD_SOURCES) {
+    const deadNorm = dead.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!deadNorm) continue;
+    const nameNorm = sName.replace(/[^a-z0-9]/g, '');
+    const urlNorm = sUrl.replace(/[^a-z0-9]/g, '');
+    const idNorm = sId.replace(/[^a-z0-9]/g, '');
+    if (idNorm && (idNorm.includes(deadNorm) || deadNorm.includes(idNorm))) return true;
+    if (nameNorm && (nameNorm.includes(deadNorm) || deadNorm.includes(nameNorm))) return true;
+    if (urlNorm && urlNorm.includes(deadNorm)) return true;
+  }
+
+  if (sId && !isSourceAlive(sId)) return true;
+  if (sName && !isSourceAlive(sName)) return true;
+
+  return false;
+}
+
+/**
+ * Check if a given series belongs to a disabled source using O(1) SOURCE_MAP lookups.
+ */
+export function isSeriesFromDisabledSource(m: MangaItem): boolean {
+  if (isSourceUrlOrNameDisabled(m.sourceName, m.sourceUrl, m.id)) {
+    // MangaDex API fallback exception: if MangaDex is enabled and item has apiId, keep it!
+    const mangadexIsEnabled = !disabledSourceIds.has('mangadex') && isSourceAlive('mangadex');
+    if (mangadexIsEnabled && (m.apiId || m.id?.startsWith('md_') || (m.syncedFromApi && m.syncedFromApi.includes('MangaDex')))) {
+      return false;
+    }
+    return true;
+  }
   return false;
 }
 

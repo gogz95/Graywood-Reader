@@ -18,9 +18,8 @@ import {
   MAX_PROXY_IMAGE_BYTES,
 } from '../security';
 import { imageCacheService } from '../services/imageCache';
-import { eventBus } from '../services/eventBus';
 import { fetchMangaDex } from '../services/metadataService';
-import { KOTATSU_SOURCES } from '../sources/sourcesCatalog';
+import { KOTATSU_SOURCES, isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 import { parseOptimizationParams, optimizeImageBuffer } from '../services/imageOptimizer';
 import {
   kotatsuImageEngine,
@@ -144,7 +143,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     });
 
     if (!cached) {
-      return res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
+      return res.status(502).json({ error: 'Failed to fetch image from remote host' });
     }
 
     if (req.headers['if-none-match'] === cached.etag) {
@@ -162,7 +161,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {
-      res.redirect(`/api/reader/panel-image?manga=Page%20Panel&chapter=1&page=1`);
+      res.status(502).json({ error: 'Error proxying target image', message: err?.message || String(err) });
     } else {
       res.end();
     }
@@ -217,21 +216,21 @@ readerRouter.get('/api/reader/chapters/:mangaId', async (req, res) => {
     });
   }
 
-  if (manga && liveSourceUrl && liveSourceUrl.toLowerCase().includes('mangadex.org') && manga.availableSources?.length) {
+  if (manga && liveSourceUrl && (liveSourceUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, liveSourceUrl)) && manga.availableSources?.length) {
     const alt = manga.availableSources.find(
-      (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+      (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
     );
     if (alt) liveSourceUrl = alt.sourceUrl;
   }
 
-  if (manga && (!liveSourceUrl || liveSourceUrl.toLowerCase().includes('mangadex.org'))) {
+  if (manga && (!liveSourceUrl || liveSourceUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, liveSourceUrl))) {
     const autoSource = await autoDiscoverLiveSourceForManga(manga);
     if (autoSource) {
       liveSourceUrl = autoSource.sourceUrl;
     }
   }
 
-  if (liveSourceUrl && (liveSourceUrl.startsWith('http://') || liveSourceUrl.startsWith('https://')) && !liveSourceUrl.toLowerCase().includes('mangadex.org')) {
+  if (liveSourceUrl && (liveSourceUrl.startsWith('http://') || liveSourceUrl.startsWith('https://')) && !liveSourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(manga?.sourceName, liveSourceUrl)) {
     const matchedDomain = matchLiveDomain(liveSourceUrl || '');
     const domainId = matchedDomain ? matchedDomain.id : 'general';
     const sourceLabel = matchedDomain ? matchedDomain.name : 'Webtoon Source';
@@ -328,13 +327,15 @@ readerRouter.get('/api/reader/sources/:mangaId', async (req, res) => {
   if (!manga) return res.status(404).json({ error: "Manga not found" });
 
   const existing = (manga.availableSources || []).filter(
-    (s) => s && s.sourceUrl && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+    (s) => s && s.sourceUrl && !s.sourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
   );
+
+  const primaryIsBroken = isSourceUrlOrNameDisabled(manga.sourceName, manga.sourceUrl);
 
   res.json({
     mangaId: manga.id,
     title: manga.title,
-    primarySource: manga.sourceUrl,
+    primarySource: primaryIsBroken ? (existing[0]?.sourceUrl || '') : manga.sourceUrl,
     sources: existing,
   });
 });
@@ -375,17 +376,17 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     }
   }
 
-  if (targetUrl && targetUrl.toLowerCase().includes('mangadex.org') && manga?.availableSources?.length) {
+  if (targetUrl && (targetUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) && manga?.availableSources?.length) {
     const altSource = manga.availableSources.find(
-      (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org')
+      (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
     );
     if (altSource) {
-      console.log(`[Reader Stream Engine] Promoting alternative live source "${altSource.sourceName}" over MangaDex metadata-only sourceUrl.`);
+      console.log(`[Reader Stream Engine] Promoting alternative live source "${altSource.sourceName}" over broken/metadata-only sourceUrl.`);
       targetUrl = altSource.sourceUrl;
     }
   }
 
-  if (manga && (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org'))) {
+  if (manga && (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, targetUrl, manga.id))) {
     const autoSource = await autoDiscoverLiveSourceForManga(manga);
     if (autoSource) {
       targetUrl = autoSource.sourceUrl;
@@ -405,7 +406,26 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     });
   }
 
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.toLowerCase().includes('mangadex.org')) {
+  // If the target URL is explicitly from a disabled/broken source, do not serve it
+  if (targetUrl && isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) {
+    return res.json({
+      mangaId,
+      chapterNumber,
+      chapterId: chapterId || `ch_${chapterNumber}`,
+      totalPages: 0,
+      pages: [],
+      sourceType: 'none',
+      sourceDomain: '',
+      sourceName: 'Source Disabled',
+      isRealImages: false,
+      contentUnavailable: true,
+      isPlaceholder: false,
+      loadError: `Chapter ${chapterNumber} is unavailable because this source has been flagged as broken or disabled. Please switch to another source from the mirror menu.`,
+      notice: `Source is flagged as broken.`,
+    });
+  }
+
+  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) {
     const matchedDomain = matchLiveDomain(targetUrl);
     const domainId = matchedDomain ? matchedDomain.id : 'general';
 
@@ -494,26 +514,21 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     }
   }
 
-  // Placeholder fallback panel
-  const totalPages = 14;
-  const placeholderPages: string[] = [];
-  for (let p = 1; p <= totalPages; p++) {
-    placeholderPages.push(
-      `/api/reader/panel-image?manga=${encodeURIComponent(mangaTitle)}&chapter=${chapterNumber}&totalPages=${totalPages}&page=${p}&type=${encodeURIComponent(manga?.type || 'manhwa')}&genre=${encodeURIComponent(manga?.genres?.[0] || 'Action')}`
-    );
-  }
-
+  // No placeholder panels when entering read mode: report missing pages cleanly
   return res.json({
     mangaId,
     chapterNumber,
     chapterId: chapterId || `ch_${chapterNumber}`,
-    totalPages: placeholderPages.length,
-    pages: placeholderPages,
-    sourceType: 'offline_aesthetic_generator',
-    sourceDomain: 'graywood.local',
-    sourceName: 'Offline Aesthetic Reader Generator',
+    totalPages: 0,
+    pages: [],
+    sourceType: 'none',
+    sourceDomain: '',
+    sourceName: 'Source Unavailable',
     isRealImages: false,
-    notice: `Generating ${placeholderPages.length} styled aesthetic panels for Chapter ${chapterNumber}.`,
+    contentUnavailable: true,
+    isPlaceholder: false,
+    loadError: `Chapter ${chapterNumber} is missing pages. No readable panel images could be extracted from the source (${targetUrl || 'unavailable'}). Try switching to another mirror or source.`,
+    notice: `Chapter ${chapterNumber} is missing pages.`,
   });
 });
 
