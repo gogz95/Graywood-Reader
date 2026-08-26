@@ -26,6 +26,7 @@ import { categoriesRouter } from "./server/routes/categories";
 import { challengesRouter } from "./server/routes/challenges";
 import { downloadsRouter } from "./server/routes/downloads";
 import { readlistsRouter } from "./server/routes/readlists";
+import { roomsRouter } from "./server/routes/rooms";
 import { eventsRouter } from "./server/routes/events";
 import { mangaRouter, handleFullTextSearch } from "./server/routes/manga";
 import { readerRouter } from "./server/routes/reader";
@@ -149,6 +150,7 @@ app.use(trackerRouter);
 app.use(challengesRouter);
 app.use(downloadsRouter);
 app.use(readlistsRouter);
+app.use(roomsRouter);
 app.use('/api/events', eventsRouter);
 
 // ── Base Server Health, Version & Config Endpoints ────────────────────────────

@@ -111,6 +111,7 @@ export interface ReaderSettings {
   guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
   prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
   splitLandscapeSpreads?: boolean; // Canvas-based landscape double-page auto-splitting (Mihon-style)
+  smartWebtoonify?: boolean; // Smart Vision panel segmentation converting multi-panel classic manga to vertical webtoon
   // Reflowable EPUB / Light Novel Typography Settings
   epubFontFamily?: 'serif' | 'sans' | 'dyslexic' | 'mono';
   epubFontSize?: number; // px, default 18

@@ -53,11 +53,11 @@ export const handleFullTextSearch = (req: any, res: any) => {
 mangaRouter.get('/search/full-text', handleFullTextSearch);
 
 // Spoiler-safe story companion endpoint (GET /api/manga/:id/story-companion)
-mangaRouter.get('/:id/story-companion', (req, res) => {
+mangaRouter.get('/:id/story-companion', async (req, res) => {
   const manga = SqliteDb.getMangaById(req.params.id);
   if (!manga) return res.status(404).json({ error: 'Manga not found' });
   const chapter = parseInt(req.query.chapter as string || String(manga.currentChapter || 1), 10);
-  const data = generateStoryCompanion(manga, chapter);
+  const data = await generateStoryCompanion(manga, chapter);
   res.json(data);
 });
 

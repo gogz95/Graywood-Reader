@@ -54,7 +54,12 @@ export const StoryCompanionModal: React.FC<StoryCompanionModalProps> = ({
     if (isOpen && manga) {
       setLoading(true);
       apiFetch(`/api/manga/${manga.id}/story-companion?chapter=${currentChapterNumber}`)
-        .then((res: any) => setData(res))
+        .then(async (res) => {
+          if (res.ok) {
+            const json = await res.json();
+            setData(json);
+          }
+        })
         .catch((err) => console.error('[StoryCompanion] Error:', err))
         .finally(() => setLoading(false));
     }

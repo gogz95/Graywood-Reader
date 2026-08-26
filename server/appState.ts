@@ -318,15 +318,12 @@ export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
 export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
   if (!items || items.length === 0) return;
   SqliteDb.bulkUpsertManga(items);
-  // Fix #4: Build an index so each lookup is O(1) instead of O(n)
-  const idxMap = new Map<string, number>();
-  mangaDatabase.forEach((m, i) => idxMap.set(m.id, i));
   for (const item of items) {
-    const existingIdx = idxMap.get(item.id);
+    const existingIdx = mangaIdIndex.get(item.id);
     if (existingIdx !== undefined) {
       mangaDatabase[existingIdx] = item;
     } else {
-      idxMap.set(item.id, mangaDatabase.length);
+      mangaIdIndex.set(item.id, mangaDatabase.length);
       mangaDatabase.push(item);
     }
     try { notifyLibraryItemChanged(item); } catch {}

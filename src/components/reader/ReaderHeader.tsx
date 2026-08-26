@@ -12,6 +12,7 @@ import {
   Maximize,
   Search,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { MangaItem, ChapterData, ScanGroupOption, ReaderSettings, ReaderViewMode, PageStickyNote } from '../../types';
 
@@ -38,6 +39,9 @@ export interface ReaderHeaderProps {
   isLoupeActive?: boolean;
   onToggleLoupe?: () => void;
   onOpenMirrorModal?: () => void;
+  onOpenStoryCompanion?: () => void;
+  onOpenMangaTogether?: () => void;
+  isMangaTogetherActive?: boolean;
   zoomScale?: number;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -77,6 +81,9 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
   isLoupeActive,
   onToggleLoupe,
   onOpenMirrorModal,
+  onOpenStoryCompanion,
+  onOpenMangaTogether,
+  isMangaTogetherActive,
   zoomScale = 1.0,
   onZoomIn,
   onZoomOut,
@@ -271,6 +278,32 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
             title="Panel Magnifier Loupe Tool (Hotkey M)"
           >
             <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        )}
+
+        {/* Spoiler-Safe Story Companion Trigger */}
+        {onOpenStoryCompanion && (
+          <button
+            onClick={onOpenStoryCompanion}
+            className="p-2 sm:p-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25"
+            title="Spoiler-Safe Story Companion & Character Roster"
+          >
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-300" />
+          </button>
+        )}
+
+        {/* Manga Together Co-Reading Room Trigger */}
+        {onOpenMangaTogether && (
+          <button
+            onClick={onOpenMangaTogether}
+            className={`p-2 sm:p-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all ${
+              isMangaTogetherActive
+                ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 ring-2 ring-cyan-500/30 animate-pulse'
+                : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-cyan-300'
+            }`}
+            title="Manga Together — Real-Time Co-Reading Room"
+          >
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         )}
 

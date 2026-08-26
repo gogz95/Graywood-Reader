@@ -32,13 +32,17 @@ import { ShortcutsHelpModal } from './reader/ShortcutsHelpModal';
 import { QuickJumpModal } from './reader/QuickJumpModal';
 import { AmbientSoundModal } from './reader/AmbientSoundModal';
 import { MirrorSourceModal } from './reader/MirrorSourceModal';
+import { StoryCompanionModal } from './StoryCompanionModal';
+import { MangaTogetherModal } from './reader/MangaTogetherModal';
 import { WebtoonRenderer } from './reader/WebtoonRenderer';
 import { PagedRenderer } from './reader/PagedRenderer';
 import { soundscapes } from '../utils/soundscapes';
 import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
 import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';
+import { useMangaTogether } from '../hooks/useMangaTogether';
 import { useReaderZoom } from '../hooks/useReaderZoom';
 import { performPanelOcr, OcrResult } from '../utils/ocrEngine';
+import { webtoonifyImage } from '../utils/webtoonification';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -384,6 +388,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   } | null>(null);
   const [noteInputText, setNoteInputText] = useState<string>('');
   const [noteInputColor, setNoteInputColor] = useState<'yellow' | 'blue' | 'purple' | 'green'>('yellow');
+
+  // Story Companion & Manga Together Real-Time Co-Reading State
+  const [showStoryCompanionModal, setShowStoryCompanionModal] = useState<boolean>(false);
+  const [showMangaTogetherModal, setShowMangaTogetherModal] = useState<boolean>(false);
+
+  const mangaTogether = useMangaTogether({
+    mangaId: manga.id,
+    currentChapterNumber: currentChapterNum,
+    onRemoteNavigate: (chNum, pageIdx, scrollPct) => {
+      if (chNum !== currentChapterNum) {
+        setCurrentChapterNum(chNum);
+      }
+      setCurrentPageIndex(pageIdx);
+      if (isWebtoon && scrollContainerRef.current) {
+        const maxScroll = scrollContainerRef.current.scrollHeight - scrollContainerRef.current.clientHeight;
+        scrollContainerRef.current.scrollTop = (scrollPct / 100) * maxScroll;
+      }
+    },
+  });
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -1126,6 +1149,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             });
           }}
           onOpenMirrorModal={() => setShowMirrorModal(true)}
+          onOpenStoryCompanion={() => setShowStoryCompanionModal(true)}
+          onOpenMangaTogether={() => setShowMangaTogetherModal(true)}
+          isMangaTogetherActive={Boolean(mangaTogether.activeRoom)}
           zoomScale={zoom.scale}
           onZoomIn={zoom.zoomIn}
           onZoomOut={zoom.zoomOut}
@@ -1841,6 +1867,62 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           activeSourceUrl={activeSourceUrl}
           onClose={() => setShowMirrorModal(false)}
           onSelectSource={handleSelectSource}
+        />
+      )}
+
+      {/* MANGA TOGETHER LIVE LASER POINTERS */}
+      {mangaTogether.laserPointers.map((ptr) => (
+        <div
+          key={ptr.id}
+          className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-ping duration-1000"
+          style={{ left: `${ptr.x}%`, top: `${ptr.y}%` }}
+        >
+          <div className="w-5 h-5 rounded-full bg-cyan-400 border-2 border-white shadow-lg shadow-cyan-400/80 ring-4 ring-cyan-400/40" />
+          <span className="text-[10px] font-bold text-cyan-200 bg-black/75 px-1.5 py-0.5 rounded mt-1 whitespace-nowrap shadow">
+            {ptr.actorName}
+          </span>
+        </div>
+      ))}
+
+      {/* MANGA TOGETHER FLOATING REACTIONS */}
+      {mangaTogether.floatingReactions.map((rxn) => (
+        <div
+          key={rxn.id}
+          className="pointer-events-none fixed bottom-16 right-12 z-[9999] flex flex-col items-center animate-bounce duration-700"
+        >
+          <span className="text-4xl filter drop-shadow-lg">{rxn.emoji}</span>
+          <span className="text-[10px] font-bold text-secondary bg-app/80 px-1.5 py-0.5 rounded shadow">
+            {rxn.actorName}
+          </span>
+        </div>
+      ))}
+
+      {/* SPOILER-SAFE STORY COMPANION MODAL */}
+      {showStoryCompanionModal && (
+        <StoryCompanionModal
+          manga={manga}
+          currentChapterNumber={currentChapterNum}
+          isOpen={showStoryCompanionModal}
+          onClose={() => setShowStoryCompanionModal(false)}
+        />
+      )}
+
+      {/* MANGA TOGETHER CO-READING MODAL */}
+      {showMangaTogetherModal && (
+        <MangaTogetherModal
+          isOpen={showMangaTogetherModal}
+          onClose={() => setShowMangaTogetherModal(false)}
+          manga={manga}
+          currentChapterNumber={currentChapterNum}
+          activeRoom={mangaTogether.activeRoom}
+          isHost={mangaTogether.isHost}
+          currentUser={mangaTogether.currentUser}
+          autoFollow={mangaTogether.autoFollow}
+          setAutoFollow={mangaTogether.setAutoFollow}
+          onCreateRoom={mangaTogether.createRoom}
+          onJoinRoom={mangaTogether.joinRoom}
+          onLeaveRoom={mangaTogether.leaveRoom}
+          onSendReaction={mangaTogether.sendReaction}
         />
       )}
     </div>

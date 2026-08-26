@@ -276,6 +276,22 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
 
           <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
             <div>
+              <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-accent" />
+                Smart Webtoonify (Vision Slicing)
+              </div>
+              <div className="text-[10px] text-secondary">Auto-segment multi-panel classic manga into vertical scroll</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.smartWebtoonify || false}
+              onChange={(e) => onSaveSettings({ ...settings, smartWebtoonify: e.target.checked })}
+              className="w-4 h-4 accent-accent"
+            />
+          </label>
+
+          <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+            <div>
               <div className="text-xs font-bold text-primary">E-Ink High Contrast Mode</div>
               <div className="text-[10px] text-secondary">Zero animations & 1-bit dithering for e-readers</div>
             </div>
