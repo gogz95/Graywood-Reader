@@ -264,11 +264,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   },
 
   incrementChapter: async (id) => {
-    const { activeProfile, activeProfileId } = useAuthStore.getState();
-    if (activeProfile.role === 'admin') {
-      console.log('[Host Admin] Chapter progress is not tracked for the Host Administrator.');
-      return;
-    }
+    const { activeProfileId } = useAuthStore.getState();
     const current = get().mangaList.find((m) => m.id === id);
     if (!current) return;
     const nextCh = current.currentChapter + 1;

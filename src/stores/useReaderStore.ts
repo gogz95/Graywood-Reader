@@ -69,14 +69,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       return;
     }
 
-    const isHostAdmin = activeProfile.role === 'admin';
-
     let ch: number | undefined;
     if (chapterId && chapterNumber !== undefined && chapterNumber > 0) {
       ch = chapterNumber;
     } else if (chapterNumber !== undefined && chapterNumber > 0) {
       ch = chapterNumber;
-    } else if (!isHostAdmin && !isGuestClient && manga.currentChapter > 0) {
+    } else if (!isGuestClient && manga.currentChapter > 0) {
       ch = manga.currentChapter;
     } else if (isGuestClient) {
       const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
@@ -125,16 +123,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
   markChapterRead: async (mangaId, chapterNumber) => {
     const { isIncognito } = get();
-    const { activeProfile, activeProfileId } = useAuthStore.getState();
+    const { activeProfileId } = useAuthStore.getState();
     const { appSettings } = useSettingsStore.getState();
     const libraryStore = useLibraryStore.getState();
 
     if (isIncognito) {
       console.log('[Incognito] Private reading mode active - read history suppressed.');
-      return;
-    }
-    if (activeProfile.role === 'admin') {
-      console.log('[Host Admin] Read progress is not tracked for the Host Administrator.');
       return;
     }
 

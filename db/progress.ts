@@ -80,3 +80,11 @@ export function getReadingActivity(userId: string): any[] {
 export function getAllReadingProgressForUser(userId: string): any[] {
   return stmtGetReadingProgressByUser.all(userId);
 }
+
+const stmtDeleteReadingProgressByUserId = db.prepare('DELETE FROM reading_progress WHERE user_id = ?');
+const stmtDeleteReadingActivityByUserId = db.prepare('DELETE FROM reading_activity WHERE user_id = ?');
+
+export function deleteReadingDataForUser(userId: string): void {
+  stmtDeleteReadingProgressByUserId.run(userId);
+  stmtDeleteReadingActivityByUserId.run(userId);
+}

@@ -208,8 +208,9 @@ progressRouter.get("/api/reader/history", (req, res) => {
 
   for (const p of progRows) {
     if (!p.manga_id || map.has(p.manga_id)) continue;
-    const manga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
-    if (manga) {
+    const rawManga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
+    if (rawManga) {
+      const manga = SqliteDb.applyUserOverlayOne(rawManga, userId);
       map.set(p.manga_id, { manga, progress: p });
       if (map.size >= 50) break;
     }

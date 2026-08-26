@@ -37,6 +37,20 @@ export function parseOptimizationParams(req: Request): ImageOptimizationOptions 
   return { format, quality, width };
 }
 
+let cachedSharp: any = undefined;
+
+async function getSharpModule(): Promise<any> {
+  if (cachedSharp !== undefined) return cachedSharp;
+  try {
+    // @ts-ignore
+    const sharpModule = await import('sharp').catch(() => null);
+    cachedSharp = sharpModule?.default || sharpModule || null;
+  } catch {
+    cachedSharp = null;
+  }
+  return cachedSharp;
+}
+
 /**
  * Optimizes an image buffer according to client request parameters.
  * Falls back gracefully to original buffer if optional native modules are absent.
@@ -52,10 +66,7 @@ export async function optimizeImageBuffer(
   }
 
   try {
-    // Attempt dynamic sharp load if installed
-    // @ts-ignore
-    const sharpModule = await import('sharp').catch(() => null);
-    const sharp = sharpModule?.default || sharpModule;
+    const sharp = await getSharpModule();
 
     if (sharp) {
       let instance = sharp(inputBuffer);

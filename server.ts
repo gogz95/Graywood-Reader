@@ -3,48 +3,14 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { SqliteDb } from "./sqlite-db";
-import { MangaItem, UserProfile, UserRole, isMangaDexSourceLink } from "./src/types";
 import {
-  resolveEncryptionSecret,
-  ENCRYPTION_SECRET,
-  encryptPII,
-  decryptPII,
-  hashPassword,
-  isAlreadyHashed,
-  verifyPassword,
-  verifyPasswordAsync,
   AUTH_ENABLED,
-  AUTH_TOKEN_TTL_MS,
-  AUTH_SIGNING_KEY,
-  signAuthToken,
-  verifyAuthToken,
-  revokeAuthToken,
-  toPublicUser,
   isHostRequest,
-  assertSafeProxyTarget,
-  fetchWithSsrfGuard,
-  MAX_PROXY_IMAGE_BYTES,
   normalizeGatePath,
   isHostOnlyPath,
   SENSITIVE_GET_PATHS,
 } from "./server/security";
-import {
-  rateLimitMiddleware,
-  isImageProxyPath,
-  RATE_LIMIT_MAX,
-  RATE_LIMIT_PROXY_MAX,
-  RATE_LIMIT_WINDOW,
-  ipRequestCounts,
-  ipProxyRequestCounts,
-} from "./server/rateLimit";
-import {
-  detectChallenge,
-  solveWithFlareSolverr,
-  checkSolverBalance,
-  fetchWithChallengeBypass,
-} from "./server/captchaSolver";
-import { challengeManager } from "./server/challengeManager";
-import { sourceCircuitBreaker } from "./server/circuitBreaker";
+import { rateLimitMiddleware } from "./server/rateLimit";
 import { notesRouter } from "./server/routes/notes";
 import { opdsRouter } from "./server/routes/opds";
 import { localLibraryRouter } from "./server/routes/localLibrary";
@@ -61,106 +27,35 @@ import { challengesRouter } from "./server/routes/challenges";
 import { downloadsRouter } from "./server/routes/downloads";
 import { readlistsRouter } from "./server/routes/readlists";
 import { eventsRouter } from "./server/routes/events";
-import { eventBus } from "./server/services/eventBus";
-import { mangaRouter, isContentPath, isNavText } from "./server/routes/manga";
-import {
-  readerRouter,
-  resolveManga,
-  isValidPanelImageUrl,
-  parseSrcsetCandidate,
-  extractPanelImages,
-  handleImageProxyRequest,
-} from "./server/routes/reader";
-import {
-  sourcesRouter,
-  handleFlagSourceBroken,
-} from "./server/routes/sources";
-import {
-  exploreRouter,
-  integrateKotatsuSourcesAndMerge,
-  updateDatabaseWithAllAvailableSeries,
-} from "./server/routes/explore";
-import {
-  trackerRouter,
-  autoUpdateLogs,
-  autoUpdateStatus,
-} from "./server/routes/tracker";
-import {
-  refreshSingleMangaMetadata,
-  fetchMangaDex,
-  calculateStringSimilarity,
-  getMangaDexMetadataByTitle,
-  parseGenericLiveSeriesMetadata,
-  fetchLiveSeriesMetadata,
-  purgeDisabledSourcesAndRefreshMetadata,
-} from "./server/services/metadataService";
+import { mangaRouter, handleFullTextSearch } from "./server/routes/manga";
+import { readerRouter } from "./server/routes/reader";
+import { sourcesRouter } from "./server/routes/sources";
+import { exploreRouter } from "./server/routes/explore";
+import { trackerRouter, autoUpdateLogs, autoUpdateStatus } from "./server/routes/tracker";
+import { refreshSingleMangaMetadata } from "./server/services/metadataService";
 import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
 import { startAutoBackupScheduler } from "./server/services/autoBackupService";
-import { imageCacheService } from "./server/services/imageCache";
-import {
-  isAdSeries,
-  isAdUrl,
-  isAdTitle,
-  isAdImageSrc,
-  stripAdElements,
-} from "./server/adFilter";
-import {
-  sourceHealthMap,
-  updateSourceHealth,
-  loadSourceHealthMap,
-  detectBlockedResponse,
-  sourceCookieJar,
-} from "./server/services/sourceHealthService";
+import { loadSourceHealthMap } from "./server/services/sourceHealthService";
 import {
   kotatsuImageEngine,
-  matchLiveDomain,
-  getLiveDomains,
-  getEngineConfig,
-  CURATED_ENGINE_SOURCES,
-  ENGINE_SOURCE_REGISTRY,
   syncEngineRegistryFromCatalog,
-  fetchLiveChapterList,
   normalizeLiveTargetUrl,
-  matchResolvedChapter,
-  autoDiscoverLiveSourceForManga,
-  searchLiveSourcesForSeries,
-  parseGenericChapterListFromHtml,
 } from "./server/services/crawlerEngine";
-import {
-  scheduleExploreRefresher,
-  probeSourceSeriesCount,
-  auditAndDisableEmptySources,
-  parseUniversalCatalogCards,
-  searchSourceDirectly,
-} from "./server/services/exploreService";
+import { scheduleExploreRefresher } from "./server/services/exploreService";
 import {
   initLibraryCache,
   startWeeklyLibraryCacheScheduler,
 } from "./server/services/libraryCacheService";
 import {
   APP_VERSION,
-  APP_USER_AGENT,
   getSystemVersionReport,
 } from "./server/version";
 import { logger, requestLoggerMiddleware } from "./server/logger";
-import {
-  KOTATSU_SOURCES,
-  ALL_SOURCES_CATALOG,
-  SOURCE_MAP,
-  disabledSourceIds,
-  isSourceAlive,
-  isMetadataOnlySource,
-  buildFullSourceInventory,
-  ensureSourceInRegistry,
-  getSourceById,
-  isSeriesFromDisabledSource,
-} from "./server/sources/sourcesCatalog";
+import { isSeriesFromDisabledSource } from "./server/sources/sourcesCatalog";
 import {
   mangaDatabase,
   userProfiles,
   syncConfig,
-  appSettings,
-  replaceMangaDatabase,
   saveDatabaseToDisk,
   flushStateNow,
   cancelPendingSave,
@@ -168,21 +63,8 @@ import {
   loadDatabaseFromDisk,
   purgeReaperScansFromAllStorage,
   syncAddOrUpdateManga,
-  syncBulkAddOrUpdateManga,
-  syncDeleteManga,
-  syncResetManga,
-  resolveRequestUserId,
   resolveAuthUser,
-  canWriteCatalog,
-  canModifyManga,
-  rejectCatalogWrite,
 } from "./server/appState";
-import {
-  snapshotMetadataOverrides,
-  restoreMetadataOverrides,
-  ensureCoreFields,
-  preferEnglishTitle,
-} from "./src/utils/metadataHelpers";
 
 export const sourceCustomCookies = new Map<string, string[]>();
 export const sourceCustomUserAgents = new Map<string, string>();
@@ -246,6 +128,7 @@ app.use((req, _res, next) => {
 });
 
 // Mount scoped modular routers
+app.get('/api/search/full-text', handleFullTextSearch);
 app.use(progressRouter);
 app.use(bugsRouter);
 app.use(notesRouter);

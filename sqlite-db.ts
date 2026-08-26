@@ -73,9 +73,7 @@ export const SqliteDb = {
   applyUserOverlayOne: usersDb.applyUserOverlayOne,
   applyUserOverlay: usersDb.applyUserOverlay,
   purgeUserData: usersDb.purgeUserData,
-  deleteReadingDataForUser: (userId: string) => {
-    progressDb.upsertReadingProgress({ manga_id: '', user_id: userId, chapter_number: 0 }); // noop trigger
-  },
+  deleteReadingDataForUser: progressDb.deleteReadingDataForUser,
 
   // Reading Progress & Activity
   upsertReadingProgress: progressDb.upsertReadingProgress,

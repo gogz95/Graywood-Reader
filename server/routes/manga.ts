@@ -36,8 +36,8 @@ import { generateStoryCompanion } from '../services/storyCompanion';
 
 export const mangaRouter = Router();
 
-// Full-text search endpoint across all library fields
-mangaRouter.get('/api/search/full-text', (req, res) => {
+// Full-text search endpoint across all library fields (supports /search/full-text and /api/search/full-text)
+export const handleFullTextSearch = (req: any, res: any) => {
   const query = (req.query.q as string || '').trim();
   if (!query) {
     return res.json({ query: '', totalMatches: 0, results: [] });
@@ -47,10 +47,12 @@ mangaRouter.get('/api/search/full-text', (req, res) => {
   const allManga = SqliteDb.getAllManga().filter((m) => allowNsfw || !isNsfwManga(m));
   const results = searchIndexer.search(query, allManga);
   res.json({ query, totalMatches: results.length, results });
-});
+};
 
-// Spoiler-safe story companion endpoint
-mangaRouter.get('/api/manga/:id/story-companion', (req, res) => {
+mangaRouter.get('/search/full-text', handleFullTextSearch);
+
+// Spoiler-safe story companion endpoint (GET /api/manga/:id/story-companion)
+mangaRouter.get('/:id/story-companion', (req, res) => {
   const manga = SqliteDb.getMangaById(req.params.id);
   if (!manga) return res.status(404).json({ error: 'Manga not found' });
   const chapter = parseInt(req.query.chapter as string || String(manga.currentChapter || 1), 10);
