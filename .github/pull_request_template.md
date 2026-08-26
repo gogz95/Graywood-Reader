@@ -1,58 +1,35 @@
-## 📝 Description
+## Description
 
-<!-- Briefly describe the changes introduced in this pull request and the motivation behind them. -->
+<!-- Provide a brief explanation of the change, motivation, and context. -->
 
-## 🔗 Related Issues
+Fixes #(issue)
 
-<!-- Link relevant issues here. Example: Fixes #123, Closes #456 -->
-- Fixes #
+## Type of Change
 
-## 🏷️ Type of Change
-
-<!-- Mark the appropriate item with an [x] -->
 - [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
 - [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] ⚡ Performance improvement
-- [ ] ♻️ Code refactoring (no functional changes)
-- [ ] 🌐 Source / Parser fix (updated or fixed scraper engine)
-- [ ] 🎨 UI / UX enhancement
+- [ ] 🚀 Performance optimization
+- [ ] ♻️ Code refactoring / cleanup
+- [ ] 🌐 Scraper / Parser update or addition
 - [ ] 📝 Documentation update
-- [ ] 🔧 Build / CI / Tooling change
-- [ ] 💥 Breaking change (fix or feature that causes existing functionality to change)
+- [ ] 🔒 Security hardening
 
-## 🔍 Key Changes & Implementation Details
+## Verification & Testing
 
-<!-- List the main components or files affected and how the feature/fix was implemented. -->
-- 
+<!-- Describe how you verified your changes. Include commands and test output. -->
 
-## 📖 Reader & Layout Verification (if applicable)
+- [ ] `npm run lint` passes with 0 TypeScript errors
+- [ ] `npm test` passes all unit and integration tests
+- [ ] `npm run build` bundles without errors
+- [ ] Live scraper verified with `npm run reader:smoke` (if modifying parsers)
+- [ ] Manual testing performed in the browser
 
-<!-- If changes affect the reader, mark which modes have been verified -->
-- [ ] Webtoon / Long-Strip (Standard & 0px Seamless)
-- [ ] Double-Page Book Spread
-- [ ] Japanese Manga Right-to-Left (RTL) & LTR
-- [ ] Single Page
-- [ ] Visual Shaders (E-Ink, Sepia, Sharpener, OLED)
-- [ ] Offline Chapter Cache (IndexedDB)
-- [ ] Mobile Touch / Responsive Layout
+## Screenshots / Demos (for UI/UX changes)
 
-## 💾 Database / API Changes (if applicable)
+<!-- Add before/after screenshots or GIFs if applicable -->
 
-<!-- Does this PR alter SQLite schemas, API endpoints, or OPDS feeds? -->
-- [ ] No database schema changes
-- [ ] Added backward-compatible SQLite migration / column
-- [ ] OPDS 1.2 catalog feed updated
+## Compliance & Legal Checklist
 
-## 📸 Screenshots or Recordings (if UI changes)
-
-<!-- Drag and drop before & after screenshots or screen recordings here -->
-
-## ✅ Checklist
-
-- [ ] My code adheres to the style guidelines in [CONTRIBUTING.md](CONTRIBUTING.md).
-- [ ] I have performed a self-review of my own code.
-- [ ] TypeScript compilation passes cleanly (`npm run lint`).
-- [ ] Unit and integration tests pass (`npm test`).
-- [ ] Production build succeeds (`npm run build`).
-- [ ] All database queries use parameterized statements (`better-sqlite3`).
-- [ ] I have updated relevant documentation if necessary (e.g., `README.md`, `BUGS.md`, `ROADMAP.md`).
+- [ ] My code adheres to the [Code of Conduct](CODE_OF_CONDUCT.md).
+- [ ] My changes comply with the project [Legal Disclaimer](DISCLAIMER.md) (no bundled copyrighted media, respect for rate limits, SSRF protection).
+- [ ] Any new third-party dependencies are permissively licensed and compatible with GPL-3.0-or-later.

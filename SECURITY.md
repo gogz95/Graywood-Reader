@@ -31,8 +31,8 @@ We provide security updates and patches for the latest active release versions:
 To help us investigate and resolve the issue quickly, please provide:
 
 - A clear description of the vulnerability.
-- Steps to reproduce the vulnerability (proof of concept, curl commands, or script).
-- The affected component (e.g., Image Proxy, OPDS feed, SQLite DAL, Auth, FlareSolverr bridge).
+- Steps to reproduce the vulnerability (proof of concept, curl commands, or reproduction script).
+- The affected component (e.g., Image Proxy, OPDS feed, SQLite DAL, Auth, FlareSolverr bridge, SSRF filter).
 - Potential impact and attack scenarios.
 - Any suggested mitigations or patches if you have developed one.
 
@@ -71,4 +71,4 @@ Graywood Reader uses AES-256-GCM to encrypt sensitive tokens (e.g., FlareSolverr
 
 ### 5. Automated Backups & Permissions
 - Store database snapshots (`data/manga.db`) in a read/write-restricted directory owned by a non-root application user.
-- Export periodic Tachiyomi JSON backups for offsite disaster recovery.
+- Export periodic Tachiyomi JSON or full server migration ZIP backups for offsite disaster recovery.

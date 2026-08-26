@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Bell,
   KeyRound,
+  Scale,
 } from 'lucide-react';
 import { BulkScrapeModal } from './BulkScrapeModal';
 import { ReaderAppearanceTab } from './settings/ReaderAppearanceTab';
@@ -30,6 +31,7 @@ import { AutoUpdateWebhooksTab } from './settings/AutoUpdateWebhooksTab';
 import { SecurityCaptchaTab } from './settings/SecurityCaptchaTab';
 import { DataBackupMigrationTab } from './settings/DataBackupMigrationTab';
 import { DuplicatesSubdomainTab } from './settings/DuplicatesSubdomainTab';
+import { AboutLegalTab } from './settings/AboutLegalTab';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -83,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
   onOpenSetupWizard,
 }) => {
   const [activeSection, setActiveSection] = useState<
-    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'webhooks' | 'security' | 'duplicates' | 'subdomain' | 'restore' | 'backup'
+    'reader' | 'appearance' | 'autoupdate' | 'sources' | 'webhooks' | 'security' | 'duplicates' | 'subdomain' | 'restore' | 'backup' | 'about'
   >('reader');
   const [bulkScrapeModalOpen, setBulkScrapeModalOpen] = useState(false);
   const isAdmin = activeProfile?.role === 'admin';
@@ -326,6 +328,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
               </span>
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSection('about')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+              activeSection === 'about'
+                ? 'bg-accent text-accent-fg shadow-md font-black'
+                : 'text-secondary hover:text-primary hover:bg-elevated/60'
+            }`}
+          >
+            <Scale className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-accent-2" />
+            <span>About &amp; Legal</span>
+          </button>
         </div>
 
         {/* Tab Contents */}
@@ -402,6 +417,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({
               onOpenSetupWizard={onOpenSetupWizard}
             />
           )}
+
+          {activeSection === 'about' && <AboutLegalTab />}
         </div>
 
         {/* Footer Actions */}

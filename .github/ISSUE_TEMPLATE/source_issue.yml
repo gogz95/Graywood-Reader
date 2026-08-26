@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this template when a specific manga source or parser stops returning search results, chapter lists, or image pages.
+        Use this template when a specific manga source or parser stops returning search results, chapter lists, or image pages. Please review [DISCLAIMER.md](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/DISCLAIMER.md) regarding third-party sources.
   - type: input
     id: source-name
     attributes:
@@ -63,4 +63,6 @@ body:
         - label: I verified that the source website is accessible and working in my normal web browser.
           required: true
         - label: I checked if FlareSolverr or CapSolver is operational if Cloudflare protection is active.
+          required: true
+        - label: I acknowledge that Graywood Reader does not host or control third-party websites or content.
           required: true

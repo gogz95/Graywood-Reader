@@ -1,7 +1,33 @@
 {
-    "name": "manhuasync-tracker",
+    "name": "graywood-reader",
     "version": "1.0.0",
+    "description": "High-performance self-hosted manga, manhwa, and manhua library tracker with a Kotatsu-inspired reader, OPDS 1.2 catalog server, and SQLite WAL storage.",
     "license": "GPL-3.0-or-later",
+    "author": "Graywood Reader Contributors",
+    "homepage": "https://github.com/gogz95/Remix-ManhuaSync-to-a-reader#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/gogz95/Remix-ManhuaSync-to-a-reader.git"
+    },
+    "bugs": {
+        "url": "https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/issues"
+    },
+    "keywords": [
+        "manga",
+        "manhwa",
+        "manhua",
+        "reader",
+        "tracker",
+        "kotatsu",
+        "tachiyomi",
+        "mihon",
+        "opds",
+        "opds-server",
+        "self-hosted",
+        "sqlite",
+        "pwa",
+        "webtoon"
+    ],
     "main": "electron-main.cjs",
     "engines": {
         "node": ">=22.12.0"
@@ -13,7 +39,7 @@
         "start": "node dist-server/server.cjs",
         "start:prod": "node dist-server/server.cjs",
         "pm2:start": "pm2 start ecosystem.config.cjs",
-        "docker:build": "docker build -t manhuasync-tracker .",
+        "docker:build": "docker build -t graywood-reader .",
         "docker:run": "docker compose up -d",
         "deploy:linux": "bash scripts/deploy-linux.sh",
         "deploy:windows": "scripts\\deploy-windows.bat",

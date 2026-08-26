@@ -1,134 +1,233 @@
 # Graywood Reader
 
-> ⚡ **Note on Development**: This project is proudly **vibecoded** with AI assistance and is **heavily inspired by other incredible open-source apps** across the manga/manhwa reading ecosystem — including **Kotatsu**, **Tachiyomi / Mihon**, **Suwayomi**, **Paperback**, and **Komga**.
+<div align="center">
 
-A modern, high-performance self-hosted manga, manhwa, and manhua library tracker with a feature-rich Kotatsu-inspired reader. Track your collection across hundreds of scanlation sources, enjoy seamless webtoon and double-page book reading, automatic chapter updates, offline downloads, AniList progress scrobbling, and an OPDS catalog server — all from a single lightweight Node + React application backed by SQLite.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
+[![Node.js Version](https://img.shields.io/badge/node.js-%E2%89%A522.12-brightgreen.svg?style=flat-square)](package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
+[![React](https://img.shields.io/badge/React-19.0-61DAFB.svg?style=flat-square&logo=react&logoColor=black)](package.json)
+[![Database: SQLite WAL](https://img.shields.io/badge/Database-SQLite%20(WAL)-003B57.svg?style=flat-square&logo=sqlite&logoColor=white)](sqlite-db.ts)
+[![Tests](https://img.shields.io/badge/Tests-380%2B%20Passing-success.svg?style=flat-square)](tests/)
+[![Protocol: OPDS 1.2](https://img.shields.io/badge/Feed-OPDS%201.2%20PSE-orange.svg?style=flat-square)](server/routes/opds.ts)
+[![PWA Ready](https://img.shields.io/badge/PWA-Installable-purple.svg?style=flat-square)](public/manifest.webmanifest)
+
+**A high-performance, private, self-hosted manga, manhwa, and manhua library manager with a Kotatsu-inspired reader.**
+
+[Key Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Deployment](#-deployment) • [OPDS Catalog](#-opds-12-catalog-server) • [Legal Disclaimer](#-legal-disclaimer) • [License](#-license)
+
+</div>
+
+---
+
+> ⚡ **Development & Heritage**: This project is **heavily inspired by the best open-source manga applications** across the reading ecosystem — including **[Kotatsu](https://github.com/KotatsuApp/Kotatsu)**, **[Tachiyomi / Mihon](https://github.com/mihonapp/mihon)**, **[Suwayomi](https://github.com/Suwayomi/Suwayomi-Server)**, **[Paperback](https://github.com/Paperback-iOS)**, and **[Komga](https://github.com/gotson/komga)**.
+
+Graywood Reader is a single-binary-capable Node.js + React application powered by `better-sqlite3` in Write-Ahead Logging (WAL) mode. It combines multi-source scraping across 1,100+ community parsers, MangaDex API v5 metadata enrichment, AniList live progress tracking, offline IndexedDB chapter downloads, and a full OPDS 1.2 catalog server for e-readers — all protected behind automated anti-bot defense pipelines, AES-256-GCM credential encryption, and SSRF mitigations.
 
 ---
 
 ## ✨ Features
 
-- 📚 **Smart Library Management** — Track reading statuses (`reading`, `completed`, `plan_to_read`, `on_hold`, `dropped`), unread chapter counters, favorites, flags, personal ratings, and custom tags.
-- 🗂️ **Multi-Select Bulk Actions** — Floating toolbar for batch status changes, bulk mark-as-read, and mass deletion.
-- 🔍 **Multi-Source Discovery** — MangaDex API v5, AniList search, Jikan/MyAnimeList, Kitsu, MangaUpdates, OpenLibrary, and Google Books metadata enrichment, plus 1,100+ Kotatsu-parser sources (Madara, MangaThemesia, WPComics, FoolSlide, and custom HTML engines).
-- 📖 **Kotatsu-Inspired Reader**:
-  - **Layouts**: Webtoon (Seamless 0px gap & Standard), Japanese Manga Right-to-Left (RTL), Left-to-Right (LTR), Single Page, and Double-Page Book Spread.
-  - **Smart Guided Panel View**: Snap-to-panel keyboard/tap scrolling for long-strip webtoons.
-  - **Visual Shader Filters**: Normal, Line-Art Sharpener, E-Ink (e-paper high-contrast mode), OLED Ultra-Dark, Warm Sepia, Grayscale, and High-Contrast.
-  - **Private Page Sticky Notes**: Pin personal notes, impressions, and theories directly to specific pages with instant jump-to-page navigation.
-  - **Instant Next Chapter Prefetch**: 0ms chapter transitions via silent background prefetching.
-  - **Granular Auto-Scroll**: 60 FPS smooth micro-stepping with countdown auto-progression.
-- 💾 **100% Offline Reading** — Download complete chapters into browser `IndexedDB` storage for instant zero-network offline reading.
-- 🛡️ **Automated Bot Defense Bypass** — Multi-tiered Cloudflare Turnstile, DDoS check, and Captcha solver pipeline (FlareSolverr + 2Captcha/CapSolver integration).
-- 🔄 **Ecosystem Sync & Portability**:
-  - **Tachiyomi / Mihon JSON Backups**: Full bidirectional import and export support.
-  - **AniList GraphQL Live Scrobbler**: Automatically updates your AniList reading progress as chapters are completed.
-  - **OPDS 1.2 Catalog Server**: Serve your collection to e-readers (KOReader, Moon+ Reader, Panels, Paperback) via `/api/opds/catalog.xml`.
-- ⚡ **High-Performance SQLite Backend** — WAL mode enabled with parameterized queries, sub-millisecond writes, and immutable image proxy caching with HTTP 304 ETags.
-- 📱 **Progressive Web App (PWA) & Desktop** — Standalone PWA installable on iOS/Android, plus an Electron desktop shell.
+### 📚 Smart Library & Collection Tracking
+- **Granular Statuses**: Organize titles into `Reading`, `Completed`, `Plan to Read`, `On Hold`, and `Dropped` shelves.
+- **Unread & Release Badges**: Real-time unread chapter counts, release date tracking, and automated chapter update feeds.
+- **Multi-Select Batch Actions**: Floating toolbar for bulk status assignment, bulk mark-as-read, shelf categorization, and mass deletion.
+- **Favorites, Flags & Custom Tags**: Star favorites, flag broken sources with automated recovery, rate series, and manage personal tags.
+
+### 📖 Kotatsu-Inspired Reader Experience
+- **Multiple Reading Modes**:
+  - **Webtoon (Long Strip)**: Continuous vertical strip with seamless 0px gap mode and standard margin mode.
+  - **Japanese Manga Right-to-Left (RTL)**: Traditional right-to-left paging.
+  - **Left-to-Right (LTR)**: Western comic reading layout.
+  - **Single Page View**: Focused single page presentation.
+  - **Double-Page Book Spread**: Intelligent dual-page pairing with automatic cover offset detection.
+- **Guided Smart Panel View**: Snap-to-panel micro-navigation optimized for vertical webtoon strips.
+- **Hardware-Accelerated Shader Filters**: Normal, Line-Art Sharpener, E-Ink (e-paper high-contrast mode), OLED Ultra-Dark, Warm Sepia, and Grayscale.
+- **Private Sticky Notes**: Anchor personal thoughts, theories, and notes to specific chapter pages with instant jump-to-page navigation.
+- **Instant Next Chapter Prefetch**: Zero-latency chapter transitions via intelligent background prefetching.
+- **Granular 60 FPS Auto-Scroll**: Configurable smooth micro-stepping with countdown auto-progression.
+
+### 🔍 Multi-Source Discovery & Metadata Enrichment
+- **1,100+ Kotatsu Parser Sources**: Search and browse across Madara, MangaThemesia, WPComics, FoolSlide, and custom HTML scraper engines.
+- **Rich Metadata Providers**: MangaDex API v5, AniList GraphQL, MangaUpdates, Kitsu, OpenLibrary, and Google Books integration.
+- **Local CBZ / Folder Archives**: Index and read personal offline `.cbz`, `.zip`, and image folder collections directly.
+
+### 💾 100% Offline Reading & Portable Backups
+- **Client-Side IndexedDB Storage**: Cache complete chapters directly inside the browser for offline reading on mobile or desktop without internet access.
+- **Server Storage & CBZ Downloads**: Save chapters to disk as standard `.cbz` archives.
+- **Tachiyomi / Mihon Backups**: Full bidirectional import and export support for Tachiyomi v2 / Mihon JSON backup files.
+- **One-Click Server Migrations**: Export and import complete instance state (database, settings, profiles, notes) as a timestamped `.zip` archive.
+
+### 🛡️ Bot Defense, Privacy & Self-Hosting Security
+- **Automated Anti-Bot Pipeline**: FlareSolverr proxy bridge and 2Captcha/CapSolver integration for bypassing Cloudflare Turnstile and DDoS challenges.
+- **AES-256-GCM PII Encryption**: Sensitive API keys, session tokens, and scraper credentials are encrypted at rest.
+- **SSRF Network Protection**: Built-in IP validation restricts scraper and image proxy requests from targeting private subnets (RFC 1918), loopback, and link-local ranges.
+- **Role-Based Access Control**: Configurable multi-user authentication (`admin` and `user` roles) with host-gate verification.
+
+### 📡 OPDS 1.2 Catalog Server & E-Reader Integration
+- Standard **OPDS 1.2 acquisition feeds** with **Page Streaming Extension (PSE)** at `/api/opds/catalog.xml`.
+- Compatible out-of-the-box with **KOReader**, **Moon+ Reader**, **Panels (iOS)**, **Paperback**, and other OPDS clients.
 
 ---
 
 ## 🚀 Quick Start
 
-**Prerequisites:** Node.js ≥ 22.12
+### Prerequisites
+- **Node.js**: `≥ 22.12.0` (LTS recommended)
+- **npm**: `≥ 10.0.0`
+- **Git**
 
+### 1. Clone & Install
 ```bash
-# 1. Install dependencies
+git clone https://github.com/gogz95/Remix-ManhuaSync-to-a-reader.git
+cd Remix-ManhuaSync-to-a-reader
 npm install
-
-# 2. Run local development server
-npm run dev        # API server + Vite HMR on http://localhost:3000
 ```
 
-### Production Build & Run
+### 2. Local Development
+```bash
+# Start API backend + Vite HMR development server
+npm run dev
+```
+Open **`http://localhost:3000`** in your browser.
 
+### 3. Production Build & Run
 ```bash
 # Build frontend bundle (dist/) + backend bundle (dist-server/server.cjs)
 npm run build
 
-# Start production server
-npm run start      # node dist-server/server.cjs
+# Start the production server
+npm run start
 ```
 
 ---
 
 ## ⚙️ Environment Variables
 
-Copy `.env.example` to `.env` and adjust as needed:
+Copy `.env.example` to `.env` and configure your environment:
 
-| Variable | Purpose |
-|---|---|
-| `PORT` / `HOST` | Bind address (default `3000` / `0.0.0.0`). Prefer `127.0.0.1` for single-user desktop setups. |
-| `ENCRYPTION_SECRET` | ≥32-character secret for PII encryption and auth tokens. **Required for Docker Compose.** |
-| `REQUIRE_AUTH` | Set to `1` to enforce multi-user authentication for non-localhost connections. |
-| `GEMINI_API_KEY` | Optional — AI-powered series search, smart tagging, and recommendations. |
-| `STORAGE_PATH` | Optional — Offline/CBZ storage folder. |
+```bash
+cp .env.example .env
+```
+
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | HTTP server listening port | `3000` |
+| `HOST` | Bind address (`127.0.0.1` for desktop/local, `0.0.0.0` for containers) | `0.0.0.0` |
+| `ENCRYPTION_SECRET` | 32+ character high-entropy key for PII and credential encryption | *Generated on first run if omitted* |
+| `REQUIRE_AUTH` | Enforce multi-user session authentication for non-loopback clients (`1` or `0`) | `0` |
+| `STORAGE_PATH` | Server-side directory for offline downloads, caches, and backups | `./data` |
+| `GEMINI_API_KEY` | Optional — Enables AI-assisted series search, smart tagging, and recommendations | *None* |
 
 ---
 
 ## 🐳 Deployment
 
-- **Docker Compose:**
-  ```bash
-  npm run docker:build
-  npm run docker:run
-  ```
-  *(Data persists in `./data/manga.db`)*
-- **PM2 Process Manager:** `npm run build && npm run pm2:start`
-- **Linux Deployment Script:** `npm run deploy:linux`
-- **Windows Deployment Script:** `npm run deploy:windows`
-- **Desktop Electron Installer:** `npm run build:exe` (Generates standalone NSIS installer)
+### Docker Compose (Recommended)
+```bash
+# 1. Build container image
+npm run docker:build
+
+# 2. Start container with persistent data volume
+npm run docker:run
+```
+Data persists in `./data/manga.db`.
+
+### PM2 Process Manager
+```bash
+npm run build
+npm run pm2:start
+```
+
+### Standalone Desktop Executable (Windows)
+```bash
+npm run build:exe
+```
+Generates a standalone installer and portable `.exe` in `dist-electron/`.
 
 ---
 
 ## 🏗️ Architecture
 
+```mermaid
+graph TD
+    Client[Web Browser / PWA / Electron] -->|HTTP / WebSocket / REST| Gateway[Express 5 Server :3000]
+    EReader[KOReader / Moon+ / Panels] -->|OPDS 1.2 XML / PSE| OPDS[OPDS Catalog Router]
+    
+    subgraph "Core Backend Services"
+        Gateway --> OPDS
+        Gateway --> ScraperRouter[Source Discovery & Scraper Router]
+        Gateway --> ReaderRouter[Reader & Proxy Image Engine]
+        Gateway --> AuthDAL[Auth & User Profile DAL]
+        Gateway --> BackupEngine[Backup & Migration Service]
+    end
+
+    subgraph "Defenses & Helpers"
+        ReaderRouter --> SSRFGuard[SSRF Private IP Filter]
+        ScraperRouter --> RateLimiter[Domain Rate Limiter]
+        ScraperRouter --> CircuitBreaker[Source Circuit Breaker]
+        ScraperRouter --> BotDefense[FlareSolverr & Captcha Pipeline]
+    end
+
+    subgraph "Storage & Data Layer"
+        AuthDAL --> SQLite[(better-sqlite3 WAL Database)]
+        BackupEngine --> SQLite
+        ReaderRouter --> LocalCache[(Local Image Cache & CBZ Storage)]
+    end
+
+    subgraph "External Providers"
+        ScraperRouter --> MangaDex[MangaDex API v5]
+        ScraperRouter --> AniList[AniList GraphQL Scrobbler]
+        ScraperRouter --> KotatsuParsers[1,100+ Kotatsu Scraper Engines]
+    end
+```
+
+### Directory Structure
 ```
 Graywood-Reader/
-├── server.ts                    # Express 5 API + OPDS 1.2 server + scrapers + auto-updater
+├── server.ts                    # Express 5 API + OPDS 1.2 server + scrapers
 ├── sqlite-db.ts                 # better-sqlite3 DAL (manga, profiles, reading progress, notes)
 ├── server/
 │   ├── captchaSolver.ts         # Cloudflare Turnstile & 2Captcha solver orchestrator
-│   └── security.ts              # AES-256-GCM PII encryption, SSRF filters & token auth
+│   ├── circuitBreaker.ts        # Source failure backoff and circuit breaker
+│   ├── rateLimit.ts             # IP rate-limiting & DDoS mitigation
+│   ├── security.ts              # AES-256-GCM PII encryption, SSRF filter & token auth
+│   ├── routes/                  # REST controllers (auth, manga, reader, sources, opds, gdpr)
+│   └── services/                # Crawler engine, metadata enrichers, download manager
 ├── src/
 │   ├── App.tsx                  # Root application controller & lazy module router
-│   ├── components/
-│   │   ├── ReaderView.tsx       # Kotatsu-inspired reader (Webtoon, Double spread, E-Ink, Notes)
-│   │   ├── LibraryView.tsx      # Multi-select library grid/table with virtualized chunking
-│   │   ├── SettingsModal.tsx    # Preferences, FlareSolverr, AniList, and Tachiyomi backups
-│   │   └── ...                  # Browse, Sources, Analytics, Duplicates modals
-│   └── utils/
-│       ├── readingMode.ts       # Format detection & persistent reader settings
-│       ├── offlineStorage.ts    # IndexedDB offline chapter cache engine
-│       ├── tachiyomiImporter.ts # Tachiyomi v2 / Mihon JSON backup parser & exporter
-│       └── aniListScrobbler.ts  # AniList GraphQL live scrobbler
-├── public/
-│   ├── manifest.webmanifest     # Standalone PWA web manifest
-│   └── sw.js                    # Service Worker static asset caching
-└── kotatsu-parsers/             # Vendored Kotlin scraper definitions scanned on startup
+│   ├── components/              # Reader, Library, Settings, Browse, Modals
+│   ├── hooks/                   # Custom React hooks (useReaderSession, useKeyboardNav)
+│   └── utils/                   # IndexedDB cache, Tachiyomi parser, AniList scrobbler
+├── public/                      # PWA Web Manifest, service worker, icons
+└── tests/                       # 40+ Vitest test suites (380+ tests)
 ```
+
+---
+
+## 📡 OPDS 1.2 Catalog Server
+
+Graywood Reader exposes a standards-compliant OPDS 1.2 catalog for e-readers:
+
+- **Root Catalog Feed**: `http://<server-ip>:3000/api/opds/catalog.xml`
+- **Search Feed**: `http://<server-ip>:3000/api/opds/search?q={searchTerms}`
+- **Shelf Feeds**: Reading, Completed, Plan to Read, On Hold, Dropped
+- **Page Streaming Extension (PSE)**: Supported for zero-download page-by-page streaming on compatible readers (e.g. Panels).
 
 ---
 
 ## 📜 NPM Scripts
 
-| Script | Description |
+| Script | Purpose |
 |---|---|
-| `npm run dev` | Starts server + Vite HMR development server |
-| `npm run build` | Full production build (`vite build` + `esbuild server.ts`) |
-| `npm run build:server` | Bundles server only into `dist-server/server.cjs` |
-| `npm run start` | Runs production server (`node dist-server/server.cjs`) |
-| `npm run lint` | Runs TypeScript type checking (`tsc --noEmit`) |
-| `npm run reader:smoke` | Executes live source reader smoke tests |
-| `npm run build:exe` | Generates Windows desktop executable |
-
----
-
-## 🐛 Bug Tracker & Roadmap
-
-- **Known Issues & Bug Fixes**: See [`BUGS.md`](BUGS.md) for the active bug tracker and historical archive.
-- **Future Feature Roadmap**: See [`ROADMAP.md`](ROADMAP.md) for planned gamification features, ambient atmosphere sound engine, and cloud integrations.
+| `npm run dev` | Start development server with Vite HMR (`tsx server.ts`) |
+| `npm run build` | Full production build (`vite build` + `build:server`) |
+| `npm run start` | Run compiled production bundle (`node dist-server/server.cjs`) |
+| `npm run lint` | Run TypeScript type checking across all files (`tsc --noEmit`) |
+| `npm test` | Run complete unit and integration test suite with Vitest (`vitest run`) |
+| `npm run reader:smoke` | Run live scraper smoke tests against configured sources |
+| `npm run build:exe` | Package Windows standalone desktop executable |
+| `npm run docker:build` | Build production Docker image |
+| `npm run docker:run` | Start Docker Compose container |
 
 ---
 
@@ -136,8 +235,10 @@ Graywood-Reader/
 
 Contributions are what make the open-source community an amazing place to learn, inspire, and create.
 - **Contributing Guidelines**: See [`CONTRIBUTING.md`](CONTRIBUTING.md) for local setup, development commands, and architecture details.
-- **Code of Conduct**: See [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for community guidelines.
+- **Code of Conduct**: See [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for community standards and pledge.
 - **Security Policy**: See [`SECURITY.md`](SECURITY.md) for vulnerability reporting and self-hosting security practices.
+- **Active Bug Tracker**: See [`BUGS.md`](BUGS.md) for tracked issues and resolutions.
+- **Roadmap**: See [`ROADMAP.md`](ROADMAP.md) for upcoming features and architectural plans.
 
 ---
 
@@ -157,14 +258,13 @@ This project is deeply indebted to and inspired by the incredible work of the op
 
 **Graywood Reader** is an open-source, self-hosted indexer, catalog manager, and reader application. It is provided strictly as a technical tool for organizing, browsing, and reading content that users already have access to or that is made available publicly on the internet.
 
-- **No Content Hosting or Distribution:** The developers, maintainers, and contributors of Graywood Reader do not host, store, stream, publish, or distribute any copyrighted media, manga, manhwa, manhua, or comic chapters on any central server, cloud service, or within this repository.
-- **Third-Party Sources & Parsers:**
-  - All parser definitions, scraper scripts, and API connectors are technical instructions designed to interpret publicly accessible web documents and endpoints.
-  - The developers have no ownership, affiliation, control, or partnership with any third-party websites, domains, CDNs, or scanlation groups accessed through these parsers.
-  - We do not monitor, curate, or guarantee the accuracy, legality, safety, copyright status, or availability of any content hosted by third-party websites.
-- **Local Caching & User Control:** Any temporary image proxying, browser storage (`IndexedDB`), or offline downloads (`STORAGE_PATH`) operate exclusively on the user's own local hardware or self-hosted server environment, executed solely at the user's direction.
-- **User Responsibility:** Users assume full responsibility for how they use this software, including verifying that their access and storage of materials comply with applicable local copyright laws, intellectual property rights, and the terms of service of the third-party websites they access.
-- **Copyright & DMCA Notices:** Because Graywood Reader is a standalone client software application that does not host or transmit media files through any developer-owned infrastructure, any copyright infringement claims or takedown notices regarding specific content must be directed to the third-party web hosts and source operators actually hosting the media.
+- **No Content Hosting or Distribution**: The developers, maintainers, and contributors of Graywood Reader do not host, store, stream, publish, or distribute any copyrighted media, manga, manhwa, manhua, or comic chapters on any central server, cloud service, or within this repository.
+- **Third-Party Sources & Parsers**: All parser definitions, scraper scripts, and API connectors are technical instructions designed to interpret publicly accessible web documents and endpoints. The developers have no ownership, affiliation, control, or partnership with any third-party websites or scanlation groups.
+- **Local Caching & User Control**: Any temporary image proxying, browser storage (`IndexedDB`), or offline downloads (`STORAGE_PATH`) operate exclusively on the user's own local hardware or self-hosted server environment, executed solely at the user's direction.
+- **User Responsibility**: Users assume full responsibility for how they use this software, including verifying that their access and storage of materials comply with applicable local copyright laws, intellectual property rights, and the terms of service of the third-party websites they access.
+- **Copyright & DMCA Notices**: Because Graywood Reader is a standalone client software application that does not host or transmit media files through any developer-owned infrastructure, any copyright infringement claims or takedown notices regarding specific content must be directed to the third-party web hosts and source operators actually hosting the media.
+
+For the full legal terms, see [`DISCLAIMER.md`](DISCLAIMER.md).
 
 ---
 
@@ -173,4 +273,3 @@ This project is deeply indebted to and inspired by the incredible work of the op
 **Graywood Reader** is free software licensed under the **GNU General Public License v3.0 or later** (`GPL-3.0-or-later`). See [`LICENSE`](LICENSE) for the full text.
 
 Third-party dependencies and vendored parser licenses are documented in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) and [`NOTICE`](NOTICE).
-

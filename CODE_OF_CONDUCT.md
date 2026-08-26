@@ -44,7 +44,7 @@ This Code of Conduct applies within all community spaces (including GitHub issue
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers via GitHub private reporting or security advisories. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 
@@ -58,11 +58,11 @@ Community leaders will follow these Community Impact Guidelines in determining t
 
 #### 2. Warning
 - **Community Impact**: A violation through a single incident or series of actions.
-- **Consequence**: A warning with consequences for continued behavior. No interaction with the people involved, including unsolicited interaction with those enforcing the Code of Conduct, for a specified period of time. This includes avoiding interactions in community spaces as well as external channels like social media. Violating these terms may lead to a temporary or permanent ban.
+- **Consequence**: A warning with consequences for continued behavior. No interaction with the people involved, including unsolicited interaction with those enforcing the Code of Conduct, for a specified period of time.
 
 #### 3. Temporary Ban
 - **Community Impact**: A serious violation of community standards, including sustained inappropriate behavior.
-- **Consequence**: A temporary ban from any sort of interaction or public communication with the community for a specified period of time. No public or private interaction with the people involved, including unsolicited interaction with those enforcing the Code of Conduct, is allowed during this period. Violating these terms may lead to a permanent ban.
+- **Consequence**: A temporary ban from any sort of interaction or public communication with the community for a specified period of time.
 
 #### 4. Permanent Ban
 - **Community Impact**: Demonstrating a pattern of violation of community standards, including sustained inappropriate behavior, harassment of an individual, or aggression toward or disparagement of classes of individuals.
