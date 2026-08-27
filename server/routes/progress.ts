@@ -142,7 +142,11 @@ function resolveProgressUserId(req: any): string {
 
 // Save (or update) the current reading position for a manga/chapter.
 progressRouter.post("/api/reader/progress", (req, res) => {
-  const { mangaId, chapterNumber, pageIndex, pageCount, percent, title, sourceName, sourceUrl, coverImage } = req.body || {};
+  let body = req.body || {};
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch {}
+  }
+  const { mangaId, chapterNumber, pageIndex, pageCount, percent, title, sourceName, sourceUrl, coverImage } = body;
   if (!mangaId || chapterNumber === undefined) {
     return res.status(400).json({ error: 'mangaId and chapterNumber are required' });
   }
@@ -164,19 +168,23 @@ progressRouter.post("/api/reader/progress", (req, res) => {
     console.error('[Progress Engine] Failed to ensure manga placeholder:', e);
   }
 
+  const chNum = Number(chapterNumber) || 0;
+  const pIdx = Number.isFinite(Number(pageIndex)) ? Number(pageIndex) : 0;
+  const pCount = Number.isFinite(Number(pageCount)) ? Number(pageCount) : 0;
+  const pct = Number.isFinite(Number(percent)) ? Number(percent) : (pCount > 0 ? Math.round((pIdx / pCount) * 100) : 0);
+
   SqliteDb.upsertReadingProgress({
     manga_id: mId,
     user_id: userId,
-    chapter_number: Number(chapterNumber) || 0,
-    page_index: Number(pageIndex),
-    page_count: Number(pageCount),
-    percent: Number(percent),
+    chapter_number: chNum,
+    page_index: pIdx,
+    page_count: pCount,
+    percent: pct,
   });
 
   // Per-user library chapter (do NOT clobber global catalog currentChapter)
   try {
-    const ch = Number(chapterNumber) || 0;
-    SqliteDb.setUserLibraryChapter(userId, mId, ch);
+    SqliteDb.setUserLibraryChapter(userId, mId, chNum);
   } catch (err) {
     console.error('[Progress Engine] Failed to mirror progress onto user library state:', err);
   }
@@ -186,10 +194,10 @@ progressRouter.post("/api/reader/progress", (req, res) => {
     broadcastProgressSync({
       userId,
       mangaId: mId,
-      chapterNumber: Number(chapterNumber) || 0,
-      pageIndex: Number(pageIndex),
-      pageCount: Number(pageCount),
-      percent: Number(percent),
+      chapterNumber: chNum,
+      pageIndex: pIdx,
+      pageCount: pCount,
+      percent: pct,
     });
   } catch (err) {
     console.error('[SSE Sync Engine] Broadcast failed:', err);

@@ -142,4 +142,104 @@ describe('Reading Progress Persistence for Missing Metadata & Missing Library Se
       expect(progressRows[0].percent).toBe(35);
     });
   });
+
+  describe('bulkApplyUserImportState and reading_progress synchronization', () => {
+    it('populates reading_progress rows during bulk backup import so continue reading shelf works', () => {
+      SqliteDb.bulkApplyUserImportState('usr_test_bulk', [
+        {
+          id: 'manga_bulk_import_1',
+          currentChapter: 33,
+          isFavorite: true,
+          status: 'reading',
+        },
+        {
+          id: 'manga_bulk_import_2',
+          currentChapter: 77,
+          isFavorite: false,
+          status: 'reading',
+        },
+      ]);
+
+      const p1 = SqliteDb.getReadingProgress('manga_bulk_import_1', 'usr_test_bulk');
+      expect(p1.length).toBe(1);
+      expect(p1[0].chapter_number).toBe(33);
+      expect(p1[0].percent).toBe(100);
+
+      const p2 = SqliteDb.getReadingProgress('manga_bulk_import_2', 'usr_test_bulk');
+      expect(p2.length).toBe(1);
+      expect(p2[0].chapter_number).toBe(77);
+
+      // Verify user library state is populated
+      const states = SqliteDb.getAllUserLibraryStates('usr_test_bulk');
+      const s1 = states.find((s) => s.manga_id === 'manga_bulk_import_1');
+      expect(s1).toBeDefined();
+      expect(s1.current_chapter).toBe(33);
+    });
+  });
+
+  describe('User Overlay currentChapter preservation', () => {
+    it('does not downgrade non-zero manga currentChapter when user state has uninitialized 0', () => {
+      const baseManga: any = {
+        id: 'manga_overlay_test',
+        title: 'Overlay Test Manga',
+        currentChapter: 25,
+        latestChapter: 50,
+        status: 'reading',
+        isFavorite: false,
+        altTitles: [],
+        genres: [],
+      };
+
+      const overlaid = SqliteDb.applyUserOverlayOne(baseManga, 'usr_new_test');
+      expect(overlaid.currentChapter).toBe(25);
+    });
+  });
+
+  describe('Full Database Dump Restoration with camelCase and snake_case Schemas', () => {
+    it('restores reading_progress and user_library_state from camelCase payload', () => {
+      const camelDump = {
+        mangaDatabase: [
+          {
+            id: 'manga_camel_1',
+            title: 'Camel Case Series',
+            currentChapter: 40,
+            latestChapter: 80,
+            status: 'reading',
+            isFavorite: true,
+          },
+        ],
+        readingProgress: [
+          {
+            mangaId: 'manga_camel_1',
+            userId: 'usr_camel_test',
+            chapterNumber: 40,
+            pageIndex: 12,
+            pageCount: 30,
+            percent: 40,
+          },
+        ],
+        userLibraryState: [
+          {
+            mangaId: 'manga_camel_1',
+            userId: 'usr_camel_test',
+            currentChapter: 40,
+            status: 'reading',
+          },
+        ],
+      };
+
+      SqliteDb.importFullDatabaseDump(camelDump, { mode: 'merge' });
+
+      const progress = SqliteDb.getReadingProgress('manga_camel_1', 'usr_camel_test');
+      expect(progress.length).toBe(1);
+      expect(progress[0].chapter_number).toBe(40);
+      expect(progress[0].page_index).toBe(12);
+      expect(progress[0].percent).toBe(40);
+
+      const states = SqliteDb.getAllUserLibraryStates('usr_camel_test');
+      const s = states.find((x) => x.manga_id === 'manga_camel_1');
+      expect(s).toBeDefined();
+      expect(s.current_chapter).toBe(40);
+    });
+  });
 });

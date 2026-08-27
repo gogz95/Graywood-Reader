@@ -52,8 +52,14 @@ const stmtUpsertUserLibraryState = db.prepare(`
   INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
   VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status)
   ON CONFLICT(user_id, manga_id) DO UPDATE SET
-    current_chapter = excluded.current_chapter,
-    last_read_at = excluded.last_read_at,
+    current_chapter = CASE
+      WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+      ELSE user_library_state.current_chapter
+    END,
+    last_read_at = CASE
+      WHEN excluded.current_chapter >= COALESCE(user_library_state.current_chapter, 0) THEN excluded.last_read_at
+      ELSE user_library_state.last_read_at
+    END,
     status = COALESCE(excluded.status, user_library_state.status)
 `);
 
@@ -188,11 +194,13 @@ export function importFullDatabaseDump(dump: any, options: { mode?: 'replace' | 
         mangaCount++;
 
         const itemUid = item.userId || 'usr_admin';
+        const ch = Math.max(0, Number(item.currentChapter) || 0);
+
         if (!hasExplicitUserLibraryState && (item.currentChapter !== undefined || item.status || item.lastReadAt)) {
           stmtUpsertUserLibraryState.run({
             user_id: itemUid,
             manga_id: item.id,
-            current_chapter: Math.max(0, Number(item.currentChapter) || 0),
+            current_chapter: ch,
             last_read_at: item.lastReadAt || now,
             status: item.status || null,
           });
@@ -208,14 +216,14 @@ export function importFullDatabaseDump(dump: any, options: { mode?: 'replace' | 
           });
         }
 
-        if (item.currentChapter && Number(item.currentChapter) > 0) {
+        if (ch > 0) {
           stmtUpsertReadingProgress.run({
             manga_id: item.id,
             user_id: itemUid,
-            chapter_number: Number(item.currentChapter),
-            page_index: 0,
-            page_count: 0,
-            percent: 100,
+            chapter_number: ch,
+            page_index: Number(item.pageIndex) || 0,
+            page_count: Number(item.pageCount) || 0,
+            percent: Number(item.percent) || 100,
             last_read_at: item.lastReadAt || now,
           });
         }
@@ -309,21 +317,28 @@ export function importFullDatabaseDump(dump: any, options: { mode?: 'replace' | 
       }
     }
 
-    if (Array.isArray(dump.readingProgress)) {
+    const rawProgressList = Array.isArray(dump.readingProgress)
+      ? dump.readingProgress
+      : Array.isArray(dump.progress)
+      ? dump.progress
+      : [];
+    if (rawProgressList.length > 0) {
       const stmtProg = db.prepare(`
         INSERT OR REPLACE INTO reading_progress (manga_id, user_id, chapter_number, page_index, page_count, percent, last_read_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
-      for (const r of dump.readingProgress) {
-        if (r && r.manga_id && r.user_id) {
+      for (const r of rawProgressList) {
+        const mId = r?.manga_id || r?.mangaId || r?.id;
+        const uId = r?.user_id || r?.userId || 'usr_admin';
+        if (mId && uId) {
           stmtProg.run(
-            r.manga_id,
-            r.user_id,
-            Number(r.chapter_number) || 0,
-            Number(r.page_index) || 0,
-            Number(r.page_count) || 0,
-            Number(r.percent) || 0,
-            r.last_read_at || new Date().toISOString()
+            mId,
+            uId,
+            Number(r.chapter_number ?? r.chapterNumber ?? r.chapter) || 0,
+            Number(r.page_index ?? r.pageIndex ?? r.page) || 0,
+            Number(r.page_count ?? r.pageCount) || 0,
+            Number(r.percent ?? r.progress) || 0,
+            r.last_read_at || r.lastReadAt || r.updated_at || r.updatedAt || new Date().toISOString()
           );
           progressCount++;
         }
@@ -336,46 +351,72 @@ export function importFullDatabaseDump(dump: any, options: { mode?: 'replace' | 
         VALUES (?, ?, ?, ?)
       `);
       for (const a of dump.readingActivity) {
-        if (a && a.date && a.user_id) {
+        if (a && a.date && (a.user_id || a.userId)) {
           stmtAct.run(
             a.date,
-            a.user_id,
-            Number(a.chapters_read) || 0,
-            Number(a.minutes_spent) || 0
+            a.user_id || a.userId || 'usr_admin',
+            Number(a.chapters_read ?? a.chaptersRead) || 0,
+            Number(a.minutes_spent ?? a.minutesSpent) || 0
           );
         }
       }
     }
 
-    if (Array.isArray(dump.userFavorites)) {
+    const rawFavList = Array.isArray(dump.userFavorites)
+      ? dump.userFavorites
+      : Array.isArray(dump.userFavourites)
+      ? dump.userFavourites
+      : Array.isArray(dump.favorites)
+      ? dump.favorites
+      : [];
+    if (rawFavList.length > 0) {
       const stmtFav = db.prepare(`
         INSERT OR REPLACE INTO user_favorites (user_id, manga_id, is_favorite, updated_at)
         VALUES (?, ?, ?, ?)
       `);
-      for (const f of dump.userFavorites) {
-        if (f && f.user_id && f.manga_id) {
+      for (const f of rawFavList) {
+        const mId = f?.manga_id || f?.mangaId || f?.id;
+        const uId = f?.user_id || f?.userId || 'usr_admin';
+        if (mId && uId) {
           stmtFav.run(
-            f.user_id,
-            f.manga_id,
-            Number(f.is_favorite) ? 1 : 0,
-            f.updated_at || new Date().toISOString()
+            uId,
+            mId,
+            (f.is_favorite || f.isFavorite || f.favorite) ? 1 : 0,
+            f.updated_at || f.updatedAt || new Date().toISOString()
           );
         }
       }
     }
 
-    if (Array.isArray(dump.userLibraryState)) {
+    const rawStateList = Array.isArray(dump.userLibraryState)
+      ? dump.userLibraryState
+      : Array.isArray(dump.userLibraryStates)
+      ? dump.userLibraryStates
+      : [];
+    if (rawStateList.length > 0) {
       const stmtLib = db.prepare(`
-        INSERT OR REPLACE INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
+        INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
         VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, manga_id) DO UPDATE SET
+          current_chapter = CASE
+            WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+            ELSE user_library_state.current_chapter
+          END,
+          last_read_at = CASE
+            WHEN excluded.current_chapter >= COALESCE(user_library_state.current_chapter, 0) THEN excluded.last_read_at
+            ELSE user_library_state.last_read_at
+          END,
+          status = COALESCE(excluded.status, user_library_state.status)
       `);
-      for (const s of dump.userLibraryState) {
-        if (s && s.user_id && s.manga_id) {
+      for (const s of rawStateList) {
+        const mId = s?.manga_id || s?.mangaId || s?.id;
+        const uId = s?.user_id || s?.userId || 'usr_admin';
+        if (mId && uId) {
           stmtLib.run(
-            s.user_id,
-            s.manga_id,
-            Number(s.current_chapter) || 0,
-            s.last_read_at || new Date().toISOString(),
+            uId,
+            mId,
+            Number(s.current_chapter ?? s.currentChapter ?? s.chapter) || 0,
+            s.last_read_at || s.lastReadAt || new Date().toISOString(),
             s.status || null
           );
         }

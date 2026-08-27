@@ -166,11 +166,37 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       let maxTotalCh = chapters.length;
       let readCount = 0;
       for (const c of chapters) {
-        const chNum = Number(c.chapter_number ?? c.number ?? c.chapterNumber);
+        let chNum = 0;
+        let isRead = false;
+        let lastPage = 0;
+
+        if (Array.isArray(c)) {
+          // Tuple format: [url, name, scanlator, read, bookmark, last_page_read, date_fetch, date_upload, chapter_number, source_order]
+          isRead = Boolean(c[3] === true || c[3] === 1);
+          lastPage = Number(c[5]) || 0;
+          const rawNum = Number(c[8]);
+          if (Number.isFinite(rawNum) && rawNum >= 0) {
+            chNum = rawNum;
+          } else if (c[1]) {
+            const match = String(c[1]).match(/(?:chapter|ch\.?|ep\.?|#)\s*([0-9]+(?:\.[0-9]+)?)/i) || String(c[1]).match(/\b([0-9]+(?:\.[0-9]+)?)\b/);
+            if (match && match[1]) chNum = parseFloat(match[1]);
+          }
+        } else if (typeof c === 'object' && c !== null) {
+          isRead = Boolean(c.read === true || c.read === 1);
+          lastPage = Number(c.last_page_read ?? c.lastPageRead ?? c.page) || 0;
+          const rawNum = Number(c.chapter_number ?? c.number ?? c.chapterNumber ?? c.chapter_num);
+          if (Number.isFinite(rawNum) && rawNum >= 0) {
+            chNum = rawNum;
+          } else if (c.name || c.title) {
+            const match = String(c.name || c.title).match(/(?:chapter|ch\.?|ep\.?|#)\s*([0-9]+(?:\.[0-9]+)?)/i) || String(c.name || c.title).match(/\b([0-9]+(?:\.[0-9]+)?)\b/);
+            if (match && match[1]) chNum = parseFloat(match[1]);
+          }
+        }
+
         if (Number.isFinite(chNum) && chNum > maxTotalCh) {
           maxTotalCh = chNum;
         }
-        if (c.read || (c.last_page_read && c.last_page_read > 0)) {
+        if (isRead || lastPage > 0) {
           readCount++;
           if (Number.isFinite(chNum) && chNum > maxReadCh) {
             maxReadCh = chNum;
@@ -181,13 +207,44 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
       currentChapter = maxReadCh > 0 ? maxReadCh : readCount;
     }
 
-    // Check history list
+    // Check history list inside entry
     const historyList = entry.history || entry.manga?.history;
     if (Array.isArray(historyList) && historyList.length > 0) {
       for (const h of historyList) {
-        const hNum = Number(h?.chapter_number ?? h?.chapterNumber ?? h?.number);
+        let hNum = 0;
+        if (Array.isArray(h)) {
+          // [chapterUrl, lastReadTime, timeRead] or [chapterNumber]
+          const rawH0 = Number(h[0]);
+          if (Number.isFinite(rawH0) && rawH0 > 0) {
+            hNum = rawH0;
+          } else if (typeof h[0] === 'string' && Array.isArray(chapters)) {
+            const matched = chapters.find((ch: any) => (Array.isArray(ch) ? ch[0] === h[0] : ch?.url === h[0]));
+            if (matched) {
+              hNum = Array.isArray(matched) ? (Number(matched[8]) || 0) : (Number(matched.chapter_number ?? matched.number) || 0);
+            }
+          }
+        } else if (typeof h === 'object' && h !== null) {
+          hNum = Number(h?.chapter_number ?? h?.chapterNumber ?? h?.number ?? h?.chapter ?? h?.lastChapterRead ?? 0);
+          if ((!hNum || hNum <= 0) && h.url && Array.isArray(chapters)) {
+            const matched = chapters.find((ch: any) => (Array.isArray(ch) ? ch[0] === h.url : ch?.url === h.url));
+            if (matched) {
+              hNum = Array.isArray(matched) ? (Number(matched[8]) || 0) : (Number(matched.chapter_number ?? matched.number) || 0);
+            }
+          }
+        }
         if (Number.isFinite(hNum) && hNum > currentChapter) {
           currentChapter = Math.floor(hNum);
+        }
+      }
+    }
+
+    // Check tracking entries (MAL / AniList / Kitsu / MangaUpdates synced progress)
+    const trackList = entry.tracking || entry.tracks || entry.manga?.tracking || entry.manga?.tracks;
+    if (Array.isArray(trackList) && trackList.length > 0) {
+      for (const t of trackList) {
+        const lastRead = Number(t?.last_chapter_read ?? t?.lastChapterRead ?? t?.chapters_read ?? t?.chaptersRead ?? t?.progress ?? 0);
+        if (Number.isFinite(lastRead) && lastRead > currentChapter) {
+          currentChapter = Math.floor(lastRead);
         }
       }
     }
@@ -264,9 +321,20 @@ export function parseTachiyomiBackup(jsonContent: string, userId: string = 'usr_
   const rawHistory = (parsed as any).history || (parsed as any).backupHistory || [];
   if (Array.isArray(rawHistory)) {
     for (const h of rawHistory) {
-      const hUrl = h.url || h.mangaUrl || (Array.isArray(h.manga) ? h.manga[0] : '');
-      const hTitle = h.title || h.mangaTitle || (Array.isArray(h.manga) ? h.manga[1] : '');
-      const hChapter = Number(h.lastChapterRead ?? h.chapterNumber ?? h.chapter_number ?? h.chapter ?? 0);
+      let hUrl = '';
+      let hTitle = '';
+      let hChapter = 0;
+
+      if (Array.isArray(h)) {
+        // [mangaUrl, lastRead, timeRead] or [url, title, chapter]
+        hUrl = typeof h[0] === 'string' ? h[0] : '';
+        hTitle = typeof h[1] === 'string' ? h[1] : '';
+        hChapter = typeof h[2] === 'number' ? h[2] : (typeof h[0] === 'number' ? h[0] : 0);
+      } else if (typeof h === 'object' && h !== null) {
+        hUrl = h.url || h.mangaUrl || h.manga_url || (Array.isArray(h.manga) ? h.manga[0] : '');
+        hTitle = h.title || h.mangaTitle || h.manga_title || (Array.isArray(h.manga) ? h.manga[1] : '');
+        hChapter = Number(h.lastChapterRead ?? h.chapterNumber ?? h.chapter_number ?? h.chapter ?? h.progress ?? 0);
+      }
 
       const existing = importedItems.find((item) => (hUrl && item.sourceUrl === hUrl) || (hTitle && item.title.toLowerCase() === hTitle.toLowerCase()));
       if (existing) {

@@ -39,8 +39,14 @@ const stmtUpsertUserLibraryState = db.prepare(`
   INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
   VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status)
   ON CONFLICT(user_id, manga_id) DO UPDATE SET
-    current_chapter = excluded.current_chapter,
-    last_read_at = excluded.last_read_at,
+    current_chapter = CASE
+      WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+      ELSE user_library_state.current_chapter
+    END,
+    last_read_at = CASE
+      WHEN excluded.current_chapter >= COALESCE(user_library_state.current_chapter, 0) THEN excluded.last_read_at
+      ELSE user_library_state.last_read_at
+    END,
     status = COALESCE(excluded.status, user_library_state.status)
 `);
 const stmtGetUserLibraryState = db.prepare(`
@@ -169,10 +175,12 @@ export function applyUserOverlayOne(manga: MangaItem, userId: string | null | un
   const catRows = stmtGetMangaCategories.all(manga.id, userId) as { category_id: string }[];
   const categories = catRows.map((r) => r.category_id);
 
+  const effectiveChapter = Math.max(Number(stateRow?.current_chapter) || 0, Number(manga.currentChapter) || 0);
+
   return {
     ...manga,
     isFavorite: isFav,
-    currentChapter: stateRow ? (Number(stateRow.current_chapter) || 0) : (Number(manga.currentChapter) || 0),
+    currentChapter: effectiveChapter,
     lastReadAt: stateRow?.last_read_at || manga.lastReadAt,
     status: (stateRow?.status as MangaItem['status']) || manga.status,
     categories,
@@ -198,10 +206,11 @@ export function applyUserOverlay(items: MangaItem[], userId: string | null | und
   return items.map((m) => {
     const state = userStateMap.get(m.id);
     const userCats = catMap.get(m.id);
+    const effectiveChapter = Math.max(Number(state?.currentChapter) || 0, Number(m.currentChapter) || 0);
     return {
       ...m,
       isFavorite: favs.has(m.id),
-      currentChapter: state ? state.currentChapter : (Number(m.currentChapter) || 0),
+      currentChapter: effectiveChapter,
       lastReadAt: state?.lastReadAt || m.lastReadAt,
       status: (state?.status as MangaItem['status']) || m.status,
       categories: userCats || [],

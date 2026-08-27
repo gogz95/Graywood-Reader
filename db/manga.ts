@@ -77,8 +77,14 @@ const stmtUpsertUserLibraryState = db.prepare(`
   INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
   VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status)
   ON CONFLICT(user_id, manga_id) DO UPDATE SET
-    current_chapter = excluded.current_chapter,
-    last_read_at = excluded.last_read_at,
+    current_chapter = CASE
+      WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+      ELSE user_library_state.current_chapter
+    END,
+    last_read_at = CASE
+      WHEN excluded.current_chapter >= COALESCE(user_library_state.current_chapter, 0) THEN excluded.last_read_at
+      ELSE user_library_state.last_read_at
+    END,
     status = COALESCE(excluded.status, user_library_state.status)
 `);
 

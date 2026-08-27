@@ -65,6 +65,46 @@ describe('Tachiyomi v2 import', () => {
     expect(items[0].categories).toContain('Top Tier Manhwa');
   });
 
+  it('correctly restores reading progress from tuple-based chapter lists', () => {
+    const backupWithTupleChapters = {
+      version: 2,
+      mangas: [
+        {
+          manga: ['https://example.com/manga/tuple', 'Tuple Manga', 1, '', '', '', ['Action'], 1, ''],
+          // Tuple format: [url, name, scanlator, read, bookmark, last_page_read, date_fetch, date_upload, chapter_number, source_order]
+          chapters: [
+            ['/c1', 'Chapter 1', '', true, false, 0, 0, 0, 1, 0],
+            ['/c2', 'Chapter 2', '', true, false, 5, 0, 0, 2, 1],
+            ['/c3', 'Chapter 3', '', false, false, 0, 0, 0, 3, 2],
+          ],
+        },
+      ],
+    };
+
+    const items = parseTachiyomiBackup(JSON.stringify(backupWithTupleChapters), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].currentChapter).toBe(2);
+    expect(items[0].totalChapters).toBe(3);
+  });
+
+  it('restores reading progress from tracking entries in Tachiyomi backups', () => {
+    const backupWithTracks = {
+      version: 2,
+      mangas: [
+        {
+          manga: ['https://example.com/manga/tracked', 'Tracked Manga', 1, '', '', '', ['Action'], 1, ''],
+          tracking: [
+            { sync_id: 1, media_id: 999, last_chapter_read: 85, total_chapters: 150 },
+          ],
+        },
+      ],
+    };
+
+    const items = parseTachiyomiBackup(JSON.stringify(backupWithTracks), 'usr_test');
+    expect(items).toHaveLength(1);
+    expect(items[0].currentChapter).toBe(85);
+  });
+
   it('throws on invalid JSON / empty backup', () => {
     expect(() => parseTachiyomiBackup('not json')).toThrow();
     expect(() => parseTachiyomiBackup('{"mangas":[]}')).toThrow();

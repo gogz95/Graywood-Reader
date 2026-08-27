@@ -213,7 +213,7 @@ export function AppLayout() {
 
   const handleOpenReaderWithUrl = useCallback(
     (manga: MangaItem, chapterNumber?: number, chapterId?: string) => {
-      openReader(manga, chapterNumber || 1, chapterId);
+      openReader(manga, chapterNumber, chapterId);
     },
     [openReader]
   );

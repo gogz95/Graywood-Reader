@@ -76,16 +76,29 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       ch = chapterNumber;
     } else if (!isGuestClient && manga.currentChapter > 0) {
       ch = manga.currentChapter;
-    } else if (isGuestClient) {
-      const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
-      if (saved > 0) ch = saved;
+    } else {
+      // LocalStorage / guest fallback check
+      try {
+        const localStr = localStorage.getItem(`reader_progress_${manga.id}`);
+        if (localStr) {
+          const parsed = JSON.parse(localStr);
+          if (parsed.chapterNumber && Number(parsed.chapterNumber) > 0) {
+            ch = Number(parsed.chapterNumber);
+          }
+        }
+      } catch {}
+      if (!ch && isGuestClient) {
+        const saved = getClientSessionHistory()[manga.id]?.currentChapter || 0;
+        if (saved > 0) ch = saved;
+      }
     }
 
     if (ch === undefined || ch <= 0) {
-      ch = manga.currentChapter > 0 ? manga.currentChapter : 0;
+      const savedCh = manga.currentChapter > 0 ? manga.currentChapter : 0;
+      ch = savedCh;
       try {
         const res = await apiFetch(
-          `/api/reader/chapters/${encodeURIComponent(manga.id)}?order=desc${
+          `/api/reader/chapters/${encodeURIComponent(manga.id)}?order=asc${
             manga.sourceUrl ? `&url=${encodeURIComponent(manga.sourceUrl)}` : ''
           }`
         );
@@ -98,12 +111,14 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
             if (nums.length > 0) {
               const newest = Math.max(...nums);
               const oldest = Math.min(...nums);
-              if (ch > 0 && ch >= oldest && ch <= newest) {
-                // keep saved progress
-              } else if (ch > 0 && ch < oldest) {
+              if (savedCh > 0 && savedCh >= oldest && savedCh <= newest) {
+                ch = savedCh;
+              } else if (savedCh > 0 && savedCh < oldest) {
                 ch = oldest;
-              } else {
+              } else if (savedCh > 0 && savedCh > newest) {
                 ch = newest;
+              } else {
+                ch = oldest; // Start unread manga at chapter 1 / oldest chapter
               }
             }
           }
@@ -111,7 +126,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       } catch (err) {
         console.warn('[Reader] Failed to resolve live chapter list; falling back.', err);
       }
-      if (!ch || ch <= 0) ch = Math.max(1, manga.latestChapter || 1);
+      if (!ch || ch <= 0) ch = 1;
     }
 
     set({ readerTarget: { manga, chapterNumber: ch, chapterId } });

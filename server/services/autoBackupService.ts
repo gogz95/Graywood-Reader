@@ -159,12 +159,12 @@ export function restoreLocalBackup(filename: string): { success: boolean; messag
       return { success: false, message: 'Invalid backup structure: No manga database array found.' };
     }
 
-    // If backup contains full tables, import all tables atomically
-    if (parsed.categories || parsed.readingProgress || parsed.pageStickyNotes) {
+    // If backup contains full tables or simple arrays, import all tables atomically with progress synchronization
+    if (parsed.categories || parsed.readingProgress || parsed.pageStickyNotes || parsed.userLibraryState || parsed.userFavorites) {
       SqliteDb.importFullDatabaseDump(parsed, { mode: 'merge' });
     } else {
-      // Legacy snapshot: restore series
-      SqliteDb.bulkUpsertManga(itemsToRestore);
+      // Legacy snapshot: restore series and synchronize progress via importFullDatabaseDump in merge mode
+      SqliteDb.importFullDatabaseDump({ mangaDatabase: itemsToRestore }, { mode: 'merge' });
     }
 
     // Refresh in-memory database

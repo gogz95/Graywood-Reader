@@ -203,30 +203,36 @@ settingsRouter.post("/api/settings/backup/import", (req, res) => {
     // Restore reading progress for all items (even if series is missing metadata or not in main library)
     if (Array.isArray(importedProgress)) {
       for (const p of importedProgress) {
-        if (!p || !p.manga_id) continue;
+        const mId = p?.manga_id || p?.mangaId || p?.id;
+        const uId = p?.user_id || p?.userId || 'usr_admin';
+        const chNum = Number(p?.chapter_number ?? p?.chapterNumber ?? p?.chapter) || 0;
+        if (!p || !mId) continue;
         SqliteDb.ensureMangaPlaceholder({
-          id: p.manga_id,
-          title: p.manga_title || p.title,
+          id: mId,
+          title: p.manga_title || p.mangaTitle || p.title,
           sourceName: p.source_name || p.sourceName,
           sourceUrl: p.source_url || p.sourceUrl,
-          userId: 'usr_admin',
-          currentChapter: p.chapter_number,
+          userId: uId,
+          currentChapter: chNum,
         });
         SqliteDb.upsertReadingProgress({
-          manga_id: p.manga_id,
-          user_id: p.user_id || 'usr_admin',
-          chapter_number: p.chapter_number,
-          page_index: p.page_index,
-          page_count: p.page_count,
-          percent: p.percent,
+          manga_id: mId,
+          user_id: uId,
+          chapter_number: chNum,
+          page_index: Number(p.page_index ?? p.pageIndex ?? p.page) || 0,
+          page_count: Number(p.page_count ?? p.pageCount) || 0,
+          percent: Number(p.percent ?? p.progress) || 100,
         });
       }
     }
 
     if (Array.isArray(importedStates)) {
       for (const s of importedStates) {
-        if (!s || !s.manga_id) continue;
-        SqliteDb.setUserLibraryChapter(s.user_id || 'usr_admin', s.manga_id, Number(s.current_chapter) || 0, { status: s.status });
+        const mId = s?.manga_id || s?.mangaId || s?.id;
+        const uId = s?.user_id || s?.userId || 'usr_admin';
+        const chNum = Number(s?.current_chapter ?? s?.currentChapter ?? s?.chapter) || 0;
+        if (!s || !mId) continue;
+        SqliteDb.setUserLibraryChapter(uId, mId, chNum, { status: s.status });
       }
     }
 

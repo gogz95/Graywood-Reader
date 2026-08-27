@@ -175,6 +175,7 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
 
   return (
     <div
+      id={`webtoon-panel-${idx}`}
       ref={containerRef}
       onClick={handlePanelClick}
       style={{ minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px' }}
@@ -361,9 +362,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [bookmarkedPages, setBookmarkedPages] = useState<number[]>([]);
   const [downloading, setDownloading] = useState<boolean>(false);
 
-  // Scroll progress tracking
+  // Scroll progress tracking & Restoration Guard
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [readProgressPercent, setReadProgressPercent] = useState<number>(0);
+  const isRestoringScrollRef = useRef<boolean>(false);
+  const initialResumeTargetRef = useRef<{ page: number; percent: number } | null>(null);
 
   // Toast notice
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -612,17 +615,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       // Resume mid-chapter page if the server (or local storage fallback) has stored progress for this chapter
       let resumePage = 0;
+      let resumePercent = 0;
       try {
         const histRes = await apiFetch(`/api/reader/history/${encodeURIComponent(manga.id)}`);
         if (histRes.ok) {
           const rows = await histRes.json();
           if (Array.isArray(rows)) {
             const match = rows.find((r: any) => Number(r.chapter_number) === Number(chNum));
-            if (match && Number(match.page_index) > 0) {
-              resumePage = Math.min(
-                Number(match.page_index) || 0,
-                Math.max(0, (data.pages?.length || 1) - 1)
-              );
+            if (match) {
+              if (Number(match.page_index) > 0) {
+                resumePage = Math.min(
+                  Number(match.page_index) || 0,
+                  Math.max(0, (data.pages?.length || 1) - 1)
+                );
+              }
+              if (Number(match.percent) > 0) {
+                resumePercent = Number(match.percent);
+              }
             }
           }
         }
@@ -631,22 +640,37 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }
 
       // Offline / LocalStorage Progress Fallback (ensures progress restores even if offline or missing from database)
-      if (resumePage === 0) {
+      if (resumePage === 0 && resumePercent === 0) {
         try {
           const localStr = localStorage.getItem(`reader_progress_${manga.id}`);
           if (localStr) {
             const localData = JSON.parse(localStr);
-            if (Number(localData.chapterNumber) === Number(chNum) && Number(localData.pageIndex) > 0) {
-              resumePage = Math.min(
-                Number(localData.pageIndex) || 0,
-                Math.max(0, (data.pages?.length || 1) - 1)
-              );
+            if (Number(localData.chapterNumber) === Number(chNum)) {
+              if (Number(localData.pageIndex) > 0) {
+                resumePage = Math.min(
+                  Number(localData.pageIndex) || 0,
+                  Math.max(0, (data.pages?.length || 1) - 1)
+                );
+              }
+              if (Number(localData.percent) > 0) {
+                resumePercent = Number(localData.percent);
+              }
             }
           }
         } catch {}
       }
 
+      if (resumePercent === 0 && resumePage > 0 && data.pages?.length) {
+        resumePercent = Math.round((resumePage / data.pages.length) * 100);
+      }
+
       setCurrentPageIndex(resumePage);
+      setReadProgressPercent(resumePercent);
+
+      if (resumePage > 0 || resumePercent > 0) {
+        initialResumeTargetRef.current = { page: resumePage, percent: resumePercent };
+        isRestoringScrollRef.current = true;
+      }
 
       // Initialize Kotatsu Parallel Image Loader Engine
       if (data.pages && data.pages.length > 0 && !data.isPlaceholder && !data.contentUnavailable) {
@@ -657,17 +681,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         loader.setActiveIndex(resumePage);
       }
 
-      if (settings.autoMarkRead && !data.isPlaceholder && !data.contentUnavailable && data.pages?.length) {
-        markChapterReadOnce(chNum);
-      }
-
       // Persist open position so analytics/history stay warm
       if (!data.isPlaceholder && data.pages?.length) {
         try {
           localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
             chapterNumber: chNum,
             pageIndex: resumePage,
-            percent: data.pages.length ? Math.round((resumePage / data.pages.length) * 100) : 0,
+            percent: resumePercent,
             timestamp: Date.now(),
           }));
         } catch {}
@@ -679,7 +699,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             chapterNumber: chNum,
             pageIndex: resumePage,
             pageCount: data.pages.length,
-            percent: data.pages.length ? Math.round((resumePage / data.pages.length) * 100) : 0,
+            percent: resumePercent,
             title: manga.title,
             sourceName: manga.sourceName,
             sourceUrl: manga.sourceUrl,
@@ -754,7 +774,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Handle Scroll Progress & Auto-Next Chapter Trigger
   const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current || !chapterData) return;
+    if (!scrollContainerRef.current || !chapterData || isRestoringScrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     if (scrollHeight <= clientHeight) {
       setReadProgressPercent(100);
@@ -789,9 +809,71 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum, settings.viewMode]);
 
+  // Automatically restore vertical scroll position for Webtoon & Vertical modes
+  useEffect(() => {
+    if (!chapterData || (!isWebtoon && settings.viewMode !== 'vertical-paged') || !initialResumeTargetRef.current) return;
+    const target = initialResumeTargetRef.current;
+    if (!target || (target.page <= 0 && target.percent <= 0)) {
+      isRestoringScrollRef.current = false;
+      return;
+    }
+
+    let timeoutId: any = null;
+    const attemptScroll = (attempts = 0) => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+
+      const panelEl = document.getElementById(`webtoon-panel-${target.page}`);
+      if (panelEl) {
+        panelEl.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' });
+        timeoutId = setTimeout(() => {
+          isRestoringScrollRef.current = false;
+        }, 300);
+        initialResumeTargetRef.current = null;
+        return;
+      }
+
+      const { scrollHeight, clientHeight } = el;
+      if (scrollHeight > clientHeight + 100) {
+        const targetScroll = target.percent > 0
+          ? (target.percent / 100) * (scrollHeight - clientHeight)
+          : (target.page / (chapterData.pages.length || 1)) * scrollHeight;
+        el.scrollTop = targetScroll;
+        timeoutId = setTimeout(() => {
+          isRestoringScrollRef.current = false;
+        }, 300);
+        initialResumeTargetRef.current = null;
+        return;
+      }
+
+      if (attempts < 8) {
+        timeoutId = setTimeout(() => attemptScroll(attempts + 1), 120);
+      } else {
+        isRestoringScrollRef.current = false;
+        initialResumeTargetRef.current = null;
+      }
+    };
+
+    const frameId = requestAnimationFrame(() => attemptScroll(0));
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [chapterData, isWebtoon, settings.viewMode]);
+
+  // In Paged mode (Single / Double / RTL / LTR), auto-mark read when reaching 80%+ of the chapter
+  useEffect(() => {
+    if (!isWebtoon && chapterData && chapterData.pages.length > 0 && settings.autoMarkRead) {
+      const threshold = Math.floor(chapterData.pages.length * 0.8);
+      if (currentPageIndex >= threshold) {
+        markChapterReadOnce(currentChapterNum);
+      }
+    }
+  }, [currentPageIndex, chapterData, isWebtoon, settings.autoMarkRead, markChapterReadOnce, currentChapterNum]);
+
   // Debounced server progress persistence (page + percent) for analytics/resume
   useEffect(() => {
-    if (!chapterData || chapterData.isPlaceholder || chapterData.contentUnavailable || !chapterData.pages?.length) return;
+    if (!chapterData || chapterData.isPlaceholder || chapterData.contentUnavailable || !chapterData.pages?.length || isRestoringScrollRef.current || loading) return;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
@@ -818,7 +900,81 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }).catch(() => {});
     }, 1200);
     return () => clearTimeout(timer);
-  }, [manga.id, manga.title, manga.sourceName, manga.sourceUrl, manga.coverImage, currentChapterNum, currentPageIndex, readProgressPercent, chapterData]);
+  }, [manga.id, manga.title, manga.sourceName, manga.sourceUrl, manga.coverImage, currentChapterNum, currentPageIndex, readProgressPercent, chapterData, loading]);
+
+  // Track latest progress for immediate unmount / beforeunload flush
+  const latestProgressRef = useRef({
+    mangaId: manga.id,
+    chapterNumber: currentChapterNum,
+    pageIndex: currentPageIndex,
+    pageCount: chapterData?.pages?.length || 0,
+    percent: readProgressPercent,
+    title: manga.title,
+    sourceName: manga.sourceName,
+    sourceUrl: manga.sourceUrl,
+    coverImage: manga.coverImage,
+    isPlaceholder: chapterData?.isPlaceholder,
+    contentUnavailable: chapterData?.contentUnavailable,
+  });
+
+  latestProgressRef.current = {
+    mangaId: manga.id,
+    chapterNumber: currentChapterNum,
+    pageIndex: currentPageIndex,
+    pageCount: chapterData?.pages?.length || 0,
+    percent: readProgressPercent,
+    title: manga.title,
+    sourceName: manga.sourceName,
+    sourceUrl: manga.sourceUrl,
+    coverImage: manga.coverImage,
+    isPlaceholder: chapterData?.isPlaceholder,
+    contentUnavailable: chapterData?.contentUnavailable,
+  };
+
+  // Immediate flush on unmount or tab close
+  useEffect(() => {
+    const flushProgress = () => {
+      const cur = latestProgressRef.current;
+      if (!cur || cur.isPlaceholder || cur.contentUnavailable || cur.pageCount <= 0 || isRestoringScrollRef.current) return;
+      try {
+        localStorage.setItem(`reader_progress_${cur.mangaId}`, JSON.stringify({
+          chapterNumber: cur.chapterNumber,
+          pageIndex: cur.pageIndex,
+          percent: cur.percent,
+          timestamp: Date.now(),
+        }));
+      } catch {}
+
+      try {
+        const payload = JSON.stringify({
+          mangaId: cur.mangaId,
+          chapterNumber: cur.chapterNumber,
+          pageIndex: cur.pageIndex,
+          pageCount: cur.pageCount,
+          percent: cur.percent,
+          title: cur.title,
+          sourceName: cur.sourceName,
+          sourceUrl: cur.sourceUrl,
+          coverImage: cur.coverImage,
+        });
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon('/api/reader/progress', blob);
+        } else {
+          apiFetch('/api/reader/progress', {
+            method: 'POST',
+            body: payload,
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', flushProgress);
+    return () => {
+      window.removeEventListener('beforeunload', flushProgress);
+      flushProgress();
+    };
+  }, []);
 
   // Toggle bookmark for page
   const toggleBookmarkPage = useCallback((pageIdx: number) => {

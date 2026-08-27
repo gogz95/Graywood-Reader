@@ -154,9 +154,16 @@ export function bulkApplyUserImportState(
     INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
     VALUES (:user_id, :manga_id, :current_chapter, :last_read_at, :status)
     ON CONFLICT(user_id, manga_id) DO UPDATE SET
-      current_chapter = CASE WHEN excluded.current_chapter > user_library_state.current_chapter THEN excluded.current_chapter ELSE user_library_state.current_chapter END,
+      current_chapter = CASE WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter ELSE COALESCE(user_library_state.current_chapter, excluded.current_chapter) END,
       last_read_at = excluded.last_read_at,
       status = COALESCE(excluded.status, user_library_state.status)
+  `);
+  const stmtProg = db.prepare(`
+    INSERT INTO reading_progress (manga_id, user_id, chapter_number, page_index, page_count, percent, last_read_at)
+    VALUES (@manga_id, @user_id, @chapter_number, @page_index, @page_count, @percent, @last_read_at)
+    ON CONFLICT(manga_id, user_id, chapter_number) DO UPDATE SET
+      percent = excluded.percent,
+      last_read_at = excluded.last_read_at
   `);
   const stmtDelCats = db.prepare('DELETE FROM manga_categories WHERE manga_id = ? AND user_id = ?');
   const stmtInsCat = db.prepare('INSERT OR IGNORE INTO manga_categories (manga_id, category_id, user_id) VALUES (?, ?, ?)');
@@ -174,6 +181,17 @@ export function bulkApplyUserImportState(
           current_chapter: Math.max(0, item.currentChapter || 0),
           last_read_at: now,
           status: item.status || null,
+        });
+      }
+      if (item.currentChapter !== undefined && item.currentChapter > 0) {
+        stmtProg.run({
+          manga_id: item.id,
+          user_id: userId,
+          chapter_number: Number(item.currentChapter),
+          page_index: 0,
+          page_count: 0,
+          percent: 100,
+          last_read_at: now,
         });
       }
       if (Array.isArray(item.categoryIds) && item.categoryIds.length > 0) {
