@@ -7,7 +7,6 @@ import {
   Plus,
   Globe,
   Calendar,
-  User,
   Compass,
   Bug,
   MoreVertical,
@@ -65,7 +64,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = React.memo(({
   activeTab,
   setActiveTab,
-  subdomain,
+  subdomain: _subdomain,
   searchQuery,
   setSearchQuery,
   unreadCount,
@@ -96,6 +95,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
 }) => {
   const [mobileQuickMenuOpen, setMobileQuickMenuOpen] = useState(false);
   const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
 
@@ -112,9 +112,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [toolsDropdownOpen]);
 
+  // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Trigger command palette on Ctrl+K, Cmd+K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (onOpenCommandPalette) {
@@ -140,151 +140,138 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
     action?.();
   };
 
-  /* Shared primary navigation tabs */
   const tabs: Array<{
     id: AppNavTab;
     label: string;
     mobileLabel: string;
     icon: React.ComponentType<{ className?: string }>;
     badge?: number;
-    title?: string;
   }> = [
-    { id: 'welcome', label: 'Home', mobileLabel: 'Home', icon: Home, title: 'Welcome Hub, Trending & Updates' },
-    { id: 'library', label: 'My Library', mobileLabel: 'Library', icon: BookOpen, badge: unreadCount, title: 'Your Personal Manga Library' },
-    { id: 'browse', label: 'Browse', mobileLabel: 'Browse', icon: Compass, title: 'Browse All Active Multi-Sources' },
-    { id: 'categories', label: 'Categories', mobileLabel: 'Shelves', icon: Layers, title: 'Custom Shelves & Categorized Collections' },
-    { id: 'sources', label: 'Sources', mobileLabel: 'Sources', icon: Globe, title: 'Manage Scraper Engines & Connectors' },
+    { id: 'welcome', label: 'Home', mobileLabel: 'Home', icon: Home },
+    { id: 'library', label: 'Library', mobileLabel: 'Library', icon: BookOpen, badge: unreadCount },
+    { id: 'browse', label: 'Browse', mobileLabel: 'Browse', icon: Compass },
+    { id: 'categories', label: 'Shelves', mobileLabel: 'Shelves', icon: Layers },
+    { id: 'sources', label: 'Sources', mobileLabel: 'Sources', icon: Globe },
   ];
-
-  const totalToolAlerts = pendingChallengesCount + (duplicateCount > 0 ? 1 : 0);
-
-  const searchInput = (
-    <div className="relative w-full group">
-      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted group-focus-within:text-accent transition-colors pointer-events-none" />
-      <input
-        ref={searchInputRef}
-        type="search"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Search series, author, genre, or source..."
-        className="w-full pl-10 pr-20 py-2.5 text-xs rounded-2xl bg-app/60 border border-edge/80 hover:border-edge-strong focus:border-accent focus:bg-app/90 text-primary placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent/25 transition-all shadow-inner"
-      />
-      {searchQuery ? (
-        <button
-          onClick={() => setSearchQuery('')}
-          aria-label="Clear search"
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-secondary hover:text-primary bg-elevated hover:bg-edge-strong rounded-lg px-2 py-0.5 transition-colors cursor-pointer"
-        >
-          Clear
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onOpenCommandPalette?.()}
-          title="Open Quick Command & Search Spotlight (⌘K / Ctrl+K)"
-          className="hidden sm:flex items-center gap-1 absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-lg text-[10px] font-mono text-muted bg-elevated/80 border border-edge/60 hover:bg-elevated hover:text-accent transition-colors shadow-xs cursor-pointer"
-        >
-          <span className="text-[10px] font-bold">⌘K</span>
-        </button>
-      )}
-    </div>
-  );
 
   return (
     <>
-      <header className="sticky top-0 z-40 glass-nav text-primary">
-        {/* ── Row 1 · Brand · Search · Actions ───────────────────────── */}
+      <header className="sticky top-0 z-40 bg-app/80 backdrop-blur-xl border-b border-edge/80 text-primary transition-all">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-2 sm:gap-4 h-15 sm:h-16">
-            {/* Brand (Links to Home / Welcome) */}
+          <div className="flex items-center justify-between gap-2 lg:gap-4 h-16">
+            {/* ── Brand Logo ────────────────────────────────────────────── */}
             <button
               onClick={() => setActiveTab('welcome')}
-              className="flex items-center gap-3 min-w-0 shrink-0 group text-left cursor-pointer active:scale-[0.98] transition-transform"
-              aria-label="Go to Welcome Home"
+              className="flex items-center gap-2.5 shrink-0 group text-left cursor-pointer active:scale-95 transition-transform"
+              aria-label="Graywood Reader Home"
             >
-              <div className="p-2 sm:p-2.5 bg-accent-grad rounded-2xl shadow-lg shadow-accent/25 text-accent-fg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300">
-                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+              <div className="w-9 h-9 rounded-xl bg-accent-grad shadow-md shadow-accent/20 text-accent-fg flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <BookOpen className="w-4.5 h-4.5 stroke-[2.5]" />
               </div>
-              <div className="min-w-0 text-left">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-black tracking-tight font-display text-primary truncate group-hover:text-accent transition-colors">
-                    Graywood Reader
-                  </h1>
-                  {isIncognito ? (
-                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-accent-2/20 text-accent-2 border border-accent-2/30">
-                      <EyeOff className="w-3 h-3 mr-1" />
-                      Incognito
-                    </span>
-                  ) : (
-                    <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-success/15 text-success border border-success/25 shadow-xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse mr-1.5 shadow-sm" />
-                      Live Sync
-                    </span>
-                  )}
-                </div>
-                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted font-medium">
-                  <Globe className="w-3 h-3 text-accent shrink-0" />
-                  <span className="font-mono text-accent/80 truncate">{subdomain}</span>
-                </div>
-              </div>
+              <span className="text-base font-black tracking-tight font-display text-primary hidden sm:inline group-hover:text-accent transition-colors">
+                Graywood
+              </span>
             </button>
 
-            {/* Desktop search */}
-            <div className="hidden md:block flex-1 max-w-xl mx-2">{searchInput}</div>
+            {/* ── Streamlined Main Navigation Tabs (Desktop Inline) ─────── */}
+            <nav className="hidden md:flex items-center gap-1 bg-surface/60 border border-edge/60 p-1 rounded-2xl shadow-inner text-xs font-bold" aria-label="Main">
+              {tabs.map(({ id, label, icon: Icon, badge }) => {
+                const isActive = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? 'bg-accent text-accent-fg font-black shadow-sm'
+                        : 'text-secondary hover:text-primary hover:bg-elevated/70'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{label}</span>
+                    {badge && badge > 0 ? (
+                      <span
+                        className={`min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[9px] font-black flex items-center justify-center leading-none ${
+                          isActive ? 'bg-black text-white' : 'bg-accent text-accent-fg'
+                        }`}
+                      >
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </nav>
 
-            {/* Actions Group */}
+            {/* ── Compact / Expandable Search Bar ────────────────────────── */}
+            <div className="flex-1 max-w-xs lg:max-w-sm hidden sm:block">
+              <div className="relative group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted group-focus-within:text-accent transition-colors pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setSearchExpanded(true)}
+                  onBlur={() => setSearchExpanded(false)}
+                  placeholder="Search series, authors..."
+                  className={`w-full pl-8.5 pr-14 py-1.5 text-xs rounded-xl bg-surface/80 border border-edge hover:border-edge-strong focus:border-accent focus:bg-surface text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent/30 transition-all ${
+                    searchExpanded ? 'ring-1 ring-accent/30 border-accent' : ''
+                  }`}
+                />
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted hover:text-primary px-1.5 py-0.5 rounded cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                ) : (
+                  <kbd className="hidden lg:inline-flex items-center gap-0.5 absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-app border border-edge">
+                    ⌘K
+                  </kbd>
+                )}
+              </div>
+            </div>
+
+            {/* ── Right Action Cluster ──────────────────────────────────── */}
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Incognito Private Reading Toggle */}
+              {/* Incognito reading mode toggle */}
               <button
                 onClick={onToggleIncognito}
-                title="Toggle Incognito Private Reading Mode"
-                aria-pressed={isIncognito}
-                className={`p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer ${
+                title={isIncognito ? 'Incognito Mode Active' : 'Enable Incognito Reading'}
+                className={`p-2 rounded-xl border transition-all cursor-pointer ${
                   isIncognito
-                    ? 'bg-accent-2 text-accent-fg border-accent-2 shadow-md'
-                    : 'bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary border-edge-strong/60'
+                    ? 'bg-accent-2 text-accent-fg border-accent-2 shadow-sm'
+                    : 'bg-surface/80 hover:bg-elevated text-secondary hover:text-primary border-edge'
                 }`}
               >
                 <EyeOff className="w-4 h-4" />
               </button>
 
-              {/* Challenge Alert (if any pending captchas) */}
-              {pendingChallengesCount > 0 && onOpenChallengesModal && (
-                <button
-                  onClick={onOpenChallengesModal}
-                  title={`${pendingChallengesCount} source(s) require manual captcha solving`}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-black rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 animate-pulse shadow-md transition-all cursor-pointer"
-                >
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  <span className="hidden sm:inline">Captcha</span>
-                  <span className="w-4 h-4 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center justify-center">
-                    {pendingChallengesCount}
-                  </span>
-                </button>
-              )}
-
-              {/* Tools & Activity Dropdown (Combines secondary utilities cleanly) */}
+              {/* Tools Menu Dropdown */}
               <div className="relative" ref={toolsMenuRef}>
                 <button
                   type="button"
                   onClick={() => setToolsDropdownOpen((v) => !v)}
-                  title="Tools, Downloads, Readlists & Analytics"
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                  title="Tools & Vault"
+                  className={`flex items-center gap-1.5 px-2.5 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
                     toolsDropdownOpen
                       ? 'bg-elevated text-primary border-accent'
-                      : 'bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary border-edge-strong/60'
+                      : 'bg-surface/80 hover:bg-elevated text-secondary hover:text-primary border-edge'
                   }`}
                 >
                   <Wrench className="w-3.5 h-3.5 text-accent" />
-                  <span>Tools</span>
-                  {(activeDownloadsCount > 0 || totalToolAlerts > 0) && (
+                  <span className="hidden xl:inline">Tools</span>
+                  {activeDownloadsCount > 0 && (
                     <span className="w-2 h-2 rounded-full bg-accent animate-ping" />
                   )}
                   <ChevronDown className={`w-3.5 h-3.5 transition-transform ${toolsDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {toolsDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-64 p-2 bg-surface/95 border border-edge rounded-2xl shadow-2xl backdrop-blur-xl z-50 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
+                  <div className="absolute right-0 top-full mt-2 w-60 p-1.5 bg-surface/95 border border-edge rounded-2xl shadow-2xl backdrop-blur-xl z-50 space-y-0.5 animate-in fade-in slide-in-from-top-2 duration-150 text-xs">
                     {onOpenDownloadManager && (
                       <button
                         type="button"
@@ -316,7 +303,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
                       >
                         <ListOrdered className="w-4 h-4 text-accent-2" />
-                        <span>Readlists &amp; Story Arcs</span>
+                        <span>Readlists</span>
                       </button>
                     )}
 
@@ -329,7 +316,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                       className="w-full p-2 rounded-xl flex items-center gap-2 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
                     >
                       <Calendar className="w-4 h-4 text-info" />
-                      <span>Reading Activity Heatmap</span>
+                      <span>Activity Heatmap</span>
                     </button>
 
                     {onOpenAchievements && (
@@ -342,7 +329,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
                       >
                         <Trophy className="w-4 h-4 text-amber-400" />
-                        <span>Achievements &amp; Wrapped</span>
+                        <span>Achievements</span>
                       </button>
                     )}
 
@@ -359,7 +346,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                     >
                       <span className="flex items-center gap-2">
                         <RefreshCw className={`w-4 h-4 text-accent ${isUpdating ? 'animate-spin' : ''}`} />
-                        <span>{isUpdating ? 'Scanning Library...' : 'Auto-Update Scanner'}</span>
+                        <span>{isUpdating ? 'Scanning...' : 'Scan Updates'}</span>
                       </span>
                     </button>
 
@@ -373,7 +360,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                     >
                       <span className="flex items-center gap-2">
                         <Search className="w-4 h-4 text-secondary" />
-                        <span>Duplicate Series Finder</span>
+                        <span>Deduplicate</span>
                       </span>
                       {duplicateCount > 0 && (
                         <span className="px-1.5 py-0.5 rounded-full bg-danger/25 text-danger text-[10px] font-black">
@@ -392,7 +379,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 hover:bg-elevated text-secondary hover:text-primary transition-colors cursor-pointer"
                       >
                         <Puzzle className="w-4 h-4 text-accent" />
-                        <span>Community Extensions</span>
+                        <span>Extensions</span>
                       </button>
                     )}
 
@@ -406,7 +393,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 bg-accent-2/10 hover:bg-accent-2/20 text-accent-2 font-bold transition-colors cursor-pointer"
                       >
                         <Shield className="w-4 h-4" />
-                        <span>Host Admin Panel</span>
+                        <span>Host Admin</span>
                       </button>
                     )}
 
@@ -420,7 +407,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold transition-colors cursor-pointer"
                       >
                         <Download className="w-4 h-4 text-amber-400" />
-                        <span>Install Standalone PWA</span>
+                        <span>Install App</span>
                       </button>
                     )}
 
@@ -434,195 +421,108 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         className="w-full p-2 rounded-xl flex items-center gap-2 hover:bg-elevated text-danger transition-colors cursor-pointer"
                       >
                         <Bug className="w-4 h-4" />
-                        <span>Submit Issue / Bug</span>
+                        <span>Submit Issue</span>
                       </button>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* User Authentication / Profile Section */}
+              {/* User Sign In / Register or Profile */}
               {isGuest ? (
-                <div className="flex items-center gap-1 sm:gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => onOpenAuthModal('login')}
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl bg-elevated/80 text-secondary hover:text-primary border border-edge hover:border-accent/40 transition-all cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl text-secondary hover:text-primary hover:bg-elevated transition-colors cursor-pointer"
                   >
-                    <LogIn className="w-3.5 h-3.5 text-accent" />
-                    <span className="hidden sm:inline">Sign In</span>
+                    Sign In
                   </button>
-
                   <button
                     onClick={() => onOpenAuthModal('register')}
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 text-xs font-black rounded-xl bg-accent text-accent-fg hover:bg-accent-bright shadow-md shadow-accent/20 transition-all cursor-pointer active:scale-95"
+                    className="px-3 py-1.5 text-xs font-black rounded-xl bg-accent text-accent-fg hover:bg-accent-bright shadow-sm transition-all cursor-pointer active:scale-95"
                   >
-                    <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span className="hidden sm:inline">Register</span>
+                    Register
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={onOpenProfileModal}
-                  title={`User Profile: ${activeProfile?.name || 'Reader'}`}
-                  className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold rounded-xl bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20 transition-all max-w-[38vw] sm:max-w-none cursor-pointer"
+                  title={`Profile: ${activeProfile?.name || 'Reader'}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-xl bg-surface/80 hover:bg-elevated border border-edge text-primary transition-all cursor-pointer"
                 >
-                  <span className="text-base leading-none">{activeProfile?.avatar || '👤'}</span>
-                  <span className="hidden md:inline truncate">{activeProfile?.name || 'Reader'}</span>
-                  {activeProfile?.role === 'admin' && (
-                    <span className="hidden md:inline px-1 py-0.5 rounded text-[9px] font-black bg-accent text-accent-fg">
-                      ADMIN
-                    </span>
-                  )}
+                  <span className="text-sm leading-none">{activeProfile?.avatar || '👤'}</span>
+                  <span className="hidden lg:inline truncate max-w-[90px]">{activeProfile?.name || 'Reader'}</span>
                 </button>
               )}
 
-              {/* Primary action: Add Series */}
+              {/* Primary + Add Series Button */}
               <button
                 onClick={onOpenAddModal}
-                title="Add New Series to Library"
-                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 text-xs font-black rounded-xl bg-accent hover:bg-accent-bright text-accent-fg shadow-md shadow-accent/25 transition-all active:scale-95 cursor-pointer"
+                title="Add New Series"
+                className="px-3 py-1.5 text-xs font-black rounded-xl bg-accent hover:bg-accent-bright text-accent-fg shadow-sm flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
               >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span className="hidden sm:inline">Add Series</span>
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span className="hidden sm:inline">Add</span>
               </button>
 
-              {/* Settings Gear Button */}
+              {/* Settings Gear */}
               <button
                 onClick={onOpenSettingsModal}
-                title="Global Settings & Database Storage"
-                className="p-2 sm:p-2.5 rounded-xl bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary border border-edge-strong/60 transition-all cursor-pointer"
+                title="Settings & Tools"
+                className="p-2 rounded-xl bg-surface/80 hover:bg-elevated text-secondary hover:text-primary border border-edge transition-colors cursor-pointer"
               >
                 <Sliders className="w-4 h-4" />
               </button>
 
-              {/* Mobile quick-menu toggle */}
+              {/* Mobile quick-menu trigger */}
               <button
                 onClick={() => setMobileQuickMenuOpen((v) => !v)}
-                aria-label="More actions"
-                aria-expanded={mobileQuickMenuOpen}
-                className="md:hidden p-2 rounded-xl bg-elevated/70 border border-edge-strong/60 text-secondary cursor-pointer"
+                aria-label="More"
+                className="md:hidden p-2 rounded-xl bg-surface border border-edge text-secondary cursor-pointer"
               >
                 {mobileQuickMenuOpen ? <X className="w-4 h-4 text-accent" /> : <MoreVertical className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          {/* Mobile search */}
-          <div className="md:hidden pb-2.5">{searchInput}</div>
+          {/* Mobile search bar (only on mobile screens) */}
+          <div className="sm:hidden pb-2.5">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search series..."
+                className="w-full pl-8.5 pr-8 py-1.5 text-xs rounded-xl bg-surface border border-edge text-primary placeholder-muted focus:outline-none focus:border-accent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── Mobile quick-action drawer ─────────────────────────────────── */}
         {mobileQuickMenuOpen && (
-          <div className="md:hidden p-3 bg-app border-b border-edge grid grid-cols-2 gap-2 text-xs font-bold">
-            <button
-              onClick={() => closeQuickMenu(onToggleIncognito)}
-              className={`p-2.5 rounded-xl border flex items-center gap-2 cursor-pointer ${
-                isIncognito
-                  ? 'bg-accent-2/20 text-accent-2 border-accent-2/40'
-                  : 'bg-surface text-secondary border-edge'
-              }`}
-            >
-              <EyeOff className="w-4 h-4" />
-              <span>{isIncognito ? 'Incognito ON' : 'Incognito OFF'}</span>
-            </button>
-
-            {canInstallPwa && onOpenPwaInstall && (
-              <button
-                onClick={() => closeQuickMenu(onOpenPwaInstall)}
-                className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-2 cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-amber-400" />
-                <span>Install App</span>
-              </button>
-            )}
-
-            {onOpenDownloadManager && (
-              <button
-                onClick={() => closeQuickMenu(onOpenDownloadManager)}
-                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-accent" />
-                <span>Downloads {activeDownloadsCount > 0 ? `(${activeDownloadsCount})` : ''}</span>
-              </button>
-            )}
-
-            {onOpenReadlists && (
-              <button
-                onClick={() => closeQuickMenu(onOpenReadlists)}
-                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 cursor-pointer"
-              >
-                <ListOrdered className="w-4 h-4 text-accent-2" />
-                <span>Readlists</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => closeQuickMenu(onOpenAnalytics)}
-              className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 cursor-pointer"
-            >
-              <Calendar className="w-4 h-4 text-info" />
-              <span>Activity Heatmap</span>
-            </button>
-
-            {onOpenAchievements && (
-              <button
-                onClick={() => closeQuickMenu(onOpenAchievements)}
-                className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 cursor-pointer"
-              >
-                <Trophy className="w-4 h-4 text-amber-400" />
-                <span>Achievements &amp; Recap</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => closeQuickMenu(onOpenAddModal)}
-              className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-accent" />
-              <span>Add Series</span>
-            </button>
-
-            <button
-              onClick={() => closeQuickMenu(onRunAutoUpdate)}
-              disabled={isUpdating}
-              className="p-2.5 rounded-xl bg-surface text-secondary border border-edge flex items-center gap-2 disabled:opacity-60 cursor-pointer"
-            >
-              <RefreshCw className={`w-4 h-4 text-accent ${isUpdating ? 'animate-spin' : ''}`} />
-              <span>{isUpdating ? 'Scanning...' : 'Update Library'}</span>
-            </button>
-
-            {pendingChallengesCount > 0 && onOpenChallengesModal && (
-              <button
-                onClick={() => closeQuickMenu(onOpenChallengesModal)}
-                className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-2 cursor-pointer"
-              >
-                <ShieldAlert className="w-4 h-4 text-amber-400" />
-                <span>Captchas ({pendingChallengesCount})</span>
-              </button>
-            )}
-
-            {onOpenSubmitBugModal && (
-              <button
-                onClick={() => closeQuickMenu(onOpenSubmitBugModal)}
-                className="p-2.5 rounded-xl bg-danger/10 text-danger border border-danger/30 flex items-center gap-2 cursor-pointer"
-              >
-                <Bug className="w-4 h-4" />
-                <span>Submit Bug</span>
-              </button>
-            )}
-
+          <div className="md:hidden p-3 bg-surface border-t border-edge grid grid-cols-2 gap-2 text-xs font-bold animate-in fade-in duration-150">
             {isGuest ? (
               <>
                 <button
                   onClick={() => closeQuickMenu(() => onOpenAuthModal('login'))}
-                  className="p-2.5 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer"
+                  className="p-2 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer"
                 >
                   <LogIn className="w-4 h-4 text-accent" />
                   <span>Sign In</span>
                 </button>
                 <button
                   onClick={() => closeQuickMenu(() => onOpenAuthModal('register'))}
-                  className="p-2.5 rounded-xl bg-accent text-accent-fg font-black border border-accent flex items-center gap-2 cursor-pointer"
+                  className="p-2 rounded-xl bg-accent text-accent-fg font-black flex items-center gap-2 cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Register</span>
@@ -631,17 +531,64 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
             ) : (
               <button
                 onClick={() => closeQuickMenu(onOpenProfileModal)}
-                className="p-2.5 rounded-xl bg-accent/10 text-accent border border-accent/30 flex items-center gap-2 cursor-pointer"
+                className="p-2 rounded-xl bg-elevated text-primary border border-edge flex items-center gap-2 col-span-2 cursor-pointer"
               >
-                <span className="text-base leading-none">{activeProfile?.avatar || '👤'}</span>
-                <span className="truncate">{activeProfile?.name || 'Reader'}</span>
+                <span>{activeProfile?.avatar || '👤'}</span>
+                <span>{activeProfile?.name || 'Reader'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => closeQuickMenu(onOpenAnalytics)}
+              className="p-2 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer"
+            >
+              <Calendar className="w-4 h-4 text-info" />
+              <span>Activity</span>
+            </button>
+
+            {onOpenAchievements && (
+              <button
+                onClick={() => closeQuickMenu(onOpenAchievements)}
+                className="p-2 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer"
+              >
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>Achievements</span>
+              </button>
+            )}
+
+            {onOpenDownloadManager && (
+              <button
+                onClick={() => closeQuickMenu(onOpenDownloadManager)}
+                className="p-2 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-accent" />
+                <span>Downloads {activeDownloadsCount > 0 ? `(${activeDownloadsCount})` : ''}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => closeQuickMenu(onRunAutoUpdate)}
+              disabled={isUpdating}
+              className="p-2 rounded-xl bg-elevated text-secondary border border-edge flex items-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 text-accent ${isUpdating ? 'animate-spin' : ''}`} />
+              <span>{isUpdating ? 'Scanning...' : 'Scan Updates'}</span>
+            </button>
+
+            {pendingChallengesCount > 0 && onOpenChallengesModal && (
+              <button
+                onClick={() => closeQuickMenu(onOpenChallengesModal)}
+                className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-2 cursor-pointer col-span-2"
+              >
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+                <span>Captchas ({pendingChallengesCount})</span>
               </button>
             )}
 
             {showAdmin && (
               <button
                 onClick={() => closeQuickMenu(onOpenAdminPanel)}
-                className="p-2.5 rounded-xl bg-accent-2/15 text-accent-2 border border-accent-2/40 flex items-center gap-2 col-span-2 cursor-pointer"
+                className="p-2 rounded-xl bg-accent-2/15 text-accent-2 border border-accent-2/40 flex items-center gap-2 col-span-2 cursor-pointer"
               >
                 <Shield className="w-4 h-4" />
                 <span>Host Admin Panel</span>
@@ -649,61 +596,11 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
             )}
           </div>
         )}
-
-        {/* ── Row 2 · Desktop tab navigation ───────────────────────── */}
-        <div className="hidden md:block border-t border-edge/60 bg-app/30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 text-xs sm:text-sm font-medium" aria-label="Primary">
-              {tabs.map(({ id, label, icon: Icon, badge }) => {
-                const isActive = activeTab === id;
-                return (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTab(id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 cursor-pointer ${
-                      isActive
-                        ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
-                        : 'text-secondary hover:text-primary hover:bg-elevated/70'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 ${isActive ? 'stroke-[2.5]' : ''}`} />
-                    <span>{label}</span>
-                    {badge ? (
-                      <span className={`min-w-[1.15rem] h-[1.15rem] px-1 rounded-full text-[10px] font-black flex items-center justify-center leading-none ${
-                        isActive ? 'bg-black text-white' : 'bg-accent text-accent-fg'
-                      }`}>
-                        {badge > 99 ? '99+' : badge}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={onOpenSettingsModal}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 cursor-pointer ${
-                  activeTab === 'settings'
-                    ? 'bg-accent text-accent-fg font-black shadow-md shadow-accent/20'
-                    : 'text-secondary hover:text-primary hover:bg-elevated/70'
-                }`}
-              >
-                <Sliders className="w-4 h-4" />
-                <span>Settings &amp; Tools</span>
-                {duplicateCount > 0 && (
-                  <span className="min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-danger/25 text-danger border border-danger/30 text-[10px] font-black flex items-center justify-center leading-none">
-                    {duplicateCount}
-                  </span>
-                )}
-              </button>
-            </nav>
-          </div>
-        </div>
       </header>
 
-      {/* ── Mobile floating bottom navigation ─────────────────────────── */}
+      {/* ── Mobile Floating Bottom Bar ──────────────────────────────────── */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 border-t border-edge backdrop-blur-xl px-2 pt-1.5 pb-safe flex items-stretch justify-around shadow-2xl shadow-black/40"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 border-t border-edge backdrop-blur-xl px-2 pt-1 pb-safe flex items-stretch justify-around shadow-2xl shadow-black/40"
         aria-label="Primary mobile"
       >
         {tabs.map(({ id, mobileLabel, icon: Icon, badge }) => {
@@ -713,18 +610,18 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               key={id}
               onClick={() => setActiveTab(id)}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-xl transition-all cursor-pointer ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-xl transition-all cursor-pointer ${
                 active ? 'text-accent font-bold' : 'text-muted'
               }`}
             >
               <span
-                className={`relative flex items-center justify-center w-10 h-6 rounded-full transition-all ${
+                className={`relative flex items-center justify-center w-9 h-6 rounded-full transition-all ${
                   active ? 'bg-accent/15' : ''
                 }`}
               >
-                <Icon className="w-5 h-5" />
-                {badge ? (
-                  <span className="absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-accent-fg text-[9px] font-black flex items-center justify-center leading-none">
+                <Icon className="w-4.5 h-4.5" />
+                {badge && badge > 0 ? (
+                  <span className="absolute -top-1 -right-1.5 min-w-[0.9rem] h-3.5 px-1 rounded-full bg-accent text-accent-fg text-[9px] font-black flex items-center justify-center leading-none">
                     {badge > 99 ? '99+' : badge}
                   </span>
                 ) : null}
@@ -736,15 +633,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
 
         <button
           onClick={onOpenSettingsModal}
-          className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1.5 rounded-xl text-muted transition-all cursor-pointer"
+          className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-xl text-muted transition-all cursor-pointer"
         >
-          <span className="relative flex items-center justify-center w-10 h-6">
-            <Sliders className="w-5 h-5" />
-            {duplicateCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 min-w-[1rem] h-4 px-1 rounded-full bg-danger text-white text-[9px] font-black flex items-center justify-center leading-none">
-                {duplicateCount}
-              </span>
-            )}
+          <span className="relative flex items-center justify-center w-9 h-6">
+            <Sliders className="w-4.5 h-4.5" />
           </span>
           <span className="text-[10px]">Settings</span>
         </button>

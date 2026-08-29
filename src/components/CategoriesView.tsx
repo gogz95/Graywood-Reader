@@ -159,20 +159,20 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
   }, [mangaList]);
 
   return (
-    <div className="space-y-8 pb-16">
-      {/* ── Header ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-edge/60 pb-6">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-2xl bg-accent-grad text-accent-fg shadow-md shadow-accent/20">
-              <Layers className="w-5 h-5 stroke-[2.5]" />
+    <div className="space-y-6 pb-16">
+      {/* ── Streamlined Header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-edge/60 pb-4">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-xl bg-accent-grad text-accent-fg shadow-xs">
+              <Layers className="w-4 h-4 stroke-[2.5]" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-primary font-display">
+            <h1 className="text-xl sm:text-2xl font-black text-primary font-display">
               Categories &amp; Shelves
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-secondary">
-            Organize and explore series across custom shelves, dynamic smart rules, and genre collections.
+          <p className="text-xs text-secondary">
+            Organize series into custom shelves, smart dynamic rules, and genre collections.
           </p>
         </div>
 
@@ -180,54 +180,54 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
           {isGuest ? (
             <button
               onClick={onOpenAuthModal}
-              className="px-4 py-2.5 rounded-xl bg-accent text-accent-fg text-xs font-black flex items-center gap-2 shadow-md hover:bg-accent-bright transition-all cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-accent text-accent-fg text-xs font-black shadow-xs hover:bg-accent-bright transition-all cursor-pointer"
             >
               <span>Sign in to Create Shelves</span>
             </button>
           ) : (
             <button
               onClick={() => setManageModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-accent text-accent-fg text-xs font-black flex items-center gap-2 shadow-md hover:bg-accent-bright transition-all cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 rounded-xl bg-accent text-accent-fg text-xs font-black flex items-center gap-1.5 shadow-xs hover:bg-accent-bright transition-all cursor-pointer active:scale-95"
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Manage Custom Shelves</span>
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>Manage Shelves</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Sub-tabs ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 p-1 bg-surface/80 border border-edge rounded-2xl max-w-fit overflow-x-auto no-scrollbar">
+      {/* ── Streamlined Sub-tabs ───────────────────────────────────────────────── */}
+      <div className="inline-flex items-center gap-1 p-1 bg-surface/80 border border-edge rounded-xl text-xs font-bold">
         <button
           onClick={() => setActiveTab('custom')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'custom'
-              ? 'bg-accent text-accent-fg shadow-sm'
-              : 'text-secondary hover:text-primary hover:bg-elevated'
+              ? 'bg-accent text-accent-fg shadow-xs font-black'
+              : 'text-secondary hover:text-primary'
           }`}
         >
           <Bookmark className="w-3.5 h-3.5" />
-          <span>Custom Shelves ({categories.length})</span>
+          <span>Custom ({categories.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('status')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'status'
-              ? 'bg-accent text-accent-fg shadow-sm'
-              : 'text-secondary hover:text-primary hover:bg-elevated'
+              ? 'bg-accent text-accent-fg shadow-xs font-black'
+              : 'text-secondary hover:text-primary'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
-          <span>Reading Status</span>
+          <span>Status</span>
         </button>
 
         <button
           onClick={() => setActiveTab('genres')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'genres'
-              ? 'bg-accent text-accent-fg shadow-sm'
-              : 'text-secondary hover:text-primary hover:bg-elevated'
+              ? 'bg-accent text-accent-fg shadow-xs font-black'
+              : 'text-secondary hover:text-primary'
           }`}
         >
           <Sparkles className="w-3.5 h-3.5" />
@@ -236,14 +236,14 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
 
         <button
           onClick={() => setActiveTab('types')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'types'
-              ? 'bg-accent text-accent-fg shadow-sm'
-              : 'text-secondary hover:text-primary hover:bg-elevated'
+              ? 'bg-accent text-accent-fg shadow-xs font-black'
+              : 'text-secondary hover:text-primary'
           }`}
         >
           <Compass className="w-3.5 h-3.5" />
-          <span>Format &amp; Origin</span>
+          <span>Origin</span>
         </button>
       </div>
 
