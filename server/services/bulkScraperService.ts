@@ -6,7 +6,6 @@
 import { MangaItem } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
 } from '../appState';
@@ -245,7 +244,7 @@ class BulkScraperService {
 
     // Build O(1) title lookup map
     const titleMap = new Map<string, MangaItem>();
-    for (const m of mangaDatabase) {
+    for (const m of SqliteDb.getAllManga()) {
       const norm = m.title.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (norm) titleMap.set(norm, m);
       for (const alt of m.altTitles || []) {

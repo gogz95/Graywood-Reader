@@ -16,7 +16,15 @@ export function LibraryPage() {
   }>();
 
   const { isGuestClient } = useAuthStore();
-  const { deleteManga, incrementChapter, bulkUpdateStatus, bulkDelete } = useLibraryStore();
+  const {
+    deleteManga,
+    incrementChapter,
+    bulkUpdateStatus,
+    bulkDelete,
+    fetchNextMangaPage,
+    hasMore,
+    isLoadingMore,
+  } = useLibraryStore();
   const displayMangaList = useDisplayMangaList();
   const { openModal, setModalData } = useModalStore();
   const { openReader, setChapterListTarget } = useReaderStore();
@@ -51,6 +59,9 @@ export function LibraryPage() {
       onBulkDelete={bulkDelete}
       isGuest={isGuestClient}
       onOpenAuthModal={handleOpenAuthModal}
+      hasMoreServer={hasMore}
+      isLoadingMoreServer={isLoadingMore}
+      onLoadMoreServer={fetchNextMangaPage}
     />
   );
 }

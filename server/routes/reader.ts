@@ -7,7 +7,6 @@ import { Router, Request, Response } from 'express';
 import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   resolveRequestUserId,
   syncAddOrUpdateManga,
   isNsfwAccessAllowed,
@@ -38,7 +37,7 @@ export { extractPanelImages, parseSrcsetCandidate, isValidPanelImageUrl };
 
 export function resolveManga(mangaId: string): MangaItem | undefined {
   if (!mangaId) return undefined;
-  return SqliteDb.getMangaById(mangaId) || mangaDatabase.find((m) => m.id === mangaId || m.apiId === mangaId);
+  return SqliteDb.getMangaById(mangaId) || SqliteDb.getMangaByApiId(mangaId) || undefined;
 }
 
 function escapeXml(unsafe: string | number): string {
@@ -347,7 +346,7 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
   const chapterNumber = Math.max(1, parseFloat(req.query.chapterNumber as string) || 1);
   let chapterId = (req.query.chapterId as string) || '';
 
-  const manga = resolveManga(String(mangaId || '')) || mangaDatabase.find((m) => m.apiId === mangaId);
+  const manga = resolveManga(String(mangaId || ''));
   let mangaTitle = (req.query.title as string) || (manga ? manga.title : 'Webtoon Series');
   const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 1;
 
@@ -728,7 +727,7 @@ readerRouter.get('/api/reader/panel-image', (req, res) => {
 // ── POST /api/reader/mark-read - Mark chapter as read ─────────────────────────
 readerRouter.post('/api/reader/mark-read', (req, res) => {
   const { mangaId, chapterNumber, manga: mangaPayload } = req.body || {};
-  let manga = SqliteDb.getMangaById(String(mangaId)) || mangaDatabase.find((m) => m.id === mangaId);
+  let manga = resolveManga(String(mangaId || ''));
   if (!manga && mangaPayload && typeof mangaPayload === 'object') {
     const rawManga: MangaItem = {
       id: String(mangaId || mangaPayload.id || `manga_${Date.now()}`),

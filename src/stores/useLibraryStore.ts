@@ -20,6 +20,11 @@ const DEFAULT_CONFIG: DatabaseSyncConfig = {
 
 interface LibraryState {
   mangaList: MangaItem[];
+  totalCount: number;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  page: number;
+  pageSize: number;
   logs: AutoUpdateLog[];
   duplicates: DuplicateCandidate[];
   config: DatabaseSyncConfig;
@@ -34,7 +39,9 @@ interface LibraryState {
   setIsUpdating: (updating: boolean) => void;
 
   // Data fetching
-  fetchMangaList: () => Promise<void>;
+  fetchMangaList: (customPageSize?: number) => Promise<void>;
+  fetchNextMangaPage: () => Promise<void>;
+  fetchAllManga: () => Promise<void>;
   fetchLogs: () => Promise<void>;
   fetchConfig: () => Promise<void>;
   scanDuplicates: () => Promise<void>;
@@ -63,6 +70,11 @@ interface LibraryState {
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
   mangaList: [],
+  totalCount: 0,
+  hasMore: false,
+  isLoadingMore: false,
+  page: 1,
+  pageSize: 100,
   logs: [],
   duplicates: [],
   config: DEFAULT_CONFIG,
@@ -82,15 +94,71 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     })),
   setIsUpdating: (isUpdating) => set({ isUpdating }),
 
-  fetchMangaList: async () => {
+  fetchMangaList: async (customPageSize) => {
+    try {
+      const size = customPageSize || get().pageSize || 100;
+      const res = await apiFetch(`/api/manga?limit=${size}&offset=0`);
+      if (res.ok) {
+        const totalHeader = res.headers?.get ? res.headers.get('X-Total-Count') : null;
+        const data: MangaItem[] = await res.json();
+        const totalCount = totalHeader ? parseInt(totalHeader, 10) : data.length;
+        set({
+          mangaList: data,
+          totalCount,
+          hasMore: data.length < totalCount,
+          page: 1,
+        });
+      }
+    } catch (err) {
+      console.error('[Library] Fetch manga list error:', err);
+    }
+  },
+
+  fetchNextMangaPage: async () => {
+    const { mangaList, totalCount, hasMore, isLoadingMore, page, pageSize } = get();
+    if (!hasMore || isLoadingMore) return;
+    set({ isLoadingMore: true });
+    try {
+      const offset = mangaList.length;
+      const res = await apiFetch(`/api/manga?limit=${pageSize}&offset=${offset}`);
+      if (res.ok) {
+        const totalHeader = res.headers?.get ? res.headers.get('X-Total-Count') : null;
+        const nextBatch: MangaItem[] = await res.json();
+        const newTotal = totalHeader ? parseInt(totalHeader, 10) : totalCount;
+        const combined = [...mangaList, ...nextBatch];
+        const seen = new Set<string>();
+        const deduped: MangaItem[] = [];
+        for (const item of combined) {
+          if (!seen.has(item.id)) {
+            seen.add(item.id);
+            deduped.push(item);
+          }
+        }
+        set({
+          mangaList: deduped,
+          totalCount: newTotal,
+          hasMore: deduped.length < newTotal,
+          page: page + 1,
+          isLoadingMore: false,
+        });
+      } else {
+        set({ isLoadingMore: false });
+      }
+    } catch (err) {
+      console.error('[Library] Fetch next manga page error:', err);
+      set({ isLoadingMore: false });
+    }
+  },
+
+  fetchAllManga: async () => {
     try {
       const res = await apiFetch('/api/manga');
       if (res.ok) {
         const data = await res.json();
-        set({ mangaList: data });
+        set({ mangaList: data, totalCount: data.length, hasMore: false });
       }
     } catch (err) {
-      console.error('[Library] Fetch manga list error:', err);
+      console.error('[Library] Fetch all manga error:', err);
     }
   },
 

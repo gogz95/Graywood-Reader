@@ -7,7 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { MangaItem } from '../../src/types';
-import { resolveRequestUserId, mangaDatabase } from '../appState';
+import { resolveRequestUserId } from '../appState';
 import { scanStorage, getArchiveEntry } from './localLibrary';
 import { kotatsuImageEngine, matchLiveDomain, autoDiscoverLiveSourceForManga } from '../services/crawlerEngine';
 
@@ -291,7 +291,7 @@ komgaCompatRouter.get('/api/v1/books/:id/pages', async (req: Request, res: Respo
   const mangaId = parts[0];
   const chNum = Number(parts[1]) || 1;
 
-  const manga = SqliteDb.getMangaById(mangaId) || mangaDatabase.find((m) => m.id === mangaId);
+  const manga = SqliteDb.getMangaById(mangaId);
   if (!manga) return res.status(404).json({ error: 'Book not found' });
 
   // If local archive
@@ -330,7 +330,7 @@ komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', async (req: Request
   const chNum = Number(parts[1]) || 1;
   const pageNum = Number(req.params.pageNumber) || 1;
 
-  const manga = SqliteDb.getMangaById(mangaId) || mangaDatabase.find((m) => m.id === mangaId);
+  const manga = SqliteDb.getMangaById(mangaId);
   if (manga?.sourceUrl?.startsWith('local://')) {
     const archiveId = manga.sourceUrl.replace('local://', '');
     return res.redirect(`/api/local/library/${archiveId}/page/${pageNum - 1}`);

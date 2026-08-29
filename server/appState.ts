@@ -135,19 +135,39 @@ export function resolveAuthUser(req: express.Request): UserProfile | null {
 // IN-MEMORY DB STATE (live-exported: importers always see the current value)
 // ============================================================================
 
-// Persistent Database File Path (legacy JSON snapshot target)
-export const DB_FILE_PATH = path.join(process.cwd(), "database.json");
+// Persistent Database File Path (isolated under data/backups/ as canonical persistent storage)
+export const DB_BACKUP_DIR = path.join(process.cwd(), "data", "backups");
+export const DB_FILE_PATH = path.join(DB_BACKUP_DIR, "legacy-snapshot.json");
 
-export let mangaDatabase: MangaItem[] = [];
-
-// O(1) index: id → array position. Rebuilt whenever mangaDatabase is reassigned;
-// maintained incrementally on add/update/delete.
-export let mangaIdIndex = new Map<string, number>();
-
-function rebuildMangaIdIndex(): void {
-  mangaIdIndex = new Map();
-  mangaDatabase.forEach((m, i) => mangaIdIndex.set(m.id, i));
+/**
+ * Direct SQLite reader returning full catalog array for explicit backups/exports.
+ */
+export function getMangaDatabase(): MangaItem[] {
+  return SqliteDb.getAllManga();
 }
+
+/**
+ * Backward-compatible live proxy delegating directly to SQLite WAL store.
+ * Eliminates duplicate in-memory RAM allocations while preserving array ergonomics.
+ */
+export const mangaDatabase: MangaItem[] = new Proxy([] as MangaItem[], {
+  get(_target, prop) {
+    if (prop === 'length') {
+      return SqliteDb.getMangaCount();
+    }
+    if (prop === Symbol.iterator) {
+      return function* () {
+        yield* SqliteDb.getAllManga();
+      };
+    }
+    const all = SqliteDb.getAllManga();
+    if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+      return all[Number(prop)];
+    }
+    const val = (all as any)[prop];
+    return typeof val === 'function' ? val.bind(all) : val;
+  },
+});
 
 export let userProfiles: UserProfile[] = [
   {
@@ -273,11 +293,15 @@ export function writeLegacyJsonSnapshot(reason: string) {
     return;
   }
   try {
+    if (!fs.existsSync(DB_BACKUP_DIR)) {
+      fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
+    }
+    const allManga = SqliteDb.getAllManga();
     const dataToSave = {
       version: 1,
       gdprEncrypted: true,
       lastSaved: new Date().toISOString(),
-      mangaDatabase,
+      mangaDatabase: allManga,
       userProfiles: buildEncryptedProfiles(),
       autoUpdateLogs,
       syncConfig,
@@ -288,7 +312,7 @@ export function writeLegacyJsonSnapshot(reason: string) {
     const tempPath = `${DB_FILE_PATH}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(dataToSave, null, 2), "utf-8");
     fs.renameSync(tempPath, DB_FILE_PATH);
-    console.log(`[GDPR Database Engine] Wrote legacy JSON snapshot (${reason}) with ${mangaDatabase.length} series & ${userProfiles.length} encrypted profiles.`);
+    console.log(`[GDPR Database Engine] Wrote legacy JSON snapshot (${reason}) with ${allManga.length} series & ${userProfiles.length} encrypted profiles.`);
   } catch (err) {
     console.error("[GDPR Database Engine] Error writing legacy JSON snapshot:", err);
   }
@@ -300,17 +324,7 @@ export function writeLegacyJsonSnapshot(reason: string) {
 
 export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
   SqliteDb.upsertManga(item);
-  const existingIdx = mangaIdIndex.get(item.id);
-  if (existingIdx !== undefined) {
-    mangaDatabase[existingIdx] = item;
-  } else {
-    mangaIdIndex.set(item.id, mangaDatabase.length);
-    mangaDatabase.push(item);
-  }
-  syncConfig.totalTracked = mangaDatabase.length;
-  // Note: manga row is already persisted by SqliteDb.upsertManga() above.
-  // saveDatabaseToDisk() is intentionally NOT called here — it flushes
-  // profiles/settings/config/logs which haven't changed.
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
   try { notifyLibraryItemChanged(item); } catch {}
   return item;
 }
@@ -318,34 +332,22 @@ export function syncAddOrUpdateManga(item: MangaItem): MangaItem {
 export function syncBulkAddOrUpdateManga(items: MangaItem[]) {
   if (!items || items.length === 0) return;
   SqliteDb.bulkUpsertManga(items);
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
   for (const item of items) {
-    const existingIdx = mangaIdIndex.get(item.id);
-    if (existingIdx !== undefined) {
-      mangaDatabase[existingIdx] = item;
-    } else {
-      mangaIdIndex.set(item.id, mangaDatabase.length);
-      mangaDatabase.push(item);
-    }
     try { notifyLibraryItemChanged(item); } catch {}
   }
-  syncConfig.totalTracked = mangaDatabase.length;
 }
 
 export function syncDeleteManga(id: string) {
   SqliteDb.deleteManga(id);
-  mangaDatabase = mangaDatabase.filter((m) => m.id !== id);
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
   try { notifyLibraryItemChanged({ id }); } catch {}
 }
 
 export function syncBulkDeleteManga(ids: string[]): void {
   if (!ids || ids.length === 0) return;
   SqliteDb.bulkDeleteManga(ids);
-  const idSet = new Set(ids);
-  mangaDatabase = mangaDatabase.filter((m) => !idSet.has(m.id));
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
   for (const id of ids) {
     try { notifyLibraryItemChanged({ id }); } catch {}
   }
@@ -354,22 +356,18 @@ export function syncBulkDeleteManga(ids: string[]): void {
 export function syncResetManga(items: MangaItem[]) {
   SqliteDb.deleteAllManga();
   SqliteDb.bulkUpsertManga(items);
-  mangaDatabase = [...items];
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
 }
 
 // Wholesale replacement seams used by admin/GDPR erasure & dead-source purge.
 export function replaceMangaDatabase(items: MangaItem[]): void {
-  mangaDatabase = items;
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
+  SqliteDb.deleteAllManga();
+  SqliteDb.bulkUpsertManga(items);
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
 }
 
 export function reloadMangaFromSql(): void {
-  mangaDatabase = SqliteDb.getAllManga();
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
+  syncConfig.totalTracked = SqliteDb.getMangaCount();
 }
 
 /**
@@ -468,10 +466,7 @@ export function loadDatabaseFromDisk() {
     }
 
     // 1. Manga library: SQLite is the canonical store.
-    //    (migrateJsonToSqlite() already imported any legacy database.json at module load.)
-    mangaDatabase = SqliteDb.getAllManga();
-    rebuildMangaIdIndex();
-    syncConfig.totalTracked = mangaDatabase.length;
+    syncConfig.totalTracked = SqliteDb.getMangaCount();
 
     // 2. Detect whether app state already lives in SQLite; otherwise perform a
     //    one-time migration of profiles/settings/config/logs from database.json.
@@ -586,37 +581,24 @@ export function loadDatabaseFromDisk() {
     }
 
     // Auto-mark setup completed if database already contains existing series or settings
-    if (!appSettings.initialSetupCompleted && (storedSettingsJson || mangaDatabase.length > 0)) {
+    const currentMangaCount = SqliteDb.getMangaCount();
+    if (!appSettings.initialSetupCompleted && (storedSettingsJson || currentMangaCount > 0)) {
       appSettings.initialSetupCompleted = true;
     }
 
-    console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${mangaDatabase.length} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
+    console.log(`[SQLite Engine] Startup state loaded (SQLite canonical): ${currentMangaCount} series, ${userProfiles.length} profiles, ${autoUpdateLogs.length} update logs.`);
   } catch (err) {
     console.error("[SQLite Engine] Error loading app state on startup:", err);
   }
 }
 
-// Helper: Purge any residual Reaper Scans items from memory & SQLite
+// Helper: Purge any residual Reaper Scans items from SQLite
 export function purgeReaperScansFromAllStorage() {
-  const initialLen = mangaDatabase.length;
-  mangaDatabase = mangaDatabase.filter((m) => {
-    const isReaper = (m.sourceName && m.sourceName.includes('Reaper Scans')) || (m.sourceUrl && m.sourceUrl.includes('reaperscans.com'));
-    if (isReaper) return false;
-    if (m.availableSources && m.availableSources.length > 0) {
-      m.availableSources = m.availableSources.filter(
-        (s) => s.sourceName !== 'Reaper Scans' && !s.sourceUrl.includes('reaperscans.com')
-      );
-    }
-    return true;
-  });
-  rebuildMangaIdIndex();
-  syncConfig.totalTracked = mangaDatabase.length;
-
   try {
     const sqlitePurged = SqliteDb.purgeReaperScans();
-    const removedCount = initialLen - mangaDatabase.length;
-    if (removedCount > 0 || sqlitePurged > 0) {
-      console.log(`[Purge Engine] Successfully purged ${removedCount} memory items & ${sqlitePurged} SQLite Reaper Scans entries.`);
+    syncConfig.totalTracked = SqliteDb.getMangaCount();
+    if (sqlitePurged > 0) {
+      console.log(`[Purge Engine] Successfully purged ${sqlitePurged} SQLite Reaper Scans entries.`);
       saveDatabaseToDisk();
     }
   } catch (e) { }

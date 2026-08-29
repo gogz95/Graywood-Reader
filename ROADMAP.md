@@ -157,6 +157,21 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 ---
 
+### 🖥️ Track 8: Desktop Runtime Strategy & Consolidation (Electron vs. Tauri) (Active Plan 🟡)
+- **Runtime Trade-Off Evaluation & Canonical Target Selection**:
+  - **Option A: Electron Packaging**:
+    - *Strengths*: Bundled Node.js 24 runtime, direct server process spawning without IPC bridging, full Chromium flag control (zero-copy GPU rasterization, canvas OOP), and native Discord Rich Presence (RPC) support out-of-the-box.
+    - *Trade-offs*: ~150MB+ bundle size, higher idle memory footprint (~120–180MB RAM).
+  - **Option B: Tauri v2 Packaging (`src-tauri/`)**:
+    - *Strengths*: Ultra-lightweight (~10–15MB installer), minimal idle RAM (~30–45MB), utilizes native OS WebView2 (Windows) / WebKit (macOS/Linux).
+    - *Trade-offs*: Requires Rust toolchain for builds; requires managing sidecar backend or headless node binary for the Express/SQLite server.
+- **Implementation & Pruning Roadmap**:
+  - [ ] Align on canonical desktop runtime target based on user deployment priority (low-resource client vs. standalone self-hosted server bundle).
+  - [ ] Consolidate desktop startup scripts: unify `start-desktop.ps1`, `run.bat`, and `electron:dev`/`tauri:dev` npm scripts.
+  - [ ] Prune unused wrapper configurations, devDependencies, and build scripts once selection is finalized to eliminate repository bloat.
+
+---
+
 ## 🔧 Code Quality & Maintenance Tracking
 
 ### 🟢 Completed / Resolved

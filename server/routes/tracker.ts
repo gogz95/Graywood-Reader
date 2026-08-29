@@ -295,15 +295,12 @@ Identify duplicate pairs (e.g. romanized vs English translation). Return JSON ar
 trackerRouter.post('/api/tracker/merge-duplicates', (req, res) => {
   const { primaryId, secondaryId, newTitle, newAltTitles, newGenres, newDescription } = req.body;
 
-  const primaryIdx = mangaDatabase.findIndex((m) => m.id === primaryId);
-  const secondaryIdx = mangaDatabase.findIndex((m) => m.id === secondaryId);
+  const primary = SqliteDb.getMangaById(primaryId);
+  const secondary = SqliteDb.getMangaById(secondaryId);
 
-  if (primaryIdx === -1 || secondaryIdx === -1) {
+  if (!primary || !secondary) {
     return res.status(404).json({ error: "One or both items not found" });
   }
-
-  const primary = mangaDatabase[primaryIdx];
-  const secondary = mangaDatabase[secondaryIdx];
 
   const maxCurrentChapter = Math.max(primary.currentChapter || 0, secondary.currentChapter || 0);
   const maxLatestChapter = Math.max(primary.latestChapter || 1, secondary.latestChapter || 1);
@@ -328,7 +325,7 @@ trackerRouter.post('/api/tracker/merge-duplicates', (req, res) => {
     success: true,
     mergedItem: mergedPrimary,
     removedId: secondaryId,
-    remainingTotal: mangaDatabase.length,
+    remainingTotal: SqliteDb.getMangaCount(),
   });
 });
 
@@ -579,9 +576,9 @@ trackerRouter.post('/api/mangadex/import/:mangaDexId', async (req, res) => {
     const description = descObj.en || Object.values(descObj)[0] || 'MangaDex imported series.';
     const tags = (m.attributes.tags || []).map((t: any) => t.attributes?.name?.en).filter(Boolean);
 
-    const existingIndex = mangaDatabase.findIndex((item) => item.apiId === mangaDexId || item.id === mangaDexId);
-    if (existingIndex !== -1) {
-      return res.json({ success: true, message: "Series already synced in database", manga: mangaDatabase[existingIndex] });
+    const existingManga = SqliteDb.getMangaByApiId(mangaDexId) || SqliteDb.getMangaById(mangaDexId);
+    if (existingManga) {
+      return res.json({ success: true, message: "Series already synced in database", manga: existingManga });
     }
 
     const newMangaItem: MangaItem = {

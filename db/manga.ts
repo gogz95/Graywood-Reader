@@ -234,8 +234,12 @@ export function rekeyCollidedSourceIds(): number {
 }
 
 export function migrateJsonToSqlite() {
-  const jsonPath = path.join(process.cwd(), 'database.json');
-  if (!fs.existsSync(jsonPath)) return;
+  const legacyPaths = [
+    path.join(process.cwd(), 'data', 'backups', 'legacy-snapshot.json'),
+    path.join(process.cwd(), 'database.json'),
+  ];
+  const jsonPath = legacyPaths.find((p) => fs.existsSync(p));
+  if (!jsonPath) return;
 
   const countRow = db.prepare('SELECT COUNT(*) as count FROM manga').get() as { count: number };
   if (countRow.count > 0) {
@@ -263,17 +267,13 @@ export function migrateJsonToSqlite() {
   }
 }
 
-let _mangaCache: MangaItem[] | null = null;
-
 export function invalidateMangaCache() {
-  _mangaCache = null;
+  // Maintained for backward-compatible interface contract
 }
 
 export function getAllManga(): MangaItem[] {
-  if (_mangaCache) return _mangaCache;
   const rows = stmtGetAllManga.all();
-  _mangaCache = rows.map(mapRowToMangaItem);
-  return _mangaCache;
+  return rows.map(mapRowToMangaItem);
 }
 
 export function queryManga(
@@ -353,30 +353,20 @@ export function queryManga(
 }
 
 export function getMangaById(id: string): MangaItem | null {
-  if (_mangaCache) {
-    const found = _mangaCache.find((m) => m.id === id);
-    if (found) return found;
-  }
   const row = stmtGetMangaById.get(id);
   return row ? mapRowToMangaItem(row) : null;
 }
 
 export function getMangaByApiId(apiId: string): MangaItem | null {
-  if (_mangaCache) {
-    const found = _mangaCache.find((m) => m.apiId === apiId);
-    if (found) return found;
-  }
   const row = stmtGetMangaByApiId.get(apiId);
   return row ? mapRowToMangaItem(row) : null;
 }
 
 export function upsertManga(item: MangaItem) {
-  _mangaCache = null;
   stmtUpsertManga.run(mapMangaItemToRow(item));
 }
 
 export function bulkUpsertManga(items: MangaItem[]) {
-  _mangaCache = null;
   const now = new Date().toISOString();
   const transaction = db.transaction((list: MangaItem[]) => {
     for (const item of list) {
@@ -421,22 +411,18 @@ export function bulkUpsertManga(items: MangaItem[]) {
 }
 
 export function updateChapterProgress(id: string, chapterNumber: number) {
-  _mangaCache = null;
   stmtUpdateProgress.run(chapterNumber, new Date().toISOString(), id);
 }
 
 export function toggleFavorite(id: string, isFavorite: boolean) {
-  _mangaCache = null;
   stmtToggleFavorite.run(isFavorite ? 1 : 0, id);
 }
 
 export function toggleFlag(id: string, isFlagged: boolean, flagReason?: string) {
-  _mangaCache = null;
   stmtToggleFlag.run(isFlagged ? 1 : 0, flagReason || null, isFlagged ? new Date().toISOString() : null, id);
 }
 
 export function deleteManga(id: string) {
-  _mangaCache = null;
   stmtDeleteManga.run(id);
   try {
     db.prepare('DELETE FROM user_favorites WHERE manga_id = ?').run(id);
@@ -449,7 +435,6 @@ export function deleteManga(id: string) {
 
 export function bulkDeleteManga(ids: string[]): number {
   if (!ids || ids.length === 0) return 0;
-  _mangaCache = null;
   const deleteTx = db.transaction((idList: string[]) => {
     let count = 0;
     for (const id of idList) {
@@ -469,13 +454,11 @@ export function bulkDeleteManga(ids: string[]): number {
 }
 
 export function deleteMangaByUserId(userId: string): number {
-  _mangaCache = null;
   const info = stmtDeleteMangaByUserId.run(userId);
   return Number(info.changes) || 0;
 }
 
 export function deleteAllManga() {
-  _mangaCache = null;
   db.prepare('DELETE FROM manga').run();
   try {
     db.prepare('DELETE FROM user_favorites').run();

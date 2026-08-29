@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
-import { resolveRequestUserId, mangaDatabase } from '../appState';
+import { resolveRequestUserId } from '../appState';
 import { verifyAuthToken } from '../security';
 import { eventBus } from '../services/eventBus';
 
@@ -87,25 +87,14 @@ progressRouter.get("/api/reader/progress", async (req, res) => {
   let targetMangaId: string | null = mangaIdParam || null;
 
   if (!targetMangaId && (sourceId || slug)) {
-    // 1. Check in-memory mangaDatabase
-    const manga = mangaDatabase.find((m) => {
+    const allManga = SqliteDb.getAllManga();
+    const sqliteMatch = allManga.find((m) => {
       const nameMatch = !sourceId || (m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase()));
       const urlMatch = !slug || (m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase()));
       return nameMatch && urlMatch;
     });
-    if (manga) {
-      targetMangaId = manga.id;
-    } else {
-      // 2. Check SqliteDb by sourceUrl / slug
-      const allManga = SqliteDb.getAllManga();
-      const sqliteMatch = allManga.find((m) => {
-        const nameMatch = !sourceId || (m.sourceName && m.sourceName.toLowerCase().includes(sourceId.toLowerCase()));
-        const urlMatch = !slug || (m.sourceUrl && m.sourceUrl.toLowerCase().includes(slug.toLowerCase()));
-        return nameMatch && urlMatch;
-      });
-      if (sqliteMatch) {
-        targetMangaId = sqliteMatch.id;
-      }
+    if (sqliteMatch) {
+      targetMangaId = sqliteMatch.id;
     }
   }
 
@@ -251,7 +240,7 @@ progressRouter.get("/api/reader/history", (req, res) => {
 
   for (const p of progRows) {
     if (!p.manga_id || map.has(p.manga_id)) continue;
-    let rawManga = SqliteDb.getMangaById(p.manga_id) || mangaDatabase.find((m) => m.id === p.manga_id);
+    let rawManga = SqliteDb.getMangaById(p.manga_id);
     if (!rawManga) {
       // Create resilient fallback MangaItem for series read from browse/external sources with missing metadata
       const cleanTitle = p.manga_id.replace(/^manga_|^m_/, '').replace(/[-_]/g, ' ') || 'External Series';

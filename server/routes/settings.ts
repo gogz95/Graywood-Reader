@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { APP_VERSION } from '../version';
 import {
-  mangaDatabase,
   appSettings,
   setAppSettings,
   syncConfig,
@@ -30,9 +29,8 @@ settingsRouter.get("/api/settings", (_req, res) => {
   // If the server has existing series in library or explicit completion flag, setup is completed
   const isSetupCompleted = Boolean(
     appSettings.initialSetupCompleted ||
-    mangaDatabase.length > 0 ||
-    SqliteDb.getSetting('appSettings') !== null ||
-    (typeof SqliteDb.getMangaCount === 'function' && SqliteDb.getMangaCount() > 0)
+    SqliteDb.getMangaCount() > 0 ||
+    SqliteDb.getSetting('appSettings') !== null
   );
 
   // Secrets never leave the server in plaintext: captcha API keys and webhook

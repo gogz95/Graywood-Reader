@@ -45,6 +45,9 @@ interface LibraryViewProps {
   isGuest?: boolean;
   onOpenAuthModal?: () => void;
   onRefreshLibrary?: () => void;
+  hasMoreServer?: boolean;
+  onLoadMoreServer?: () => void;
+  isLoadingMoreServer?: boolean;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -62,6 +65,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   isGuest = false,
   onOpenAuthModal,
   onRefreshLibrary,
+  hasMoreServer = false,
+  onLoadMoreServer,
+  isLoadingMoreServer = false,
 }) => {
   const [statusFilter, setStatusFilter] = useState<ReadingStatus | 'all' | 'favorites' | 'flagged'>('all');
   const [typeFilter, setTypeFilter] = useState<MangaType | 'all'>('all');
@@ -347,20 +353,24 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setVisibleLimit(36);
   }, [statusFilter, typeFilter, sortBy, searchQuery]);
 
-  // IntersectionObserver for lazy chunk rendering
+  // IntersectionObserver for lazy chunk rendering & progressive server loading
   React.useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setVisibleLimit((prev) => Math.min(prev + 24, sortedList.length));
+          if (visibleLimit < sortedList.length) {
+            setVisibleLimit((prev) => Math.min(prev + 24, sortedList.length));
+          } else if (hasMoreServer && onLoadMoreServer && !isLoadingMoreServer) {
+            onLoadMoreServer();
+          }
         }
       },
       { rootMargin: '400px' }
     );
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
-  }, [sortedList.length]);
+  }, [sortedList.length, visibleLimit, hasMoreServer, isLoadingMoreServer, onLoadMoreServer]);
 
   const visibleList = React.useMemo(() => sortedList.slice(0, visibleLimit), [sortedList, visibleLimit]);
 
@@ -853,9 +863,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               ))}
             </div>
 
-            {visibleLimit < sortedList.length && (
-              <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary">
-                Loading more series ({visibleLimit} of {sortedList.length})...
+            {(visibleLimit < sortedList.length || hasMoreServer) && (
+              <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary flex items-center justify-center gap-2">
+                {isLoadingMoreServer ? (
+                  <span>Fetching more library series from server...</span>
+                ) : (
+                  <span>Loading more series ({visibleLimit} of {sortedList.length}{hasMoreServer ? '+' : ''})...</span>
+                )}
               </div>
             )}
           </div>
@@ -880,9 +894,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               />
             ))}
           </div>
-          {visibleLimit < sortedList.length && (
-            <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary">
-              Loading more series ({visibleLimit} of {sortedList.length})...
+          {(visibleLimit < sortedList.length || hasMoreServer) && (
+            <div ref={sentinelRef} className="py-4 text-center text-xs font-mono text-secondary flex items-center justify-center gap-2">
+              {isLoadingMoreServer ? (
+                <span>Fetching more library series from server...</span>
+              ) : (
+                <span>Loading more series ({visibleLimit} of {sortedList.length}{hasMoreServer ? '+' : ''})...</span>
+              )}
             </div>
           )}
         </div>

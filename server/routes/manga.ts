@@ -4,7 +4,6 @@ import * as cheerio from 'cheerio';
 import { MangaItem, isNsfwManga, getNsfwDetectionReason } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   autoUpdateLogs,
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
@@ -142,7 +141,7 @@ mangaRouter.get('/', (req, res) => {
 // ── GET /api/manga/:id - Get Single Series with User Overlay ──────────────────
 mangaRouter.get('/:id', (req, res) => {
   const { id } = req.params;
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (!existing) return res.status(404).json({ error: 'Manga not found' });
 
   // Gate 18+ / NSFW content for guest users
@@ -314,7 +313,7 @@ mangaRouter.post('/bulk-import', (req, res) => {
 // ── POST /api/manga/:id/refresh-metadata - Single Manga Refresh ───────────────
 mangaRouter.post('/:id/refresh-metadata', async (req, res) => {
   const { id } = req.params;
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (!existing) return res.status(404).json({ error: 'Manga not found' });
 
   try {
@@ -333,7 +332,7 @@ mangaRouter.post('/:id/refresh-metadata', async (req, res) => {
 mangaRouter.post('/:id/pull-metadata-from-source', async (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (!existing) return res.status(404).json({ error: 'Manga not found' });
   if (!canModifyManga(req, existing)) {
     return res.status(403).json({ error: 'Forbidden', message: "You do not have permission to modify another user's series." });
@@ -451,8 +450,6 @@ mangaRouter.post('/:id/pull-metadata-from-source', async (req, res) => {
   updated.lastUpdated = new Date().toISOString();
 
   SqliteDb.upsertManga(updated);
-  const idx = mangaDatabase.findIndex((m) => m.id === id);
-  if (idx !== -1) mangaDatabase[idx] = updated;
   saveDatabaseToDisk();
 
   console.log(`[pull-metadata-from-source] Applied [${appliedFields.join(', ')}] from '${sourceName}' for '${updated.title}'`);
@@ -469,7 +466,7 @@ mangaRouter.post('/:id/pull-metadata-from-source', async (req, res) => {
 // ── GET /api/manga/:id/metadata-options - Aggregated Metadata Studio ──────────
 mangaRouter.get('/:id/metadata-options', async (req, res) => {
   const { id } = req.params;
-  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const manga = SqliteDb.getMangaById(id);
   if (!manga) return res.status(404).json({ error: 'Manga not found' });
 
   const searchOverride = typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim() : '';
@@ -730,7 +727,7 @@ mangaRouter.get('/:id/metadata-options', async (req, res) => {
 mangaRouter.post('/:id/custom-metadata-update', (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
-  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const manga = SqliteDb.getMangaById(id);
   if (!manga) return res.status(404).json({ error: 'Manga not found' });
   if (!canModifyManga(req, manga)) {
     return res.status(403).json({ error: 'Forbidden', message: "You do not have permission to modify another user's series." });
@@ -776,7 +773,7 @@ mangaRouter.post('/:id/custom-metadata-update', (req, res) => {
 // ── GET /api/manga/:id/find-sources - Search Alternative Sources ──────────────
 mangaRouter.get('/:id/find-sources', async (req, res) => {
   const { id } = req.params;
-  const manga = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const manga = SqliteDb.getMangaById(id);
   if (!manga) return res.status(404).json({ error: 'Manga not found' });
 
   const queryParam = ((req.query.q as string) || '').trim();
@@ -928,7 +925,7 @@ mangaRouter.get('/:id/find-sources', async (req, res) => {
 mangaRouter.post('/:id/attach-source', (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (!existing) return res.status(404).json({ error: 'Manga not found' });
   if (!canModifyManga(req, existing)) {
     return res.status(403).json({ error: 'Forbidden', message: "You do not have permission to modify another user's series." });
@@ -976,12 +973,14 @@ mangaRouter.post('/:id/attach-source', (req, res) => {
 // ── POST /api/manga/refresh-all-metadata - Bulk Refresh ───────────────────────
 mangaRouter.post('/refresh-all-metadata', async (_req, res) => {
   try {
-    console.log(`[Metadata Engine] Starting bulk metadata refresh for all ${mangaDatabase.length} series...`);
+    const totalSeriesCount = SqliteDb.getMangaCount();
+    console.log(`[Metadata Engine] Starting bulk metadata refresh for all ${totalSeriesCount} series...`);
     let refreshedCount = 0;
+    const allManga = SqliteDb.getAllManga();
 
     const batchSize = 5;
-    for (let i = 0; i < mangaDatabase.length; i += batchSize) {
-      const batch = mangaDatabase.slice(i, i + batchSize);
+    for (let i = 0; i < allManga.length; i += batchSize) {
+      const batch = allManga.slice(i, i + batchSize);
       await Promise.all(batch.map((m) => refreshSingleMangaMetadata(m).catch(() => m)));
       refreshedCount += batch.length;
     }
@@ -1002,7 +1001,7 @@ mangaRouter.post('/refresh-all-metadata', async (_req, res) => {
     res.json({
       success: true,
       updatedCount: refreshedCount,
-      totalCount: mangaDatabase.length,
+      totalCount: totalSeriesCount,
       message: `Successfully refreshed metadata for ${refreshedCount} series.`,
     });
   } catch (err: any) {
@@ -1118,7 +1117,7 @@ mangaRouter.post('/toggle-flag', (req, res) => {
   const { id, isFlagged, flagReason } = req.body || {};
   if (!id) return res.status(400).json({ error: 'Missing manga id' });
 
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (existing) {
     existing.isFlagged = Boolean(isFlagged);
     existing.flagReason = flagReason || (isFlagged ? 'Flagged for loading errors' : undefined);
@@ -1221,7 +1220,7 @@ mangaRouter.post('/sanitize-titles', (req, res) => {
 mangaRouter.delete('/:id', (req, res) => {
   if (!canWriteCatalog(req)) return rejectCatalogWrite(res);
   const { id } = req.params;
-  const existing = SqliteDb.getMangaById(id) || mangaDatabase.find((m) => m.id === id);
+  const existing = SqliteDb.getMangaById(id);
   if (existing && !canModifyManga(req, existing)) {
     return res.status(403).json({ error: 'Forbidden', message: "You do not have permission to delete another user's series." });
   }

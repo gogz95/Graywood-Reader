@@ -6,7 +6,6 @@
 import fs from 'fs';
 import path from 'path';
 import {
-  mangaDatabase,
   userProfiles,
   autoUpdateLogs,
   syncConfig,
@@ -96,8 +95,8 @@ export function createBackupNow(customLabel = ''): { success: boolean; filename?
       gdprEncrypted: true,
       exportedAt: now.toISOString(),
       generator: 'Graywood-Reader Auto-Backup',
-      totalSeries: mangaDatabase.length,
-      mangaDatabase,
+      totalSeries: fullDump.manga.length,
+      mangaDatabase: fullDump.manga,
       categories: fullDump.categories,
       mangaCategories: fullDump.mangaCategories,
       userProfiles: buildEncryptedProfiles(),

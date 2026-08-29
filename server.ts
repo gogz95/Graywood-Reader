@@ -54,7 +54,6 @@ import {
 import { logger, requestLoggerMiddleware } from "./server/logger";
 import { isSeriesFromDisabledSource } from "./server/sources/sourcesCatalog";
 import {
-  mangaDatabase,
   userProfiles,
   syncConfig,
   saveDatabaseToDisk,
@@ -160,7 +159,7 @@ app.get("/api/health", (req, res) => {
     version: APP_VERSION,
     uptime: Math.floor(process.uptime()),
     uptimeSeconds: Math.floor(process.uptime()),
-    seriesCount: mangaDatabase.length,
+    seriesCount: SqliteDb.getMangaCount(),
     userCount: userProfiles.length,
     isHost,
   });
@@ -209,7 +208,7 @@ async function runLiveRateSpacedAutoUpdate() {
   autoUpdateStatus.lastScanTimestamp = new Date().toISOString();
 
   // Prioritize reading series & favorites over cold catalog entries
-  const eligibleSeries = mangaDatabase
+  const eligibleSeries = SqliteDb.getAllManga()
     .filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m))
     .sort((a, b) => {
       const aPrio = (a.status === 'reading' ? 10 : 0) + (a.isFavorite ? 5 : 0);
@@ -265,7 +264,7 @@ function scheduleBackgroundAutoUpdater() {
 
 function migrateStaleSourceUrlsInDatabase(): number {
   let changed = 0;
-  for (const m of mangaDatabase) {
+  for (const m of SqliteDb.getAllManga()) {
     let dirty = false;
     if (m.sourceUrl && typeof m.sourceUrl === 'string') {
       const next = normalizeLiveTargetUrl(m.sourceUrl);
@@ -370,7 +369,7 @@ export async function startServer() {
 
   httpServer = app.listen(PORT, HOST, () => {
     logger.info('Startup', `Graywood Reader v${APP_VERSION} running on http://${HOST}:${PORT}`);
-    logger.info('Startup', `SQLite database ready (${mangaDatabase.length} series, ${userProfiles.length} users)`);
+    logger.info('Startup', `SQLite database ready (${SqliteDb.getMangaCount()} series, ${userProfiles.length} users)`);
   });
 
   initLibraryCache();
