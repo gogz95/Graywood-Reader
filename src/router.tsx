@@ -1,7 +1,9 @@
 import { createBrowserRouter } from 'react-router';
 import { AppLayout } from './layouts/AppLayout';
+import { WelcomePage } from './pages/WelcomePage';
 import { LibraryPage } from './pages/LibraryPage';
 import { BrowsePage } from './pages/BrowsePage';
+import { CategoriesPage } from './pages/CategoriesPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { AutoUpdatePage } from './pages/AutoUpdatePage';
 import { DuplicatesPage } from './pages/DuplicatesPage';
@@ -13,8 +15,10 @@ export const router = createBrowserRouter([
     path: '/',
     element: <AppLayout />,
     children: [
-      { index: true, element: <LibraryPage /> },
+      { index: true, element: <WelcomePage /> },
+      { path: 'library', element: <LibraryPage /> },
       { path: 'browse', element: <BrowsePage /> },
+      { path: 'categories', element: <CategoriesPage /> },
       { path: 'sources', element: <SourcesPage /> },
       { path: 'autoupdate', element: <AutoUpdatePage /> },
       { path: 'duplicates', element: <DuplicatesPage /> },

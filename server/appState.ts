@@ -397,7 +397,7 @@ function applySyncConfigRestored(config: DatabaseSyncConfig) {
  * (mirrors the restore semantics minus the removed-sources reviver).
  */
 export function applySyncConfigPatch(cleanConfig: Record<string, any>): void {
-  syncConfig = { ...syncConfig, ...cleanConfig, totalTracked: mangaDatabase.length };
+  syncConfig = { ...syncConfig, ...cleanConfig, totalTracked: SqliteDb.getMangaCount() };
   if (Array.isArray(cleanConfig.disabledSources)) {
     disabledSourceIds.clear();
     cleanConfig.disabledSources.forEach((id: string) => disabledSourceIds.add(String(id)));

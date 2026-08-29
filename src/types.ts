@@ -3,7 +3,7 @@ export type ReaderBgColor = 'slate' | 'black' | 'charcoal' | 'sepia' | 'white';
 export type ReaderImageFilter = 'normal' | 'grayscale' | 'sepia' | 'warm-amber' | 'invert' | 'brightness' | 'oled' | 'e-ink' | 'sharpener' | 'high-contrast' | 'dithered-1bit';
 export type AppTheme = 'amber' | 'emerald' | 'amoled' | 'violet' | 'cyberpunk' | 'crimson' | 'nord';
 export type MangaType = 'manga' | 'manhwa' | 'manhua' | 'novel';
-export type AppNavTab = 'library' | 'browse' | 'sources' | 'settings' | 'autoupdate' | 'duplicates' | 'openapi';
+export type AppNavTab = 'welcome' | 'library' | 'browse' | 'categories' | 'sources' | 'settings' | 'autoupdate' | 'duplicates' | 'openapi';
 
 
 export type SourceEngineType = 'madara' | 'mangathemesia' | 'mangadex' | 'foolslide' | 'wpcomics' | 'custom_html';
@@ -425,3 +425,43 @@ export function hasWorkingReaderSource(manga: {
 // NSFW detection logic lives in src/utils/nsfwDetection.ts.
 // Re-exported here for full backward compatibility with all existing imports.
 export { isNsfwManga, getNsfwDetectionReason } from './utils/nsfwDetection';
+
+export interface FlagCategory {
+  id: string;
+  label: string;
+  description: string;
+  flagReason: string;
+}
+
+export const FLAG_CATEGORIES: FlagCategory[] = [
+  {
+    id: 'no_pages',
+    label: 'Does not load pages',
+    description: 'Reader opens but shows broken/blank/placeholder images.',
+    flagReason: 'Does not load pages',
+  },
+  {
+    id: 'wrong_chapter',
+    label: 'Loads wrong chapter',
+    description: 'The wrong chapter content is displayed when reading.',
+    flagReason: 'Loads wrong chapter',
+  },
+  {
+    id: 'wrong_series',
+    label: 'Loads wrong series',
+    description: 'A different series with a similar title is loaded.',
+    flagReason: 'Loads wrong series',
+  },
+  {
+    id: 'missing_source',
+    label: 'Missing source',
+    description: 'No working reading source or chapter parser is linked.',
+    flagReason: 'Missing source',
+  },
+  {
+    id: 'other',
+    label: 'Other Fault',
+    description: 'Any other problem with this series or its content.',
+    flagReason: 'Other Fault',
+  },
+];

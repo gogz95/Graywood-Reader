@@ -5,7 +5,7 @@
 import * as cheerio from 'cheerio';
 import { MangaItem } from '../../../src/types';
 import { SqliteDb } from '../../../sqlite-db';
-import { mangaDatabase, appSettings, saveDatabaseToDisk, syncAddOrUpdateManga } from '../../appState';
+import { appSettings, saveDatabaseToDisk, syncAddOrUpdateManga } from '../../appState';
 import {
   snapshotMetadataOverrides,
   restoreMetadataOverrides,
@@ -520,8 +520,9 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
   let purgedCount = 0;
   let refreshedCount = 0;
 
+  const allManga = SqliteDb.getAllManga();
   const validItems: MangaItem[] = [];
-  for (const m of mangaDatabase) {
+  for (const m of allManga) {
     if (isSeriesFromDisabledSource(m)) {
       SqliteDb.deleteManga(m.id);
       purgedCount++;
@@ -530,10 +531,7 @@ export async function purgeDisabledSourcesAndRefreshMetadata(): Promise<{
     }
   }
 
-  mangaDatabase.length = 0;
-  mangaDatabase.push(...validItems);
-
-  for (const m of mangaDatabase.slice(0, 50)) {
+  for (const m of validItems.slice(0, 50)) {
     try {
       await refreshSingleMangaMetadata(m);
       refreshedCount++;

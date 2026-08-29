@@ -18,8 +18,9 @@ import {
   isSourceAlive,
 } from '../../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../../captchaSolver';
-import { sourceCookieJar, updateSourceHealth } from '../sourceHealthService';
-import { appSettings, mangaDatabase } from '../../appState';
+import { sourceCookieJar } from '../sourceHealthService';
+import { SqliteDb } from '../../../sqlite-db';
+import { appSettings } from '../../appState';
 
 export const SCRAPER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -40,7 +41,7 @@ export function dedupeExploreItems(items: any[]): any[] {
 }
 
 export function buildDatabaseExploreItems(limit: number = 30): any[] {
-  return mangaDatabase
+  return SqliteDb.getAllManga()
     .filter((m) => m && m.title && m.title !== 'Unknown')
     .slice(0, limit)
     .map((m) => ({

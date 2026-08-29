@@ -7,7 +7,6 @@ import { Router, Request, Response } from 'express';
 import { MangaItem, isNsfwManga } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
   isNsfwAccessAllowed,
@@ -52,8 +51,9 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
   let newCount = 0;
 
   // Build O(1) title lookup map for fast exact matching
+  const allManga = SqliteDb.getAllManga();
   const titleMap = new Map<string, MangaItem>();
-  for (const m of mangaDatabase) {
+  for (const m of allManga) {
     const norm = m.title.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (norm) titleMap.set(norm, m);
     for (const alt of (m.altTitles || [])) {
@@ -102,7 +102,7 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
       let maxSim = 0;
       let similarTarget: MangaItem | null = null;
 
-      for (const existing of mangaDatabase) {
+      for (const existing of allManga) {
         const sim = calculateStringSimilarity(existing.title, item.title);
         if (sim > maxSim) {
           maxSim = sim;
@@ -434,6 +434,69 @@ exploreRouter.get('/api/kotatsu/updates', async (req, res) => {
   }
 });
 
+// ── GET /api/explore/welcome ────────────────────────────────────────────────
+exploreRouter.get('/api/explore/welcome', async (req, res) => {
+  try {
+    let allManga = SqliteDb.getAllManga();
+    const isNsfwAllowed = isNsfwAccessAllowed(req);
+    if (!isNsfwAllowed) {
+      allManga = allManga.filter((m: any) => !isNsfwManga(m));
+    }
+
+    // 1. Newly updated series (sorted by lastUpdated DESC)
+    const recentlyUpdated = [...allManga]
+      .filter((m: any) => m.title && m.latestChapter)
+      .sort((a: any, b: any) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
+      .slice(0, 18);
+
+    // 2. Popular series (sorted by rating DESC, then latestChapter DESC)
+    const popular = [...allManga]
+      .filter((m: any) => m.title)
+      .sort((a: any, b: any) => {
+        const rB = Number(b.rating) || 0;
+        const rA = Number(a.rating) || 0;
+        if (rB !== rA) return rB - rA;
+        return (Number(b.latestChapter) || 0) - (Number(a.latestChapter) || 0);
+      })
+      .slice(0, 18);
+
+    // 3. Stats summary
+    const totalChapters = allManga.reduce((acc: number, m: any) => acc + (Number(m.latestChapter) || 0), 0);
+    const activeSources = getAllSourcesWithExtensions().filter(
+      (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
+    );
+
+    // 4. Top Genres & Categories
+    const genreMap = new Map<string, number>();
+    for (const m of allManga) {
+      for (const g of m.genres || []) {
+        if (typeof g === 'string' && g.trim()) {
+          const norm = g.trim();
+          genreMap.set(norm, (genreMap.get(norm) || 0) + 1);
+        }
+      }
+    }
+    const topCategories = [...genreMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 14)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json({
+      newlyUpdated: recentlyUpdated,
+      popular,
+      stats: {
+        totalSeries: allManga.length,
+        totalChapters,
+        totalSources: activeSources.length,
+      },
+      topCategories,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to fetch welcome data' });
+  }
+});
+
+
 // ── GET /api/kotatsu/latest ──────────────────────────────────────────────────
 exploreRouter.get('/api/kotatsu/latest', async (req, res) => {
   const sourceId = (req.query.sourceId as string) || '';
@@ -660,7 +723,7 @@ export async function updateDatabaseWithAllAvailableSeries(): Promise<{
   return {
     totalNew,
     totalMerged,
-    totalSeriesInDatabase: mangaDatabase.length,
+    totalSeriesInDatabase: SqliteDb.getMangaCount(),
     sourceCounts,
   };
 }
@@ -698,7 +761,7 @@ export async function pullBulkMangaDexSeries(maxPages: number = 20): Promise<{
     totalNew: 0,
     totalMerged: 0,
     totalPulled,
-    totalSeriesInDatabase: mangaDatabase.length,
+    totalSeriesInDatabase: SqliteDb.getMangaCount(),
   };
 }
 
@@ -745,7 +808,7 @@ exploreRouter.post('/api/kotatsu/sync-database', (req, res) => {
     success: true,
     message: `Database sync complete! Integrated ${items.length} series.`,
     ...result,
-    totalInDatabase: mangaDatabase.length,
+    totalInDatabase: SqliteDb.getMangaCount(),
   });
 });
 
@@ -768,7 +831,7 @@ exploreRouter.get('/api/metadata/search-providers', async (req, res) => {
 
 exploreRouter.post('/api/metadata/enrich-manga/:id', async (req, res) => {
   const { id } = req.params;
-  const manga = mangaDatabase.find((m) => m.id === id) || SqliteDb.getMangaById(id);
+  const manga = SqliteDb.getMangaById(id);
   if (!manga) {
     return res.status(404).json({ error: 'Manga item not found' });
   }

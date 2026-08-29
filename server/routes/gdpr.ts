@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { SqliteDb } from '../../sqlite-db';
 import { toPublicUser, isHostRequest } from '../security';
 import {
-  mangaDatabase,
   userProfiles,
   setUserProfiles,
   reloadMangaFromSql,
@@ -26,7 +25,7 @@ gdprRouter.get("/api/gdpr/export-data/:userId", (req, res) => {
   const user = userProfiles.find((u) => u.id === userId);
   if (!user) return res.status(404).json({ error: "User not found" });
 
-  const userSeries = mangaDatabase.filter((m) => m.userId === userId);
+  const userSeries = SqliteDb.getAllManga().filter((m) => m.userId === userId);
   // Complete Article 15 bundle: profile + owned series + ALL per-user tables
   // (favorites, library state, page-level reading position, daily activity).
   const libraryState = Array.from(SqliteDb.getUserLibraryStateMap(userId).entries()).map(

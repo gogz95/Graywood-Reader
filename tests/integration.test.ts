@@ -489,7 +489,22 @@ describe('Komga Page Streaming & OPDS CBZ Acquisition', () => {
 
     await request(app).delete(`/api/manga/${mangaId}`);
   });
+
+  it('GET /api/explore/welcome returns newlyUpdated, popular, stats, and topCategories', async () => {
+    const res = await request(app).get('/api/explore/welcome');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('newlyUpdated');
+    expect(res.body).toHaveProperty('popular');
+    expect(res.body).toHaveProperty('stats');
+    expect(res.body).toHaveProperty('topCategories');
+    expect(Array.isArray(res.body.newlyUpdated)).toBe(true);
+    expect(Array.isArray(res.body.popular)).toBe(true);
+    expect(typeof res.body.stats.totalSeries).toBe('number');
+    expect(typeof res.body.stats.totalChapters).toBe('number');
+    expect(Array.isArray(res.body.topCategories)).toBe(true);
+  });
 });
+
 
 
 

@@ -24,8 +24,9 @@ import {
   AlertTriangle,
   Folder,
   Palette,
+  Flag,
 } from 'lucide-react';
-import { FLAG_CATEGORIES, FlagCategory } from './FlagIssueModal';
+import { FLAG_CATEGORIES, FlagCategory } from '../types';
 
 const SourceFinderModal = React.lazy(() => import('./SourceFinderModal').then(m => ({ default: m.SourceFinderModal })));
 const MetadataStudioModal = React.lazy(() => import('./MetadataStudioModal').then(m => ({ default: m.MetadataStudioModal })));
@@ -45,6 +46,21 @@ interface MangaDetailModalProps {
   isGuest?: boolean;
   onOpenAuthModal?: () => void;
 }
+
+const renderFlagIcon = (id: string) => {
+  switch (id) {
+    case 'no_pages':
+      return <AlertTriangle className="w-4 h-4" />;
+    case 'wrong_chapter':
+      return <BookOpen className="w-4 h-4" />;
+    case 'wrong_series':
+      return <Folder className="w-4 h-4" />;
+    case 'missing_source':
+      return <AlertTriangle className="w-4 h-4" />;
+    default:
+      return <Flag className="w-4 h-4" />;
+  }
+};
 
 export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
   manga,
@@ -310,7 +326,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
                           }}
                           className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-secondary hover:bg-danger/15 hover:text-danger transition-colors text-left border-b border-edge/60 last:border-0 cursor-pointer"
                         >
-                          <span className="p-1 rounded-lg bg-danger/20 text-danger">{cat.icon}</span>
+                          <span className="p-1 rounded-lg bg-danger/20 text-danger">{renderFlagIcon(cat.id)}</span>
                           <span>
                             <span className="block font-bold text-primary">{cat.label}</span>
                             <span className="block text-[10px] text-muted">{cat.description}</span>
@@ -698,13 +714,25 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
 
         {/* Footer Actions */}
         <div className="p-4 sm:p-5 bg-surface border-t border-edge flex items-center justify-between gap-3">
-          <button
-            onClick={() => onDeleteManga(manga.id)}
-            className="px-4 py-2.5 rounded-2xl bg-danger/15 hover:bg-danger/25 border border-danger/30 text-danger font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onDeleteManga(manga.id)}
+              className="px-4 py-2.5 rounded-2xl bg-danger/15 hover:bg-danger/25 border border-danger/30 text-danger font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+            <button
+              onClick={() => {
+                onReport?.(FLAG_CATEGORIES[0], manga);
+              }}
+              title="Report an issue with this series"
+              className="px-3 py-2.5 rounded-2xl bg-elevated hover:bg-edge-strong border border-edge text-muted hover:text-amber-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            >
+              <Flag className="w-4 h-4" />
+              <span className="hidden sm:inline">Report Issue</span>
+            </button>
+          </div>
 
           <div className="flex items-center gap-2.5">
             <button

@@ -4,7 +4,6 @@ import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   userProfiles,
   syncConfig,
   appSettings,
@@ -272,10 +271,10 @@ export async function restoreMigrationPackage(
     if (storedSyncConfigRaw) {
       try {
         const parsed = JSON.parse(storedSyncConfigRaw);
-        setSyncConfig({ ...syncConfig, ...parsed, totalTracked: mangaDatabase.length });
+        setSyncConfig({ ...syncConfig, ...parsed, totalTracked: SqliteDb.getMangaCount() });
       } catch {}
     } else if (configPayload?.syncConfig) {
-      setSyncConfig({ ...syncConfig, ...configPayload.syncConfig, totalTracked: mangaDatabase.length });
+      setSyncConfig({ ...syncConfig, ...configPayload.syncConfig, totalTracked: SqliteDb.getMangaCount() });
     }
 
     const storedLogs = SqliteDb.getAllLogs();

@@ -19,6 +19,7 @@ import {
   Sparkles,
   Shield,
   X,
+  Database,
 } from 'lucide-react';
 
 interface DataBackupMigrationTabProps {
@@ -51,6 +52,32 @@ export const DataBackupMigrationTab: React.FC<DataBackupMigrationTabProps> = ({
   const [isLoadingBackups, setIsLoadingBackups] = useState(false);
   const [isTriggeringBackup, setIsTriggeringBackup] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isOptimizingDb, setIsOptimizingDb] = useState(false);
+  const [dbOptimizeResult, setDbOptimizeResult] = useState<any | null>(null);
+
+  const handleRunDbVacuum = async () => {
+    if (isOptimizingDb) return;
+    setIsOptimizingDb(true);
+    try {
+      const res = await apiFetch('/api/settings/db/vacuum', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacuum: true, purgeExpiredCache: true, trimLogsDays: 30 }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setDbOptimizeResult(json.result || json);
+        showToast('Database optimization & WAL checkpoint completed successfully!');
+        onRefreshData();
+      } else {
+        showToast('Failed to optimize database.');
+      }
+    } catch (err: any) {
+      showToast(`Database optimization error: ${err.message}`);
+    } finally {
+      setIsOptimizingDb(false);
+    }
+  };
 
   const fetchLocalBackups = async () => {
     setIsLoadingBackups(true);
@@ -884,6 +911,61 @@ export const DataBackupMigrationTab: React.FC<DataBackupMigrationTabProps> = ({
           >
             <Download className="w-4 h-4" />
             <span>Export Tachiyomi Backup (.json)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* SQLite Database Storage & WAL Optimization Card */}
+      <div className="p-5 bg-app rounded-2xl border border-edge space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="font-bold text-primary text-sm flex items-center gap-2">
+            <Database className="w-4 h-4 text-accent" />
+            SQLite Database & WAL Storage Optimization
+          </div>
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent border border-accent/30">
+            better-sqlite3 WAL
+          </span>
+        </div>
+
+        <p className="text-secondary text-xs">
+          Perform a live ACID maintenance cycle: checkpoints the Write-Ahead Log (WAL), trims expired logs older than 30 days, purges stale chapter cache blobs, and executes SQLite <code className="px-1.5 py-0.5 rounded bg-surface border border-edge font-mono text-accent font-bold">PRAGMA optimize</code>.
+        </p>
+
+        {dbOptimizeResult && (
+          <div className="p-3 bg-surface rounded-xl border border-edge text-xs space-y-1">
+            <div className="font-bold text-primary flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>{dbOptimizeResult.message || 'Database Maintenance Complete'}</span>
+            </div>
+            {dbOptimizeResult.dbSizeBytes !== undefined && (
+              <div className="text-muted text-[11px] grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono">
+                <div>DB Size: <span className="text-primary font-bold">{(dbOptimizeResult.dbSizeBytes / (1024 * 1024)).toFixed(2)} MB</span></div>
+                <div>WAL Size: <span className="text-primary font-bold">{(dbOptimizeResult.walSizeBytes / 1024).toFixed(1)} KB</span></div>
+                <div>Cache Purged: <span className="text-primary font-bold">{dbOptimizeResult.purgedExpiredCache || 0}</span></div>
+                <div>Logs Trimmed: <span className="text-primary font-bold">{dbOptimizeResult.trimmedLogsCount || 0}</span></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={handleRunDbVacuum}
+            disabled={isOptimizingDb}
+            className="px-4 py-2.5 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-black text-xs flex items-center gap-2 shadow-md shadow-accent/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isOptimizingDb ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Running Database VACUUM & Optimize...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4" />
+                <span>Run Database VACUUM & Optimize</span>
+              </>
+            )}
           </button>
         </div>
       </div>

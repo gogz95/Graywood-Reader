@@ -11,6 +11,7 @@ import {
   Eye,
   Send,
   Zap,
+  Link2,
 } from 'lucide-react';
 import { MangaItem } from '../../types';
 import { ActiveRoomState, RoomParticipant } from '../../hooks/useMangaTogether';
@@ -50,6 +51,7 @@ export const MangaTogetherModal: React.FC<MangaTogetherModalProps> = ({
   const [userName, setUserName] = useState('');
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -60,6 +62,14 @@ export const MangaTogetherModal: React.FC<MangaTogetherModalProps> = ({
     navigator.clipboard.writeText(activeRoom.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    if (!activeRoom) return;
+    const shareUrl = `${window.location.origin}${window.location.pathname}?room=${activeRoom.id}`;
+    navigator.clipboard.writeText(shareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleCreate = async () => {
@@ -132,14 +142,26 @@ export const MangaTogetherModal: React.FC<MangaTogetherModalProps> = ({
                     {activeRoom.id}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="px-3.5 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
-                >
-                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                  {copied ? 'Copied!' : 'Copy Code'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    title="Copy 6-character room code"
+                    className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Code'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    title="Copy full invite URL to clipboard"
+                    className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent border border-accent/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Link2 className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'Link Copied!' : 'Share Link'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Status & Auto-Follow */}

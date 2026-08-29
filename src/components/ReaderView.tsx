@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch } from '../utils/api';
 import { KotatsuImageLoader, PageLoadState } from '../utils/KotatsuImageLoader';
-import { FlagCategory } from './FlagIssueModal';
 import {
   MangaItem,
   ChapterData,
@@ -12,6 +11,8 @@ import {
   ScanGroupOption,
   PageStickyNote,
   isNsfwManga,
+  FlagCategory,
+  FLAG_CATEGORIES,
 } from '../types';
 import {
   detectMangaFormat,
@@ -1464,6 +1465,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               >
                 <Globe className="w-4 h-4" />
                 Switch Mirror / Source
+              </button>
+              <button
+                onClick={() => onReport?.(FLAG_CATEGORIES[0], manga)}
+                className="px-4 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Flag className="w-4 h-4" />
+                Report Chapter Issue
               </button>
               {chapterData?.nextChapterNumber ? (
                 <button

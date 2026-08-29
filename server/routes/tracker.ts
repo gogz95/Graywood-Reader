@@ -7,7 +7,6 @@ import { Router, Request, Response } from 'express';
 import { MangaItem, DuplicateCandidate } from '../../src/types';
 import { SqliteDb } from '../../sqlite-db';
 import {
-  mangaDatabase,
   syncConfig,
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
@@ -80,11 +79,12 @@ trackerRouter.post('/api/tracker/auto-update', async (_req, res) => {
 
   autoUpdateStatus.isScanning = true;
   autoUpdateStatus.scannedCount = 0;
-  autoUpdateStatus.totalCount = mangaDatabase.length;
+  const allManga = SqliteDb.getAllManga();
+  autoUpdateStatus.totalCount = allManga.length;
   autoUpdateStatus.newReleasesFound = 0;
 
   try {
-    const toUpdate = mangaDatabase.filter((m) => m.autoUpdateEnabled !== false);
+    const toUpdate = allManga.filter((m) => m.autoUpdateEnabled !== false);
     autoUpdateStatus.totalCount = toUpdate.length;
 
     const batchSize = 4;
@@ -160,7 +160,8 @@ trackerRouter.post('/api/tracker/detect-duplicates', async (_req, res) => {
   const processedPairs = new Set<string>();
 
   const tokenMap = new Map<string, MangaItem[]>();
-  for (const m of mangaDatabase) {
+  const allMangaForDups = SqliteDb.getAllManga();
+  for (const m of allMangaForDups) {
     const tokens = Array.from(new Set(
       [m.title, ...(m.altTitles || [])]
         .flatMap((t) => t.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/))
@@ -221,9 +222,9 @@ trackerRouter.post('/api/tracker/detect-duplicates', async (_req, res) => {
   }
 
   const ai = getGeminiClient();
-  if (ai && mangaDatabase.length > 2) {
+  if (ai && allMangaForDups.length > 2) {
     try {
-      const dbTitlesList = mangaDatabase.map((m) => ({
+      const dbTitlesList = allMangaForDups.map((m) => ({
         id: m.id,
         title: m.title,
         altTitles: m.altTitles,
@@ -245,8 +246,8 @@ Identify duplicate pairs (e.g. romanized vs English translation). Return JSON ar
         const aiResults = JSON.parse(response.text);
         if (Array.isArray(aiResults)) {
           for (const aiDup of aiResults) {
-            const itemA = mangaDatabase.find((m) => m.id === aiDup.primaryId);
-            const itemB = mangaDatabase.find((m) => m.id === aiDup.secondaryId);
+            const itemA = allMangaForDups.find((m) => m.id === aiDup.primaryId);
+            const itemB = allMangaForDups.find((m) => m.id === aiDup.secondaryId);
             if (itemA && itemB && itemA.id !== itemB.id) {
               const existingIdx = candidates.findIndex(
                 (c) =>
@@ -395,7 +396,7 @@ Return JSON array of { title, type, reason }.`,
 trackerRouter.get('/api/db/export', (req, res) => {
   const format = req.query.format || 'json';
   const uid = resolveRequestUserId(req) || 'usr_admin';
-  const exportItems = SqliteDb.applyUserOverlay(mangaDatabase, uid);
+  const exportItems = SqliteDb.applyUserOverlay(SqliteDb.getAllManga(), uid);
 
   if (format === 'csv') {
     const headers = "id,title,type,currentChapter,latestChapter,status,rating,sourceName\n";
@@ -438,9 +439,12 @@ trackerRouter.post('/api/db/import', (req, res) => {
   if (replaceExisting) {
     syncResetManga(itemsToImport);
   } else {
+    const currentManga = SqliteDb.getAllManga();
+    const existingTitles = new Set(currentManga.map((m) => m.title.toLowerCase()));
+    const existingIds = new Set(currentManga.map((m) => m.id));
     const freshItems: MangaItem[] = [];
     itemsToImport.forEach((item: MangaItem) => {
-      const exists = mangaDatabase.some((m) => m.id === item.id || m.title.toLowerCase() === item.title.toLowerCase());
+      const exists = existingIds.has(item.id) || existingTitles.has(item.title.toLowerCase());
       if (!exists) freshItems.push(item);
     });
     if (freshItems.length > 0) syncBulkAddOrUpdateManga(freshItems);
@@ -456,7 +460,7 @@ trackerRouter.post('/api/db/import', (req, res) => {
   }));
   SqliteDb.bulkApplyUserImportState(uid, userStateBatch);
 
-  res.json({ success: true, totalTracked: mangaDatabase.length });
+  res.json({ success: true, totalTracked: SqliteDb.getMangaCount() });
 });
 
 trackerRouter.post('/api/db/reset', (req, res) => {
@@ -472,7 +476,7 @@ trackerRouter.post('/api/db/refresh-all', async (_req, res) => {
       success: true,
       message: `Database refreshed: ${result.purgedCount} purged, ${result.refreshedCount} refreshed.`,
       ...result,
-      data: mangaDatabase,
+      data: SqliteDb.getAllManga(),
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to refresh database", details: err.message });

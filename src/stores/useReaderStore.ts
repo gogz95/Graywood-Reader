@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { MangaItem, AppTheme, isNsfwManga } from '../types';
-import { FlagCategory } from '../components/FlagIssueModal';
+import { MangaItem, AppTheme, isNsfwManga, FlagCategory } from '../types';
 import { apiFetch } from '../utils/api';
 import { useAuthStore, getDeviceId } from './useAuthStore';
 import { useLibraryStore } from './useLibraryStore';

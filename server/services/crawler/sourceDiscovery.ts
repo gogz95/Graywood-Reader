@@ -4,7 +4,7 @@
 
 import { MangaItem } from '../../../src/types';
 import { SqliteDb } from '../../../sqlite-db';
-import { mangaDatabase, saveDatabaseToDisk } from '../../appState';
+import { syncAddOrUpdateManga } from '../../appState';
 import { disabledSourceIds, isSourceAlive, isSourceUrlOrNameDisabled } from '../../sources/sourcesCatalog';
 import { calculateStringSimilarity } from '../metadataService';
 import { searchWeebCentral } from '../../scrapers/weebCentral';
@@ -162,10 +162,7 @@ export async function autoDiscoverLiveSourceForManga(
       if (!manga.sourceUrl || manga.sourceUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, manga.sourceUrl)) {
         manga.sourceUrl = existingLive.sourceUrl;
         manga.sourceName = existingLive.sourceName || manga.sourceName;
-        SqliteDb.upsertManga(manga);
-        const idx = mangaDatabase.findIndex((m) => m.id === manga.id);
-        if (idx !== -1) mangaDatabase[idx] = manga;
-        saveDatabaseToDisk();
+        syncAddOrUpdateManga(manga);
       }
       return existingLive;
     }
@@ -189,10 +186,7 @@ export async function autoDiscoverLiveSourceForManga(
   }
 
   manga.lastUpdated = new Date().toISOString();
-  SqliteDb.upsertManga(manga);
-  const idx = mangaDatabase.findIndex((m) => m.id === manga.id);
-  if (idx !== -1) mangaDatabase[idx] = manga;
-  saveDatabaseToDisk();
+  syncAddOrUpdateManga(manga);
 
   console.log(`[Live Source Discovery] Auto-linked live source "${best.sourceName}" (${best.sourceUrl}) for "${manga.title}"`);
   return best;

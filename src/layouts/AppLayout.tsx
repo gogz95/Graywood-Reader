@@ -28,6 +28,7 @@ const PwaInstallPrompt = lazy(() => import('../components/PwaInstallPrompt').the
 import { OfflineIndicator } from '../components/OfflineIndicator';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 import { MangaItem, AppTheme, AppSettings, AppNavTab } from '../types';
+import { apiFetch } from '../utils/api';
 import { useRealtimeSync } from '../hooks/useRealtimeSync';
 import {
   useAuthStore,
@@ -47,8 +48,10 @@ const ViewFallback = () => (
 );
 
 const TAB_PATHS: Record<string, string> = {
-  library: '/',
+  welcome: '/',
+  library: '/library',
   browse: '/browse',
+  categories: '/categories',
   sources: '/sources',
   autoupdate: '/autoupdate',
   duplicates: '/duplicates',
@@ -152,12 +155,15 @@ export function AppLayout() {
 
   const activeTab: AppNavTab = (() => {
     const p = location.pathname;
+    if (p === '/' || p.startsWith('/welcome')) return 'welcome';
+    if (p.startsWith('/library')) return 'library';
     if (p.startsWith('/browse')) return 'browse';
+    if (p.startsWith('/categories')) return 'categories';
     if (p.startsWith('/sources')) return 'sources';
     if (p.startsWith('/autoupdate')) return 'autoupdate';
     if (p.startsWith('/duplicates')) return 'duplicates';
     if (p.startsWith('/openapi')) return 'openapi';
-    return 'library';
+    return 'welcome';
   })();
 
   const handleTabChange = useCallback((tab: AppNavTab) => {
@@ -181,6 +187,26 @@ export function AppLayout() {
     startPolling();
     return () => stopPolling();
   }, []);
+
+  // Manga Together: Deep Link & Auto-join room via ?room=CODE
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const roomCode = params.get('room');
+    if (!roomCode || mangaList.length === 0) return;
+
+    apiFetch(`/api/rooms/${roomCode.toUpperCase()}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const room = await res.json();
+        if (room && room.mangaId) {
+          const targetManga = mangaList.find((m) => m.id === room.mangaId);
+          if (targetManga) {
+            openReader(targetManga, room.chapterNumber || 1);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [location.search, mangaList, openReader]);
 
   const effectiveTheme = useMemo(() => {
     if ((appSettings.appTheme as string) === 'system') {
@@ -297,7 +323,7 @@ export function AppLayout() {
         activeProfile={activeProfile}
         isHostComputer={isHostComputer}
         onOpenProfileModal={() => openModal('userProfile')}
-        onOpenAuthModal={() => handleOpenAuthModal('login')}
+        onOpenAuthModal={(mode) => handleOpenAuthModal(mode || 'login')}
         onOpenAdminPanel={() => openModal('adminPanel')}
         onOpenSubmitBugModal={handleOpenSubmitBug}
         onOpenExtensionManager={() => openModal('extensionManager')}
