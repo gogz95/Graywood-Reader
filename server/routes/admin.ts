@@ -21,12 +21,13 @@ import {
 
 export const adminRouter = Router();
 
-// Restrict all Admin operations strictly to the Host Computer
+// Restrict all Admin operations strictly to the Host Computer or Authenticated Administrators
 adminRouter.use("/api/admin", (req, res, next) => {
-  if (!isHostRequest(req)) {
+  const user = (req as any).user;
+  if (!isHostRequest(req) && !(user && user.role === 'admin')) {
     return res.status(403).json({
       error: "Forbidden",
-      message: "Admin functionality is strictly restricted to the host computer.",
+      message: "Admin functionality is restricted to the host computer or authenticated administrators.",
     });
   }
   next();

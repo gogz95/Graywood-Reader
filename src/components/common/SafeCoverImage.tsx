@@ -13,6 +13,12 @@ export interface SafeCoverImageProps {
 }
 
 /**
+ * Session-wide cache of image URLs that failed to load (404/502/network failure).
+ * Once a cover URL fails anywhere in the client, all other components skip requesting it.
+ */
+export const failedCoverUrls = new Set<string>();
+
+/**
  * SafeCoverImage renders cover art or a clean "Missing Page / Cover" placeholder UI.
  * It avoids requesting broken or hardcoded fallback images and stops any recursive error loops.
  */
@@ -26,13 +32,16 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
   decoding = 'async',
   onLoad,
 }) => {
-  const [hasError, setHasError] = useState(false);
+  const cleanSrc = src?.trim();
+  const [hasError, setHasError] = useState(() => (cleanSrc ? failedCoverUrls.has(cleanSrc) : true));
 
   useEffect(() => {
-    setHasError(false);
-  }, [src]);
-
-  const cleanSrc = src?.trim();
+    if (cleanSrc && failedCoverUrls.has(cleanSrc)) {
+      setHasError(true);
+    } else {
+      setHasError(false);
+    }
+  }, [cleanSrc]);
 
   if (!cleanSrc || hasError) {
     return (
@@ -59,6 +68,7 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
       className={className}
       onLoad={onLoad}
       onError={() => {
+        if (cleanSrc) failedCoverUrls.add(cleanSrc);
         setHasError(true);
       }}
     />

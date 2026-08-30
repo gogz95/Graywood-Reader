@@ -49,15 +49,19 @@ function escapeXml(unsafe: string | number): string {
     .replace(/'/g, '&#39;');
 }
 
-// Negative cache for proxy images that returned 404/410/failed upstream (TTL: 5 minutes)
-const negativeProxyCache = new Map<string, number>();
+// Negative cache for proxy images that returned 404/410/failed upstream (TTL: 10 minutes)
+export const negativeProxyCache = new Map<string, number>();
 
-function pruneNegativeProxyCache() {
+export function pruneNegativeProxyCache() {
   if (negativeProxyCache.size < 500) return;
   const now = Date.now();
   for (const [key, expiresAt] of negativeProxyCache.entries()) {
     if (now > expiresAt) negativeProxyCache.delete(key);
   }
+}
+
+export function clearNegativeProxyCache() {
+  negativeProxyCache.clear();
 }
 
 // Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
@@ -100,6 +104,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
   pruneNegativeProxyCache();
   const cachedFailureExpiry = negativeProxyCache.get(targetUrl);
   if (cachedFailureExpiry && Date.now() < cachedFailureExpiry) {
+    res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
     return res.status(502).json({ error: 'Failed to fetch image from remote host (cached failure)' });
   }
 
@@ -119,35 +124,42 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
       let referer: string;
       if (pageUrl) {
         referer = pageUrl;
+      } else if (targetUrl.includes('mangadex.org') || targetUrl.includes('uploads.mangadex.org')) {
+        referer = 'https://mangadex.org/';
       } else if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
         referer = 'https://manhwa18.com/';
       } else if (sourceUrl) {
         try {
           referer = new URL(sourceUrl).origin + '/';
         } catch {
-          referer = 'https://mangadex.org';
+          referer = 'https://mangadex.org/';
         }
       } else {
         try {
           referer = new URL(targetUrl).origin + '/';
         } catch {
-          referer = 'https://mangadex.org';
+          referer = 'https://mangadex.org/';
         }
       }
 
-      const response = await fetchWithSsrfGuard(targetUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-          'Referer': referer,
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        },
-        signal: AbortSignal.timeout(20000),
-      });
+      let response: globalThis.Response;
+      try {
+        response = await fetchWithSsrfGuard(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'Referer': referer,
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          },
+          signal: AbortSignal.timeout(12000),
+        });
+      } catch (fetchErr: any) {
+        negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+        console.warn(`[Proxy Image Engine] Upstream network/socket failure for ${targetUrl}:`, fetchErr?.message || fetchErr);
+        return null;
+      }
 
       if (!response.ok) {
-        if (response.status === 404 || response.status === 410) {
-          negativeProxyCache.set(targetUrl, Date.now() + 5 * 60 * 1000);
-        }
+        negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
         console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
         return null;
       }
@@ -163,6 +175,8 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     });
 
     if (!cached) {
+      negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+      res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
       return res.status(502).json({ error: 'Failed to fetch image from remote host' });
     }
 
@@ -179,8 +193,10 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', 'inline');
     res.end(optimized.buffer);
   } catch (err: any) {
-    console.error(`[Proxy Image Engine] Error fetching target image (${targetUrl}):`, err?.message || err);
+    negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+    console.warn(`[Proxy Image Engine] Error proxying image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {
+      res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
       res.status(502).json({ error: 'Error proxying target image', message: err?.message || String(err) });
     } else {
       res.end();

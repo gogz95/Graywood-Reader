@@ -8,6 +8,7 @@ import {
   Play,
   Star,
 } from 'lucide-react';
+import { SafeCoverImage } from '../common/SafeCoverImage';
 
 export interface JumpBackInShelfProps {
   items: MangaItem[];
@@ -97,11 +98,11 @@ export const JumpBackInShelf = React.memo<JumpBackInShelfProps>(({ items, onOpen
               className="w-80 sm:w-96 card-wide-resume bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl p-3.5 flex gap-3.5 shadow-lg group cursor-pointer shrink-0"
             >
               <div className="relative w-20 sm:w-24 aspect-[3/4] rounded-xl overflow-hidden bg-app shrink-0">
-                <img
+                <SafeCoverImage
                   src={manga.coverImage}
                   alt={manga.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
+                  compact
                 />
                 {hasNew && (
                   <span className="absolute top-1 left-1 px-1.5 py-0.2 rounded text-[9px] font-black bg-accent-2 text-accent-fg shadow-md">
@@ -251,11 +252,11 @@ export const FreshReleasesShelf = React.memo<FreshReleasesShelfProps>(({ items, 
               className="w-36 sm:w-44 card-interactive bg-surface/90 border border-edge/80 hover:border-accent/60 rounded-2xl overflow-hidden shadow-lg flex flex-col shrink-0 cursor-pointer group"
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden bg-app">
-                <img
+                <SafeCoverImage
                   src={manga.coverImage}
                   alt={manga.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
+                  compact
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/40" />
 

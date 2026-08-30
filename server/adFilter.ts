@@ -75,6 +75,19 @@ export function isAdUrl(url: string): boolean {
   return false;
 }
 
+export const CHAPTER_ONLY_TITLE_PATTERNS = [
+  /^(?:Cap[ií]tulo|Chapter|Ch\.)\s*\d+(?:\s*[-–:]\s*|\s+(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|[a-z]+|\d{1,4})|\s*$)/i,
+];
+
+export function isChapterOnlyTitle(title: string): boolean {
+  if (!title || typeof title !== 'string') return false;
+  const clean = title.trim();
+  for (const pattern of CHAPTER_ONLY_TITLE_PATTERNS) {
+    if (pattern.test(clean)) return true;
+  }
+  return false;
+}
+
 export function isAdSeries(title: string, url?: string, description?: string): boolean {
   if (isAdTitle(title)) return true;
   if (url && isAdUrl(url)) return true;

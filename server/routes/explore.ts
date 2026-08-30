@@ -12,6 +12,7 @@ import {
   isNsfwAccessAllowed,
   appSettings,
 } from '../appState';
+import { isChapterOnlyTitle } from '../adFilter';
 import {
   KOTATSU_SOURCES,
   disabledSourceIds,
@@ -265,9 +266,17 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
 
     const existingCountForSource = catalog.filter((it) => it.__sourceId === rawSourceId).length;
     if (sourceDef && existingCountForSource < page * limit && page <= 5) {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       try {
-        const liveResult = await getSourcePopularSeries(sourceDef, page, limit);
-        const liveItems = Array.isArray(liveResult) ? liveResult : (liveResult?.items || []);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Live on-demand explore fetch timed out (6s)')), 6000);
+        });
+        const liveResult = await Promise.race([
+          getSourcePopularSeries(sourceDef, page, limit),
+          timeoutPromise,
+        ]);
+        const rawItems = Array.isArray(liveResult) ? liveResult : (liveResult?.items || []);
+        const liveItems = rawItems.filter((it: any) => it?.title && !isChapterOnlyTitle(it.title));
         if (liveItems.length > 0) {
           const tagged = liveItems.map((it) => ({
             ...it,
@@ -284,6 +293,8 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
         }
       } catch (liveErr: any) {
         console.warn(`[Explore] Live on-demand fetch notice for ${rawSourceId}:`, liveErr?.message);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
       }
     }
   }

@@ -30,8 +30,8 @@ const stmtUpsertReadingActivity = db.prepare(`
   INSERT INTO reading_activity (date, user_id, chapters_read, minutes_spent)
   VALUES (@date, @user_id, @chapters_read, @minutes_spent)
   ON CONFLICT(date, user_id) DO UPDATE SET
-    chapters_read = excluded.chapters_read,
-    minutes_spent = excluded.minutes_spent
+    chapters_read = reading_activity.chapters_read + excluded.chapters_read,
+    minutes_spent = reading_activity.minutes_spent + excluded.minutes_spent
 `);
 
 export function upsertReadingProgress(p: {
@@ -63,13 +63,11 @@ export function getReadingProgressForChapter(mangaId: string, userId: string, ch
 
 export function recordReadingActivity(userId: string, opts: { chaptersRead?: number; minutesSpent?: number }) {
   const today = new Date().toISOString().substring(0, 10);
-  const allRows = stmtGetReadingActivity.all(userId) as any[];
-  const existing = allRows.find((r: any) => r.date === today);
   stmtUpsertReadingActivity.run({
     date: today,
     user_id: userId,
-    chapters_read: (existing?.chapters_read || 0) + (Number(opts.chaptersRead) || 0),
-    minutes_spent: (existing?.minutes_spent || 0) + (Number(opts.minutesSpent) || 0),
+    chapters_read: Math.max(0, Number(opts.chaptersRead) || 0),
+    minutes_spent: Math.max(0, Number(opts.minutesSpent) || 0),
   });
 }
 

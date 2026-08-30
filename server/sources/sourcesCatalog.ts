@@ -27,8 +27,8 @@ export function isSeriesContentPath(p: string): boolean {
 export function isChapterTitle(t: string): boolean {
   if (!t) return true;
   const clean = t.trim();
-  if (/^(?:ch(?:apter)?\.?\s*\d+|ep(?:isode)?\.?\s*\d+|vol(?:ume)?\.?\s*\d+|season\s*\d+\s*(?:ep\s*\d+)?|\d+(?:\.\d+)?)$/i.test(clean)) return true;
-  if (/^(?:read\s+chapter|chapter\s+\d+|ch\.\s*\d+|ep\.\s*\d+|all\s+chapters|previous\s+chapter|next\s+chapter)/i.test(clean)) return true;
+  if (/^(?:cap[ií]tulo\.?\s*\d+|ch(?:apter)?\.?\s*\d+|ep(?:isode)?\.?\s*\d+|vol(?:ume)?\.?\s*\d+|season\s*\d+\s*(?:ep\s*\d+)?|\d+(?:\.\d+)?)$/i.test(clean)) return true;
+  if (/^(?:read\s+chapter|chapter\s+\d+|ch\.\s*\d+|ep\.\s*\d+|cap[ií]tulo\s*\d+|all\s+chapters|previous\s+chapter|next\s+chapter)/i.test(clean)) return true;
   return false;
 }
 

@@ -27,6 +27,7 @@ import {
   Flag,
 } from 'lucide-react';
 import { FLAG_CATEGORIES, FlagCategory } from '../types';
+import { SafeCoverImage } from './common/SafeCoverImage';
 
 const SourceFinderModal = React.lazy(() => import('./SourceFinderModal').then(m => ({ default: m.SourceFinderModal })));
 const MetadataStudioModal = React.lazy(() => import('./MetadataStudioModal').then(m => ({ default: m.MetadataStudioModal })));
@@ -224,10 +225,11 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
         <div className="relative p-6 sm:p-8 border-b border-edge overflow-hidden">
           {/* Blurred background cover art */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <img
+            <SafeCoverImage
               src={manga.coverImage}
               alt=""
               className="w-full h-full object-cover blur-3xl opacity-20 scale-125 transition-all"
+              compact
             />
             <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/90 to-transparent" />
             <div className="hero-ambient-glow absolute inset-0" />
@@ -246,7 +248,7 @@ export const MangaDetailModal: React.FC<MangaDetailModalProps> = React.memo(({
               onClick={() => setIsCoverPickerOpen(true)}
               title="Click to preview and select covers from all sources"
             >
-              <img
+              <SafeCoverImage
                 src={manga.coverImage}
                 alt={manga.title}
                 className="w-28 h-40 sm:w-40 sm:h-56 rounded-2xl object-cover bg-app shadow-2xl border-2 border-edge/80 group-hover:border-accent group-hover:scale-[1.03] transition-all duration-300"

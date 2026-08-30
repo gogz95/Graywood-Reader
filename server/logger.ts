@@ -174,8 +174,13 @@ export function requestLoggerMiddleware(
     const userId = (req as any).user?.id || (req as any).user?.username || '-';
     const msg = `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${elapsed}ms`;
     const meta = { method: req.method, url: req.originalUrl || req.url, status: res.statusCode, durationMs: elapsed, userId };
+    const isImageProxy = req.path.includes('/image-proxy') || req.path.includes('/proxy-image') || req.path.includes('/proxy/image');
     if (res.statusCode >= 500) {
-      logger.error('HTTP', msg, meta);
+      if (isImageProxy && res.statusCode === 502) {
+        logger.warn('HTTP', msg, meta);
+      } else {
+        logger.error('HTTP', msg, meta);
+      }
     } else if (res.statusCode >= 400) {
       logger.warn('HTTP', msg, meta);
     } else {

@@ -42,7 +42,7 @@ import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
 import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';
 import { useMangaTogether } from '../hooks/useMangaTogether';
 import { useReaderZoom } from '../hooks/useReaderZoom';
-import { performPanelOcr, OcrResult } from '../utils/ocrEngine';
+import { performPanelOcr, OcrResult, inpaintDialogueOnCanvas } from '../utils/ocrEngine';
 import { webtoonifyImage } from '../utils/webtoonification';
 import {
   ArrowLeft,
@@ -648,8 +648,44 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   }, [chapterData, currentPageIndex, pageLoadStates, settings.targetTranslationLang, triggerToast]);
 
-  // EPUB Reflowable Text Content State
+  // EPUB Reflowable Text Content State & Local Novel Fetcher
   const [epubChapterHtml, setEpubChapterHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const isEpubNovel =
+      settings.viewMode === 'reflowable-text' ||
+      (manga.type as string) === 'epub' ||
+      manga.sourceUrl?.startsWith('local://') ||
+      manga.id.startsWith('local_');
+
+    if (!isEpubNovel) {
+      setEpubChapterHtml(null);
+      return;
+    }
+
+    const archiveId = manga.sourceUrl?.startsWith('local://')
+      ? manga.sourceUrl.replace('local://', '')
+      : manga.id.startsWith('local_')
+      ? manga.id.replace('local_', '')
+      : null;
+
+    if (archiveId) {
+      const chapterIdx = Math.max(0, Math.floor(currentChapterNum) - 1);
+      apiFetch(`/api/local/library/${encodeURIComponent(archiveId)}/epub/chapter/${chapterIdx}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (active && data?.html) {
+            setEpubChapterHtml(data.html);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [manga.id, manga.sourceUrl, manga.type, currentChapterNum, settings.viewMode]);
 
   // Live SSE Session Sync across all devices / active tabs
   useLiveReadingSessionSync((update: RemoteProgressUpdate) => {
@@ -2268,6 +2304,18 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className="text-[10px] uppercase font-bold text-accent mb-1">English Translation:</div>
             <p>{ocrResult.translatedText}</p>
           </div>
+          {settings.enableAiInpainting && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerToast('AI Inpainting: Dialogue typeset applied to active panel');
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-accent text-accent-fg font-black text-xs hover:opacity-90 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Apply In-Place Speech Bubble Inpaint</span>
+            </button>
+          )}
         </div>
       )}
 

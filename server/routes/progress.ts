@@ -32,7 +32,7 @@ export function broadcastProgressSync(event: {
 }): void {
   const payload = `data: ${JSON.stringify({ type: 'progress_update', ...event, timestamp: new Date().toISOString() })}\n\n`;
   for (const client of sseClients) {
-    if (client.userId === event.userId || client.userId === 'usr_guest') {
+    if (client.userId === event.userId) {
       try {
         client.res.write(payload);
       } catch {

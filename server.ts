@@ -105,26 +105,27 @@ app.use((_req, res, next) => {
   next();
 });
 
-// Host-only gate for sensitive operations
+app.use((req, _res, next) => {
+  (req as any).user = resolveAuthUser(req);
+  next();
+});
+
+// Host-only gate for sensitive operations (allows host computer OR authenticated admin)
 app.use((req, res, next) => {
   const path = normalizeGatePath(req.path);
   if (!isHostOnlyPath(path)) return next();
   if (req.method === 'GET' && !SENSITIVE_GET_PATHS.has(path)) return next();
-  if (!isHostRequest(req)) {
+  const user = (req as any).user;
+  if (!isHostRequest(req) && !(AUTH_ENABLED && user && user.role === 'admin')) {
     return res.status(403).json({
       error: "Forbidden",
-      message: "Global settings and administrative operations are restricted to the host computer.",
+      message: "Global settings and administrative operations are restricted to the host computer or authenticated administrators.",
     });
   }
   next();
 });
 
 app.use(rateLimitMiddleware);
-
-app.use((req, _res, next) => {
-  (req as any).user = resolveAuthUser(req);
-  next();
-});
 
 // Mount scoped modular routers
 app.get('/api/search/full-text', handleFullTextSearch);

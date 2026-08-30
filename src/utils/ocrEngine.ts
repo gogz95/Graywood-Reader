@@ -78,3 +78,85 @@ export async function performPanelOcr(
     confidence: 0.9,
   };
 }
+
+/**
+ * Inpaint / overlay translated text into a speech bubble region on canvas.
+ * Fills speech bubble with a clean background and typesets translated dialogue.
+ */
+export function inpaintDialogueOnCanvas(
+  targetCanvas: HTMLCanvasElement,
+  box: OcrBoundingBox,
+  text: string,
+  options?: {
+    bubbleColor?: string;
+    textColor?: string;
+    fontSize?: number;
+    fontFamily?: string;
+  }
+): void {
+  const ctx = targetCanvas.getContext('2d');
+  if (!ctx || !text) return;
+
+  const bubbleColor = options?.bubbleColor || '#ffffff';
+  const textColor = options?.textColor || '#000000';
+  const fontFamily = options?.fontFamily || 'sans-serif';
+  const fontSize = options?.fontSize || Math.max(12, Math.floor(box.height * 0.16));
+
+  ctx.save();
+
+  // 1. Draw smooth rounded speech bubble patch
+  ctx.fillStyle = bubbleColor;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.lineWidth = 1.5;
+
+  const radius = 8;
+  const { x, y, width, height } = box;
+
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 2. Typeset text with word-wrapping
+  ctx.fillStyle = textColor;
+  ctx.font = `600 ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+  const maxWidth = Math.max(10, width - 16);
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  const lineHeight = fontSize * 1.25;
+  const startY = y + (height / 2) - ((lines.length - 1) * lineHeight / 2);
+  const centerX = x + (width / 2);
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], centerX, startY + (i * lineHeight));
+  }
+
+  ctx.restore();
+}
+

@@ -310,6 +310,39 @@ export function initializeDatabaseSchema(): void {
       }
     }
   } catch (e) { }
+
+  // Purge legacy dead fallback covers
+  try {
+    const updateResult = db.prepare("UPDATE manga SET coverImage = '' WHERE coverImage LIKE '%32d76d19%'").run();
+    if (updateResult.changes > 0) {
+      logger.info('SQLite', 'Purged dead fallback cover URLs from database', { updatedRows: updateResult.changes });
+    }
+  } catch (e) { }
+
+  // Purge orphaned ghost chapter posts mistakenly indexed as standalone manga
+  // ONLY if they have no user ownership, are not favorited, and have no user progress/readlist entries.
+  try {
+    const ghostChapterRows = db.prepare(`
+      SELECT m.id, m.title FROM manga m
+      WHERE (m.title LIKE 'Capítulo %'
+         OR m.title LIKE 'Capitulo %'
+         OR (m.title LIKE 'Chapter %' AND length(m.title) < 25))
+        AND (m.userId IS NULL OR m.userId = 'usr_admin')
+        AND COALESCE(m.isFavorite, 0) = 0
+        AND NOT EXISTS (SELECT 1 FROM reading_progress rp WHERE rp.manga_id = m.id)
+        AND NOT EXISTS (SELECT 1 FROM readlist_items ri WHERE ri.manga_id = m.id)
+        AND NOT EXISTS (SELECT 1 FROM user_favorites uf WHERE uf.manga_id = m.id AND uf.is_favorite = 1)
+        AND NOT EXISTS (SELECT 1 FROM user_library_state uls WHERE uls.manga_id = m.id)
+    `).all() as any[];
+
+    if (ghostChapterRows && ghostChapterRows.length > 0) {
+      const deleteStmt = db.prepare('DELETE FROM manga WHERE id = ?');
+      for (const row of ghostChapterRows) {
+        deleteStmt.run(row.id);
+        logger.info('SQLite', 'Purged orphaned chapter-as-manga entry from database', { id: row.id, title: row.title });
+      }
+    }
+  } catch (e) { }
 }
 
 // Auto-initialize schema on module load

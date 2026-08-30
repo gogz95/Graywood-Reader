@@ -8,6 +8,7 @@ import {
   Play,
   Flame,
 } from 'lucide-react';
+import { SafeCoverImage } from '../common/SafeCoverImage';
 
 export interface HeroSpotlightProps {
   items: MangaItem[];
@@ -29,17 +30,16 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
     setIndex((prev) => (prev < total - 1 ? prev + 1 : 0));
   }, [total]);
 
-  // Auto-advance spotlight slide every 7 seconds when not hovered
+  // Auto-rotate slides every 6 seconds unless user is hovering
   useEffect(() => {
     if (total <= 1 || isPaused) return;
-    const timer = setInterval(() => {
-      nextSlide();
-    }, 7000);
+    const timer = setInterval(nextSlide, 6000);
     return () => clearInterval(timer);
   }, [total, isPaused, nextSlide]);
 
   if (!items || items.length === 0) return null;
-  const current = items[Math.min(index, items.length - 1)];
+
+  const current = items[index];
   if (!current) return null;
 
   const progress = current.latestChapter > 0 ? Math.min(100, Math.round((current.currentChapter / current.latestChapter) * 100)) : 0;
@@ -54,10 +54,11 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
     >
       {/* Blurred ambient backdrop art */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <img
+        <SafeCoverImage
           src={current.coverImage}
           alt=""
           className="w-full h-full object-cover blur-3xl opacity-25 scale-125 transition-all duration-700"
+          compact
         />
         <div className="absolute inset-0 bg-gradient-to-r from-app via-app/90 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/50" />
@@ -160,7 +161,7 @@ export const HeroSpotlightBanner = React.memo<HeroSpotlightProps>(({ items, onOp
           className="hidden sm:block relative shrink-0 cursor-pointer group/cover"
         >
           <div className="relative aspect-[3/4] w-40 sm:w-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 group-hover/cover:scale-105 group-hover/cover:border-accent transition-all duration-300">
-            <img
+            <SafeCoverImage
               src={current.coverImage}
               alt={current.title}
               className="w-full h-full object-cover"
