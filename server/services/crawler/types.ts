@@ -66,6 +66,8 @@ export const DOMAIN_MIRRORS: Record<string, string> = {
   'aquamanga.org': 'aquareader.org',
   'paragonscans.com': 'arvencomics.com',
   'paragonscans.net': 'arvencomics.com',
+  'ravenscans.net': 'ravenscans.org',
+  'ravenscans.com': 'ravenscans.org',
 };
 
 export const UA_HEADERS = {

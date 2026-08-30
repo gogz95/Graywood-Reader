@@ -132,13 +132,15 @@ export async function buildUniversalExploreCatalog(options: {
 }
 
 let isRefresherRunning = false;
+let exploreWarmupTimer: NodeJS.Timeout | null = null;
+let exploreRefresherTimer: NodeJS.Timeout | null = null;
 
 export function scheduleExploreRefresher(): void {
   if (isRefresherRunning) return;
   isRefresherRunning = true;
 
   // Background warm-up 5 seconds after boot
-  setTimeout(async () => {
+  exploreWarmupTimer = setTimeout(async () => {
     try {
       console.log('[Explore Engine] Warming up universal catalog buffer in background...');
       await buildUniversalExploreCatalog();
@@ -149,7 +151,7 @@ export function scheduleExploreRefresher(): void {
   }, 5000);
 
   // Hourly background refresher
-  setInterval(async () => {
+  exploreRefresherTimer = setInterval(async () => {
     try {
       console.log('[Explore Engine] Refreshing explore buffer...');
       await buildUniversalExploreCatalog();
@@ -157,4 +159,17 @@ export function scheduleExploreRefresher(): void {
       console.error('[Explore Engine] Scheduled refresh error:', err);
     }
   }, EXPLORE_CACHE_TTL_MS);
+}
+
+export function stopExploreRefresher(): void {
+  if (exploreWarmupTimer) {
+    clearTimeout(exploreWarmupTimer);
+    exploreWarmupTimer = null;
+  }
+  if (exploreRefresherTimer) {
+    clearInterval(exploreRefresherTimer);
+    exploreRefresherTimer = null;
+  }
+  isRefresherRunning = false;
+  console.log('[Explore Engine] Stopped explore refresher timers.');
 }

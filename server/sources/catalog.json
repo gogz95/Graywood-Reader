@@ -7895,11 +7895,12 @@
   {
     "id": "ravenscans",
     "name": "RavenScans",
-    "baseUrl": "https://ravenscans.net",
+    "baseUrl": "https://ravenscans.org",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": true,
+    "catalogPath": "/manga/"
   },
   {
     "id": "raw1001",

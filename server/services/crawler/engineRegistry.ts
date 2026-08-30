@@ -35,7 +35,7 @@ export const CURATED_ENGINE_SOURCES: EngineSourceConfig[] = [
   { id: 'mangaxyz', name: 'Mangaxyz', domain: 'mangaxyz.com', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'mangabuddy', name: 'MangaBuddy', domain: 'mangabuddy.com', engine: 'madara', lang: 'en', isNsfw: false },
   { id: 'arvenscans', name: 'Arven Scans', domain: 'arvencomics.com', engine: 'madara', lang: 'en', isNsfw: false },
-  { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.net', engine: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'ravenscans', name: 'Raven Scans', domain: 'ravenscans.org', engine: 'mangathemesia', lang: 'en', isNsfw: false },
   { id: 'hentai20', name: 'Hentai20', domain: 'hentai20.io', engine: 'mangathemesia', lang: 'en', isNsfw: true },
 ];
 
@@ -135,7 +135,7 @@ export function getEngineConfig(domainOrUrl: string): EngineSourceConfig | undef
     domain = DOMAIN_MIRRORS[domain];
   }
   return ENGINE_SOURCE_REGISTRY.find(
-    (cfg) => cfg.domain.toLowerCase() === domain || domain.endsWith('.' + cfg.domain.toLowerCase())
+    (cfg) => cfg.id === norm || cfg.domain.toLowerCase() === domain || domain.endsWith('.' + cfg.domain.toLowerCase())
   );
 }
 

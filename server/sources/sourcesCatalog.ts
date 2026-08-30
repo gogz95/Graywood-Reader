@@ -104,7 +104,7 @@ const DEFAULT_PRIMARY_SOURCES: SourceDefinition[] = [
   { id: 'beehentai',     name: 'ToonTop',             baseUrl: 'https://toontop.io',         engineType: 'madara',        lang: 'en', isNsfw: true  },
   { id: 'mangatx',       name: 'Manga TX',            baseUrl: 'https://mangatx.com',        engineType: 'madara',        lang: 'en', isNsfw: false },
   // ── Verified working MangaThemesia sources ───────────────────────────────
-  { id: 'ravenscans',    name: 'Raven Scans',         baseUrl: 'https://ravenscans.net',     engineType: 'mangathemesia', lang: 'en', isNsfw: false },
+  { id: 'ravenscans',    name: 'Raven Scans',         baseUrl: 'https://ravenscans.org',     engineType: 'mangathemesia', lang: 'en', isNsfw: false, catalogPath: '/manga/' },
   { id: 'hentai20',      name: 'Hentai20',            baseUrl: 'https://hentai20.io',        engineType: 'mangathemesia', lang: 'en', isNsfw: true  },
   // ── Custom / Special HTML sources ────────────────────────────────────────
   { id: 'hotcomics',     name: 'HotComics',           baseUrl: 'https://hotcomics.net',      engineType: 'custom_html',   lang: 'en', isNsfw: true  },

@@ -84,6 +84,15 @@ settingsRouter.post("/api/settings/initial-setup", (req, res) => {
     pinnedSources,
   } = req.body || {};
 
+  if (adminPassword !== undefined && adminPassword !== null && adminPassword !== '') {
+    if (typeof adminPassword !== 'string' || adminPassword.length < 8) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Password must be at least 8 characters long.",
+      });
+    }
+  }
+
   // 1. Update Host Admin Profile in SQLite
   const adminIdx = userProfiles.findIndex((p) => p.id === 'usr_admin');
   if (adminIdx !== -1) {
@@ -93,7 +102,7 @@ settingsRouter.post("/api/settings/initial-setup", (req, res) => {
     if (adminUsername && typeof adminUsername === 'string' && adminUsername.trim()) {
       userProfiles[adminIdx].username = adminUsername.trim();
     }
-    if (adminPassword && typeof adminPassword === 'string' && adminPassword.length >= 6) {
+    if (adminPassword && typeof adminPassword === 'string' && adminPassword.length >= 8) {
       userProfiles[adminIdx].password = hashPassword(adminPassword);
     }
   }

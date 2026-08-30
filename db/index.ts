@@ -60,6 +60,10 @@ export const SqliteDb = {
   deleteAllManga: mangaDb.deleteAllManga,
   getMangaCount: mangaDb.getMangaCount,
   ensureMangaPlaceholder: mangaDb.ensureMangaPlaceholder,
+  getRecentlyUpdatedManga: mangaDb.getRecentlyUpdatedManga,
+  getPopularManga: mangaDb.getPopularManga,
+  getLibraryStats: mangaDb.getLibraryStats,
+  getTopGenres: mangaDb.getTopGenres,
 
   // Users & Profiles
   getAllProfiles: usersDb.getAllProfiles,

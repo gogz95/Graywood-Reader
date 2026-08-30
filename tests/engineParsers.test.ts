@@ -554,6 +554,30 @@ describe('Automated Engine Parser Test Harness', () => {
       const meta = parseGenericLiveSeriesMetadata(adPageHtml, 'https://mangahentai.me/ad-landing');
       expect(meta).toBeNull();
     });
+
+    it('correctly resolves Raven Scans engine config by source ID, current domain, and mirror URLs', async () => {
+      const { getEngineConfig, normalizeLiveTargetUrl } = await import('../server/services/crawlerEngine');
+
+      // 1. Normalizes .net and .com to .org
+      expect(normalizeLiveTargetUrl('https://ravenscans.net/manga/nano-machine/')).toBe('https://ravenscans.org/manga/nano-machine/');
+      expect(normalizeLiveTargetUrl('https://ravenscans.com/series/nano-machine/')).toBe('https://ravenscans.org/series/nano-machine/');
+      expect(normalizeLiveTargetUrl('https://ravenscans.org/manga/nano-machine/')).toBe('https://ravenscans.org/manga/nano-machine/');
+
+      // 2. Resolves engine by source ID
+      const cfgById = getEngineConfig('ravenscans');
+      expect(cfgById).toBeDefined();
+      expect(cfgById?.engine).toBe('mangathemesia');
+      expect(cfgById?.domain).toBe('ravenscans.org');
+
+      // 3. Resolves engine by URL (both canonical and mirror)
+      const cfgByOrgUrl = getEngineConfig('https://ravenscans.org/manga/nano-machine/');
+      expect(cfgByOrgUrl).toBeDefined();
+      expect(cfgByOrgUrl?.engine).toBe('mangathemesia');
+
+      const cfgByNetUrl = getEngineConfig('https://ravenscans.net/manga/nano-machine/');
+      expect(cfgByNetUrl).toBeDefined();
+      expect(cfgByNetUrl?.engine).toBe('mangathemesia');
+    });
   });
 });
 

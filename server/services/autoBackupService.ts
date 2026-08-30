@@ -232,3 +232,11 @@ export function startAutoBackupScheduler(intervalMinutes = 30) {
 
   console.log(`[Auto Backup Scheduler] Initialized (interval ${intervalMinutes}m)`);
 }
+
+export function stopAutoBackupScheduler(): void {
+  if (schedulerTimer) {
+    clearInterval(schedulerTimer);
+    schedulerTimer = null;
+    console.log('[Auto Backup Scheduler] Stopped background auto-backup scheduler.');
+  }
+}

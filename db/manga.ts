@@ -10,6 +10,39 @@ const stmtGetAllManga = db.prepare('SELECT * FROM manga ORDER BY lastUpdated DES
 const stmtGetMangaById = db.prepare('SELECT * FROM manga WHERE id = ?');
 const stmtGetMangaByApiId = db.prepare('SELECT * FROM manga WHERE apiId = ?');
 
+const stmtGetRecentlyUpdatedManga = db.prepare(`
+  SELECT * FROM manga
+  WHERE (isNsfw = 0 OR ? = 1)
+    AND title IS NOT NULL
+    AND COALESCE(latestChapter, 0) > 0
+  ORDER BY lastUpdated DESC
+  LIMIT ?
+`);
+
+const stmtGetPopularManga = db.prepare(`
+  SELECT * FROM manga
+  WHERE (isNsfw = 0 OR ? = 1)
+    AND title IS NOT NULL
+  ORDER BY rating DESC, latestChapter DESC
+  LIMIT ?
+`);
+
+const stmtGetLibraryStats = db.prepare(`
+  SELECT
+    COUNT(*) as totalSeries,
+    COALESCE(SUM(latestChapter), 0) as totalChapters
+  FROM manga
+  WHERE (isNsfw = 0 OR ? = 1)
+`);
+
+const stmtGetAllGenres = db.prepare(`
+  SELECT genres FROM manga
+  WHERE (isNsfw = 0 OR ? = 1)
+    AND genres IS NOT NULL
+    AND genres != ''
+    AND genres != '[]'
+`);
+
 const stmtUpsertManga = db.prepare(`
   INSERT INTO manga (
     id, title, altTitles, type, coverImage, description, genres, status,
@@ -274,6 +307,50 @@ export function invalidateMangaCache() {
 export function getAllManga(): MangaItem[] {
   const rows = stmtGetAllManga.all();
   return rows.map(mapRowToMangaItem);
+}
+
+export function getRecentlyUpdatedManga(limit = 18, allowNsfw = true): MangaItem[] {
+  const rows = stmtGetRecentlyUpdatedManga.all(allowNsfw ? 1 : 0, limit);
+  return rows.map(mapRowToMangaItem);
+}
+
+export function getPopularManga(limit = 18, allowNsfw = true): MangaItem[] {
+  const rows = stmtGetPopularManga.all(allowNsfw ? 1 : 0, limit);
+  return rows.map(mapRowToMangaItem);
+}
+
+export function getLibraryStats(allowNsfw = true): { totalSeries: number; totalChapters: number } {
+  const row = stmtGetLibraryStats.get(allowNsfw ? 1 : 0) as any;
+  return {
+    totalSeries: Number(row?.totalSeries) || 0,
+    totalChapters: Number(row?.totalChapters) || 0,
+  };
+}
+
+export function getTopGenres(limit = 14, allowNsfw = true): { name: string; count: number }[] {
+  const rows = stmtGetAllGenres.all(allowNsfw ? 1 : 0) as { genres: string }[];
+  const genreMap = new Map<string, number>();
+  for (const r of rows) {
+    try {
+      const parsed = JSON.parse(r.genres);
+      if (Array.isArray(parsed)) {
+        for (const g of parsed) {
+          if (typeof g === 'string' && g.trim()) {
+            const norm = g.trim();
+            const lower = norm.toLowerCase();
+            if (!allowNsfw && (lower === '18+' || lower === 'adult' || lower === 'smut' || lower === 'hentai' || lower === 'erotica' || lower === 'nsfw' || lower === 'r18' || lower === 'pornographic')) {
+              continue;
+            }
+            genreMap.set(norm, (genreMap.get(norm) || 0) + 1);
+          }
+        }
+      }
+    } catch {}
+  }
+  return [...genreMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
 }
 
 export function queryManga(

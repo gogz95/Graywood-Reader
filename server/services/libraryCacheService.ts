@@ -202,6 +202,14 @@ export function startWeeklyLibraryCacheScheduler(checkIntervalHours = 1): void {
   console.log(`[Library Cache Scheduler] Initialized weekly cache update scheduler (check interval: ${checkIntervalHours}h, TTL: 7d).`);
 }
 
+export function stopWeeklyLibraryCacheScheduler(): void {
+  if (weeklySchedulerTimer) {
+    clearInterval(weeklySchedulerTimer);
+    weeklySchedulerTimer = null;
+    console.log('[Library Cache Scheduler] Stopped weekly cache update scheduler.');
+  }
+}
+
 /**
  * Returns current health and timing metadata about the persistent library cache.
  */

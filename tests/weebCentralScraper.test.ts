@@ -30,10 +30,11 @@ describe('Weeb Central Scraper & Registry Verification', () => {
     expect(aqua?.baseUrl).toBe('https://aquareader.org');
   });
 
-  it('has correct Raven Scans URL in catalog (ravenscans.net)', () => {
+  it('has correct Raven Scans URL in catalog (ravenscans.org)', () => {
     const raven = getSourceById('ravenscans');
     expect(raven).toBeDefined();
-    expect(raven?.baseUrl).toBe('https://ravenscans.net');
+    expect(raven?.baseUrl).toBe('https://ravenscans.org');
+    expect(raven?.catalogPath).toBe('/manga/');
   });
 
   it('has Weeb Central configured as custom_html in registry', () => {

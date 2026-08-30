@@ -289,6 +289,11 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
             if (!exploreBufferRef.current.sourceIds.includes(sourceDef.id)) {
               exploreBufferRef.current.sourceIds.push(sourceDef.id);
             }
+            try {
+              SqliteDb.setExploreBuffer(exploreBufferRef.current);
+            } catch (persistErr) {
+              console.warn('[Explore] Failed to persist on-demand buffer to SQLite:', persistErr);
+            }
           }
         }
       } catch (liveErr: any) {
@@ -449,56 +454,29 @@ exploreRouter.get('/api/kotatsu/updates', async (req, res) => {
 // ── GET /api/explore/welcome ────────────────────────────────────────────────
 exploreRouter.get('/api/explore/welcome', async (req, res) => {
   try {
-    let allManga = SqliteDb.getAllManga();
     const isNsfwAllowed = isNsfwAccessAllowed(req);
-    if (!isNsfwAllowed) {
-      allManga = allManga.filter((m: any) => !isNsfwManga(m));
-    }
 
-    // 1. Newly updated series (sorted by lastUpdated DESC)
-    const recentlyUpdated = [...allManga]
-      .filter((m: any) => m.title && m.latestChapter)
-      .sort((a: any, b: any) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())
-      .slice(0, 18);
+    // 1. Newly updated series (indexed SQL query)
+    const recentlyUpdated = SqliteDb.getRecentlyUpdatedManga(18, isNsfwAllowed);
 
-    // 2. Popular series (sorted by rating DESC, then latestChapter DESC)
-    const popular = [...allManga]
-      .filter((m: any) => m.title)
-      .sort((a: any, b: any) => {
-        const rB = Number(b.rating) || 0;
-        const rA = Number(a.rating) || 0;
-        if (rB !== rA) return rB - rA;
-        return (Number(b.latestChapter) || 0) - (Number(a.latestChapter) || 0);
-      })
-      .slice(0, 18);
+    // 2. Popular series (indexed SQL query)
+    const popular = SqliteDb.getPopularManga(18, isNsfwAllowed);
 
-    // 3. Stats summary
-    const totalChapters = allManga.reduce((acc: number, m: any) => acc + (Number(m.latestChapter) || 0), 0);
+    // 3. Stats summary (COUNT & SUM SQL aggregation)
+    const stats = SqliteDb.getLibraryStats(isNsfwAllowed);
     const activeSources = getAllSourcesWithExtensions().filter(
       (s) => s.id !== 'mangadex' && !disabledSourceIds.has(s.id) && isSourceAlive(s.id)
     );
 
-    // 4. Top Genres & Categories
-    const genreMap = new Map<string, number>();
-    for (const m of allManga) {
-      for (const g of m.genres || []) {
-        if (typeof g === 'string' && g.trim()) {
-          const norm = g.trim();
-          genreMap.set(norm, (genreMap.get(norm) || 0) + 1);
-        }
-      }
-    }
-    const topCategories = [...genreMap.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 14)
-      .map(([name, count]) => ({ name, count }));
+    // 4. Top Genres & Categories (targeted SQL scan)
+    const topCategories = SqliteDb.getTopGenres(14, isNsfwAllowed);
 
     res.json({
       newlyUpdated: recentlyUpdated,
       popular,
       stats: {
-        totalSeries: allManga.length,
-        totalChapters,
+        totalSeries: stats.totalSeries,
+        totalChapters: stats.totalChapters,
         totalSources: activeSources.length,
       },
       topCategories,
@@ -681,6 +659,22 @@ export async function updateDatabaseWithAllAvailableSeries(): Promise<{
     }
   } catch (e: any) {
     console.warn('[Database Engine] Manhwa18 bulk update warning:', e.message);
+  }
+
+  try {
+    const ravenDef = KOTATSU_SOURCES.find((s) => s.id === 'ravenscans');
+    if (ravenDef && !disabledSourceIds.has('ravenscans') && isSourceAlive('ravenscans')) {
+      const ravenResult = await getSourcePopularSeries(ravenDef, 1, 30);
+      const ravenItems = Array.isArray(ravenResult) ? ravenResult : (ravenResult?.items || []);
+      if (ravenItems.length > 0) {
+        const res = integrateKotatsuSourcesAndMerge(ravenItems);
+        totalNew += res.newCount;
+        totalMerged += res.mergedCount;
+        sourceCounts['ravenscans'] = ravenItems.length;
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Database Engine] Raven Scans bulk update warning:', e.message);
   }
 
   const extraSources = ENGINE_SOURCE_REGISTRY.filter(

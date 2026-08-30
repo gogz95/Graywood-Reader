@@ -35,17 +35,18 @@ import { exploreRouter } from "./server/routes/explore";
 import { trackerRouter, autoUpdateLogs, autoUpdateStatus } from "./server/routes/tracker";
 import { refreshSingleMangaMetadata } from "./server/services/metadataService";
 import { dispatchNewChapterWebhooks } from "./server/services/webhookNotifier";
-import { startAutoBackupScheduler } from "./server/services/autoBackupService";
+import { startAutoBackupScheduler, stopAutoBackupScheduler } from "./server/services/autoBackupService";
 import { loadSourceHealthMap } from "./server/services/sourceHealthService";
 import {
   kotatsuImageEngine,
   syncEngineRegistryFromCatalog,
   normalizeLiveTargetUrl,
 } from "./server/services/crawlerEngine";
-import { scheduleExploreRefresher } from "./server/services/exploreService";
+import { scheduleExploreRefresher, stopExploreRefresher } from "./server/services/exploreService";
 import {
   initLibraryCache,
   startWeeklyLibraryCacheScheduler,
+  stopWeeklyLibraryCacheScheduler,
 } from "./server/services/libraryCacheService";
 import {
   APP_VERSION,
@@ -256,9 +257,12 @@ async function runLiveRateSpacedAutoUpdate() {
   autoUpdateStatus.currentSource = '';
 }
 
+let backgroundAutoUpdaterTimer: NodeJS.Timeout | null = null;
+
 function scheduleBackgroundAutoUpdater() {
+  if (backgroundAutoUpdaterTimer) clearInterval(backgroundAutoUpdaterTimer);
   const intervalMs = Math.max(1, syncConfig.autoUpdateIntervalMinutes || 30) * 60 * 1000;
-  setInterval(() => {
+  backgroundAutoUpdaterTimer = setInterval(() => {
     runLiveRateSpacedAutoUpdate().catch((e) => console.error("Background auto-update error:", e));
   }, intervalMs);
 }
@@ -381,9 +385,12 @@ export async function startServer() {
   scheduleDatabaseMaintenance();
 }
 
+let dbMaintenanceTimer: NodeJS.Timeout | null = null;
+
 function scheduleDatabaseMaintenance() {
+  if (dbMaintenanceTimer) clearInterval(dbMaintenanceTimer);
   // Run lightweight maintenance daily (cache purge, log trim, WAL checkpoint & PRAGMA optimize)
-  setInterval(() => {
+  dbMaintenanceTimer = setInterval(() => {
     try {
       SqliteDb.performDatabaseMaintenance({ vacuum: false, purgeExpiredCache: true, trimLogsDays: 30 });
     } catch (err) {
@@ -400,6 +407,18 @@ function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   logger.info('Shutdown', `Received ${signal}. Closing active connections & flushing state to SQLite...`);
+
+  // Stop background scheduler timers to guarantee no async tasks fire during shutdown
+  try {
+    if (backgroundAutoUpdaterTimer) clearInterval(backgroundAutoUpdaterTimer);
+    if (dbMaintenanceTimer) clearInterval(dbMaintenanceTimer);
+    stopExploreRefresher();
+    stopWeeklyLibraryCacheScheduler();
+    stopAutoBackupScheduler();
+  } catch (schedErr) {
+    logger.error('Shutdown', 'Error while stopping background schedulers', { error: String(schedErr) });
+  }
+
   try {
     closeAllProgressSseClients('Server is shutting down');
     closeAllEventsSseClients('Server is shutting down');

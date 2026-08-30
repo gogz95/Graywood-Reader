@@ -480,7 +480,15 @@ export async function getSourcePopularSeries(
   if (!src) return { items: [], totalCount: 0 };
   const origin = new URL(src.baseUrl).origin;
   const catalogPath = (src as any).catalogPath || '/';
-  const url = `${origin}${catalogPath.startsWith('/') ? '' : '/'}${catalogPath}`;
+  let pathWithPage = catalogPath.startsWith('/') ? catalogPath : `/${catalogPath}`;
+  if (page > 1) {
+    if (src.engineType === 'mangathemesia' || (src.engineType as string) === 'mangareader') {
+      pathWithPage = pathWithPage.endsWith('/') ? `${pathWithPage}page/${page}/` : `${pathWithPage}/page/${page}/`;
+    } else {
+      pathWithPage = pathWithPage.includes('?') ? `${pathWithPage}&page=${page}` : `${pathWithPage}?page=${page}`;
+    }
+  }
+  const url = `${origin}${pathWithPage}`;
 
   const res = await fetchWithChallengeBypass(url, {
     headers: { 'User-Agent': SCRAPER_UA, Accept: 'text/html', Referer: origin + '/' },
@@ -505,11 +513,78 @@ export async function searchSourceDirectly(
   limit: number = 24
 ): Promise<{ items: any[]; totalCount: number }> {
   const sourceId = typeof sourceDefOrId === 'string' ? sourceDefOrId : sourceDefOrId.id;
+  const cleanQ = (query || '').trim();
+
+  // Dedicated specialized scrapers
   if (sourceId === 'manhwa18') {
-    return await searchManhwa18(query, page, limit);
+    return await searchManhwa18(cleanQ, page, limit);
   }
+  if (sourceId === 'weebcentral') {
+    try {
+      const { searchWeebCentral } = await import('../../scrapers/weebCentral');
+      const items = await searchWeebCentral(cleanQ);
+      const sliced = items.slice((page - 1) * limit, page * limit);
+      return { items: sliced, totalCount: items.length };
+    } catch {}
+  }
+  if (sourceId === 'manhuaplus') {
+    try {
+      const { searchManhuaPlus } = await import('../../scrapers/manhuaPlus');
+      const items = await searchManhuaPlus(cleanQ, limit);
+      return { items, totalCount: items.length };
+    } catch {}
+  }
+  if (sourceId === 'demonicscans') {
+    try {
+      const { searchDemonicScans } = await import('../../scrapers/demonicScans');
+      const items = await searchDemonicScans(cleanQ, limit);
+      return { items, totalCount: items.length };
+    } catch {}
+  }
+
+  const src = typeof sourceDefOrId === 'object' ? sourceDefOrId : KOTATSU_SOURCES.find((s) => s.id === sourceId);
+  if (!src) return { items: [], totalCount: 0 };
+  const origin = new URL(src.baseUrl).origin;
+
+  // Live search for WordPress / MangaThemesia / MangaReader / Madara / Custom sources
+  if (cleanQ) {
+    try {
+      let searchUrl = '';
+      if (src.engineType === 'madara') {
+        searchUrl = `${origin}/?s=${encodeURIComponent(cleanQ)}&post_type=wp-manga`;
+      } else {
+        searchUrl = page > 1
+          ? `${origin}/page/${page}/?s=${encodeURIComponent(cleanQ)}`
+          : `${origin}/?s=${encodeURIComponent(cleanQ)}`;
+      }
+
+      const res = await fetchWithChallengeBypass(searchUrl, {
+        headers: { 'User-Agent': SCRAPER_UA, Accept: 'text/html', Referer: origin + '/' },
+        enableCloudflareBypass: appSettings.enableCloudflareBypass,
+        flareSolverrUrl: appSettings.flareSolverrUrl,
+        captchaSolverEnabled: appSettings.captchaSolverEnabled,
+        captchaApiKey: appSettings.captchaApiKey,
+        timeoutMs: 12000,
+        sourceId: src.id,
+        onCookieUpdate: (sid, cookies) => sourceCookieJar.setCookies(sid, cookies),
+      });
+
+      if (res.ok && res.html) {
+        const liveItems = parseUniversalCatalogCards(res.html, src, origin, limit);
+        if (liveItems.length > 0) {
+          return { items: liveItems, totalCount: liveItems.length };
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Search] Live direct search failed for ${src.id}:`, err?.message);
+    }
+  }
+
+  // Fallback: in-memory filter from popular series
   const { items } = await getSourcePopularSeries(sourceDefOrId, page, limit);
-  const filtered = items.filter((i) => i.title.toLowerCase().includes(query.toLowerCase()));
+  const filtered = cleanQ
+    ? items.filter((i) => i.title.toLowerCase().includes(cleanQ.toLowerCase()))
+    : items;
   return { items: filtered, totalCount: filtered.length };
 }
 
