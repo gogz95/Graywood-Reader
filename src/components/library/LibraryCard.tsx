@@ -12,8 +12,7 @@ import {
   Check,
 } from 'lucide-react';
 
-const FALLBACK_COVER =
-  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
+import { SafeCoverImage } from '../common/SafeCoverImage';
 
 /** Memoized Shimmer Placeholder Card for smooth loading */
 export const MangaSkeletonCard = React.memo(() => (
@@ -58,9 +57,6 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
   onIncrementChapter,
   onQuickEdit,
 }) => {
-  const [imgLoaded, setImgLoaded] = React.useState(false);
-  const [imgError, setImgError] = React.useState(false);
-
   const hasNewChapter = manga.latestChapter > manga.currentChapter;
   const progress =
     manga.latestChapter > 0
@@ -77,23 +73,11 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
         }}
         className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
       >
-        {/* Shimmer skeleton before image completes load */}
-        {!imgLoaded && !imgError && (
-          <div className="absolute inset-0 skeleton-shimmer z-0" />
-        )}
-        <img
-          src={imgError ? FALLBACK_COVER : (manga.coverImage || FALLBACK_COVER)}
+        <SafeCoverImage
+          src={manga.coverImage}
           alt={manga.title}
-          onLoad={() => setImgLoaded(true)}
-          onError={() => {
-            setImgError(true);
-            setImgLoaded(true);
-          }}
-          className={`w-full h-full object-cover group-hover:scale-108 transition-all duration-500 ease-out ${
-            imgLoaded ? 'opacity-100' : 'opacity-0'
-          }`}
-          loading="lazy"
-          decoding="async"
+          fallbackMessage="Missing Cover"
+          className="w-full h-full object-cover group-hover:scale-108 transition-all duration-500 ease-out"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors pointer-events-none" />
 
@@ -298,16 +282,15 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
       )}
       <td className="py-3 px-4">
         <div className="flex items-center gap-3">
-          <img
-            src={manga.coverImage || FALLBACK_COVER}
-            alt={manga.title}
-            loading="lazy"
-            decoding="async"
-            className="w-9 h-12 rounded-lg object-cover bg-app border border-edge/60 shrink-0"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = FALLBACK_COVER;
-            }}
-          />
+          <div className="w-9 h-12 shrink-0">
+            <SafeCoverImage
+              src={manga.coverImage}
+              alt={manga.title}
+              compact
+              fallbackMessage="Missing"
+              className="w-9 h-12 rounded-lg object-cover bg-app border border-edge/60 shrink-0"
+            />
+          </div>
           <div>
             <div
               onClick={() => {

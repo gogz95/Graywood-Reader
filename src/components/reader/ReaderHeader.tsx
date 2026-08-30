@@ -13,6 +13,7 @@ import {
   Search,
   Sparkles,
   Users,
+  Languages,
 } from 'lucide-react';
 import { MangaItem, ChapterData, ScanGroupOption, ReaderSettings, ReaderViewMode, PageStickyNote } from '../../types';
 
@@ -42,6 +43,9 @@ export interface ReaderHeaderProps {
   onOpenStoryCompanion?: () => void;
   onOpenMangaTogether?: () => void;
   isMangaTogetherActive?: boolean;
+  isTranslationEnabled?: boolean;
+  isTranslating?: boolean;
+  onTriggerTranslation?: () => void;
   zoomScale?: number;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -84,6 +88,9 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
   onOpenStoryCompanion,
   onOpenMangaTogether,
   isMangaTogetherActive,
+  isTranslationEnabled,
+  isTranslating,
+  onTriggerTranslation,
   zoomScale = 1.0,
   onZoomIn,
   onZoomOut,
@@ -289,6 +296,21 @@ export const ReaderHeader: React.FC<ReaderHeaderProps> = React.memo(({
             title="Spoiler-Safe Story Companion & Character Roster"
           >
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-300" />
+          </button>
+        )}
+
+        {/* On-Demand Dialogue Translation Trigger (Only visible when enabled in settings) */}
+        {isTranslationEnabled && onTriggerTranslation && (
+          <button
+            onClick={onTriggerTranslation}
+            className={`p-2 sm:p-2.5 rounded-xl border text-xs sm:text-sm font-bold transition-all ${
+              isTranslating
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 animate-pulse'
+                : 'bg-elevated/80 hover:bg-elevated border-edge text-secondary hover:text-amber-400'
+            }`}
+            title="Translate Panel Dialogue (On-Demand OCR)"
+          >
+            <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
           </button>
         )}
 

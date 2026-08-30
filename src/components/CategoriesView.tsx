@@ -19,6 +19,7 @@ import {
 import { MangaItem, UserCategory } from '../types';
 import { apiFetch } from '../utils/api';
 import { ManageCategoriesModal, renderCategoryIcon } from './ManageCategoriesModal';
+import { SafeCoverImage } from './common/SafeCoverImage';
 
 interface CategoriesViewProps {
   mangaList: MangaItem[];
@@ -29,9 +30,6 @@ interface CategoriesViewProps {
 }
 
 type CategoryTab = 'custom' | 'status' | 'genres' | 'types';
-
-const FALLBACK_COVER =
-  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
 
 export const CategoriesView: React.FC<CategoriesViewProps> = ({
   mangaList,
@@ -336,13 +334,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                             className="group w-28 shrink-0 cursor-pointer space-y-1.5"
                           >
                             <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-app border border-edge group-hover:border-accent/60 transition-all relative">
-                              <img
-                                src={manga.coverImage || FALLBACK_COVER}
+                              <SafeCoverImage
+                                src={manga.coverImage}
                                 alt={manga.title}
+                                fallbackMessage="Missing"
+                                compact
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                                }}
                               />
                               {manga.latestChapter > manga.currentChapter && (
                                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-accent animate-pulse" />
@@ -407,13 +404,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                         className="group w-28 shrink-0 cursor-pointer space-y-1.5"
                       >
                         <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-app border border-edge group-hover:border-accent/60 transition-all relative">
-                          <img
-                            src={manga.coverImage || FALLBACK_COVER}
+                          <SafeCoverImage
+                            src={manga.coverImage}
                             alt={manga.title}
+                            fallbackMessage="Missing"
+                            compact
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                            }}
                           />
                         </div>
                         <h4 className="text-[11px] font-bold text-primary truncate group-hover:text-accent transition-colors">
@@ -451,15 +447,15 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
               {/* Mini cover previews */}
               <div className="flex gap-2 overflow-hidden h-16">
                 {g.items.slice(0, 4).map((m) => (
-                  <img
-                    key={m.id}
-                    src={m.coverImage || FALLBACK_COVER}
-                    alt={m.title}
-                    className="w-12 h-16 object-cover rounded-lg bg-app shrink-0 border border-edge"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                    }}
-                  />
+                  <div key={m.id} className="w-12 h-16 shrink-0 rounded-lg overflow-hidden border border-edge bg-app">
+                    <SafeCoverImage
+                      src={m.coverImage}
+                      alt={m.title}
+                      fallbackMessage="Missing"
+                      compact
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -500,13 +496,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                       className="group w-28 shrink-0 cursor-pointer space-y-1.5"
                     >
                       <div className="aspect-[3/4] w-full rounded-xl overflow-hidden bg-app border border-edge group-hover:border-accent/60 transition-all relative">
-                        <img
-                          src={manga.coverImage || FALLBACK_COVER}
+                        <SafeCoverImage
+                          src={manga.coverImage}
                           alt={manga.title}
+                          fallbackMessage="Missing"
+                          compact
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                          }}
                         />
                       </div>
                       <h4 className="text-[11px] font-bold text-primary truncate group-hover:text-accent transition-colors">

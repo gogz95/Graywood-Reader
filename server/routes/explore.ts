@@ -120,7 +120,7 @@ export function integrateKotatsuSourcesAndMerge(incomingItems: Partial<MangaItem
         title: item.title,
         altTitles: item.altTitles || [],
         type: (item.type as MangaItem['type']) || 'manhwa',
-        coverImage: item.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+        coverImage: item.coverImage || '',
         description: item.description || `Indexed from ${item.sourceName || 'Kotatsu Source'}`,
         genres: item.genres || ['Action'],
         status: 'plan_to_read',

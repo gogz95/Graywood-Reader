@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../utils/api';
+import { SafeCoverImage } from './common/SafeCoverImage';
 import {
   Globe,
   Search,
@@ -490,7 +491,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       title: r.title,
       altTitles: [],
       type: (r.type as MangaItem['type']) || 'manhwa',
-      coverImage: r.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+      coverImage: r.coverImage || '',
       description: r.description || `Indexed from ${r.sourceName || selectedSource?.name || 'Kotatsu Source'}`,
       genres: (r.genres && r.genres.length > 0) ? r.genres : ['Action'],
       status: 'reading',
@@ -518,7 +519,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       title: r.title,
       altTitles: [],
       type: (r.type as MangaItem['type']) || 'manhwa',
-      coverImage: r.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+      coverImage: r.coverImage || '',
       description: r.description || `From ${r.sourceName}`,
       genres: (r.genres && r.genres.length > 0) ? r.genres : ['Action'],
       status: 'reading',
@@ -543,7 +544,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       title: r.title,
       altTitles: [],
       type: (r.type as MangaItem['type']) || 'manhwa',
-      coverImage: r.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+      coverImage: r.coverImage || '',
       description: r.description || '',
       genres: r.genres || ['Action'],
       status: 'reading',
@@ -574,7 +575,7 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
         title: r.title,
         altTitles: [],
         type: (r.type as MangaItem['type']) || 'manhwa',
-        coverImage: r.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+        coverImage: r.coverImage || '',
         description: r.description || `From ${r.sourceName}`,
         genres: (r.genres && r.genres.length > 0) ? r.genres : ['Action'],
         status: 'reading',
@@ -706,22 +707,12 @@ export const KotatsuSourcesView: React.FC<KotatsuSourcesViewProps> = ({
       >
         {/* Cover */}
         <div className="relative aspect-[3/4] bg-surface overflow-hidden">
-          {r.coverImage ? (
-            <img
-              src={r.coverImage}
-              alt={r.title}
-              loading="lazy"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              onError={e => {
-                (e.target as HTMLImageElement).src =
-                  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/40 to-surface">
-              <BookOpen className="w-10 h-10 text-accent-2/40" />
-            </div>
-          )}
+          <SafeCoverImage
+            src={r.coverImage}
+            alt={r.title}
+            fallbackMessage="Missing Cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
           <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none z-10">
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border backdrop-blur-sm truncate max-w-[65%] ${ENGINE_META[selectedSource?.engineType || 'mangadex']?.color}`}>
               {selectedSource?.name}

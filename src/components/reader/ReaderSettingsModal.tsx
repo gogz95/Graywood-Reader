@@ -274,21 +274,70 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
             />
           </label>
 
-          <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
-            <div>
-              <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+          {/* AI & Vision Enhancements (Strictly Optional & Disabled by Default) */}
+          <div className="p-3.5 bg-app/90 rounded-xl border border-edge space-y-3">
+            <div className="flex items-center justify-between border-b border-edge/60 pb-2">
+              <div className="text-xs font-black text-primary flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-accent" />
-                Smart Webtoonify (Vision Slicing)
+                <span>AI Vision &amp; Translation Tools</span>
               </div>
-              <div className="text-[10px] text-secondary">Auto-segment multi-panel classic manga into vertical scroll</div>
+              <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-accent/15 text-accent border border-accent/20">
+                100% Optional
+              </span>
             </div>
-            <input
-              type="checkbox"
-              checked={settings.smartWebtoonify || false}
-              onChange={(e) => onSaveSettings({ ...settings, smartWebtoonify: e.target.checked })}
-              className="w-4 h-4 accent-accent"
-            />
-          </label>
+
+            {/* Smart Webtoonify */}
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="pr-2">
+                <div className="text-xs font-bold text-primary">Smart Webtoonify (Vision Slicing)</div>
+                <div className="text-[10px] text-secondary">
+                  Auto-segment multi-panel classic manga into vertical scroll (Off by default)
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.smartWebtoonify || false}
+                onChange={(e) => onSaveSettings({ ...settings, smartWebtoonify: e.target.checked })}
+                className="w-4 h-4 accent-accent"
+              />
+            </label>
+
+            {/* Inpainting & In-Place Dialogue Translation */}
+            <label className="flex items-center justify-between cursor-pointer border-t border-edge/40 pt-2.5">
+              <div className="pr-2">
+                <div className="text-xs font-bold text-primary">In-Place Dialogue Translation &amp; Inpainting</div>
+                <div className="text-[10px] text-secondary">
+                  Replace speech bubble text on demand. Native reader pipeline remains 100% untouched when off.
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.enableAiInpainting || false}
+                onChange={(e) => onSaveSettings({ ...settings, enableAiInpainting: e.target.checked, inPlaceTranslation: e.target.checked })}
+                className="w-4 h-4 accent-accent"
+              />
+            </label>
+
+            {/* Language Selector when In-Place Translation is enabled */}
+            {settings.enableAiInpainting && (
+              <div className="flex items-center justify-between pt-1 pl-2 border-l-2 border-accent">
+                <span className="text-[11px] font-bold text-primary">Target Language:</span>
+                <select
+                  value={settings.targetTranslationLang || 'en'}
+                  onChange={(e) => onSaveSettings({ ...settings, targetTranslationLang: e.target.value })}
+                  className="px-2 py-1 rounded-lg bg-surface border border-edge text-xs font-bold text-primary cursor-pointer"
+                >
+                  <option value="en">English (en)</option>
+                  <option value="es">Spanish (es)</option>
+                  <option value="fr">French (fr)</option>
+                  <option value="de">German (de)</option>
+                  <option value="pt">Portuguese (pt)</option>
+                  <option value="id">Indonesian (id)</option>
+                  <option value="ja">Japanese (ja)</option>
+                </select>
+              </div>
+            )}
+          </div>
 
           <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
             <div>

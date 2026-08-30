@@ -628,10 +628,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
   const [showFlagDropdown, setShowFlagDropdown] = useState<boolean>(false);
 
-  // Panel OCR State
+  // Panel OCR & Dialogue Translation State
   const [ocrActive, setOcrActive] = useState<boolean>(false);
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
+
+  const handleTriggerTranslation = useCallback(async () => {
+    if (!chapterData || !chapterData.pages[currentPageIndex]) return;
+    setOcrLoading(true);
+    triggerToast(`Translating dialogue to ${settings.targetTranslationLang || 'en'}...`);
+    try {
+      const pageSrc = pageLoadStates.get(currentPageIndex)?.blobUrl || chapterData.pages[currentPageIndex];
+      const result = await performPanelOcr(pageSrc, settings.targetTranslationLang || 'en');
+      setOcrResult(result);
+    } catch (_) {
+      triggerToast('Translation failed');
+    } finally {
+      setOcrLoading(false);
+    }
+  }, [chapterData, currentPageIndex, pageLoadStates, settings.targetTranslationLang, triggerToast]);
 
   // EPUB Reflowable Text Content State
   const [epubChapterHtml, setEpubChapterHtml] = useState<string | null>(null);
@@ -1475,6 +1490,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           onOpenStoryCompanion={() => setShowStoryCompanionModal(true)}
           onOpenMangaTogether={() => setShowMangaTogetherModal(true)}
           isMangaTogetherActive={Boolean(mangaTogether.activeRoom)}
+          isTranslationEnabled={Boolean(settings.enableAiInpainting || settings.inPlaceTranslation)}
+          isTranslating={ocrLoading}
+          onTriggerTranslation={handleTriggerTranslation}
           zoomScale={zoom.scale}
           onZoomIn={zoom.zoomIn}
           onZoomOut={zoom.zoomOut}

@@ -111,7 +111,10 @@ export interface ReaderSettings {
   guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
   prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
   splitLandscapeSpreads?: boolean; // Canvas-based landscape double-page auto-splitting (Mihon-style)
-  smartWebtoonify?: boolean; // Smart Vision panel segmentation converting multi-panel classic manga to vertical webtoon
+  smartWebtoonify?: boolean; // Strictly optional: Smart Vision panel segmentation converting multi-panel classic manga to vertical webtoon
+  enableAiInpainting?: boolean; // Strictly optional (disabled by default): AI speech bubble inpainting and in-place dialogue translation
+  inPlaceTranslation?: boolean; // Strictly optional (disabled by default): In-place translated typography overlay
+  targetTranslationLang?: string; // Target translation language code (e.g. 'en', 'es', 'fr', 'de', 'pt')
   // Reflowable EPUB / Light Novel Typography Settings
   epubFontFamily?: 'serif' | 'sans' | 'dyslexic' | 'mono';
   epubFontSize?: number; // px, default 18
@@ -199,6 +202,8 @@ export interface AppSettings {
   initialSetupCompleted?: boolean;
   initialSetupTimestamp?: string;
   pinnedSources?: string[];
+  enableAiInpainting?: boolean; // Strictly optional: AI dialogue inpainting
+  enableAiWebtoonification?: boolean; // Strictly optional: AI webtoon vision slicing
   readerDefaults: ReaderSettings;
 }
 

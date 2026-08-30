@@ -49,6 +49,17 @@ function escapeXml(unsafe: string | number): string {
     .replace(/'/g, '&#39;');
 }
 
+// Negative cache for proxy images that returned 404/410/failed upstream (TTL: 5 minutes)
+const negativeProxyCache = new Map<string, number>();
+
+function pruneNegativeProxyCache() {
+  if (negativeProxyCache.size < 500) return;
+  const now = Date.now();
+  for (const [key, expiresAt] of negativeProxyCache.entries()) {
+    if (now > expiresAt) negativeProxyCache.delete(key);
+  }
+}
+
 // Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
 export const handleImageProxyRequest = async (req: Request, res: Response) => {
   let targetUrl = req.query.url as string;
@@ -84,6 +95,12 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
 
   if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
     return res.status(400).json({ error: 'Proxy target must be an absolute http(s) URL' });
+  }
+
+  pruneNegativeProxyCache();
+  const cachedFailureExpiry = negativeProxyCache.get(targetUrl);
+  if (cachedFailureExpiry && Date.now() < cachedFailureExpiry) {
+    return res.status(502).json({ error: 'Failed to fetch image from remote host (cached failure)' });
   }
 
   try {
@@ -128,6 +145,9 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
       });
 
       if (!response.ok) {
+        if (response.status === 404 || response.status === 410) {
+          negativeProxyCache.set(targetUrl, Date.now() + 5 * 60 * 1000);
+        }
         console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
         return null;
       }

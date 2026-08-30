@@ -174,7 +174,7 @@ export const AddEditModal: React.FC<AddEditModalProps> = React.memo(({
       title: nextMetadata.title,
       altTitles,
       type,
-      coverImage: nextMetadata.coverImage || '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg',
+      coverImage: nextMetadata.coverImage || '',
       description: nextMetadata.description,
       genres: nextMetadata.genres,
       isNsfw,

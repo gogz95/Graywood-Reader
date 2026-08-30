@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { MangaItem, UserProfile } from '../types';
 import { apiFetch } from '../utils/api';
+import { SafeCoverImage } from './common/SafeCoverImage';
 
 interface WelcomeStats {
   totalSeries: number;
@@ -35,9 +36,6 @@ interface WelcomeViewProps {
   onOpenReader: (manga: MangaItem, chapterNumber?: number) => void;
   libraryManga?: MangaItem[];
 }
-
-const FALLBACK_COVER =
-  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
 
 export const WelcomeView: React.FC<WelcomeViewProps> = ({
   currentUser,
@@ -301,13 +299,12 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                 className="group bg-surface/80 border border-edge hover:border-accent/50 rounded-2xl p-2.5 flex gap-3 cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
               >
                 <div className="w-14 h-18 rounded-xl overflow-hidden bg-app shrink-0 relative">
-                  <img
-                    src={manga.coverImage || FALLBACK_COVER}
+                  <SafeCoverImage
+                    src={manga.coverImage}
                     alt={manga.title}
+                    compact
+                    fallbackMessage="Missing"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                    }}
                   />
                 </div>
                 <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
@@ -400,16 +397,13 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
               >
                 {/* Cover art */}
                 <div className="relative aspect-[3/4] w-full bg-app overflow-hidden">
-                  <img
-                    src={item.coverImage || FALLBACK_COVER}
+                  <SafeCoverImage
+                    src={item.coverImage}
                     alt={item.title}
-                    loading="lazy"
+                    fallbackMessage="Missing Cover"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = FALLBACK_COVER;
-                    }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent pointer-events-none" />
 
                   {/* Chapter badge */}
                   <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-black/70 backdrop-blur-xs text-accent-bright border border-accent/30 text-[10px] font-black shadow-xs">

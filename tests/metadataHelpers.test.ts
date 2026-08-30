@@ -477,9 +477,9 @@ describe('ensureCoreFields', () => {
     expect(result.description).toContain('My Series');
   });
 
-  it('fills a default cover when empty', () => {
+  it('leaves coverImage empty when missing so UI displays missing page message instead of fake cover', () => {
     const result = ensureCoreFields({ id: 'x', title: 'X', altTitles: [], type: 'manga', description: '', genres: [] });
-    expect(result.coverImage).toBeTruthy();
+    expect(result.coverImage).toBe('');
   });
 });
 

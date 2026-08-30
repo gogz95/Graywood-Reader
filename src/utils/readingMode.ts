@@ -191,6 +191,10 @@ export function resolveInitialReaderSettings(
     preloadCount: 3,
     autoFormatMode: true,
     rememberPerSeries: true,
+    smartWebtoonify: false,
+    enableAiInpainting: false,
+    inPlaceTranslation: false,
+    targetTranslationLang: 'en',
     ...(defaultSettings || {}),
   };
 

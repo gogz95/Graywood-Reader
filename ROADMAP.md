@@ -130,8 +130,8 @@ This document outlines the implemented milestones, architectural enhancements, a
 
 - ✅ **Smart Vision Panel-by-Panel "Webtoonification" of Classic Manga (Optional Toggle)**:
   - Canvas gutter segmentation analyzing pixel intensity projection profiles in `webtoonification.ts` and `ReaderView.tsx`. Slices traditional multi-panel RTL/LTR pages into continuous, mobile-optimized vertical webtoon strips on demand.
-- **Context-Aware Comic Inpainting & Dialogue Auto-Translation (Optional Toggle)**:
-  - Speech balloon text erasure with background inpainting and re-rendering of translated dialogue using dynamic manga typography.
+- ✅ **Context-Aware Dialogue Translation & Inpainting (Strictly Optional & Disabled by Default)**:
+  - On-demand panel dialogue translation and inpainting via `performPanelOcr` in `ocrEngine.ts`, `ReaderSettingsModal.tsx`, and `ReaderHeader.tsx`. 100% opt-in toggle (`enableAiInpainting`), off by default. Native reader pipeline remains completely untouched with zero network or AI overhead when disabled.
 - ✅ **Spoiler-Safe Story Companion & Character Graph ("Who is this again?") (Optional Toggle)**:
   - Chapter-gated vector summaries, character relationship diagrams, and catch-up recaps (Chapters 1 → Current) powered by LLM without spoiling future chapters.
 

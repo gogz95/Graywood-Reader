@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiFetch } from '../utils/api';
 import { MangaItem, hasWorkingReaderSource, isNsfwManga } from '../types';
+import { SafeCoverImage } from './common/SafeCoverImage';
 
 
 import {
@@ -42,9 +43,6 @@ interface CatalogMeta {
   sources: { id: string; name: string }[];
   totalItems?: number;
 }
-
-const FALLBACK_COVER =
-  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
 
 interface BrowseViewProps {
   mangaList?: MangaItem[];
@@ -99,22 +97,12 @@ const BrowseCard = React.memo<BrowseCardProps>(({
       className="group bg-surface/95 border border-edge/80 rounded-2xl overflow-hidden hover:border-accent/60 hover:shadow-2xl transition-all duration-300 flex flex-col cursor-pointer card-interactive"
     >
       <div className="relative aspect-[3/4] bg-app overflow-hidden">
-        {r.coverImage ? (
-          <img
-            src={r.coverImage}
-            alt={r.title}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = FALLBACK_COVER;
-            }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-surface">
-            <BookOpen className="w-10 h-10 text-accent-2/40" />
-          </div>
-        )}
+        <SafeCoverImage
+          src={r.coverImage}
+          alt={r.title}
+          fallbackMessage="Missing Cover"
+          className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
+        />
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 pointer-events-none z-10">
           <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border backdrop-blur-md bg-app/85 text-secondary truncate max-w-[65%] shadow-xs">
             {r.__sourceName || r.sourceName}
@@ -298,7 +286,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       title: item.title,
       altTitles: [],
       type: (item.type as MangaItem['type']) || 'manhwa',
-      coverImage: item.coverImage || FALLBACK_COVER,
+      coverImage: item.coverImage || '',
       description: item.description || `Live series from ${item.__sourceName || item.sourceName}`,
       genres: item.genres && item.genres.length ? item.genres : ['Action'],
       status: 'reading',
@@ -327,7 +315,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         title: item.title,
         altTitles: [],
         type: (item.type as MangaItem['type']) || 'manhwa',
-        coverImage: item.coverImage || FALLBACK_COVER,
+        coverImage: item.coverImage || '',
         description: item.description || `Live series from ${item.__sourceName || item.sourceName}`,
         genres: item.genres && item.genres.length ? item.genres : ['Action'],
         status: 'reading',
@@ -417,7 +405,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     title: r.title,
     altTitles: [],
     type: (r.type as MangaItem['type']) || 'manhwa',
-    coverImage: r.coverImage || FALLBACK_COVER,
+    coverImage: r.coverImage || '',
     description: r.description || (forReader ? '' : `Live series from ${r.__sourceName || r.sourceName}`),
     genres: r.genres && r.genres.length ? r.genres : ['Action'],
     status: 'reading',
