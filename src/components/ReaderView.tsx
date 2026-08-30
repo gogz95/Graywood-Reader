@@ -70,6 +70,7 @@ import {
   AlertTriangle,
   Flag,
   StickyNote,
+  Crosshair,
   Plus,
   Trash2,
   Edit2,
@@ -105,10 +106,15 @@ interface WebtoonPanelProps {
   imageFilterStyle?: React.CSSProperties;
   isLoupeActive: boolean;
   showPageNumberOverlay: boolean;
+  enableSmartWebtoonify?: boolean;
+  readingDirection?: 'rtl' | 'ltr';
+  stickyNotesForPage?: PageStickyNote[];
   onMouseMove?: (e: React.MouseEvent<HTMLImageElement>) => void;
   onMouseLeave?: () => void;
   onRetry: (idx: number) => void;
   onDoubleTap?: (clientX: number, clientY: number, rect?: DOMRect) => void;
+  onAddNote?: (pageIndex: number) => void;
+  onOpenNote?: (note: PageStickyNote) => void;
 }
 
 /** Memoized Virtualized Webtoon Panel for smooth 60/120 FPS continuous vertical reading */
@@ -122,14 +128,43 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   imageFilterStyle,
   isLoupeActive,
   showPageNumberOverlay,
+  enableSmartWebtoonify,
+  readingDirection,
+  stickyNotesForPage,
   onMouseMove,
   onMouseLeave,
   onRetry,
   onDoubleTap,
+  onAddNote,
+  onOpenNote,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState<boolean>(idx < 4);
   const [cachedHeight, setCachedHeight] = useState<number | null>(null);
+  const [slicedUrls, setSlicedUrls] = useState<string[] | null>(null);
+
+  // Vision Gutter Segmentation (Smart Webtoonification)
+  useEffect(() => {
+    if (!enableSmartWebtoonify || !displaySrc || isError || isLoading) {
+      setSlicedUrls(null);
+      return;
+    }
+    let isMounted = true;
+    webtoonifyImage(displaySrc, readingDirection || 'rtl')
+      .then((result) => {
+        if (isMounted && result.isWebtoonified && result.slices.length > 1) {
+          setSlicedUrls(result.slices);
+        } else if (isMounted) {
+          setSlicedUrls(null);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setSlicedUrls(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [enableSmartWebtoonify, displaySrc, readingDirection, isError, isLoading]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -159,8 +194,6 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   }, []);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    // Use naturalHeight (intrinsic pixel size) rather than clientHeight (rendered
-    // CSS size) so the cached placeholder stays correct after zoom or layout changes.
     const naturalH = e.currentTarget.naturalHeight || e.currentTarget.clientHeight;
     if (naturalH > 50) {
       setCachedHeight(naturalH);
@@ -180,24 +213,43 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
       ref={containerRef}
       onClick={handlePanelClick}
       style={{ minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px' }}
-      className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel ${
+      className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel group ${
         isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
       }`}
     >
       {isVisible ? (
-        <img
-          src={displaySrc}
-          alt={`Page ${idx + 1}`}
-          style={imageFilterStyle}
-          onMouseMove={onMouseMove}
-          onMouseLeave={onMouseLeave}
-          onLoad={handleImageLoad}
-          decoding="async"
-          className={`w-full h-auto block object-contain transition-opacity duration-300 ${
-            isSeamless ? 'm-0 p-0 border-0' : ''
-          } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
-          loading={idx < 3 ? 'eager' : 'lazy'}
-        />
+        slicedUrls && slicedUrls.length > 1 ? (
+          <div className="w-full flex flex-col items-center">
+            {slicedUrls.map((sliceSrc, sliceIdx) => (
+              <img
+                key={`slice-${sliceIdx}`}
+                src={sliceSrc}
+                alt={`Page ${idx + 1} - Panel ${sliceIdx + 1}`}
+                style={imageFilterStyle}
+                onMouseMove={onMouseMove}
+                onMouseLeave={onMouseLeave}
+                decoding="async"
+                className={`w-full h-auto block object-contain ${
+                  isSeamless ? 'm-0 p-0 border-0' : 'mb-2 shadow-md'
+                } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+              />
+            ))}
+          </div>
+        ) : (
+          <img
+            src={displaySrc}
+            alt={`Page ${idx + 1}`}
+            style={imageFilterStyle}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+            onLoad={handleImageLoad}
+            decoding="async"
+            className={`w-full h-auto block object-contain transition-opacity duration-300 ${
+              isSeamless ? 'm-0 p-0 border-0' : ''
+            } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+            loading={idx < 3 ? 'eager' : 'lazy'}
+          />
+        )
       ) : (
         <div
           className="w-full flex items-center justify-center text-muted/40 font-mono text-[10px]"
@@ -233,6 +285,76 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
             <span>Retry Loading</span>
           </button>
         </div>
+      )}
+
+      {/* Pinned Sticky Notes for this page */}
+      {stickyNotesForPage && stickyNotesForPage.length > 0 && isVisible && (
+        <div className="absolute top-3 right-3 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
+          {stickyNotesForPage.map((note) => {
+            const colorClass =
+              note.color === 'blue'
+                ? 'bg-blue-500/95 text-white shadow-blue-500/40 border-blue-300'
+                : note.color === 'purple'
+                ? 'bg-purple-500/95 text-white shadow-purple-500/40 border-purple-300'
+                : note.color === 'green'
+                ? 'bg-emerald-500/95 text-white shadow-emerald-500/40 border-emerald-300'
+                : 'bg-amber-400/95 text-black shadow-amber-400/40 border-amber-300';
+
+            return (
+              <div key={note.id} className="relative group/pin">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenNote?.(note);
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xl border backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-all ${colorClass}`}
+                  title="View Sticky Note"
+                >
+                  <StickyNote className="w-3.5 h-3.5" />
+                  <span className="max-w-[110px] truncate">{note.noteText || 'Note'}</span>
+                </button>
+
+                {/* Popover preview on hover */}
+                <div className="absolute right-0 top-full mt-1.5 w-64 p-3 rounded-2xl bg-surface/95 border border-edge shadow-2xl backdrop-blur-xl opacity-0 translate-y-1 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:translate-y-0 group-hover/pin:pointer-events-auto transition-all duration-200 z-50 text-left">
+                  <div className="flex items-center justify-between text-[10px] text-muted mb-1 pb-1 border-b border-edge">
+                    <span className="font-bold text-accent">Sticky Note · Page {idx + 1}</span>
+                    <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-xs text-primary whitespace-pre-wrap line-clamp-4 leading-relaxed font-sans">
+                    {note.noteText}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenNote?.(note);
+                    }}
+                    className="mt-2.5 w-full py-1.5 rounded-xl bg-elevated hover:bg-elevated/80 text-[10px] font-bold text-secondary hover:text-primary transition-colors text-center cursor-pointer"
+                  >
+                    Open in Notes Drawer
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Quick Add Note pill on hover */}
+      {onAddNote && isVisible && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddNote(idx);
+          }}
+          className="absolute top-3 left-3 z-30 opacity-0 group-hover:opacity-85 hover:!opacity-100 transition-opacity px-2.5 py-1 rounded-xl bg-surface/85 hover:bg-surface border border-edge hover:border-accent/50 text-[10px] font-bold text-secondary hover:text-primary flex items-center gap-1.5 backdrop-blur-md cursor-pointer shadow-lg active:scale-95"
+          title="Add Sticky Note to this page"
+        >
+          <StickyNote className="w-3.5 h-3.5 text-amber-400" />
+          <span>+ Note</span>
+        </button>
       )}
 
       {showPageNumberOverlay && isVisible && (
@@ -397,6 +519,38 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [showStoryCompanionModal, setShowStoryCompanionModal] = useState<boolean>(false);
   const [showMangaTogetherModal, setShowMangaTogetherModal] = useState<boolean>(false);
 
+  // Manga Together Laser Pointer Active Mode
+  const [isLaserModeActive, setIsLaserModeActive] = useState<boolean>(false);
+
+  // Group sticky notes by pageIndex for fast O(1) in-panel lookup
+  const stickyNotesByPage = useMemo(() => {
+    const map: Record<number, PageStickyNote[]> = {};
+    for (const note of stickyNotes) {
+      if (Number(note.chapterNumber) === Number(currentChapterNum)) {
+        if (!map[note.pageIndex]) map[note.pageIndex] = [];
+        map[note.pageIndex].push(note);
+      }
+    }
+    return map;
+  }, [stickyNotes, currentChapterNum]);
+
+  const handleOpenAddNote = useCallback((pageIdx: number) => {
+    setNoteInputText('');
+    setNoteInputColor('yellow');
+    setActiveNoteModal({ pageIndex: pageIdx });
+  }, []);
+
+  const handleOpenEditNote = useCallback((note: PageStickyNote) => {
+    setNoteInputText(note.noteText);
+    setNoteInputColor(note.color || 'yellow');
+    setActiveNoteModal({
+      pageIndex: note.pageIndex,
+      noteId: note.id,
+      initialText: note.noteText,
+      color: note.color,
+    });
+  }, []);
+
   const mangaTogether = useMangaTogether({
     mangaId: manga.id,
     currentChapterNumber: currentChapterNum,
@@ -411,6 +565,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }
     },
   });
+
+  // Sync page change events with Manga Together followers when hosting
+  useEffect(() => {
+    if (mangaTogether.activeRoom && mangaTogether.isHost) {
+      mangaTogether.broadcastNav('page', currentChapterNum, currentPageIndex, readProgressPercent);
+    }
+  }, [mangaTogether.activeRoom, mangaTogether.isHost, currentChapterNum, currentPageIndex, readProgressPercent]);
 
   const fetchNotes = useCallback(async () => {
     try {
@@ -798,6 +959,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       markChapterReadOnce(currentChapterNum);
     }
 
+    // Manga Together Co-Reading: Broadcast scroll progress if hosting
+    if (mangaTogether.activeRoom && mangaTogether.isHost) {
+      mangaTogether.broadcastNav('scroll', currentChapterNum, currentPageIndex, percent);
+    }
+
     // Auto-Next Chapter trigger for Webtoons at scroll end
     if (percent >= 98 && settings.autoNextChapter && chapterData.nextChapterNumber && !autoNextCountdown) {
       triggerToast(`Auto-loading Chapter ${chapterData.nextChapterNumber} in 3s...`);
@@ -808,7 +974,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         }
       }, 3000);
     }
-  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum, settings.viewMode]);
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum, settings.viewMode, mangaTogether]);
 
   // Automatically restore vertical scroll position for Webtoon & Vertical modes
   useEffect(() => {
@@ -1423,12 +1589,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         onMouseMove={zoom.handleMouseMove}
         onMouseUp={zoom.handleMouseUp}
         onWheel={zoom.handleWheel}
-        onClick={() => {
+        onClick={(e) => {
+          if (isLaserModeActive && mangaTogether.activeRoom) {
+            const xPct = Math.round((e.clientX / window.innerWidth) * 100);
+            const yPct = Math.round((e.clientY / window.innerHeight) * 100);
+            mangaTogether.sendLaserPointer(xPct, yPct);
+            return;
+          }
           if (!zoom.isZoomed) {
             setShowHud(!showHud);
           }
         }}
-        className={`flex-1 overflow-y-auto overflow-x-hidden p-0 relative ${zoom.isZoomed ? 'cursor-grab' : 'cursor-pointer'}`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden p-0 relative ${
+          isLaserModeActive ? 'cursor-crosshair' : zoom.isZoomed ? 'cursor-grab' : 'cursor-pointer'
+        }`}
       >
         {loading ? (
           <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center">
@@ -1699,6 +1873,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     imageFilterStyle={imageFilterStyle}
                     isLoupeActive={isLoupeActive}
                     showPageNumberOverlay={Boolean(settings.showPageNumberOverlay)}
+                    enableSmartWebtoonify={Boolean(settings.smartWebtoonify)}
+                    readingDirection={detectMangaFormat(manga) === 'manga' ? 'rtl' : 'ltr'}
+                    stickyNotesForPage={stickyNotesByPage[idx]}
+                    onAddNote={handleOpenAddNote}
+                    onOpenNote={handleOpenEditNote}
                     onMouseMove={handleImageMouseMove}
                     onMouseLeave={handleImageMouseLeave}
                     onRetry={(pageIdx) => loaderRef.current?.retryPage(pageIdx)}
@@ -1825,6 +2004,58 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                             : 'w-auto h-auto'
                         } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                       />
+
+                      {/* Pinned Sticky Notes in Paged Mode */}
+                      {stickyNotesByPage[currentPageIndex] && stickyNotesByPage[currentPageIndex].length > 0 && (
+                        <div className="absolute top-4 right-4 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
+                          {stickyNotesByPage[currentPageIndex].map((note) => {
+                            const colorClass =
+                              note.color === 'blue'
+                                ? 'bg-blue-500/95 text-white shadow-blue-500/40 border-blue-300'
+                                : note.color === 'purple'
+                                ? 'bg-purple-500/95 text-white shadow-purple-500/40 border-purple-300'
+                                : note.color === 'green'
+                                ? 'bg-emerald-500/95 text-white shadow-emerald-500/40 border-emerald-300'
+                                : 'bg-amber-400/95 text-black shadow-amber-400/40 border-amber-300';
+
+                            return (
+                              <div key={note.id} className="relative group/pin">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditNote(note);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xl border backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-all ${colorClass}`}
+                                  title="View Sticky Note"
+                                >
+                                  <StickyNote className="w-3.5 h-3.5" />
+                                  <span className="max-w-[110px] truncate">{note.noteText || 'Note'}</span>
+                                </button>
+                                <div className="absolute right-0 top-full mt-1.5 w-64 p-3 rounded-2xl bg-surface/95 border border-edge shadow-2xl backdrop-blur-xl opacity-0 translate-y-1 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:translate-y-0 group-hover/pin:pointer-events-auto transition-all duration-200 z-50 text-left">
+                                  <div className="flex items-center justify-between text-[10px] text-muted mb-1 pb-1 border-b border-edge">
+                                    <span className="font-bold text-accent">Sticky Note · Page {currentPageIndex + 1}</span>
+                                    <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
+                                  </div>
+                                  <p className="text-xs text-primary whitespace-pre-wrap line-clamp-4 leading-relaxed font-sans">
+                                    {note.noteText}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditNote(note);
+                                    }}
+                                    className="mt-2.5 w-full py-1.5 rounded-xl bg-elevated hover:bg-elevated/80 text-[10px] font-bold text-secondary hover:text-primary transition-colors text-center cursor-pointer"
+                                  >
+                                    Edit in Notes Drawer
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {isLoading && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2 rounded-xl">
@@ -2052,7 +2283,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       {mangaTogether.floatingReactions.map((rxn) => (
         <div
           key={rxn.id}
-          className="pointer-events-none fixed bottom-16 right-12 z-[9999] flex flex-col items-center animate-bounce duration-700"
+          className="pointer-events-none fixed bottom-24 right-8 z-[9999] flex flex-col items-center animate-bounce duration-700"
         >
           <span className="text-4xl filter drop-shadow-lg">{rxn.emoji}</span>
           <span className="text-[10px] font-bold text-secondary bg-app/80 px-1.5 py-0.5 rounded shadow">
@@ -2060,6 +2291,89 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           </span>
         </div>
       ))}
+
+      {/* ── MANGA TOGETHER FLOATING CO-READING CAPSULE ──────────────────── */}
+      {mangaTogether.activeRoom && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-surface/95 border border-accent/40 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-300">
+          {/* Room status pill */}
+          <button
+            type="button"
+            onClick={() => setShowMangaTogetherModal(true)}
+            className="flex items-center gap-2 pr-2.5 border-r border-edge cursor-pointer hover:opacity-80 transition-opacity"
+            title="Open Room Settings"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+            <div className="flex flex-col text-left">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-black text-primary font-mono tracking-wider">
+                  {mangaTogether.activeRoom.id}
+                </span>
+                {mangaTogether.isHost && (
+                  <span className="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400/20 text-amber-400 border border-amber-400/30 uppercase">
+                    Host
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] text-secondary font-medium">
+                {mangaTogether.activeRoom.participants?.length || 1} reading together
+              </span>
+            </div>
+          </button>
+
+          {/* Laser pointer toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLaserModeActive((prev) => {
+                const next = !prev;
+                triggerToast(next ? 'Laser Pointer: Active (Tap anywhere on panel to point)' : 'Laser Pointer: Disabled');
+                return next;
+              });
+            }}
+            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+              isLaserModeActive
+                ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/30 scale-105'
+                : 'bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary border-edge'
+            }`}
+            title="Toggle Laser Pointer"
+          >
+            <Crosshair className="w-4 h-4 stroke-[2.5]" />
+          </button>
+
+          {/* Quick Reaction Emojis */}
+          <div className="flex items-center gap-1 pl-1">
+            {['❤️', '😂', '😱', '🔥', '👏', '🎉'].map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => mangaTogether.sendReaction(emoji)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-elevated hover:scale-125 active:scale-95 transition-all text-sm cursor-pointer select-none"
+                title={`Send ${emoji} reaction`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+
+          {/* Follow Host Toggle (for followers) */}
+          {!mangaTogether.isHost && (
+            <button
+              type="button"
+              onClick={() => {
+                mangaTogether.setAutoFollow(!mangaTogether.autoFollow);
+                triggerToast(mangaTogether.autoFollow ? 'Free Scrolling Active' : 'Synced with Host');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border transition-all cursor-pointer ml-1 ${
+                mangaTogether.autoFollow
+                  ? 'bg-accent/20 text-accent border-accent/40'
+                  : 'bg-elevated text-muted border-edge'
+              }`}
+            >
+              {mangaTogether.autoFollow ? 'Synced' : 'Free'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* SPOILER-SAFE STORY COMPANION MODAL */}
       {showStoryCompanionModal && (

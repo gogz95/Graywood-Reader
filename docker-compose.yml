@@ -7,11 +7,14 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
-      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET:?set ENCRYPTION_SECRET in your environment}
+      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET:-}
       - REQUIRE_AUTH=${REQUIRE_AUTH:-0}
       - STORAGE_PATH=/app/data/storage
     volumes:

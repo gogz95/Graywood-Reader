@@ -13,9 +13,9 @@ if [ -d ".git" ]; then
     git pull || true
 fi
 
-# 2. Install dependencies
-echo "📦 Installing production dependencies..."
-npm ci || npm install
+# 2. Install dependencies (including devDependencies required for Vite and esbuild build)
+echo "📦 Installing build dependencies..."
+npm ci --include=dev || npm install
 
 # 3. Build production frontend & server bundle
 echo "🔨 Building production bundle..."

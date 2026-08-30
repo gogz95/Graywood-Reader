@@ -156,6 +156,18 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         <div className="absolute top-0 right-1/4 -translate-y-1/2 w-80 h-80 bg-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 right-10 translate-y-1/3 w-64 h-64 bg-accent-2/10 rounded-full blur-3xl pointer-events-none" />
 
+        {/* Ambient cover artwork glow from top trending series */}
+        {popularSeries[0]?.coverImage && (
+          <div className="absolute -right-10 -top-10 bottom-0 w-2/5 opacity-20 overflow-hidden pointer-events-none hidden lg:block">
+            <img
+              src={popularSeries[0].coverImage}
+              alt=""
+              className="w-full h-full object-cover blur-3xl scale-125"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-surface/90 via-surface/40 to-transparent" />
+          </div>
+        )}
+
         <div className="relative z-10 max-w-3xl space-y-5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-xs font-bold tracking-wide">
             <Sparkles className="w-3.5 h-3.5 text-accent-bright animate-pulse" />

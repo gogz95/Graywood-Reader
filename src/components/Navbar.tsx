@@ -228,9 +228,14 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                     ✕
                   </button>
                 ) : (
-                  <kbd className="hidden lg:inline-flex items-center gap-0.5 absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono text-muted bg-app border border-edge">
-                    ⌘K
-                  </kbd>
+                  <button
+                    type="button"
+                    onClick={onOpenCommandPalette}
+                    className="hidden lg:inline-flex items-center gap-1 absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-lg text-[10px] font-mono font-bold text-muted hover:text-primary bg-app/80 border border-edge hover:border-accent/40 transition-colors cursor-pointer shadow-xs"
+                    title="Quick Command Palette"
+                  >
+                    <span>{typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.userAgent) ? '⌘K' : 'Ctrl K'}</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -598,9 +603,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
         )}
       </header>
 
-      {/* ── Mobile Floating Bottom Bar ──────────────────────────────────── */}
+      {/* ── Mobile Floating Bottom Bar (Ergonomic PWA Touch Targets) ────── */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 border-t border-edge backdrop-blur-xl px-2 pt-1 pb-safe flex items-stretch justify-around shadow-2xl shadow-black/40"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/90 border-t border-edge/80 backdrop-blur-2xl px-3 pt-1.5 pb-safe flex items-center justify-around shadow-2xl shadow-black/60"
         aria-label="Primary mobile"
       >
         {tabs.map(({ id, mobileLabel, icon: Icon, badge }) => {
@@ -610,35 +615,39 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               key={id}
               onClick={() => setActiveTab(id)}
               aria-current={active ? 'page' : undefined}
-              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-xl transition-all cursor-pointer ${
-                active ? 'text-accent font-bold' : 'text-muted'
+              className={`relative flex flex-col items-center justify-center gap-1 flex-1 py-1 px-1 rounded-2xl transition-all duration-200 cursor-pointer active:scale-95 ${
+                active ? 'text-accent font-black' : 'text-muted hover:text-secondary'
               }`}
             >
               <span
-                className={`relative flex items-center justify-center w-9 h-6 rounded-full transition-all ${
-                  active ? 'bg-accent/15' : ''
+                className={`relative flex items-center justify-center w-10 h-7 rounded-xl transition-all duration-200 ${
+                  active
+                    ? 'bg-accent/20 text-accent shadow-xs'
+                    : 'bg-transparent text-secondary'
                 }`}
               >
-                <Icon className="w-4.5 h-4.5" />
+                <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
                 {badge && badge > 0 ? (
-                  <span className="absolute -top-1 -right-1.5 min-w-[0.9rem] h-3.5 px-1 rounded-full bg-accent text-accent-fg text-[9px] font-black flex items-center justify-center leading-none">
+                  <span className="absolute -top-1 -right-1 min-w-[0.95rem] h-3.5 px-1 rounded-full bg-accent text-accent-fg text-[9px] font-black flex items-center justify-center leading-none shadow-xs">
                     {badge > 99 ? '99+' : badge}
                   </span>
                 ) : null}
               </span>
-              <span className="text-[10px]">{mobileLabel}</span>
+              <span className={`text-[10px] tracking-tight ${active ? 'font-black text-accent' : 'font-medium text-muted'}`}>
+                {mobileLabel}
+              </span>
             </button>
           );
         })}
 
         <button
           onClick={onOpenSettingsModal}
-          className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-xl text-muted transition-all cursor-pointer"
+          className="flex flex-col items-center justify-center gap-1 flex-1 py-1 px-1 rounded-2xl text-muted hover:text-secondary transition-all duration-200 cursor-pointer active:scale-95"
         >
-          <span className="relative flex items-center justify-center w-9 h-6">
-            <Sliders className="w-4.5 h-4.5" />
+          <span className="relative flex items-center justify-center w-10 h-7 rounded-xl bg-transparent text-secondary">
+            <Sliders className="w-4.5 h-4.5 stroke-[1.8]" />
           </span>
-          <span className="text-[10px]">Settings</span>
+          <span className="text-[10px] font-medium text-muted">Settings</span>
         </button>
       </nav>
     </>

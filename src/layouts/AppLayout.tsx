@@ -217,8 +217,23 @@ export function AppLayout() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-light', 'theme-dark', 'theme-oled');
-    root.classList.add(`theme-${effectiveTheme}`);
+    const allThemeClasses = [
+      'theme-amber',
+      'theme-emerald',
+      'theme-violet',
+      'theme-cyberpunk',
+      'theme-crimson',
+      'theme-nord',
+      'theme-amoled',
+      'theme-light',
+      'theme-dark',
+      'theme-oled',
+    ];
+    root.classList.remove(...allThemeClasses);
+    document.body.classList.remove(...allThemeClasses);
+    const targetClass = `theme-${effectiveTheme}`;
+    root.classList.add(targetClass);
+    document.body.classList.add(targetClass);
   }, [effectiveTheme]);
 
   const handleSaveSettings = useCallback(
@@ -332,7 +347,7 @@ export function AppLayout() {
         canInstallPwa={canInstall}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 pt-4 pb-24 md:pb-8">
         <Suspense fallback={<ViewFallback />}>
           <Outlet context={{ searchQuery, setSearchQuery }} />
         </Suspense>

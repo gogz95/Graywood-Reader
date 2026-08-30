@@ -35,6 +35,7 @@ import {
   getMangaDexMetadataByTitle,
   isMangaDexSourceLink,
   calculateStringSimilarity,
+  aggregateMultiSourceMetadata,
 } from '../services/metadataService';
 import { ENGINE_SOURCE_REGISTRY } from '../services/crawlerEngine';
 
@@ -813,7 +814,6 @@ exploreRouter.post('/api/kotatsu/sync-database', (req, res) => {
 });
 
 // ── Multi-Provider Metadata Provider Search & Enrichment API ─────────────────
-import { aggregateMultiSourceMetadata } from '../services/metadataService';
 
 exploreRouter.get('/api/metadata/search-providers', async (req, res) => {
   const query = (req.query.q as string || '').trim();

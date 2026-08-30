@@ -12,6 +12,9 @@ import {
   Check,
 } from 'lucide-react';
 
+const FALLBACK_COVER =
+  '/api/mangadex/image-proxy?url=https%3A%2F%2Fuploads.mangadex.org%2Fcovers%2F32d76d19-8a05-4db0-9fc2-e0b0648fe9d0%2Ffbc962f9-3d12-4c6e-8212-32a2cb874a7b.jpg';
+
 /** Memoized Shimmer Placeholder Card for smooth loading */
 export const MangaSkeletonCard = React.memo(() => (
   <div className="bg-surface/90 border border-edge/80 rounded-2xl overflow-hidden shadow-lg flex flex-col">
@@ -55,6 +58,9 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
   onIncrementChapter,
   onQuickEdit,
 }) => {
+  const [imgLoaded, setImgLoaded] = React.useState(false);
+  const [imgError, setImgError] = React.useState(false);
+
   const hasNewChapter = manga.latestChapter > manga.currentChapter;
   const progress =
     manga.latestChapter > 0
@@ -71,14 +77,25 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
         }}
         className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
       >
+        {/* Shimmer skeleton before image completes load */}
+        {!imgLoaded && !imgError && (
+          <div className="absolute inset-0 skeleton-shimmer z-0" />
+        )}
         <img
-          src={manga.coverImage}
+          src={imgError ? FALLBACK_COVER : (manga.coverImage || FALLBACK_COVER)}
           alt={manga.title}
-          className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
+          onLoad={() => setImgLoaded(true)}
+          onError={() => {
+            setImgError(true);
+            setImgLoaded(true);
+          }}
+          className={`w-full h-full object-cover group-hover:scale-108 transition-all duration-500 ease-out ${
+            imgLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
           loading="lazy"
           decoding="async"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors" />
+        <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors pointer-events-none" />
 
         {/* Multi-Select Checkbox Badge */}
         {isSelectMode && (
@@ -282,11 +299,14 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
       <td className="py-3 px-4">
         <div className="flex items-center gap-3">
           <img
-            src={manga.coverImage}
+            src={manga.coverImage || FALLBACK_COVER}
             alt={manga.title}
             loading="lazy"
             decoding="async"
-            className="w-9 h-12 rounded object-cover bg-app"
+            className="w-9 h-12 rounded-lg object-cover bg-app border border-edge/60 shrink-0"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = FALLBACK_COVER;
+            }}
           />
           <div>
             <div
