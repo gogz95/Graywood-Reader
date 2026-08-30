@@ -19,8 +19,23 @@ export const progressRouter = Router();
 interface SseSessionClient {
   userId: string;
   res: any;
+  pingInterval?: NodeJS.Timeout;
 }
-const sseClients = new Set<SseSessionClient>();
+export const sseClients = new Set<SseSessionClient>();
+
+export function closeAllProgressSseClients(message = 'Server is shutting down'): void {
+  const payload = `data: ${JSON.stringify({ type: 'shutdown', message, timestamp: new Date().toISOString() })}\n\n`;
+  for (const client of Array.from(sseClients)) {
+    try {
+      if (client.pingInterval) clearInterval(client.pingInterval);
+      client.res.write(payload);
+      client.res.end();
+    } catch {
+      // client already disconnected
+    }
+  }
+  sseClients.clear();
+}
 
 export function broadcastProgressSync(event: {
   userId: string;
@@ -36,6 +51,7 @@ export function broadcastProgressSync(event: {
       try {
         client.res.write(payload);
       } catch {
+        if (client.pingInterval) clearInterval(client.pingInterval);
         sseClients.delete(client);
       }
     }
@@ -66,6 +82,7 @@ progressRouter.get("/api/reader/sync/events", (req, res) => {
       sseClients.delete(client);
     }
   }, 25000);
+  client.pingInterval = pingInterval;
 
   req.on('close', () => {
     clearInterval(pingInterval);

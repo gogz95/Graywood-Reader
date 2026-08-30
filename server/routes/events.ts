@@ -4,6 +4,28 @@ import { verifyAuthToken, AUTH_ENABLED } from '../security';
 
 export const eventsRouter = express.Router();
 
+interface EventClientRecord {
+  res: Response;
+  heartbeatInterval: NodeJS.Timeout;
+  unsubscribe: () => void;
+}
+export const activeEventsClients = new Set<EventClientRecord>();
+
+export function closeAllEventsSseClients(message = 'Server is shutting down'): void {
+  for (const client of Array.from(activeEventsClients)) {
+    try {
+      clearInterval(client.heartbeatInterval);
+      client.unsubscribe();
+      client.res.write(`event: shutdown\n`);
+      client.res.write(`data: ${JSON.stringify({ type: 'shutdown', message, timestamp: Date.now() })}\n\n`);
+      client.res.end();
+    } catch {
+      // client already closed
+    }
+  }
+  activeEventsClients.clear();
+}
+
 /**
  * SSE endpoint for live multi-device event streaming
  * GET /api/events
@@ -57,13 +79,18 @@ eventsRouter.get('/', (req: Request, res: Response) => {
       res.write(`: heartbeat\n\n`);
     } catch {
       clearInterval(heartbeatInterval);
+      activeEventsClients.delete(clientRecord);
     }
   }, 25000);
+
+  const clientRecord: EventClientRecord = { res, heartbeatInterval, unsubscribe };
+  activeEventsClients.add(clientRecord);
 
   // Clean up on disconnect
   req.on('close', () => {
     clearInterval(heartbeatInterval);
     unsubscribe();
+    activeEventsClients.delete(clientRecord);
     res.end();
   });
 });

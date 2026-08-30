@@ -42,7 +42,9 @@ import { useGamepadNavigation } from '../hooks/useGamepadNavigation';
 import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../hooks/useReaderSession';
 import { useMangaTogether } from '../hooks/useMangaTogether';
 import { useReaderZoom } from '../hooks/useReaderZoom';
-import { performPanelOcr, OcrResult, inpaintDialogueOnCanvas } from '../utils/ocrEngine';
+import { useReaderStickyNotes } from '../hooks/useReaderStickyNotes';
+import { useReaderOffline } from '../hooks/useReaderOffline';
+import { performPanelOcr, OcrResult } from '../utils/ocrEngine';
 import { webtoonifyImage } from '../utils/webtoonification';
 import {
   ArrowLeft,
@@ -75,11 +77,7 @@ import {
   Trash2,
   Edit2,
 } from 'lucide-react';
-import {
-  saveOfflineChapter,
-  getOfflineChapter,
-  isChapterOffline,
-} from '../utils/offlineStorage';
+import { getOfflineChapter } from '../utils/offlineStorage';
 
 interface ReaderViewProps {
   manga: MangaItem;
@@ -498,22 +496,42 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setTimeout(() => setToastMsg(null), 2500);
   }, []);
 
-  // Offline Chapter Storage States
-  const [isOfflineAvailable, setIsOfflineAvailable] = useState<boolean>(false);
-  const [isDownloadingOffline, setIsDownloadingOffline] = useState<boolean>(false);
-  const [downloadProgress, setDownloadProgress] = useState<{ loaded: number; total: number } | null>(null);
+  // Offline Chapter Storage State & Actions (Extracted hook)
+  const {
+    isOfflineAvailable,
+    setIsOfflineAvailable,
+    isDownloadingOffline,
+    downloadProgress,
+    handleDownloadChapter,
+  } = useReaderOffline({
+    manga,
+    currentChapterNum,
+    chapterData,
+    triggerToast,
+  });
 
-  // Private Page Sticky Notes State
-  const [stickyNotes, setStickyNotes] = useState<PageStickyNote[]>([]);
-  const [showNotesDrawer, setShowNotesDrawer] = useState<boolean>(false);
-  const [activeNoteModal, setActiveNoteModal] = useState<{
-    pageIndex: number;
-    noteId?: string;
-    initialText?: string;
-    color?: 'yellow' | 'blue' | 'purple' | 'green';
-  } | null>(null);
-  const [noteInputText, setNoteInputText] = useState<string>('');
-  const [noteInputColor, setNoteInputColor] = useState<'yellow' | 'blue' | 'purple' | 'green'>('yellow');
+  // Private Page Sticky Notes State & Actions (Extracted hook)
+  const {
+    stickyNotes,
+    showNotesDrawer,
+    setShowNotesDrawer,
+    activeNoteModal,
+    setActiveNoteModal,
+    noteInputText,
+    setNoteInputText,
+    noteInputColor,
+    setNoteInputColor,
+    stickyNotesByPage,
+    currentChapterNotes,
+    handleOpenAddNote,
+    handleOpenEditNote,
+    handleSaveNote,
+    handleDeleteNote,
+  } = useReaderStickyNotes({
+    mangaId: manga.id,
+    currentChapterNum,
+    triggerToast,
+  });
 
   // Story Companion & Manga Together Real-Time Co-Reading State
   const [showStoryCompanionModal, setShowStoryCompanionModal] = useState<boolean>(false);
@@ -521,35 +539,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Manga Together Laser Pointer Active Mode
   const [isLaserModeActive, setIsLaserModeActive] = useState<boolean>(false);
-
-  // Group sticky notes by pageIndex for fast O(1) in-panel lookup
-  const stickyNotesByPage = useMemo(() => {
-    const map: Record<number, PageStickyNote[]> = {};
-    for (const note of stickyNotes) {
-      if (Number(note.chapterNumber) === Number(currentChapterNum)) {
-        if (!map[note.pageIndex]) map[note.pageIndex] = [];
-        map[note.pageIndex].push(note);
-      }
-    }
-    return map;
-  }, [stickyNotes, currentChapterNum]);
-
-  const handleOpenAddNote = useCallback((pageIdx: number) => {
-    setNoteInputText('');
-    setNoteInputColor('yellow');
-    setActiveNoteModal({ pageIndex: pageIdx });
-  }, []);
-
-  const handleOpenEditNote = useCallback((note: PageStickyNote) => {
-    setNoteInputText(note.noteText);
-    setNoteInputColor(note.color || 'yellow');
-    setActiveNoteModal({
-      pageIndex: note.pageIndex,
-      noteId: note.id,
-      initialText: note.noteText,
-      color: note.color,
-    });
-  }, []);
 
   const mangaTogether = useMangaTogether({
     mangaId: manga.id,
@@ -572,57 +561,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       mangaTogether.broadcastNav('page', currentChapterNum, currentPageIndex, readProgressPercent);
     }
   }, [mangaTogether.activeRoom, mangaTogether.isHost, currentChapterNum, currentPageIndex, readProgressPercent]);
-
-  const fetchNotes = useCallback(async () => {
-    try {
-      const res = await apiFetch(`/api/notes/${encodeURIComponent(manga.id)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setStickyNotes(data || []);
-      }
-    } catch (_) {}
-  }, [manga.id]);
-
-  useEffect(() => {
-    fetchNotes();
-  }, [fetchNotes]);
-
-  const handleSaveNote = async () => {
-    if (!activeNoteModal || !noteInputText.trim()) return;
-    try {
-      const res = await apiFetch('/api/notes', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: activeNoteModal.noteId,
-          mangaId: manga.id,
-          chapterNumber: currentChapterNum,
-          pageIndex: activeNoteModal.pageIndex,
-          noteText: noteInputText.trim(),
-          color: noteInputColor,
-        }),
-      });
-      if (res.ok) {
-        fetchNotes();
-        setActiveNoteModal(null);
-        setNoteInputText('');
-        triggerToast('Sticky note pinned to page!');
-      }
-    } catch (err: any) {
-      triggerToast(`Failed to save note: ${err.message}`);
-    }
-  };
-
-  const handleDeleteNote = async (noteId: string) => {
-    try {
-      const res = await apiFetch(`/api/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
-      if (res.ok) {
-        setStickyNotes((prev) => prev.filter((n) => n.id !== noteId));
-        triggerToast('Note deleted');
-      }
-    } catch (err: any) {
-      triggerToast(`Failed to delete: ${err.message}`);
-    }
-  };
 
   const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
   const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
@@ -1367,29 +1305,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [chapterData, currentPageIndex, settings.viewMode, settings.autoScrollSpeed, triggerToast]);
 
-  // Handle Offline Download Chapter
-  const handleDownloadChapter = useCallback(async () => {
-    if (!chapterData || !chapterData.pages || chapterData.pages.length === 0) return;
-    setIsDownloadingOffline(true);
-    setDownloadProgress({ loaded: 0, total: chapterData.pages.length });
-    try {
-      await saveOfflineChapter(
-        manga.id,
-        manga.title,
-        currentChapterNum,
-        chapterData.pages,
-        (loaded, total) => setDownloadProgress({ loaded, total })
-      );
-      setIsOfflineAvailable(true);
-      triggerToast(`Chapter ${currentChapterNum} downloaded for offline reading!`);
-    } catch (err: any) {
-      triggerToast(`Offline download failed: ${err.message}`);
-    } finally {
-      setIsDownloadingOffline(false);
-      setDownloadProgress(null);
-    }
-  }, [chapterData, currentChapterNum, manga.id, manga.title, triggerToast]);
-
   // Canvas background style mapping
   const bgStyleClass = useMemo(() => {
     if (settings.bgColor === 'black') return 'bg-black text-primary';
@@ -1413,10 +1328,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (settings.imageFilter === 'high-contrast') return { filter: 'contrast(140%) brightness(100%)' };
     return {};
   }, [settings.imageFilter]);
-
-  const currentChapterNotes = useMemo(() => {
-    return stickyNotes.filter((n) => Number(n.chapterNumber) === Number(currentChapterNum));
-  }, [stickyNotes, currentChapterNum]);
 
   const totalChaptersList = useMemo(() => {
     return Array.from({

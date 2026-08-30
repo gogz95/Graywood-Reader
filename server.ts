@@ -19,7 +19,7 @@ import { authRouter } from "./server/routes/auth";
 import { adminRouter } from "./server/routes/admin";
 import { gdprRouter } from "./server/routes/gdpr";
 import { settingsRouter } from "./server/routes/settings";
-import { progressRouter } from "./server/routes/progress";
+import { progressRouter, closeAllProgressSseClients } from "./server/routes/progress";
 import { bugsRouter } from "./server/routes/bugs";
 import { webhooksRouter } from "./server/routes/webhooks";
 import { categoriesRouter } from "./server/routes/categories";
@@ -27,7 +27,7 @@ import { challengesRouter } from "./server/routes/challenges";
 import { downloadsRouter } from "./server/routes/downloads";
 import { readlistsRouter } from "./server/routes/readlists";
 import { roomsRouter } from "./server/routes/rooms";
-import { eventsRouter } from "./server/routes/events";
+import { eventsRouter, closeAllEventsSseClients } from "./server/routes/events";
 import { mangaRouter, handleFullTextSearch } from "./server/routes/manga";
 import { readerRouter } from "./server/routes/reader";
 import { sourcesRouter } from "./server/routes/sources";
@@ -399,7 +399,13 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  logger.info('Shutdown', `Received ${signal}. Flushing state to SQLite...`);
+  logger.info('Shutdown', `Received ${signal}. Closing active connections & flushing state to SQLite...`);
+  try {
+    closeAllProgressSseClients('Server is shutting down');
+    closeAllEventsSseClients('Server is shutting down');
+  } catch (err) {
+    logger.error('Shutdown', 'Error while closing SSE connections', { error: String(err) });
+  }
   try {
     cancelPendingSave();
     flushStateNow();

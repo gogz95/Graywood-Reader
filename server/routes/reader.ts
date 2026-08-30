@@ -50,6 +50,7 @@ function escapeXml(unsafe: string | number): string {
 }
 
 // Negative cache for proxy images that returned 404/410/failed upstream (TTL: 10 minutes)
+export const MAX_NEGATIVE_PROXY_CACHE_SIZE = 2000;
 export const negativeProxyCache = new Map<string, number>();
 
 export function pruneNegativeProxyCache() {
@@ -58,6 +59,22 @@ export function pruneNegativeProxyCache() {
   for (const [key, expiresAt] of negativeProxyCache.entries()) {
     if (now > expiresAt) negativeProxyCache.delete(key);
   }
+  // Hard cap: if still exceeding max capacity after pruning expired items, evict oldest entries (FIFO)
+  if (negativeProxyCache.size >= MAX_NEGATIVE_PROXY_CACHE_SIZE) {
+    const overflowCount = negativeProxyCache.size - MAX_NEGATIVE_PROXY_CACHE_SIZE + 200;
+    const keysToRemove = Array.from(negativeProxyCache.keys()).slice(0, overflowCount);
+    for (const k of keysToRemove) negativeProxyCache.delete(k);
+  }
+}
+
+export function recordNegativeProxyFailure(targetUrl: string, ttlMs = 10 * 60 * 1000) {
+  if (!targetUrl) return;
+  pruneNegativeProxyCache();
+  if (negativeProxyCache.size >= MAX_NEGATIVE_PROXY_CACHE_SIZE) {
+    const oldestKey = negativeProxyCache.keys().next().value;
+    if (oldestKey) negativeProxyCache.delete(oldestKey);
+  }
+  negativeProxyCache.set(targetUrl, Date.now() + ttlMs);
 }
 
 export function clearNegativeProxyCache() {
@@ -153,13 +170,13 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
           signal: AbortSignal.timeout(12000),
         });
       } catch (fetchErr: any) {
-        negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+        recordNegativeProxyFailure(targetUrl);
         console.warn(`[Proxy Image Engine] Upstream network/socket failure for ${targetUrl}:`, fetchErr?.message || fetchErr);
         return null;
       }
 
       if (!response.ok) {
-        negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+        recordNegativeProxyFailure(targetUrl);
         console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
         return null;
       }
@@ -175,7 +192,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     });
 
     if (!cached) {
-      negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+      recordNegativeProxyFailure(targetUrl);
       res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
       return res.status(502).json({ error: 'Failed to fetch image from remote host' });
     }
@@ -193,7 +210,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', 'inline');
     res.end(optimized.buffer);
   } catch (err: any) {
-    negativeProxyCache.set(targetUrl, Date.now() + 10 * 60 * 1000);
+    recordNegativeProxyFailure(targetUrl);
     console.warn(`[Proxy Image Engine] Error proxying image (${targetUrl}):`, err?.message || err);
     if (!res.headersSent) {
       res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
