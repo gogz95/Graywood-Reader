@@ -4,7 +4,7 @@
 
 import * as cheerio from 'cheerio';
 import { MangaItem } from '../../../src/types';
-import { SqliteDb } from '../../../sqlite-db';
+import { SqliteDb } from '../../../db';
 import { appSettings, saveDatabaseToDisk, syncAddOrUpdateManga } from '../../appState';
 import {
   snapshotMetadataOverrides,

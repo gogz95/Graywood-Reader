@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   userProfiles,
   syncConfig,

@@ -143,6 +143,8 @@ export class KotatsuImageLoader {
   private maxCacheTTL: number;
   private cache: Map<number, PageLoadState>;
   private activeDownloads: Set<number>;
+  private activeControllers: Map<number, AbortController>;
+  private visibilityListener: (() => void) | null = null;
   private queue: number[];
   private pageUrls: string[];
   private sourceUrl: string;
@@ -189,6 +191,7 @@ export class KotatsuImageLoader {
     // Initialize cache
     this.cache = new Map();
     this.activeDownloads = new Set();
+    this.activeControllers = new Map();
     this.queue = [];
 
     // Initialize browser cache
@@ -204,6 +207,31 @@ export class KotatsuImageLoader {
         lastUpdated: 0,
       });
     });
+
+    if (typeof document !== 'undefined') {
+      this.visibilityListener = () => {
+        if (document.visibilityState === 'hidden') {
+          // Abort all in-flight speculative downloads and reset pending queue tasks
+          this.activeControllers.forEach((ctrl, pageIndex) => {
+            try {
+              ctrl.abort();
+            } catch {}
+            const state = this.cache.get(pageIndex);
+            if (state && state.status === 'loading') {
+              state.status = 'pending';
+            }
+          });
+          this.activeControllers.clear();
+          this.activeDownloads.clear();
+          this.queue.length = 0;
+          this.notify();
+        } else if (document.visibilityState === 'visible') {
+          // Resume processing when back to visible
+          this.processQueue();
+        }
+      };
+      document.addEventListener('visibilitychange', this.visibilityListener);
+    }
 
     // Fix #9: Start blob GC interval to revoke stale blob URLs and prevent memory growth.
     if (this.config.enableMemoryGC && this.config.gcIntervalMs > 0) {
@@ -283,6 +311,17 @@ export class KotatsuImageLoader {
    * Call this when the reader is closed or the loader is no longer needed.
    */
   public destroy(): void {
+    if (this.visibilityListener && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.visibilityListener);
+      this.visibilityListener = null;
+    }
+    this.activeControllers.forEach((ctrl) => {
+      try {
+        ctrl.abort();
+      } catch {}
+    });
+    this.activeControllers.clear();
+
     // Revoke all active blob URLs
     this.cache.forEach((state) => {
       if (state.blobUrl?.startsWith('blob:')) {
@@ -346,6 +385,8 @@ export class KotatsuImageLoader {
       return;
     }
 
+    const controller = new AbortController();
+    this.activeControllers.set(pageIndex, controller);
     this.activeDownloads.add(pageIndex);
     state.status = 'loading';
     state.attempts += 1;
@@ -380,6 +421,11 @@ export class KotatsuImageLoader {
         return;
       }
 
+      if (controller.signal.aborted) {
+        if (state.status === 'loading') state.status = 'pending';
+        return;
+      }
+
       let response: Response | null = null;
       const isAlreadyProxied = rawUrl.startsWith('/api/') || rawUrl.startsWith('/api/reader/proxy-image') || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:');
 
@@ -388,24 +434,35 @@ export class KotatsuImageLoader {
         try {
           const directController = new AbortController();
           const timeoutId = setTimeout(() => directController.abort(), 2500);
-          const directRes = await fetch(rawUrl, {
-            mode: 'cors',
-            signal: directController.signal,
-          });
-          clearTimeout(timeoutId);
-          if (directRes.ok) {
-            response = directRes;
+          const onParentAbort = () => directController.abort();
+          controller.signal.addEventListener('abort', onParentAbort);
+          try {
+            const directRes = await fetch(rawUrl, {
+              mode: 'cors',
+              signal: directController.signal,
+            });
+            if (directRes.ok) {
+              response = directRes;
+            }
+          } finally {
+            clearTimeout(timeoutId);
+            controller.signal.removeEventListener('abort', onParentAbort);
           }
         } catch {
           // Direct fetch failed due to CORS, hotlink protection, or timeout -> transparently fallback to server proxy
         }
       }
 
+      if (controller.signal.aborted) {
+        if (state.status === 'loading') state.status = 'pending';
+        return;
+      }
+
       if (!response) {
         const fetchUrl = isAlreadyProxied
           ? rawUrl
           : `/api/reader/proxy-image?url=${encodeURIComponent(rawUrl)}&sourceUrl=${encodeURIComponent(this.sourceUrl)}`;
-        response = await fetch(fetchUrl);
+        response = await fetch(fetchUrl, { signal: controller.signal });
       }
 
       if (!response.ok) {
@@ -434,6 +491,13 @@ export class KotatsuImageLoader {
         this._browserCache.set(cacheKey, { url: blobUrl, timestamp: Date.now() });
       }
     } catch (err: any) {
+      if (controller.signal.aborted || err?.name === 'AbortError') {
+        if (state.status === 'loading') {
+          state.status = 'pending';
+        }
+        return;
+      }
+
       console.warn(`[Kotatsu Image Loader] Page ${pageIndex + 1} download attempt ${state.attempts} failed:`, err.message);
 
       // Fix #20: Use config for retry count & delay instead of hardcoded values
@@ -461,9 +525,12 @@ export class KotatsuImageLoader {
         state.blobUrl = fallbackUrl;
       }
     } finally {
+      this.activeControllers.delete(pageIndex);
       this.activeDownloads.delete(pageIndex);
       this.notify();
-      this.processQueue();
+      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+        this.processQueue();
+      }
     }
   }
 

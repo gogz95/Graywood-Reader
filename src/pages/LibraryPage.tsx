@@ -1,5 +1,5 @@
 import { useOutletContext } from 'react-router';
-import { LibraryView } from '../components/LibraryView';
+import { LibraryView } from '../components/views/LibraryView';
 import {
   useLibraryStore,
   useAuthStore,

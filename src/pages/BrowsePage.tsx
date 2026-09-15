@@ -1,5 +1,5 @@
 import { useOutletContext } from 'react-router';
-import { BrowseView } from '../components/BrowseView';
+import { BrowseView } from '../components/views/BrowseView';
 import {
   useLibraryStore,
   useAuthStore,

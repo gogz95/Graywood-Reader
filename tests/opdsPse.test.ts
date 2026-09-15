@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { opdsRouter } from '../server/routes/opds';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('OPDS-PSE (Page Streaming Extension)', () => {
   it('includes OPDS-PSE stream links in series chapter acquisition feeds', async () => {

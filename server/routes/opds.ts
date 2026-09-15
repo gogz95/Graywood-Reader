@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import AdmZip from 'adm-zip';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { scanStorage } from './localLibrary';
 import { kotatsuImageEngine, matchLiveDomain, autoDiscoverLiveSourceForManga } from '../services/crawlerEngine';
 import { fetchWithSsrfGuard } from '../security';

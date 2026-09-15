@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DuplicateCandidate, DatabaseSyncConfig } from '../../types';
-import { DuplicateFinderView } from '../DuplicateFinderView';
+import { DuplicateFinderView } from '../views/DuplicateFinderView';
 import { Globe, Check } from 'lucide-react';
 
 interface DuplicatesSubdomainTabProps {

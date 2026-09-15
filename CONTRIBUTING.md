@@ -49,8 +49,8 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 
 1. **Fork and clone the repository:**
    ```bash
-   git clone https://github.com/<your-username>/Remix-ManhuaSync-to-a-reader.git
-   cd Remix-ManhuaSync-to-a-reader
+   git clone https://github.com/<your-username>/Graywood-Reader.git
+   cd Graywood-Reader
    ```
 
 2. **Install dependencies:**
@@ -122,7 +122,8 @@ npm run build
 ```
 Graywood-Reader/
 ├── server.ts                  # Express 5 entrypoint, HTTP/OPDS routes & scraper engine
-├── sqlite-db.ts               # better-sqlite3 database access layer (WAL mode)
+├── db/                        # better-sqlite3 database access layer (WAL mode)
+├── deploy/                    # Systemd service, Nginx config, PM2 ecosystem
 ├── server/
 │   ├── routes/                # Modular route controllers (auth, manga, reader, sources, opds, gdpr)
 │   ├── services/              # Crawler engine, metadata enrichers, download manager, migration
@@ -131,12 +132,15 @@ Graywood-Reader/
 │   ├── rateLimit.ts           # IP rate-limiting & DDoS mitigation
 │   └── security.ts            # AES-256-GCM encryption, SSRF protection & auth
 ├── src/
-│   ├── App.tsx                # Root React component, lazy modal routers & global state
-│   ├── components/            # Reader, Library, Browse, Settings, Modals
+│   ├── App.tsx                # Root React component, router & global state
+│   ├── components/
+│   │   ├── modals/            # Standalone modal dialogs
+│   │   ├── views/             # Primary routed and tab view components
+│   │   └── common/            # Shared UI components
 │   ├── hooks/                 # Custom React hooks (e.g., useReaderSession)
 │   └── utils/                 # IndexedDB offline storage, Tachiyomi parser, AniList scrobbler
 ├── public/                    # PWA Web Manifest, service worker, static icons
-└── tests/                     # 40+ Vitest test suites (380+ tests)
+└── tests/                     # 43+ Vitest test suites (400+ tests)
 ```
 
 ---
@@ -224,9 +228,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 🐛 Reporting Issues
 
-- **Bug Reports**: Use the [Bug Report](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/issues/new?template=bug_report.yml) template. Include your operating system, browser, server version, steps to reproduce, and relevant logs.
-- **Source / Parser Issues**: Use the [Source Issue](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/issues/new?template=source_issue.yml) template if a specific scanlation source or parser stopped working.
-- **Feature Requests**: Use the [Feature Request](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/issues/new?template=feature_request.yml) template with detailed use cases.
+- **Bug Reports**: Use the [Bug Report](https://github.com/gogz95/Graywood-Reader/issues/new?template=bug_report.yml) template. Include your operating system, browser, server version, steps to reproduce, and relevant logs.
+- **Source / Parser Issues**: Use the [Source Issue](https://github.com/gogz95/Graywood-Reader/issues/new?template=source_issue.yml) template if a specific scanlation source or parser stopped working.
+- **Feature Requests**: Use the [Feature Request](https://github.com/gogz95/Graywood-Reader/issues/new?template=feature_request.yml) template with detailed use cases.
 - **Security Vulnerabilities**: Do **not** open public issues for security vulnerabilities. Follow the instructions in [SECURITY.md](SECURITY.md).
 
 ---

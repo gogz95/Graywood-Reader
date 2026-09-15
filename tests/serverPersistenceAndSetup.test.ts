@@ -4,7 +4,7 @@ import express from 'express';
 import { settingsRouter } from '../server/routes/settings';
 import { progressRouter } from '../server/routes/progress';
 import { appSettings, userProfiles, syncConfig } from '../server/appState';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('Server Setup, Caching & Data Persistence API', () => {
   let app: express.Express;

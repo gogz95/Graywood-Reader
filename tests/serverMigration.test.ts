@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 import {
   createMigrationPackage,
   restoreMigrationPackage,

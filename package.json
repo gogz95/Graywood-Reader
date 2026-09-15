@@ -4,13 +4,13 @@
     "description": "High-performance self-hosted manga, manhwa, and manhua library tracker with a Kotatsu-inspired reader, OPDS 1.2 catalog server, and SQLite WAL storage.",
     "license": "GPL-3.0-or-later",
     "author": "Graywood Reader Contributors",
-    "homepage": "https://github.com/gogz95/Remix-ManhuaSync-to-a-reader#readme",
+    "homepage": "https://github.com/gogz95/Graywood-Reader#readme",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/gogz95/Remix-ManhuaSync-to-a-reader.git"
+        "url": "git+https://github.com/gogz95/Graywood-Reader.git"
     },
     "bugs": {
-        "url": "https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/issues"
+        "url": "https://github.com/gogz95/Graywood-Reader/issues"
     },
     "keywords": [
         "manga",
@@ -28,7 +28,7 @@
         "pwa",
         "webtoon"
     ],
-    "main": "electron-main.cjs",
+    "main": "dist-server/server.cjs",
     "engines": {
         "node": ">=22.12.0"
     },
@@ -38,13 +38,11 @@
         "build": "vite build && npm run build:server",
         "start": "node dist-server/server.cjs",
         "start:prod": "node dist-server/server.cjs",
-        "pm2:start": "pm2 start ecosystem.config.cjs",
+        "pm2:start": "pm2 start deploy/ecosystem.config.cjs",
         "docker:build": "docker build -t graywood-reader .",
         "docker:run": "docker compose up -d",
         "deploy:linux": "bash scripts/deploy-linux.sh",
         "deploy:windows": "scripts\\deploy-windows.bat",
-        "electron:dev": "electron .",
-        "build:exe": "npm run build && electron-builder --win",
         "tauri": "tauri",
         "tauri:dev": "tauri dev",
         "tauri:build": "tauri build",
@@ -74,6 +72,7 @@
         "react": "^19.0.1",
         "react-dom": "^19.0.1",
         "react-router": "^8.3.0",
+        "sharp": "^0.33.5",
         "zustand": "^5.0.15"
     },
     "devDependencies": {
@@ -86,8 +85,6 @@
         "@types/react-dom": "^19.2.4",
         "@types/supertest": "^7.2.1",
         "@vitejs/plugin-react": "^6.0.5",
-        "electron": "^43.3.0",
-        "electron-builder": "^26.15.3",
         "esbuild": "^0.28.2",
         "supertest": "^7.2.2",
         "tailwindcss": "^4.1.14",

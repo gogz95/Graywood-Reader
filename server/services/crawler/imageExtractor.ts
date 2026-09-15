@@ -11,7 +11,7 @@ export function isValidPanelImageUrl(url: string): boolean {
   if (!u.startsWith('http://') && !u.startsWith('https://')) return false;
   if (/^(data:|blob:|javascript:|#)/i.test(u)) return false;
 
-  if (/(logo|avatar|banner|covers|discord|tracker|pixel|top_ad|\/ads\/|\/banners\/|\/covers\/|\/avatar\/|\/tracker\/|\.gif(\?|$))/i.test(u)) return false;
+  if (/(logo|avatar|banner|\bcovers?\b|discord|tracker|pixel|top_ad|\/ads\/|\/banners\/|\/covers\/|\/avatar\/|\/tracker\/|\.gif(\?|$))/i.test(u)) return false;
   if (/placeholder|blank\.(jpg|jpeg|png|webp|gif)|loading\.(jpg|jpeg|png|webp|gif)|spinner|lazyload|lazy-load|no-image|noimage|thumb-placeholder/i.test(u)) return false;
   if (/doubleclick|googleadservices|pagead2|googlesyndication|adservice/i.test(u)) return false;
   if (isAdUrl(u)) return false;

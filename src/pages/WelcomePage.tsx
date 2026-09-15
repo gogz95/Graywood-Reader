@@ -1,5 +1,5 @@
 import React from 'react';
-import { WelcomeView } from '../components/WelcomeView';
+import { WelcomeView } from '../components/views/WelcomeView';
 import {
   useAuthStore,
   useModalStore,

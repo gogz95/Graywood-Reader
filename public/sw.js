@@ -1,7 +1,7 @@
 // Graywood Reader Service Worker
-// - v3: network-first navigations + stale-while-revalidate static assets & fonts
-// - Supports offline reading shell and typography caching.
-const CACHE_VERSION = 'graywood-pwa-v3';
+// - v4: Restrict cache strictly to same-origin immutable static assets and app shell
+// - Bails out on cross-origin requests, media blobs, and /api/* endpoints
+const CACHE_VERSION = 'graywood-pwa-v4';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -26,30 +26,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Never intercept non-GET or API/proxy traffic.
-  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
-
-  // Google Fonts caching (stylesheets and woff2 font files)
-  if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') {
-    event.respondWith(
-      caches.open(CACHE_VERSION).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        try {
-          const res = await fetch(event.request);
-          if (res && res.status === 200) {
-            cache.put(event.request, res.clone());
-          }
-          return res;
-        } catch {
-          return cached || new Response('', { status: 408, statusText: 'Offline Font' });
-        }
-      })
-    );
+  // 1. Immediately bail out on non-GET, cross-origin, media blobs, and /api/* endpoints
+  if (
+    event.request.method !== 'GET' ||
+    url.origin !== self.location.origin ||
+    url.protocol === 'blob:' ||
+    url.protocol === 'data:' ||
+    url.pathname.startsWith('/api/')
+  ) {
     return;
   }
 
-  // Navigation: network-first with the app shell as an offline fallback.
+  // 2. Navigation: network-first with /index.html app shell fallback
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -62,6 +50,18 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => caches.match('/index.html'))
     );
+    return;
+  }
+
+  // 3. Restrict static asset caching strictly to immutable assets (/assets/*, /index.html, /manifest.webmanifest, /icon.svg)
+  const isCacheableStatic =
+    url.pathname.startsWith('/assets/') ||
+    url.pathname === '/index.html' ||
+    url.pathname === '/manifest.webmanifest' ||
+    url.pathname === '/icon.svg' ||
+    url.pathname === '/favicon.ico';
+
+  if (!isCacheableStatic) {
     return;
   }
 

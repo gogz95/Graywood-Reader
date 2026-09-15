@@ -27,6 +27,12 @@ const stmtInsertLog = db.prepare(`
   VALUES (@id, @mangaId, @mangaTitle, @sourceName, @previousChapter, @newChapter, @timestamp, @status, @details, @type)
 `);
 
+const stmtGetSystemState = db.prepare('SELECT value FROM system_state WHERE key = ?');
+const stmtSetSystemState = db.prepare(`
+  INSERT INTO system_state (key, value, updated_at) VALUES (@key, @value, @updated_at)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+`);
+
 // ── Key-Value Settings Store ────────────────────────────────────────────────
 export function getSetting(key: string): string | null {
   const row = stmtGetSetting.get(key) as { value: string } | undefined;
@@ -35,6 +41,24 @@ export function getSetting(key: string): string | null {
 
 export function setSetting(key: string, value: string) {
   stmtSetSetting.run({ key, value });
+}
+
+// ── System State Key-Value Store (Cold Start / Lock Tracking) ───────────────
+export function getSystemState(key: string): string | null {
+  try {
+    const row = stmtGetSystemState.get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSystemState(key: string, value: string): void {
+  try {
+    stmtSetSystemState.run({ key, value, updated_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('[SQLite] Failed to set system_state:', err);
+  }
 }
 
 // ── Auto-Update Logs ────────────────────────────────────────────────────────

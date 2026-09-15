@@ -17,7 +17,7 @@ import {
   closeAllEventsSseClients,
   activeEventsClients,
 } from '../server/routes/events';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('Image Proxy Limits, Caching & Anti-Spam Protections', () => {
   beforeEach(() => {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { resolveRequestUserId } from '../appState';
 import { verifyAuthToken } from '../security';
 import { eventBus } from '../services/eventBus';

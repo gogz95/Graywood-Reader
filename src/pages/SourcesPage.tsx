@@ -1,4 +1,4 @@
-import { KotatsuSourcesView } from '../components/KotatsuSourcesView';
+import { KotatsuSourcesView } from '../components/views/KotatsuSourcesView';
 import {
   useLibraryStore,
   useAuthStore,

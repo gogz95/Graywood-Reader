@@ -2,7 +2,7 @@
  * Clear and rebuild the manga database from all working sources.
  * Usage: npm run db:rebuild  OR  npx tsx scripts/rebuild-db.ts
  */
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 import { updateDatabaseWithAllAvailableSeries } from '../server/routes/explore';
 
 async function main() {

@@ -10,7 +10,7 @@ import {
   getBackupsDirectory,
 } from '../server/services/autoBackupService';
 import { appSettings, mangaDatabase, replaceMangaDatabase } from '../server/appState';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('Auto Backup Service', () => {
   const backupDir = getBackupsDirectory();

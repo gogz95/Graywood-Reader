@@ -66,6 +66,12 @@ This document outlines the implemented milestones, architectural enhancements, a
   - Automated mirror fallback and SQLite database `sourceUrl` updates in `sourceHealthService.ts`.
 - ✅ **WeebCentral Exact Chapter Count & Sort Engine** (Aug 2026)
   - Numeric chapter sorting and full chapter list pagination.
+- ✅ **Universal MangaThemesia & Raven Scans Domain / Search Engine** (Aug 2026)
+  - Automated `ravenscans.org` domain mirror resolution, `ts_reader.run` inline script reader panel extraction, engine config matching by source ID, and real-time direct WordPress search.
+- ✅ **Indexed Welcome View Query Optimization** (Aug 2026)
+  - Sub-millisecond homepage and explore welcome queries using SQLite indexed prepared statements (`idx_manga_updated`, `idx_manga_rating`).
+- ✅ **Graceful SSE & Background Scheduler Lifecycle Cleanup** (Aug 2026)
+  - Guaranteed race-free shutdown clearing all active SSE client streams and background timers before database flush.
 
 ---
 

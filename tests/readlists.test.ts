@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('Cross-Series Readlists & Playlists Database Engine', () => {
   const testUserId = 'usr_readlist_test';

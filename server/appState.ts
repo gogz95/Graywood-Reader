@@ -17,7 +17,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { MangaItem, AutoUpdateLog, DatabaseSyncConfig, UserProfile } from "../src/types";
-import { SqliteDb } from "../sqlite-db";
+import { SqliteDb } from "../db";
 import {
   encryptPII,
   decryptPII,

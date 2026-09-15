@@ -1,4 +1,4 @@
-import { AutoUpdateView } from '../components/AutoUpdateView';
+import { AutoUpdateView } from '../components/views/AutoUpdateView';
 import {
   useLibraryStore,
   useDisplayMangaList,

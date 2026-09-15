@@ -1,4 +1,4 @@
-import { OpenApiFinderView } from '../components/OpenApiFinderView';
+import { OpenApiFinderView } from '../components/views/OpenApiFinderView';
 import { useLibraryStore } from '../stores';
 
 export function OpenApiPage() {

@@ -27,6 +27,20 @@ Copy the template below and fill in the fields:
 
 ## Active Bugs
 
+### [BUG-051] Sources autoenable when disabled manually
+- **Status**: `open`
+- **Priority**: `medium`
+- **Auto-fix**: `ask`
+- **File(s)**: `server.ts`
+- **Submitted-By**: Darkmodes (2026-08-31)
+- **Description**: Sources autoreenable after being manually disabled, this shouldn't happen
+- **Steps to Reproduce**:
+  1. Open application
+  2. Trigger reported scenario
+- **Expected**: Action completes without error.
+- **Actual**: Issue occurs as described.
+
+
 *No active bugs currently open.*
 
 ---

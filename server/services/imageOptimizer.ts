@@ -21,10 +21,10 @@ export function parseOptimizationParams(req: Request): ImageOptimizationOptions 
   if (['webp', 'avif', 'jpeg', 'png'].includes(reqFormat)) {
     format = reqFormat as any;
   } else if (reqFormat === 'auto' || !reqFormat) {
-    if (acceptHeader.includes('image/avif')) {
-      format = 'avif';
-    } else if (acceptHeader.includes('image/webp')) {
+    if (acceptHeader.includes('image/webp')) {
       format = 'webp';
+    } else if (acceptHeader.includes('image/avif')) {
+      format = 'avif';
     }
   }
 

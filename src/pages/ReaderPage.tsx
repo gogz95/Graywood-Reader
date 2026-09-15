@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { ReaderView } from '../components/ReaderView';
+import { ReaderView } from '../components/views/ReaderView';
 import {
   useLibraryStore,
   useAuthStore,
@@ -27,7 +27,7 @@ export function ReaderPage() {
   const [error, setError] = useState<string | null>(null);
 
   const targetManga = mangaInStore || fetchedManga;
-  const chapterNumber = chapter ? parseInt(chapter, 10) : 1;
+  const chapterNumber = chapter ? parseFloat(chapter) : 1;
 
   useEffect(() => {
     if (mangaInStore) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 import { signAuthToken } from '../server/security';
 import { MangaItem } from '../src/types';
 

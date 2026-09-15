@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('Database Maintenance & Vacuum Engine', () => {
   it('executes performDatabaseMaintenance without errors and returns valid metrics', () => {

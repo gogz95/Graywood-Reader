@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { PageStickyNote } from '../../src/types';
 import { isHostRequest, verifyAuthToken } from '../security';
 

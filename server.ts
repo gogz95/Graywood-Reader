@@ -2,7 +2,7 @@ import express from "express";
 import compression from "compression";
 import path from "path";
 import fs from "fs";
-import { SqliteDb } from "./sqlite-db";
+import { SqliteDb } from "./db";
 import {
   AUTH_ENABLED,
   isHostRequest,
@@ -204,14 +204,29 @@ app.post("/api/settings/cache/clear", (_req, res) => {
 // ── Rate-Spaced Background Auto-Updater ───────────────────────────────────────
 async function runLiveRateSpacedAutoUpdate() {
   if (autoUpdateStatus.isScanning) return;
+
+  const lastRunStr = SqliteDb.getSystemState('auto_update_last_run');
+  if (lastRunStr) {
+    const lastRunTime = new Date(lastRunStr).getTime();
+    if (!isNaN(lastRunTime) && Date.now() - lastRunTime < 20 * 60 * 60 * 1000) {
+      console.log(`[Auto-Updater] Skipping execution: Last run was at ${lastRunStr} (< 20h elapsed).`);
+      return;
+    }
+  }
+
   autoUpdateStatus.isScanning = true;
   autoUpdateStatus.scannedCount = 0;
   autoUpdateStatus.newReleasesFound = 0;
-  autoUpdateStatus.lastScanTimestamp = new Date().toISOString();
+  const nowIso = new Date().toISOString();
+  autoUpdateStatus.lastScanTimestamp = nowIso;
+  SqliteDb.setSystemState('auto_update_last_run', nowIso);
 
-  // Prioritize reading series & favorites over cold catalog entries
+  // Prioritize reading series & favorites over cold catalog entries.
+  // Filter updated manga strictly by active status: 'reading', 'plan_to_read', 'on_hold'.
+  // Never check or scrape updates for completed or dropped series.
+  const activeStatuses = new Set(['reading', 'plan_to_read', 'on_hold']);
   const eligibleSeries = SqliteDb.getAllManga()
-    .filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m))
+    .filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m) && activeStatuses.has(m.status))
     .sort((a, b) => {
       const aPrio = (a.status === 'reading' ? 10 : 0) + (a.isFavorite ? 5 : 0);
       const bPrio = (b.status === 'reading' ? 10 : 0) + (b.isFavorite ? 5 : 0);
@@ -318,7 +333,12 @@ function runOnceStartupMigrations() {
     try { migrateStaleSourceUrlsInDatabase(); } catch {}
     nextVersion = 2;
   }
-  // Future migrations: add `if (currentVersion < 3) { ... nextVersion = 3; }` etc.
+  if (currentVersion < 3) {
+    // v3: Migrate stale domain mirrors (e.g. ravenscans.net/.com -> ravenscans.org)
+    try { migrateStaleSourceUrlsInDatabase(); } catch {}
+    nextVersion = 3;
+  }
+  // Future migrations: add `if (currentVersion < 4) { ... nextVersion = 4; }` etc.
 
   if (nextVersion > currentVersion) {
     SqliteDb.setSetting('migration_version', String(nextVersion));

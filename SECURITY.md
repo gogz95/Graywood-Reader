@@ -21,7 +21,7 @@ We provide security updates and patches for the latest active release versions:
 ### How to Report
 
 1. **GitHub Private Vulnerability Reporting (Preferred)**:
-   Navigate to the repository's **Security** tab and click **[Report a vulnerability](https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/security/advisories/new)** to submit an advisory draft directly to maintainers.
+   Navigate to the repository's **Security** tab and click **[Report a vulnerability](https://github.com/gogz95/Graywood-Reader/security/advisories/new)** to submit an advisory draft directly to maintainers.
 
 2. **Alternative Disclosure**:
    If private vulnerability reporting is unavailable, contact the repository maintainers directly with the details of the issue.

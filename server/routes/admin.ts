@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { UserProfile, UserRole } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { logger } from '../logger';
 import { toPublicUser, isHostRequest, hashPassword } from '../security';
 import {

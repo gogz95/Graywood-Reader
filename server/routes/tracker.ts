@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { MangaItem, DuplicateCandidate } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   syncConfig,
   saveDatabaseToDisk,

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { MangaItem } from '../types';
-import type { BugReportInitialData } from '../components/SubmitBugModal';
+import type { BugReportInitialData } from '../components/modals/SubmitBugModal';
 
 // ============================================================================
 // useModalStore — Centralized modal visibility management (Zustand)

@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { MangaItem } from '../../../src/types';
-import { SqliteDb } from '../../../sqlite-db';
+import { SqliteDb } from '../../../db';
 import { syncAddOrUpdateManga } from '../../appState';
 import { disabledSourceIds, isSourceAlive, isSourceUrlOrNameDisabled } from '../../sources/sourcesCatalog';
 import { calculateStringSimilarity } from '../metadataService';

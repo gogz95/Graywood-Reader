@@ -3,10 +3,11 @@ import path from 'path';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import { MangaItem } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { domainRateLimiter } from './domainRateLimiter';
 import { comicInfoService } from './comicInfoService';
 import { logger } from '../logger';
+import { fetchWithSsrfGuard } from '../security';
 
 export type DownloadStatus = 'queued' | 'downloading' | 'packaging' | 'completed' | 'paused' | 'failed' | 'cancelled';
 
@@ -329,7 +330,7 @@ export class DownloadManagerService {
             headers['Referer'] = refererUrl;
           }
 
-          const res = await fetch(pageUrl, {
+          const res = await fetchWithSsrfGuard(pageUrl, {
             headers,
             signal: AbortSignal.timeout(15000),
           });

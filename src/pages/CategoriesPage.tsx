@@ -1,5 +1,5 @@
 import React from 'react';
-import { CategoriesView } from '../components/CategoriesView';
+import { CategoriesView } from '../components/views/CategoriesView';
 import {
   useLibraryStore,
   useAuthStore,

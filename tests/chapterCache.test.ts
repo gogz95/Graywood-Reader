@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 describe('SQLite Chapter Pages Cache (Stale-While-Revalidate)', () => {
   const mangaId = 'test_manga_cache_1';

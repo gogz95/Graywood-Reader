@@ -30,7 +30,7 @@ export const BACKEND_COMPONENTS: Record<string, BackendComponentMeta> = {
     name: "SQLite Database Access Layer",
     version: "1.0.0",
     description: "better-sqlite3 persistence engine with WAL mode, parameterized queries, and auto-migrations",
-    entrypoint: "sqlite-db.ts",
+    entrypoint: "db",
     category: "database",
   },
   security_crypto: {

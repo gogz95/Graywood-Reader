@@ -9,6 +9,7 @@
 import { MangaItem } from "../../src/types";
 import { appSettings } from "../appState";
 import { logger } from "../logger";
+import { fetchWithSsrfGuard } from "../security";
 
 export interface WebhookChapterPayload {
   title: string;
@@ -53,7 +54,7 @@ export async function sendDiscordWebhook(
 
     const discordBody = {
       username: "Graywood Reader",
-      avatar_url: "https://raw.githubusercontent.com/gogz95/Remix-ManhuaSync-to-a-reader/main/public/favicon.ico",
+      avatar_url: "https://raw.githubusercontent.com/gogz95/Graywood-Reader/main/public/favicon.ico",
       embeds: [
         {
           title: `📢 New Chapter Released: ${payload.title}`,
@@ -66,14 +67,14 @@ export async function sendDiscordWebhook(
           thumbnail: payload.coverUrl ? { url: payload.coverUrl } : undefined,
           footer: {
             text: "Graywood Reader Auto-Tracker",
-            icon_url: "https://raw.githubusercontent.com/gogz95/Remix-ManhuaSync-to-a-reader/main/public/favicon.ico",
+            icon_url: "https://raw.githubusercontent.com/gogz95/Graywood-Reader/main/public/favicon.ico",
           },
           timestamp: payload.timestamp || new Date().toISOString(),
         },
       ],
     };
 
-    const res = await fetch(webhookUrl, {
+    const res = await fetchWithSsrfGuard(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(discordBody),

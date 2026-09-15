@@ -1,4 +1,4 @@
-import { DuplicateFinderView } from '../components/DuplicateFinderView';
+import { DuplicateFinderView } from '../components/views/DuplicateFinderView';
 import { useLibraryStore } from '../stores';
 
 export function DuplicatesPage() {

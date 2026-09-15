@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { MangaItem } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   saveDatabaseToDisk,
   syncAddOrUpdateManga,

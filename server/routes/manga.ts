@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import * as cheerio from 'cheerio';
 import { MangaItem, isNsfwManga, getNsfwDetectionReason } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   autoUpdateLogs,
   saveDatabaseToDisk,

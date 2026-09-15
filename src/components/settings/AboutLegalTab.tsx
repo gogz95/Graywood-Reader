@@ -38,7 +38,7 @@ export const AboutLegalTab: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <a
-              href="https://github.com/gogz95/Remix-ManhuaSync-to-a-reader"
+              href="https://github.com/gogz95/Graywood-Reader"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-app border border-edge hover:border-accent/40 text-xs font-bold text-primary hover:text-accent transition-all cursor-pointer shadow-sm"
@@ -104,7 +104,7 @@ export const AboutLegalTab: React.FC = () => {
         </ul>
         <div className="pt-2">
           <a
-            href="https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/DISCLAIMER.md"
+            href="https://github.com/gogz95/Graywood-Reader/blob/main/DISCLAIMER.md"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-bold"
@@ -193,7 +193,7 @@ export const AboutLegalTab: React.FC = () => {
         </div>
         <div className="pt-2 flex flex-wrap items-center gap-4">
           <a
-            href="https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/THIRD-PARTY-NOTICES.md"
+            href="https://github.com/gogz95/Graywood-Reader/blob/main/THIRD-PARTY-NOTICES.md"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-bold"
@@ -203,7 +203,7 @@ export const AboutLegalTab: React.FC = () => {
             <ExternalLink className="w-3 h-3" />
           </a>
           <a
-            href="https://github.com/gogz95/Remix-ManhuaSync-to-a-reader/blob/main/LICENSE"
+            href="https://github.com/gogz95/Graywood-Reader/blob/main/LICENSE"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-bold"

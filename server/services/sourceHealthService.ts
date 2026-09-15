@@ -2,7 +2,7 @@
 // SOURCE HEALTH & SESSION COOKIE MANAGEMENT SERVICE
 // ============================================================================
 
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { sourceCircuitBreaker, CircuitState } from '../circuitBreaker';
 
 export interface SourceHealth {

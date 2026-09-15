@@ -19,7 +19,7 @@ import {
 } from '../../sources/sourcesCatalog';
 import { fetchWithChallengeBypass } from '../../captchaSolver';
 import { sourceCookieJar } from '../sourceHealthService';
-import { SqliteDb } from '../../../sqlite-db';
+import { SqliteDb } from '../../../db';
 import { appSettings } from '../../appState';
 
 export const SCRAPER_UA =

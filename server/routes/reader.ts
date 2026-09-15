@@ -5,11 +5,13 @@
 
 import { Router, Request, Response } from 'express';
 import { MangaItem, isNsfwManga } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   resolveRequestUserId,
   syncAddOrUpdateManga,
   isNsfwAccessAllowed,
+  canWriteCatalog,
+  rejectCatalogWrite,
 } from '../appState';
 import {
   fetchWithSsrfGuard,
@@ -782,6 +784,12 @@ readerRouter.post('/api/reader/mark-read', (req, res) => {
   const { mangaId, chapterNumber, manga: mangaPayload } = req.body || {};
   let manga = resolveManga(String(mangaId || ''));
   if (!manga && mangaPayload && typeof mangaPayload === 'object') {
+    if (!canWriteCatalog(req)) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Guest readers cannot create new series in the global catalog. Please sign in.',
+      });
+    }
     const rawManga: MangaItem = {
       id: String(mangaId || mangaPayload.id || `manga_${Date.now()}`),
       title: String(mangaPayload.title || 'Untitled Series'),

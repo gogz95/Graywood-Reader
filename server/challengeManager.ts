@@ -51,7 +51,7 @@ async function dispatchWebhookNotification(challenge: ChallengeNotification) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: 'Graywood Reader Security',
-          avatar_url: 'https://raw.githubusercontent.com/gogz95/Remix-ManhuaSync-to-a-reader/main/public/icon-512.png',
+          avatar_url: 'https://raw.githubusercontent.com/gogz95/Graywood-Reader/main/public/icon-512.png',
           embeds: [
             {
               title: `⚠️ Manual Captcha Required: ${challenge.sourceName}`,

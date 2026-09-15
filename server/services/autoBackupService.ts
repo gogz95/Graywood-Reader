@@ -16,7 +16,7 @@ import {
   replaceMangaDatabase,
   reloadMangaFromSql,
 } from '../appState';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 
 export interface BackupFileInfo {
   filename: string;

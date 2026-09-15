@@ -11,6 +11,7 @@ import { sourceCircuitBreaker } from '../../circuitBreaker';
 import { isAdUrl, isAdTitle, isAdSeries, stripAdElements } from '../../adFilter';
 import { sourceCookieJar, updateSourceHealth } from '../sourceHealthService';
 import { appSettings } from '../../appState';
+import { fetchWithSsrfGuard } from '../../security';
 
 export function normalizeAsuraPageList(rawPages: unknown): string[] {
   if (!Array.isArray(rawPages)) return [];
@@ -132,7 +133,7 @@ export function parseGenericChapterListFromHtml(sHtml: string, origin: string): 
 
 export async function fetchDynastyChapterList(targetUrl: string): Promise<ResolvedChapter[]> {
   try {
-    const seriesRes = await fetch(targetUrl, { headers: UA_HEADERS });
+    const seriesRes = await fetchWithSsrfGuard(targetUrl, { headers: UA_HEADERS });
     if (!seriesRes.ok) return [];
     const html = await seriesRes.text();
     const chLinkRx = /<a[^>]+href=["'](\/chapters\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -237,7 +238,7 @@ export async function fetchMadaraChapterList(targetUrl: string, config: EngineSo
     opts: any
   ): Promise<{ ok: boolean; html: string | null; status: number; bypassed: boolean; methodUsed?: string }> {
     try {
-      const res = await fetch(url, { method: 'POST', headers: opts.headers, body, signal: AbortSignal.timeout(opts.timeoutMs) });
+      const res = await fetchWithSsrfGuard(url, { method: 'POST', headers: opts.headers, body, signal: AbortSignal.timeout(opts.timeoutMs) });
       const text = await res.text();
       if (res.ok) return { ok: true, html: text, status: res.status, bypassed: false, methodUsed: 'Direct POST' };
       if (opts.enableCloudflareBypass && opts.flareSolverrUrl) {
@@ -355,7 +356,7 @@ export async function fetchMadaraChapterPages(targetUrl: string, chapterNumber: 
     }
     const origin = new URL(target.url).origin;
     const headers = { ...UA_HEADERS, Referer: origin + '/' };
-    const chRes = await fetch(target.url, { headers });
+    const chRes = await fetchWithSsrfGuard(target.url, { headers });
     if (!chRes.ok) return null;
     const chHtml = await chRes.text();
     if (/id=["']chapter-protector-data["']/i.test(chHtml)) {
@@ -592,7 +593,7 @@ export function stripHotComicsLang(href: string): string {
 export async function fetchHotComicsChapterList(seriesUrl: string, domain: string): Promise<ResolvedChapter[]> {
   try {
     const origin = (() => { try { return new URL(seriesUrl).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(seriesUrl, { headers: { ...UA_HEADERS, Referer: origin + '/' } });
+    const res = await fetchWithSsrfGuard(seriesUrl, { headers: { ...UA_HEADERS, Referer: origin + '/' } });
     if (!res.ok) return [];
     const html = await res.text();
     const $ = cheerio.load(html);
@@ -622,7 +623,7 @@ export async function fetchHotComicsChapterList(seriesUrl: string, domain: strin
 export async function fetchHotComicsChapterPages(chapterUrl: string, domain: string): Promise<string[] | null> {
   try {
     const origin = (() => { try { return new URL(chapterUrl).origin; } catch { return `https://${domain}`; } })();
-    const res = await fetch(chapterUrl, { headers: { ...UA_HEADERS, Referer: origin + '/' } });
+    const res = await fetchWithSsrfGuard(chapterUrl, { headers: { ...UA_HEADERS, Referer: origin + '/' } });
     if (!res.ok) return null;
     const html = await res.text();
     const $ = cheerio.load(html);
@@ -781,7 +782,7 @@ export async function fetchFoolSlideHtml(targetUrl: string, domainId: string): P
   }
 
   try {
-    await fetch(targetUrl, {
+    await fetchWithSsrfGuard(targetUrl, {
       method: 'POST',
       headers: {
         ...UA_HEADERS,
@@ -932,7 +933,7 @@ export async function extractLiveDomainChapterPages(
           const targetChapter = matchResolvedChapter(chapters, chapterNumber);
 
           if (targetChapter && targetChapter.slug) {
-            const pagesRes = await fetch(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
+            const pagesRes = await fetchWithSsrfGuard(`https://api.asurascans.com/api/series/${matchedSlug}/chapters/${targetChapter.slug}`, {
               headers: ASURA_API_HEADERS,
               signal: AbortSignal.timeout(15000),
             });
@@ -965,7 +966,7 @@ export async function extractLiveDomainChapterPages(
           const matchedCh = matchResolvedChapter(resolved, chapterNumber);
           if (matchedCh && matchedCh.slug) {
             const token = matchedCh.slug;
-            const chRes = await fetch(`https://flamecomics.xyz/_next/data/${ctx.buildId}/series/${ctx.seriesId}/${token}.json?id=${ctx.seriesId}&token=${token}`, {
+            const chRes = await fetchWithSsrfGuard(`https://flamecomics.xyz/_next/data/${ctx.buildId}/series/${ctx.seriesId}/${token}.json?id=${ctx.seriesId}&token=${token}`, {
               headers: UA_HEADERS,
             });
 
@@ -1032,7 +1033,7 @@ export async function extractLiveDomainChapterPages(
         if (chapters.length > 0) {
           const target = matchResolvedChapter(chapters, chapterNumber);
           if (target) {
-            const res = await fetch(target.url, {
+            const res = await fetchWithSsrfGuard(target.url, {
               headers: { 'User-Agent': UA_HEADERS['User-Agent'], Referer: targetUrl },
             });
             if (res.ok) {

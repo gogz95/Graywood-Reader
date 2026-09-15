@@ -32,6 +32,8 @@ export {
   deleteStickyNote,
 } from './notes';
 
+export { getSystemState, setSystemState } from './cache';
+
 export { optimizeDatabase } from './maintenance';
 
 /**
@@ -120,6 +122,8 @@ export const SqliteDb = {
   // Settings & Cache
   getSetting: cacheDb.getSetting,
   setSetting: cacheDb.setSetting,
+  getSystemState: cacheDb.getSystemState,
+  setSystemState: cacheDb.setSystemState,
   getAllLogs: cacheDb.getAllLogs,
   replaceAllLogs: cacheDb.replaceAllLogs,
   getExploreBuffer: cacheDb.getExploreBuffer,

@@ -1,0 +1,2399 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { apiFetch } from '../../utils/api';
+import { KotatsuImageLoader, PageLoadState } from '../../utils/KotatsuImageLoader';
+import {
+  MangaItem,
+  ChapterData,
+  ReaderSettings,
+  ReaderViewMode,
+  ReaderBgColor,
+  ReaderImageFilter,
+  ScanGroupOption,
+  PageStickyNote,
+  isNsfwManga,
+  FlagCategory,
+  FLAG_CATEGORIES,
+} from '../../types';
+import {
+  detectMangaFormat,
+  getRecommendedReadingMode,
+  resolveInitialReaderSettings,
+  saveSeriesReadingMode,
+  saveFormatReadingMode,
+  saveLastUsedReadingMode,
+  fetchSeriesReadingModeFromServer,
+  pushSeriesReadingModeToServer,
+} from '../../utils/readingMode';
+import { ReaderHeader } from '../reader/ReaderHeader';
+import { ReaderFooter } from '../reader/ReaderFooter';
+import { ReaderSettingsModal } from '../reader/ReaderSettingsModal';
+import { PageGridModal } from '../reader/PageGridModal';
+import { StickyNotesDrawer } from '../reader/StickyNotesDrawer';
+import { ShortcutsHelpModal } from '../reader/ShortcutsHelpModal';
+import { QuickJumpModal } from '../reader/QuickJumpModal';
+import { AmbientSoundModal } from '../reader/AmbientSoundModal';
+import { MirrorSourceModal } from '../reader/MirrorSourceModal';
+import { StoryCompanionModal } from '../modals/StoryCompanionModal';
+import { MangaTogetherModal } from '../reader/MangaTogetherModal';
+import { WebtoonRenderer } from '../reader/WebtoonRenderer';
+import { PagedRenderer } from '../reader/PagedRenderer';
+import { soundscapes } from '../../utils/soundscapes';
+import { useGamepadNavigation } from '../../hooks/useGamepadNavigation';
+import { useLiveReadingSessionSync, RemoteProgressUpdate } from '../../hooks/useReaderSession';
+import { useMangaTogether } from '../../hooks/useMangaTogether';
+import { useReaderZoom } from '../../hooks/useReaderZoom';
+import { useReaderStickyNotes } from '../../hooks/useReaderStickyNotes';
+import { useReaderOffline } from '../../hooks/useReaderOffline';
+import { performPanelOcr, OcrResult } from '../../utils/ocrEngine';
+import { webtoonifyImage } from '../../utils/webtoonification';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Maximize,
+  CheckCircle,
+  Sliders,
+  BookOpen,
+  X,
+  RefreshCw,
+  Zap,
+  Play,
+  Pause,
+  Grid,
+  Bookmark,
+  Download,
+  Eye,
+  Check,
+  RotateCcw,
+  Sparkles,
+  Layers,
+  Globe,
+  Smartphone,
+  AlertTriangle,
+  Flag,
+  StickyNote,
+  Crosshair,
+  Plus,
+  Trash2,
+  Edit2,
+} from 'lucide-react';
+import { getOfflineChapter } from '../../utils/offlineStorage';
+
+interface ReaderViewProps {
+  manga: MangaItem;
+  initialChapterNumber: number;
+  initialChapterId?: string;
+  defaultSettings?: ReaderSettings;
+  privateModeEnabled?: boolean;
+  onClose: () => void;
+  onMarkChapterRead: (chapterNum: number) => void;
+  /** Opens the bug-reporting tool pre-filled for the flagged series. */
+  onReport: (category: FlagCategory, manga: MangaItem) => void;
+  onSaveSettings?: (settings: ReaderSettings) => void;
+  isGuest?: boolean;
+  onOpenAuthModal?: () => void;
+}
+
+interface WebtoonPanelProps {
+  idx: number;
+  totalPages: number;
+  displaySrc: string;
+  isLoading: boolean;
+  isError: boolean;
+  isSeamless: boolean;
+  imageFilterStyle?: React.CSSProperties;
+  isLoupeActive: boolean;
+  showPageNumberOverlay: boolean;
+  enableSmartWebtoonify?: boolean;
+  readingDirection?: 'rtl' | 'ltr';
+  stickyNotesForPage?: PageStickyNote[];
+  onMouseMove?: (e: React.MouseEvent<HTMLImageElement>) => void;
+  onMouseLeave?: () => void;
+  onRetry: (idx: number) => void;
+  onDoubleTap?: (clientX: number, clientY: number, rect?: DOMRect) => void;
+  onAddNote?: (pageIndex: number) => void;
+  onOpenNote?: (note: PageStickyNote) => void;
+}
+
+/** Memoized Virtualized Webtoon Panel for smooth 60/120 FPS continuous vertical reading */
+const WebtoonPanel = React.memo<WebtoonPanelProps>(({
+  idx,
+  totalPages,
+  displaySrc,
+  isLoading,
+  isError,
+  isSeamless,
+  imageFilterStyle,
+  isLoupeActive,
+  showPageNumberOverlay,
+  enableSmartWebtoonify,
+  readingDirection,
+  stickyNotesForPage,
+  onMouseMove,
+  onMouseLeave,
+  onRetry,
+  onDoubleTap,
+  onAddNote,
+  onOpenNote,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(idx < 4);
+  const [cachedHeight, setCachedHeight] = useState<number | null>(null);
+  const [slicedUrls, setSlicedUrls] = useState<string[] | null>(null);
+
+  // Vision Gutter Segmentation (Smart Webtoonification)
+  useEffect(() => {
+    if (!enableSmartWebtoonify || !displaySrc || isError || isLoading) {
+      setSlicedUrls(null);
+      return;
+    }
+    let isMounted = true;
+    webtoonifyImage(displaySrc, readingDirection || 'rtl')
+      .then((result) => {
+        if (isMounted && result.isWebtoonified && result.slices.length > 1) {
+          setSlicedUrls(result.slices);
+        } else if (isMounted) {
+          setSlicedUrls(null);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setSlicedUrls(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [enableSmartWebtoonify, displaySrc, readingDirection, isError, isLoading]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        } else {
+          // Offscreen beyond 1200px -> unmount heavy image bitmap
+          setIsVisible(false);
+        }
+      },
+      {
+        rootMargin: '250px 0px 250px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const naturalH = e.currentTarget.naturalHeight || e.currentTarget.clientHeight;
+    if (naturalH > 50) {
+      setCachedHeight(naturalH);
+    }
+  };
+
+  const handlePanelClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.detail === 2 && onDoubleTap) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      onDoubleTap(e.clientX, e.clientY, rect);
+    }
+  };
+
+  const isReadyToRenderImage = Boolean(!isLoading || (displaySrc && displaySrc.startsWith('blob:')));
+
+  return (
+    <div
+      id={`webtoon-panel-${idx}`}
+      ref={containerRef}
+      onClick={handlePanelClick}
+      style={{ minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px' }}
+      className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel group ${
+        isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
+      }`}
+    >
+      {isVisible ? (
+        slicedUrls && slicedUrls.length > 1 ? (
+          <div className="w-full flex flex-col items-center">
+            {slicedUrls.map((sliceSrc, sliceIdx) => (
+              <img
+                key={`slice-${sliceIdx}`}
+                src={sliceSrc}
+                alt={`Page ${idx + 1} - Panel ${sliceIdx + 1}`}
+                style={imageFilterStyle}
+                onMouseMove={onMouseMove}
+                onMouseLeave={onMouseLeave}
+                decoding="async"
+                className={`w-full h-auto block object-contain ${
+                  isSeamless ? 'm-0 p-0 border-0' : 'mb-2 shadow-md'
+                } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+              />
+            ))}
+          </div>
+        ) : isReadyToRenderImage ? (
+          <img
+            src={displaySrc}
+            alt={`Page ${idx + 1}`}
+            style={imageFilterStyle}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+            onLoad={handleImageLoad}
+            decoding="async"
+            className={`w-full h-auto block object-contain transition-opacity duration-300 ${
+              isSeamless ? 'm-0 p-0 border-0' : ''
+            } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="w-full flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2"
+            style={{ height: cachedHeight ? `${cachedHeight}px` : '400px' }}
+          >
+            <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-[11px] font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-edge/60">
+              Loading Page {idx + 1}...
+            </span>
+          </div>
+        )
+      ) : (
+        <div
+          className="w-full flex items-center justify-center text-muted/40 font-mono text-[10px]"
+          style={{ height: cachedHeight ? `${cachedHeight}px` : '400px' }}
+        >
+          Page {idx + 1}
+        </div>
+      )}
+
+      {isVisible && isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2">
+          <div className="w-8 h-8 border-3 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className="text-[11px] font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-edge/60">
+            Loading Page {idx + 1}...
+          </span>
+        </div>
+      )}
+
+      {isVisible && isError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center">
+          <div className="w-10 h-10 rounded-full bg-danger/20 text-danger flex items-center justify-center">
+            <X className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-bold text-secondary">Failed to load Page {idx + 1}</p>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry(idx);
+            }}
+            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Loading</span>
+          </button>
+        </div>
+      )}
+
+      {/* Pinned Sticky Notes for this page */}
+      {stickyNotesForPage && stickyNotesForPage.length > 0 && isVisible && (
+        <div className="absolute top-3 right-3 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
+          {stickyNotesForPage.map((note) => {
+            const colorClass =
+              note.color === 'blue'
+                ? 'bg-blue-500/95 text-white shadow-blue-500/40 border-blue-300'
+                : note.color === 'purple'
+                ? 'bg-purple-500/95 text-white shadow-purple-500/40 border-purple-300'
+                : note.color === 'green'
+                ? 'bg-emerald-500/95 text-white shadow-emerald-500/40 border-emerald-300'
+                : 'bg-amber-400/95 text-black shadow-amber-400/40 border-amber-300';
+
+            return (
+              <div key={note.id} className="relative group/pin">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenNote?.(note);
+                  }}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xl border backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-all ${colorClass}`}
+                  title="View Sticky Note"
+                >
+                  <StickyNote className="w-3.5 h-3.5" />
+                  <span className="max-w-[110px] truncate">{note.noteText || 'Note'}</span>
+                </button>
+
+                {/* Popover preview on hover */}
+                <div className="absolute right-0 top-full mt-1.5 w-64 p-3 rounded-2xl bg-surface/95 border border-edge shadow-2xl backdrop-blur-xl opacity-0 translate-y-1 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:translate-y-0 group-hover/pin:pointer-events-auto transition-all duration-200 z-50 text-left">
+                  <div className="flex items-center justify-between text-[10px] text-muted mb-1 pb-1 border-b border-edge">
+                    <span className="font-bold text-accent">Sticky Note · Page {idx + 1}</span>
+                    <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                  <p className="text-xs text-primary whitespace-pre-wrap line-clamp-4 leading-relaxed font-sans">
+                    {note.noteText}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenNote?.(note);
+                    }}
+                    className="mt-2.5 w-full py-1.5 rounded-xl bg-elevated hover:bg-elevated/80 text-[10px] font-bold text-secondary hover:text-primary transition-colors text-center cursor-pointer"
+                  >
+                    Open in Notes Drawer
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Quick Add Note pill on hover */}
+      {onAddNote && isVisible && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddNote(idx);
+          }}
+          className="absolute top-3 left-3 z-30 opacity-0 group-hover:opacity-85 hover:!opacity-100 transition-opacity px-2.5 py-1 rounded-xl bg-surface/85 hover:bg-surface border border-edge hover:border-accent/50 text-[10px] font-bold text-secondary hover:text-primary flex items-center gap-1.5 backdrop-blur-md cursor-pointer shadow-lg active:scale-95"
+          title="Add Sticky Note to this page"
+        >
+          <StickyNote className="w-3.5 h-3.5 text-amber-400" />
+          <span>+ Note</span>
+        </button>
+      )}
+
+      {showPageNumberOverlay && isVisible && (
+        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-app/40 backdrop-blur-[2px] text-[10px] text-secondary/80 font-mono border border-edge/40 pointer-events-none">
+          Page {idx + 1} / {totalPages}
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const ReaderView: React.FC<ReaderViewProps> = ({
+  manga,
+  initialChapterNumber,
+  initialChapterId,
+  defaultSettings,
+  privateModeEnabled,
+  onClose,
+  onMarkChapterRead,
+  onReport,
+  onSaveSettings,
+  isGuest = false,
+  onOpenAuthModal,
+}) => {
+  const [currentChapterNum, setCurrentChapterNum] = useState<number>(initialChapterNumber || 1);
+  const [chapterData, setChapterData] = useState<ChapterData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Single / RTL / LTR page index
+  const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
+
+  // Kotatsu Parallel Worker Loader Instance & State
+  const loaderRef = useRef<KotatsuImageLoader | null>(null);
+  const [pageLoadStates, setPageLoadStates] = useState<Map<number, PageLoadState>>(new Map());
+
+  // HUD Visibility
+  const [showHud, setShowHud] = useState<boolean>(true);
+
+  // Settings state
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showChapterMenu, setShowChapterMenu] = useState<boolean>(false);
+  const [showPageGridModal, setShowPageGridModal] = useState<boolean>(false);
+  const [showGroupMenu, setShowGroupMenu] = useState<boolean>(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
+  const [showQuickJumpModal, setShowQuickJumpModal] = useState<boolean>(false);
+
+  // Selected Scanlation Release Group Version
+  const [selectedScanGroup, setSelectedScanGroup] = useState<string>(manga.sourceName || 'AsuraScans');
+  const [activeSourceName, setActiveSourceName] = useState<string>(manga.sourceName || '');
+  const [activeSourceUrl, setActiveSourceUrl] = useState<string>(manga.sourceUrl || '');
+  const [showMirrorModal, setShowMirrorModal] = useState<boolean>(false);
+
+  // High-performance Gesture Pinch-to-Zoom & Double-Tap Hook
+  const zoom = useReaderZoom();
+
+  const detectedFormat = useMemo(() => detectMangaFormat(manga), [manga]);
+
+  // Persistent Reader Settings with Format Auto-Detection
+  const [settings, setSettingsState] = useState<ReaderSettings>(() =>
+    resolveInitialReaderSettings(manga, defaultSettings)
+  );
+
+  const setSettings = useCallback(
+    (newSettings: ReaderSettings) => {
+      hydratedRef.current = true; // user took control — don't let hydration override
+      setSettingsState(newSettings);
+      saveSeriesReadingMode(manga.id, newSettings);
+      saveFormatReadingMode(detectedFormat, newSettings);
+      saveLastUsedReadingMode(newSettings);
+      // Durable server-side sync so settings roam across devices/browsers.
+      pushSeriesReadingModeToServer(manga.id, newSettings);
+      if (onSaveSettings) {
+        onSaveSettings(newSettings);
+      }
+    },
+    [manga.id, detectedFormat, onSaveSettings]
+  );
+
+  // On mount, hydrate per-series reader settings from the server (durable
+  // source of truth) and merge any that were saved on another device/browser.
+  // Local (localStorage) is the fast first paint; the server wins if it has a
+  // snapshot. A `hydratedRef` prevents this from racing a quick user edit.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await fetchSeriesReadingModeFromServer(manga.id);
+        if (!remote || cancelled || hydratedRef.current) return;
+        hydratedRef.current = true;
+        setSettingsState((prev) => ({ ...prev, ...remote }));
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manga.id]);
+  // Guard against double-firing mark-read (autoMarkRead on load + 85% scroll),
+  // which otherwise sends duplicate mark-read + AniList scrobble calls.
+  const markedReadRef = useRef<Set<number>>(new Set());
+  const markChapterReadOnce = useCallback(
+    (chNum: number) => {
+      if (markedReadRef.current.has(chNum)) return;
+      markedReadRef.current.add(chNum);
+      onMarkChapterRead(chNum);
+    },
+    [onMarkChapterRead]
+  );
+
+
+  const isWebtoon = settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless';
+
+  // Auto-scroll state
+  const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
+  const [autoNextCountdown, setAutoNextCountdown] = useState<number | null>(null);
+
+  // Ambient Soundscape state
+  const [showAmbientModal, setShowAmbientModal] = useState<boolean>(false);
+  const [pageTurnSfxEnabled, setPageTurnSfxEnabled] = useState<boolean>(true);
+
+  // Panel Magnifier Loupe Tool state
+  const [isLoupeActive, setIsLoupeActive] = useState<boolean>(false);
+  const [loupeData, setLoupeData] = useState<{ x: number; y: number; bgX: number; bgY: number; imgSrc: string } | null>(null);
+
+  // Bookmarking & Downloading
+  const [bookmarkedPages, setBookmarkedPages] = useState<number[]>([]);
+  const [downloading, setDownloading] = useState<boolean>(false);
+
+  // Scroll progress tracking & Restoration Guard
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [readProgressPercent, setReadProgressPercent] = useState<number>(0);
+  const isRestoringScrollRef = useRef<boolean>(false);
+  const initialResumeTargetRef = useRef<{ page: number; percent: number } | null>(null);
+
+  // Toast notice
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const triggerToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2500);
+  }, []);
+
+  // Offline Chapter Storage State & Actions (Extracted hook)
+  const {
+    isOfflineAvailable,
+    setIsOfflineAvailable,
+    isDownloadingOffline,
+    downloadProgress,
+    handleDownloadChapter,
+  } = useReaderOffline({
+    manga,
+    currentChapterNum,
+    chapterData,
+    triggerToast,
+  });
+
+  // Private Page Sticky Notes State & Actions (Extracted hook)
+  const {
+    stickyNotes,
+    showNotesDrawer,
+    setShowNotesDrawer,
+    activeNoteModal,
+    setActiveNoteModal,
+    noteInputText,
+    setNoteInputText,
+    noteInputColor,
+    setNoteInputColor,
+    stickyNotesByPage,
+    currentChapterNotes,
+    handleOpenAddNote,
+    handleOpenEditNote,
+    handleSaveNote,
+    handleDeleteNote,
+  } = useReaderStickyNotes({
+    mangaId: manga.id,
+    currentChapterNum,
+    triggerToast,
+  });
+
+  // Story Companion & Manga Together Real-Time Co-Reading State
+  const [showStoryCompanionModal, setShowStoryCompanionModal] = useState<boolean>(false);
+  const [showMangaTogetherModal, setShowMangaTogetherModal] = useState<boolean>(false);
+
+  // Manga Together Laser Pointer Active Mode
+  const [isLaserModeActive, setIsLaserModeActive] = useState<boolean>(false);
+
+  const mangaTogether = useMangaTogether({
+    mangaId: manga.id,
+    currentChapterNumber: currentChapterNum,
+    onRemoteNavigate: (chNum, pageIdx, scrollPct) => {
+      if (chNum !== currentChapterNum) {
+        setCurrentChapterNum(chNum);
+      }
+      setCurrentPageIndex(pageIdx);
+      if (isWebtoon && scrollContainerRef.current) {
+        const maxScroll = scrollContainerRef.current.scrollHeight - scrollContainerRef.current.clientHeight;
+        scrollContainerRef.current.scrollTop = (scrollPct / 100) * maxScroll;
+      }
+    },
+  });
+
+  // Sync page change events with Manga Together followers when hosting
+  useEffect(() => {
+    if (mangaTogether.activeRoom && mangaTogether.isHost) {
+      mangaTogether.broadcastNav('page', currentChapterNum, currentPageIndex, readProgressPercent);
+    }
+  }, [mangaTogether.activeRoom, mangaTogether.isHost, currentChapterNum, currentPageIndex, readProgressPercent]);
+
+  const [isFlagged, setIsFlagged] = useState<boolean>(Boolean(manga.isFlagged));
+  const [flagReason, setFlagReason] = useState<string>(manga.flagReason || '');
+  const [showFlagDropdown, setShowFlagDropdown] = useState<boolean>(false);
+
+  // Panel OCR & Dialogue Translation State
+  const [ocrActive, setOcrActive] = useState<boolean>(false);
+  const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
+  const [ocrLoading, setOcrLoading] = useState<boolean>(false);
+
+  const handleTriggerTranslation = useCallback(async () => {
+    if (!chapterData || !chapterData.pages[currentPageIndex]) return;
+    setOcrLoading(true);
+    triggerToast(`Translating dialogue to ${settings.targetTranslationLang || 'en'}...`);
+    try {
+      const pageSrc = pageLoadStates.get(currentPageIndex)?.blobUrl || chapterData.pages[currentPageIndex];
+      const result = await performPanelOcr(pageSrc, settings.targetTranslationLang || 'en');
+      setOcrResult(result);
+    } catch (_) {
+      triggerToast('Translation failed');
+    } finally {
+      setOcrLoading(false);
+    }
+  }, [chapterData, currentPageIndex, pageLoadStates, settings.targetTranslationLang, triggerToast]);
+
+  // EPUB Reflowable Text Content State & Local Novel Fetcher
+  const [epubChapterHtml, setEpubChapterHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const isEpubNovel =
+      settings.viewMode === 'reflowable-text' ||
+      (manga.type as string) === 'epub' ||
+      manga.sourceUrl?.startsWith('local://') ||
+      manga.id.startsWith('local_');
+
+    if (!isEpubNovel) {
+      setEpubChapterHtml(null);
+      return;
+    }
+
+    const archiveId = manga.sourceUrl?.startsWith('local://')
+      ? manga.sourceUrl.replace('local://', '')
+      : manga.id.startsWith('local_')
+      ? manga.id.replace('local_', '')
+      : null;
+
+    if (archiveId) {
+      const chapterIdx = Math.max(0, Math.floor(currentChapterNum) - 1);
+      apiFetch(`/api/local/library/${encodeURIComponent(archiveId)}/epub/chapter/${chapterIdx}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (active && data?.html) {
+            setEpubChapterHtml(data.html);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [manga.id, manga.sourceUrl, manga.type, currentChapterNum, settings.viewMode]);
+
+  // Live SSE Session Sync across all devices / active tabs
+  useLiveReadingSessionSync((update: RemoteProgressUpdate) => {
+    if (update.mangaId === manga.id && update.chapterNumber !== currentChapterNum) {
+      triggerToast(`Synced reading progress from remote device (Chapter ${update.chapterNumber})`);
+      setCurrentChapterNum(update.chapterNumber);
+    }
+  });
+
+  // Gamepad & Bluetooth Remotes & Stylus Navigation
+  useGamepadNavigation({
+    onNextPage: () => {
+      if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+      if (settings.viewMode === 'rtl' && chapterData) {
+        if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+      } else if (chapterData) {
+        if (currentPageIndex < chapterData.pages.length - 1) {
+          setCurrentPageIndex((prev) => prev + 1);
+        } else if (chapterData.nextChapterNumber) {
+          setCurrentChapterNum(chapterData.nextChapterNumber);
+        }
+      }
+    },
+    onPrevPage: () => {
+      if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+      if (settings.viewMode === 'rtl' && chapterData) {
+        if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+      } else if (chapterData) {
+        if (currentPageIndex > 0) {
+          setCurrentPageIndex((prev) => prev - 1);
+        } else if (chapterData.prevChapterNumber) {
+          setCurrentChapterNum(chapterData.prevChapterNumber);
+        }
+      }
+    },
+    onScrollUp: () => {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ top: -300, behavior: 'smooth' });
+    },
+    onScrollDown: () => {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollBy({ top: 300, behavior: 'smooth' });
+    },
+    onToggleHud: () => setShowHud((prev) => !prev),
+  });
+
+  // Chapter N+1 Silent Background Prefetch Worker
+  const prefetchedChapterRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!chapterData || !chapterData.nextChapterNumber || settings.prefetchNextChapter === false) return;
+    const nextCh = chapterData.nextChapterNumber;
+    if (prefetchedChapterRef.current === nextCh) return;
+
+    const shouldPrefetch = isWebtoon
+      ? readProgressPercent >= 92
+      : currentPageIndex >= Math.max(0, (chapterData.pages?.length || 1) - 1);
+
+    if (shouldPrefetch) {
+      prefetchedChapterRef.current = nextCh;
+      apiFetch(`/api/reader/chapter-pages?mangaId=${encodeURIComponent(manga.id)}&chapterNumber=${nextCh}`)
+        .then((res) => res.json())
+        .then(async (nextData: ChapterData) => {
+          if (nextData && nextData.pages && nextData.pages.length > 0 && !nextData.isPlaceholder) {
+            nextData.pages.slice(0, 2).forEach((url) => {
+              const img = new Image();
+              img.src = url;
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [readProgressPercent, currentPageIndex, chapterData, isWebtoon, manga.id, settings.prefetchNextChapter]);
+
+  // Dynamically compute available scanlation group versions from manga.availableSources
+  const availableScanGroups: ScanGroupOption[] = (manga.availableSources && manga.availableSources.length > 0)
+    ? manga.availableSources.map((src, idx) => ({
+        id: `src_${idx}`,
+        name: src.sourceName,
+        quality: '1080p Web',
+        releaseDate: 'Active Source',
+      }))
+    : [];
+
+  const hasMultipleSources = availableScanGroups.length > 1;
+
+  // Fetch chapter page image URLs
+  const fetchChapterPages = useCallback(async (chNum: number, overrideUrl?: string) => {
+    setLoading(true);
+    setError(null);
+    setCurrentPageIndex(0);
+    setAutoNextCountdown(null);
+
+    // Destroy existing loader instance if present
+    if (loaderRef.current) {
+      loaderRef.current.destroy();
+      loaderRef.current = null;
+    }
+
+    try {
+      // Step 1: Check offline IndexedDB storage first for instant loading
+      const offlineCopy = await getOfflineChapter(manga.id, chNum);
+      if (offlineCopy && offlineCopy.pages && offlineCopy.pages.length > 0) {
+        setIsOfflineAvailable(true);
+        setChapterData({
+          mangaId: manga.id,
+          mangaTitle: manga.title,
+          chapterId: String(chNum),
+          chapterNumber: chNum,
+          title: `Chapter ${chNum}`,
+          pages: offlineCopy.pages,
+          scanGroup: 'Offline Storage',
+          totalChapters: manga.totalChapters || 1,
+          nextChapterNumber: chNum + 1,
+          prevChapterNumber: chNum > 1 ? chNum - 1 : null,
+        });
+        setCurrentPageIndex(0);
+        setLoading(false);
+        return;
+      } else {
+        setIsOfflineAvailable(false);
+      }
+
+      const effectiveUrl = overrideUrl || activeSourceUrl || manga.sourceUrl;
+      const url = `/api/reader/chapter-pages?mangaId=${encodeURIComponent(
+        manga.id
+      )}&chapterNumber=${chNum}${initialChapterId ? `&chapterId=${encodeURIComponent(initialChapterId)}` : ''}${effectiveUrl ? `&url=${encodeURIComponent(effectiveUrl)}` : ''}${manga.title ? `&title=${encodeURIComponent(manga.title)}` : ''}`;
+      const res = await apiFetch(url);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error((errBody as any).message || (errBody as any).error || `Failed to load chapter content (HTTP ${res.status})`);
+      }
+      const data: ChapterData = await res.json();
+      setChapterData(data);
+
+      if (data.isPlaceholder || data.loadError || data.contentUnavailable || !data.pages?.length) {
+        setError(
+          data.loadError ||
+            `Chapter ${chNum} is missing pages. Live chapter panels could not be loaded from the source. Please try another mirror or source.`
+        );
+      }
+
+      // Resume mid-chapter page if the server (or local storage fallback) has stored progress for this chapter
+      let resumePage = 0;
+      let resumePercent = 0;
+      try {
+        const histRes = await apiFetch(`/api/reader/history/${encodeURIComponent(manga.id)}`);
+        if (histRes.ok) {
+          const rows = await histRes.json();
+          if (Array.isArray(rows)) {
+            const match = rows.find((r: any) => Number(r.chapter_number) === Number(chNum));
+            if (match) {
+              if (Number(match.page_index) > 0) {
+                resumePage = Math.min(
+                  Number(match.page_index) || 0,
+                  Math.max(0, (data.pages?.length || 1) - 1)
+                );
+              }
+              if (Number(match.percent) > 0) {
+                resumePercent = Number(match.percent);
+              }
+            }
+          }
+        }
+      } catch {
+        /* resume is best-effort */
+      }
+
+      // Offline / LocalStorage Progress Fallback (ensures progress restores even if offline or missing from database)
+      if (resumePage === 0 && resumePercent === 0) {
+        try {
+          const localStr = localStorage.getItem(`reader_progress_${manga.id}`);
+          if (localStr) {
+            const localData = JSON.parse(localStr);
+            if (Number(localData.chapterNumber) === Number(chNum)) {
+              if (Number(localData.pageIndex) > 0) {
+                resumePage = Math.min(
+                  Number(localData.pageIndex) || 0,
+                  Math.max(0, (data.pages?.length || 1) - 1)
+                );
+              }
+              if (Number(localData.percent) > 0) {
+                resumePercent = Number(localData.percent);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (resumePercent === 0 && resumePage > 0 && data.pages?.length) {
+        resumePercent = Math.round((resumePage / data.pages.length) * 100);
+      }
+
+      setCurrentPageIndex(resumePage);
+      setReadProgressPercent(resumePercent);
+
+      if (resumePage > 0 || resumePercent > 0) {
+        initialResumeTargetRef.current = { page: resumePage, percent: resumePercent };
+        isRestoringScrollRef.current = true;
+      }
+
+      // Initialize Kotatsu Parallel Image Loader Engine
+      if (data.pages && data.pages.length > 0 && !data.isPlaceholder && !data.contentUnavailable) {
+        const loader = new KotatsuImageLoader(data.pages, effectiveUrl, (states) => {
+          setPageLoadStates(new Map(states));
+        });
+        loaderRef.current = loader;
+        loader.setActiveIndex(resumePage);
+      }
+
+      // Persist open position so analytics/history stay warm
+      if (!data.isPlaceholder && data.pages?.length) {
+        try {
+          localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
+            chapterNumber: chNum,
+            pageIndex: resumePage,
+            percent: resumePercent,
+            timestamp: Date.now(),
+          }));
+        } catch {}
+
+        apiFetch('/api/reader/progress', {
+          method: 'POST',
+          body: JSON.stringify({
+            mangaId: manga.id,
+            chapterNumber: chNum,
+            pageIndex: resumePage,
+            pageCount: data.pages.length,
+            percent: resumePercent,
+            title: manga.title,
+            sourceName: manga.sourceName,
+            sourceUrl: manga.sourceUrl,
+            coverImage: manga.coverImage,
+          }),
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Could not load chapter pages. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [initialChapterId, manga.id, manga.sourceUrl, activeSourceUrl, settings.autoMarkRead, markChapterReadOnce]);
+
+  const handleSelectSource = useCallback(async (sourceName: string, sourceUrl: string, persistToDatabase: boolean) => {
+    setActiveSourceName(sourceName);
+    setActiveSourceUrl(sourceUrl);
+    setShowMirrorModal(false);
+    triggerToast(`Switched source to ${sourceName}`);
+
+    if (persistToDatabase) {
+      try {
+        await apiFetch(`/api/manga/${encodeURIComponent(manga.id)}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            sourceName,
+            sourceUrl,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to persist source to database', e);
+      }
+    }
+
+    fetchChapterPages(currentChapterNum, sourceUrl);
+  }, [manga.id, currentChapterNum, fetchChapterPages, triggerToast]);
+
+  useEffect(() => {
+    fetchChapterPages(currentChapterNum);
+    markedReadRef.current.clear();
+
+    return () => {
+      if (loaderRef.current) {
+        loaderRef.current.destroy();
+        loaderRef.current = null;
+      }
+    };
+  }, [currentChapterNum]);
+
+  // Update image loader sliding window whenever active page changes
+  useEffect(() => {
+    if (loaderRef.current) {
+      loaderRef.current.setActiveIndex(currentPageIndex);
+    }
+  }, [currentPageIndex]);
+
+  // Micro-step Smooth Auto-scroll Engine
+  useEffect(() => {
+    if (!isAutoScrolling || !isWebtoon) return;
+
+    // Smooth continuous micro steps based on speed level (0.5x to 3.0x)
+    const step = settings.autoScrollSpeed * 1.2;
+    const timer = setInterval(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop += step;
+      }
+    }, 16); // ~60 FPS smooth scrolling
+
+    return () => clearInterval(timer);
+  }, [isAutoScrolling, settings.autoScrollSpeed, isWebtoon]);
+
+  // Handle Scroll Progress & Auto-Next Chapter Trigger
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current || !chapterData || isRestoringScrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    if (scrollHeight <= clientHeight) {
+      setReadProgressPercent(100);
+      return;
+    }
+    const percent = Math.min(100, Math.round((scrollTop / (scrollHeight - clientHeight)) * 100));
+    setReadProgressPercent(percent);
+
+    if (chapterData.pages.length > 0) {
+      const pIdx = settings.viewMode === 'vertical-paged'
+        ? Math.min(chapterData.pages.length - 1, Math.max(0, Math.round(scrollTop / window.innerHeight)))
+        : Math.min(
+            chapterData.pages.length - 1,
+            Math.floor((scrollTop / (scrollHeight - clientHeight + 1)) * chapterData.pages.length)
+          );
+      setCurrentPageIndex(pIdx);
+    }
+
+    if (percent > 85 && settings.autoMarkRead) {
+      markChapterReadOnce(currentChapterNum);
+    }
+
+    // Manga Together Co-Reading: Broadcast scroll progress if hosting
+    if (mangaTogether.activeRoom && mangaTogether.isHost) {
+      mangaTogether.broadcastNav('scroll', currentChapterNum, currentPageIndex, percent);
+    }
+
+    // Auto-Next Chapter trigger for Webtoons at scroll end
+    if (percent >= 98 && settings.autoNextChapter && chapterData.nextChapterNumber && !autoNextCountdown) {
+      triggerToast(`Auto-loading Chapter ${chapterData.nextChapterNumber} in 3s...`);
+      setAutoNextCountdown(3);
+      setTimeout(() => {
+        if (chapterData.nextChapterNumber) {
+          setCurrentChapterNum(chapterData.nextChapterNumber);
+        }
+      }, 3000);
+    }
+  }, [scrollContainerRef, chapterData, settings.autoMarkRead, markChapterReadOnce, settings.autoNextChapter, autoNextCountdown, triggerToast, setAutoNextCountdown, setCurrentChapterNum, currentChapterNum, settings.viewMode, mangaTogether]);
+
+  // Automatically restore vertical scroll position for Webtoon & Vertical modes
+  useEffect(() => {
+    if (!chapterData || (!isWebtoon && settings.viewMode !== 'vertical-paged') || !initialResumeTargetRef.current) return;
+    const target = initialResumeTargetRef.current;
+    if (!target || (target.page <= 0 && target.percent <= 0)) {
+      isRestoringScrollRef.current = false;
+      return;
+    }
+
+    let timeoutId: any = null;
+    const attemptScroll = (attempts = 0) => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+
+      const panelEl = document.getElementById(`webtoon-panel-${target.page}`);
+      if (panelEl) {
+        panelEl.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' });
+        timeoutId = setTimeout(() => {
+          isRestoringScrollRef.current = false;
+        }, 300);
+        initialResumeTargetRef.current = null;
+        return;
+      }
+
+      const { scrollHeight, clientHeight } = el;
+      if (scrollHeight > clientHeight + 100) {
+        const targetScroll = target.percent > 0
+          ? (target.percent / 100) * (scrollHeight - clientHeight)
+          : (target.page / (chapterData.pages.length || 1)) * scrollHeight;
+        el.scrollTop = targetScroll;
+        timeoutId = setTimeout(() => {
+          isRestoringScrollRef.current = false;
+        }, 300);
+        initialResumeTargetRef.current = null;
+        return;
+      }
+
+      if (attempts < 8) {
+        timeoutId = setTimeout(() => attemptScroll(attempts + 1), 120);
+      } else {
+        isRestoringScrollRef.current = false;
+        initialResumeTargetRef.current = null;
+      }
+    };
+
+    const frameId = requestAnimationFrame(() => attemptScroll(0));
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [chapterData, isWebtoon, settings.viewMode]);
+
+  // In Paged mode (Single / Double / RTL / LTR), auto-mark read when reaching 80%+ of the chapter
+  useEffect(() => {
+    if (!isWebtoon && chapterData && chapterData.pages.length > 0 && settings.autoMarkRead) {
+      const threshold = Math.floor(chapterData.pages.length * 0.8);
+      if (currentPageIndex >= threshold) {
+        markChapterReadOnce(currentChapterNum);
+      }
+    }
+  }, [currentPageIndex, chapterData, isWebtoon, settings.autoMarkRead, markChapterReadOnce, currentChapterNum]);
+
+  // Debounced server progress persistence (page + percent) for analytics/resume
+  useEffect(() => {
+    if (!chapterData || chapterData.isPlaceholder || chapterData.contentUnavailable || !chapterData.pages?.length || isRestoringScrollRef.current || loading) return;
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(`reader_progress_${manga.id}`, JSON.stringify({
+          chapterNumber: currentChapterNum,
+          pageIndex: currentPageIndex,
+          percent: readProgressPercent,
+          timestamp: Date.now(),
+        }));
+      } catch {}
+
+      apiFetch('/api/reader/progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          mangaId: manga.id,
+          chapterNumber: currentChapterNum,
+          pageIndex: currentPageIndex,
+          pageCount: chapterData.pages.length,
+          percent: readProgressPercent,
+          title: manga.title,
+          sourceName: manga.sourceName,
+          sourceUrl: manga.sourceUrl,
+          coverImage: manga.coverImage,
+        }),
+      }).catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [manga.id, manga.title, manga.sourceName, manga.sourceUrl, manga.coverImage, currentChapterNum, currentPageIndex, readProgressPercent, chapterData, loading]);
+
+  // Track latest progress for immediate unmount / beforeunload flush
+  const latestProgressRef = useRef({
+    mangaId: manga.id,
+    chapterNumber: currentChapterNum,
+    pageIndex: currentPageIndex,
+    pageCount: chapterData?.pages?.length || 0,
+    percent: readProgressPercent,
+    title: manga.title,
+    sourceName: manga.sourceName,
+    sourceUrl: manga.sourceUrl,
+    coverImage: manga.coverImage,
+    isPlaceholder: chapterData?.isPlaceholder,
+    contentUnavailable: chapterData?.contentUnavailable,
+  });
+
+  latestProgressRef.current = {
+    mangaId: manga.id,
+    chapterNumber: currentChapterNum,
+    pageIndex: currentPageIndex,
+    pageCount: chapterData?.pages?.length || 0,
+    percent: readProgressPercent,
+    title: manga.title,
+    sourceName: manga.sourceName,
+    sourceUrl: manga.sourceUrl,
+    coverImage: manga.coverImage,
+    isPlaceholder: chapterData?.isPlaceholder,
+    contentUnavailable: chapterData?.contentUnavailable,
+  };
+
+  // Immediate flush on unmount or tab close
+  useEffect(() => {
+    const flushProgress = () => {
+      const cur = latestProgressRef.current;
+      if (!cur || cur.isPlaceholder || cur.contentUnavailable || cur.pageCount <= 0 || isRestoringScrollRef.current) return;
+      try {
+        localStorage.setItem(`reader_progress_${cur.mangaId}`, JSON.stringify({
+          chapterNumber: cur.chapterNumber,
+          pageIndex: cur.pageIndex,
+          percent: cur.percent,
+          timestamp: Date.now(),
+        }));
+      } catch {}
+
+      try {
+        const payload = JSON.stringify({
+          mangaId: cur.mangaId,
+          chapterNumber: cur.chapterNumber,
+          pageIndex: cur.pageIndex,
+          pageCount: cur.pageCount,
+          percent: cur.percent,
+          title: cur.title,
+          sourceName: cur.sourceName,
+          sourceUrl: cur.sourceUrl,
+          coverImage: cur.coverImage,
+        });
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon('/api/reader/progress', blob);
+        } else {
+          apiFetch('/api/reader/progress', {
+            method: 'POST',
+            body: payload,
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', flushProgress);
+    return () => {
+      window.removeEventListener('beforeunload', flushProgress);
+      flushProgress();
+    };
+  }, []);
+
+  // Toggle bookmark for page
+  const toggleBookmarkPage = useCallback((pageIdx: number) => {
+    setBookmarkedPages((prev) => {
+      const newBookmarks = prev.includes(pageIdx)
+        ? prev.filter((p) => p !== pageIdx)
+        : [...prev, pageIdx];
+      triggerToast(
+        prev.includes(pageIdx)
+          ? `Removed page ${pageIdx + 1} from bookmarks.`
+          : `Bookmarked page ${pageIdx + 1}!`
+      );
+      return newBookmarks;
+    });
+  }, [triggerToast]);
+
+  // Keyboard Navigation (Space for Auto-scroll, A/D, Arrow keys, F, G, H, B, S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        setIsAutoScrolling((prev) => {
+          const nextState = !prev;
+          triggerToast(nextState ? `Auto-Scroll Started (${settings.autoScrollSpeed}x)` : 'Auto-Scroll Paused');
+          return nextState;
+        });
+      } else if (e.key === 'ArrowRight' || e.key === 'd') {
+        if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+        if (settings.viewMode === 'rtl' && chapterData) {
+          if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+        } else if (settings.viewMode === 'vertical-paged' && scrollContainerRef.current) {
+          e.preventDefault();
+          const el = scrollContainerRef.current;
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) {
+            if (chapterData?.nextChapterNumber) setCurrentChapterNum(chapterData.nextChapterNumber);
+          } else {
+            el.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+          }
+        } else if (chapterData) {
+          if (currentPageIndex < chapterData.pages.length - 1) {
+            setCurrentPageIndex((prev) => prev + 1);
+          } else if (chapterData.nextChapterNumber) {
+            setCurrentChapterNum(chapterData.nextChapterNumber);
+          }
+        }
+      } else if (e.key === 'ArrowLeft' || e.key === 'a') {
+        if (pageTurnSfxEnabled) soundscapes.playPageTurn();
+        if (settings.viewMode === 'rtl' && chapterData) {
+          if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+        } else if (settings.viewMode === 'vertical-paged' && scrollContainerRef.current) {
+          e.preventDefault();
+          scrollContainerRef.current.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+        } else if (chapterData) {
+          if (currentPageIndex > 0) {
+            setCurrentPageIndex((prev) => prev - 1);
+          } else if (chapterData.prevChapterNumber) {
+            setCurrentChapterNum(chapterData.prevChapterNumber);
+          }
+        }
+      } else if (e.key === 'ArrowDown' || e.key === 'j') {
+        if (isWebtoon || settings.viewMode === 'vertical-paged') {
+          if (scrollContainerRef.current) {
+            e.preventDefault();
+            const step = settings.viewMode === 'vertical-paged' ? window.innerHeight : (settings.guidedPanelView ? window.innerHeight * 0.75 : 250);
+            scrollContainerRef.current.scrollBy({ top: step, behavior: 'smooth' });
+          }
+        }
+      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+        if (isWebtoon || settings.viewMode === 'vertical-paged') {
+          if (scrollContainerRef.current) {
+            e.preventDefault();
+            const step = settings.viewMode === 'vertical-paged' ? window.innerHeight : (settings.guidedPanelView ? window.innerHeight * 0.75 : 250);
+            scrollContainerRef.current.scrollBy({ top: -step, behavior: 'smooth' });
+          }
+        }
+      } else if (e.key === 'n') {
+        setNoteInputText('');
+        setNoteInputColor('yellow');
+        setActiveNoteModal({ pageIndex: currentPageIndex });
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsLoupeActive((prev) => {
+          const next = !prev;
+          triggerToast(next ? 'Panel Magnifier: Active (hover image)' : 'Panel Magnifier: Disabled');
+          return next;
+        });
+      } else if (e.key === 'f') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      } else if (e.key === 'g' || e.key === 'G') {
+        setShowQuickJumpModal((prev) => !prev);
+      } else if (e.key === '?' || e.key === 'h' || e.key === 'H') {
+        setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === '+' || e.key === '=') {
+        const nextSpeed = Math.min(5.0, Number((settings.autoScrollSpeed + 0.5).toFixed(1)));
+        setSettings({ ...settings, autoScrollSpeed: nextSpeed });
+        triggerToast(`Auto-Scroll Speed: ${nextSpeed}x`);
+      } else if (e.key === '-' || e.key === '_') {
+        const nextSpeed = Math.max(0.5, Number((settings.autoScrollSpeed - 0.5).toFixed(1)));
+        setSettings({ ...settings, autoScrollSpeed: nextSpeed });
+        triggerToast(`Auto-Scroll Speed: ${nextSpeed}x`);
+      } else if (e.key === 'b' || e.key === 'B') {
+        toggleBookmarkPage(currentPageIndex);
+      } else if (e.key === 's' || e.key === 'S') {
+        setShowSettings((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settings.viewMode, settings.guidedPanelView, currentPageIndex, chapterData, settings.autoScrollSpeed, isWebtoon, toggleBookmarkPage]);
+
+  // Gamepad Controller Support (e.g. 8BitDo, Bluetooth remote, Xbox, PlayStation controllers)
+  useEffect(() => {
+    let animId: number;
+    let lastButtonPress = 0;
+
+    const pollGamepad = () => {
+      const gamepads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        const now = Date.now();
+        if (now - lastButtonPress > 250) {
+          // D-Pad Right (button 15), R1 (button 5), or A (button 0) -> Next
+          if (gp.buttons[15]?.pressed || gp.buttons[5]?.pressed) {
+            lastButtonPress = now;
+            if (settings.viewMode === 'rtl' && chapterData) {
+              if (currentPageIndex > 0) setCurrentPageIndex((prev) => prev - 1);
+            } else if (chapterData) {
+              if (currentPageIndex < chapterData.pages.length - 1) {
+                setCurrentPageIndex((prev) => prev + 1);
+              } else if (chapterData.nextChapterNumber) {
+                setCurrentChapterNum(chapterData.nextChapterNumber);
+              }
+            }
+          }
+          // D-Pad Left (button 14) or L1 (button 4) -> Prev
+          else if (gp.buttons[14]?.pressed || gp.buttons[4]?.pressed) {
+            lastButtonPress = now;
+            if (settings.viewMode === 'rtl' && chapterData) {
+              if (currentPageIndex < chapterData.pages.length - 1) setCurrentPageIndex((prev) => prev + 1);
+            } else if (chapterData) {
+              if (currentPageIndex > 0) {
+                setCurrentPageIndex((prev) => prev - 1);
+              } else if (chapterData.prevChapterNumber) {
+                setCurrentChapterNum(chapterData.prevChapterNumber);
+              }
+            }
+          }
+          // Y button (button 3) -> Toggle Auto-Scroll
+          else if (gp.buttons[3]?.pressed) {
+            lastButtonPress = now;
+            setIsAutoScrolling((prev) => {
+              const next = !prev;
+              triggerToast(next ? `Auto-Scroll Started (${settings.autoScrollSpeed}x)` : 'Auto-Scroll Paused');
+              return next;
+            });
+          }
+          // X button (button 2) -> Toggle HUD
+          else if (gp.buttons[2]?.pressed) {
+            lastButtonPress = now;
+            setShowHud((prev) => !prev);
+          }
+        }
+      }
+      animId = requestAnimationFrame(pollGamepad);
+    };
+
+    animId = requestAnimationFrame(pollGamepad);
+    return () => cancelAnimationFrame(animId);
+  }, [chapterData, currentPageIndex, settings.viewMode, settings.autoScrollSpeed, triggerToast]);
+
+  // Canvas background style mapping
+  const bgStyleClass = useMemo(() => {
+    if (settings.bgColor === 'black') return 'bg-black text-primary';
+    if (settings.bgColor === 'charcoal') return 'bg-zinc-950 text-primary';
+    if (settings.bgColor === 'sepia') return 'bg-[#1c1813] text-[#e8d5b7]';
+    if (settings.bgColor === 'white') return 'bg-slate-100 text-accent-fg';
+    return 'bg-app text-primary';
+  }, [settings.bgColor]);
+
+  // CSS Image Filters Mapping (Including OLED pitch black, Warm Amber, E-Ink and Line-Art Sharpener)
+  const imageFilterStyle = useMemo(() => {
+    if (settings.imageFilter === 'warm-amber') return { filter: 'sepia(45%) hue-rotate(-20deg) contrast(98%) brightness(95%)' };
+    if (settings.imageFilter === 'oled') return { filter: 'contrast(135%) brightness(90%)' };
+    if (settings.imageFilter === 'grayscale') return { filter: 'grayscale(100%)' };
+    if (settings.imageFilter === 'sepia') return { filter: 'sepia(75%) contrast(100%) brightness(95%)' };
+    if (settings.imageFilter === 'invert') return { filter: 'invert(100%) hue-rotate(180deg)' };
+    if (settings.imageFilter === 'brightness') return { filter: 'contrast(120%) brightness(110%)' };
+    if (settings.imageFilter === 'e-ink') return { filter: 'grayscale(100%) contrast(175%) brightness(105%)' };
+    if (settings.imageFilter === 'dithered-1bit') return { filter: 'grayscale(100%) contrast(250%) brightness(110%) drop-shadow(0px 0px 1px #000)' };
+    if (settings.imageFilter === 'sharpener') return { filter: 'contrast(125%) brightness(98%) drop-shadow(0px 0px 0.5px rgba(0,0,0,0.8))' };
+    if (settings.imageFilter === 'high-contrast') return { filter: 'contrast(140%) brightness(100%)' };
+    return {};
+  }, [settings.imageFilter]);
+
+  const totalChaptersList = useMemo(() => {
+    return Array.from({
+      length: Math.max(manga.latestChapter, manga.currentChapter, 10),
+    }, (_, i) => i + 1).reverse();
+  }, [manga.latestChapter, manga.currentChapter]);
+
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!isLoupeActive) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    const relX = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100));
+    const relY = Math.max(0, Math.min(100, ((y - rect.top) / rect.height) * 100));
+    setLoupeData({ x, y, bgX: relX, bgY: relY, imgSrc: e.currentTarget.src });
+  };
+
+  const handleImageMouseLeave = () => {
+    if (isLoupeActive) setLoupeData(null);
+  };
+
+  if (isGuest && isNsfwManga(manga)) {
+    return (
+      <div className="fixed inset-0 z-50 bg-app/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md w-full bg-surface border border-rose-500/40 rounded-3xl p-8 shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-3xl flex items-center justify-center mx-auto">
+            🔞
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-primary">18+ Adult Content Restricted</h2>
+            <p className="text-xs text-secondary leading-relaxed">
+              This series contains 18+ adult explicit material. Guest users cannot view NSFW content. Please sign in to read this series.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <button
+              onClick={() => {
+                onClose();
+                onOpenAuthModal?.();
+              }}
+              className="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-lg shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Sign In to Read
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 rounded-2xl bg-elevated hover:bg-elevated text-secondary hover:text-primary font-bold text-xs transition-colors"
+            >
+              Return to Library
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`fixed inset-0 z-50 flex flex-col ${settings.imageFilter === 'oled' ? 'bg-black text-white' : bgStyleClass} font-sans select-none overflow-hidden`}>
+      {/* Toast Notice */}
+      {toastMsg && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-accent text-accent-fg font-bold text-xs rounded-xl shadow-2xl flex items-center gap-2 animate-bounce">
+          <Sparkles className="w-4 h-4" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
+
+      {/* Persistent Page & Chapter Badge Indicator (BUG-003: toggleable & semi-transparent) */}
+      {settings.showPersistentPageBadge && chapterData && (
+        <div className="fixed top-14 left-4 z-40 px-3 py-1.5 rounded-xl bg-surface/50 backdrop-blur-sm border border-edge-strong/50 text-primary/90 text-xs font-mono font-bold shadow-lg flex items-center gap-2 pointer-events-none transition-opacity">
+          <span className="text-accent/90">Ch. {currentChapterNum}</span>
+          <span className="text-muted/80">•</span>
+          <span>Page {currentPageIndex + 1} / {chapterData.pages.length}</span>
+        </div>
+      )}
+
+      {/* TOP KOTATSU HUD HEADER BAR */}
+      {showHud && (
+        <ReaderHeader
+          manga={manga}
+          currentChapterNum={currentChapterNum}
+          selectedScanGroup={selectedScanGroup}
+          chapterData={chapterData}
+          settings={settings}
+          isWebtoon={isWebtoon}
+          hasMultipleSources={hasMultipleSources}
+          availableScanGroups={availableScanGroups}
+          totalChaptersList={totalChaptersList}
+          showChapterMenu={showChapterMenu}
+          showGroupMenu={showGroupMenu}
+          currentChapterNotes={currentChapterNotes}
+          showNotesDrawer={showNotesDrawer}
+          isOfflineAvailable={isOfflineAvailable}
+          isDownloadingOffline={isDownloadingOffline}
+          downloadProgress={downloadProgress}
+          privateModeEnabled={privateModeEnabled}
+          isAmbientActive={soundscapes.getCurrentPreset() !== 'off'}
+          onOpenAmbientModal={() => setShowAmbientModal(true)}
+          isLoupeActive={isLoupeActive}
+          onToggleLoupe={() => {
+            setIsLoupeActive((prev) => {
+              const next = !prev;
+              triggerToast(next ? 'Panel Magnifier: Active' : 'Panel Magnifier: Disabled');
+              return next;
+            });
+          }}
+          onOpenMirrorModal={() => setShowMirrorModal(true)}
+          onOpenStoryCompanion={() => setShowStoryCompanionModal(true)}
+          onOpenMangaTogether={() => setShowMangaTogetherModal(true)}
+          isMangaTogetherActive={Boolean(mangaTogether.activeRoom)}
+          isTranslationEnabled={Boolean(settings.enableAiInpainting || settings.inPlaceTranslation)}
+          isTranslating={ocrLoading}
+          onTriggerTranslation={handleTriggerTranslation}
+          zoomScale={zoom.scale}
+          onZoomIn={zoom.zoomIn}
+          onZoomOut={zoom.zoomOut}
+          onResetZoom={zoom.resetZoom}
+          onClose={onClose}
+          onPrevChapter={() => chapterData?.prevChapterNumber && setCurrentChapterNum(chapterData.prevChapterNumber)}
+          onNextChapter={() => chapterData?.nextChapterNumber && setCurrentChapterNum(chapterData.nextChapterNumber)}
+          onSelectChapter={(ch) => {
+            setCurrentChapterNum(ch);
+            setShowChapterMenu(false);
+          }}
+          onToggleChapterMenu={() => setShowChapterMenu(!showChapterMenu)}
+          onToggleGroupMenu={() => setShowGroupMenu(!showGroupMenu)}
+          onSelectScanGroup={(name) => {
+            setSelectedScanGroup(name);
+            setShowGroupMenu(false);
+            triggerToast(`Switched scanlation group to ${name}`);
+          }}
+          onToggleNotesDrawer={() => setShowNotesDrawer(!showNotesDrawer)}
+          onDownloadOffline={handleDownloadChapter}
+          onToggleViewMode={() => {
+            const nextMode: ReaderViewMode = isWebtoon ? 'rtl' : 'webtoon-seamless';
+            setSettings({
+              ...settings,
+              viewMode: nextMode,
+              noPanelSpacing: nextMode === 'webtoon-seamless',
+              pageGap: nextMode === 'webtoon-seamless' ? 0 : 8,
+            });
+            triggerToast(nextMode === 'rtl' ? 'Switched to 🇯🇵 Manga (RTL)' : 'Switched to 📱 Webtoon (Seamless 0px)');
+          }}
+          onToggleFullscreen={() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+              document.exitFullscreen().catch(() => {});
+            }
+          }}
+        />
+      )}
+
+      {/* Top Scroll Reading Progress Bar */}
+      <div className="w-full h-1 bg-surface relative">
+        <div
+          className="h-full bg-accent-grad transition-all duration-150"
+          style={{ width: `${readProgressPercent}%` }}
+        />
+      </div>
+
+      {/* GRAPHICAL PAGE OVERVIEW GALLERY MODAL */}
+      {showPageGridModal && chapterData && (
+        <PageGridModal
+          chapterData={chapterData}
+          currentPageIndex={currentPageIndex}
+          bookmarkedPages={bookmarkedPages}
+          isWebtoon={isWebtoon}
+          onClose={() => setShowPageGridModal(false)}
+          onSelectPage={(idx) => {
+            setCurrentPageIndex(idx);
+            setShowPageGridModal(false);
+            if (isWebtoon && scrollContainerRef.current) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * idx;
+            }
+          }}
+        />
+      )}
+
+      {/* DISPLAY & SPEED SETTINGS MODAL */}
+      {showSettings && (
+        <ReaderSettingsModal
+          manga={manga}
+          detectedFormat={detectedFormat}
+          settings={settings}
+          isWebtoon={isWebtoon}
+          isFlagged={isFlagged}
+          onClose={() => setShowSettings(false)}
+          onSaveSettings={setSettings}
+          onTriggerToast={triggerToast}
+          onToggleFlagDropdown={() => setShowFlagDropdown(!showFlagDropdown)}
+        />
+      )}
+
+      {/* KEYBOARD SHORTCUTS CHEAT SHEET MODAL */}
+      {showShortcutsModal && (
+        <ShortcutsHelpModal onClose={() => setShowShortcutsModal(false)} />
+      )}
+
+      {/* DIRECT PAGE JUMP MODAL */}
+      {showQuickJumpModal && chapterData && (
+        <QuickJumpModal
+          totalPages={chapterData.pages.length}
+          currentPage={currentPageIndex}
+          onClose={() => setShowQuickJumpModal(false)}
+          onJump={(targetIdx) => {
+            setCurrentPageIndex(targetIdx);
+            if (isWebtoon && scrollContainerRef.current) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * targetIdx;
+            }
+          }}
+        />
+      )}
+
+      {/* MAIN READER SCROLL CANVAS */}
+      <main
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        onTouchStart={zoom.handleTouchStart}
+        onTouchMove={zoom.handleTouchMove}
+        onTouchEnd={zoom.handleTouchEnd}
+        onMouseDown={zoom.handleMouseDown}
+        onMouseMove={zoom.handleMouseMove}
+        onMouseUp={zoom.handleMouseUp}
+        onWheel={zoom.handleWheel}
+        onClick={(e) => {
+          if (isLaserModeActive && mangaTogether.activeRoom) {
+            const xPct = Math.round((e.clientX / window.innerWidth) * 100);
+            const yPct = Math.round((e.clientY / window.innerHeight) * 100);
+            mangaTogether.sendLaserPointer(xPct, yPct);
+            return;
+          }
+          if (!zoom.isZoomed) {
+            setShowHud(!showHud);
+          }
+        }}
+        className={`flex-1 overflow-y-auto overflow-x-hidden p-0 relative ${
+          isLaserModeActive ? 'cursor-crosshair' : zoom.isZoomed ? 'cursor-grab' : 'cursor-pointer'
+        }`}
+      >
+        {loading ? (
+          <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center">
+            <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-primary">Fetching Chapter {currentChapterNum}...</h3>
+              <p className="text-xs text-secondary">Scanlation Version: {activeSourceName || selectedScanGroup}</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="min-h-[70vh] flex flex-col items-center justify-center p-8 space-y-4 text-center max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-accent/10 text-accent border border-accent/30 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-primary">Missing Chapter Pages</h3>
+              <p className="text-sm text-secondary leading-relaxed">{error}</p>
+              <p className="text-xs text-muted">
+                Series: <span className="text-primary font-semibold">{manga.title}</span>
+                {' · '}Chapter {currentChapterNum}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => fetchChapterPages(currentChapterNum)}
+                className="px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs flex items-center gap-2 shadow-lg"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry Chapter
+              </button>
+              <button
+                onClick={() => setShowMirrorModal(true)}
+                className="px-4 py-2 rounded-xl bg-accent/20 border border-accent/40 text-accent font-bold text-xs flex items-center gap-2 hover:bg-accent hover:text-accent-fg transition-all"
+              >
+                <Globe className="w-4 h-4" />
+                Switch Mirror / Source
+              </button>
+              <button
+                onClick={() => onReport?.(FLAG_CATEGORIES[0], manga)}
+                className="px-4 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <Flag className="w-4 h-4" />
+                Report Chapter Issue
+              </button>
+              {chapterData?.nextChapterNumber ? (
+                <button
+                  onClick={() => setCurrentChapterNum(chapterData.nextChapterNumber!)}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+                >
+                  Try Next Chapter
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : null}
+              {chapterData?.prevChapterNumber ? (
+                <button
+                  onClick={() => setCurrentChapterNum(chapterData.prevChapterNumber!)}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous Chapter
+                </button>
+              ) : null}
+              <button
+                onClick={() => setShowChapterMenu(true)}
+                className="px-4 py-2 rounded-xl bg-elevated border border-edge text-primary font-bold text-xs flex items-center gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                Pick Chapter
+              </button>
+            </div>
+          </div>
+        ) : settings.viewMode === 'reflowable-text' || epubChapterHtml ? (
+          /* REFLOWABLE TEXT & EPUB NOVEL VIEWER MODE */
+          <div className="min-h-[85vh] w-full flex flex-col items-center justify-center p-4 sm:p-8">
+            <div
+              className="w-full bg-surface/90 border border-edge/60 rounded-3xl p-6 sm:p-12 shadow-2xl space-y-6"
+              style={{
+                maxWidth: settings.maxWidth || '800px',
+                fontFamily: settings.epubFontFamily || 'system-ui, sans-serif',
+                fontSize: `${settings.epubFontSize || 18}px`,
+                lineHeight: settings.epubLineHeight || 1.7,
+                letterSpacing: `${settings.epubLetterSpacing || 0.2}px`,
+              }}
+            >
+              <div className="border-b border-edge pb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-primary">{manga.title}</h2>
+                  <p className="text-xs text-accent font-bold mt-0.5">
+                    {chapterData?.title || `Chapter ${currentChapterNum}`}
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-accent/15 text-accent border border-accent/20">
+                  Reflowable Novel
+                </span>
+              </div>
+
+              {epubChapterHtml ? (
+                <div
+                  className="prose prose-invert max-w-none text-primary leading-relaxed space-y-4"
+                  dangerouslySetInnerHTML={{ __html: epubChapterHtml }}
+                />
+              ) : (
+                <div className="space-y-4 text-primary leading-relaxed">
+                  <p className="indent-6">
+                    {manga.description || 'Chapter text is being rendered in clean reflowable typography. You can customize the font family, font size, margins, and line height via Reader Settings.'}
+                  </p>
+                  <p className="indent-6">
+                    Enhanced with full offline caching, real-time cross-device sync, and customizable e-reader color themes.
+                  </p>
+                </div>
+              )}
+
+              <div className="border-t border-edge pt-6 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentChapterNum > 1) setCurrentChapterNum(currentChapterNum - 1);
+                  }}
+                  disabled={currentChapterNum <= 1}
+                  className="px-4 py-2 rounded-xl bg-elevated border border-edge text-xs font-bold text-secondary hover:text-primary disabled:opacity-40 flex items-center gap-1.5"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Previous Chapter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentChapterNum(currentChapterNum + 1)}
+                  className="px-4 py-2 rounded-xl bg-accent text-accent-fg text-xs font-black shadow-md flex items-center gap-1.5"
+                >
+                  Next Chapter <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : settings.viewMode === 'vertical-paged' && chapterData ? (
+          /* PAGED VERTICAL MODE — one viewport-height "page" per block, stacked
+             vertically. Reads like a vertical strip but each page snaps to a
+             full screen, so standard manga pages don't get stretched into a
+             long seamless ribbon. Prev/Next navigate one page at a time. */
+          <div className="flex flex-col items-center w-full relative select-none">
+            {/* Center Tap — Toggle HUD */}
+            <div
+              className="fixed left-[30%] right-[30%] top-0 bottom-0 z-10 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowHud(!showHud);
+              }}
+            />
+
+            {chapterData.pages.map((pageSrc, idx) => {
+              const pageState = pageLoadStates.get(idx);
+              const displaySrc = pageState?.blobUrl || pageSrc;
+              const isLoading = pageState?.status === 'loading';
+              const isError = pageState?.status === 'error';
+
+              return (
+                <div
+                  key={idx}
+                  className="relative w-full flex items-center justify-center"
+                  style={{ height: '100vh', maxWidth: settings.maxWidth }}
+                  data-page-index={idx}
+                >
+                  {isLoading ? (
+                    <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                  ) : isError ? (
+                    <div className="flex flex-col items-center gap-2 text-secondary">
+                      <AlertTriangle className="w-6 h-6 text-rose-400" />
+                      <span className="text-xs font-medium">Page {idx + 1} failed to load</span>
+                      <button
+                        onClick={() => loaderRef.current?.retryPage(idx)}
+                        className="px-2.5 py-1 rounded-lg bg-elevated border border-edge text-primary text-xs font-bold"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <img
+                      src={displaySrc}
+                      alt={`Page ${idx + 1}`}
+                      style={imageFilterStyle}
+                      onMouseMove={handleImageMouseMove}
+                      onMouseLeave={handleImageMouseLeave}
+                      decoding="async"
+                      className="max-h-[100vh] max-w-full w-auto object-contain shadow-2xl"
+                    />
+                  )}
+                  {settings.showPageNumberOverlay && (
+                    <span className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full bg-black/50 text-white text-[10px] font-bold">
+                      {idx + 1} / {chapterData.pages.length}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Previous page tap zone (left 30%) */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+                }
+              }}
+              className="fixed left-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-start pl-4 z-10"
+            >
+              <div className="p-3 rounded-full bg-surface/80 text-secondary opacity-0 hover:opacity-100 transition-opacity">
+                <ChevronLeft className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Next page tap zone (right 30%) */}
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!scrollContainerRef.current) return;
+                const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+                if (scrollTop + clientHeight >= scrollHeight - 4) {
+                  if (chapterData.nextChapterNumber) setCurrentChapterNum(chapterData.nextChapterNumber);
+                } else {
+                  scrollContainerRef.current.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+                }
+              }}
+              className="fixed right-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-end pr-4 z-10"
+            >
+              <div className="p-3 rounded-full bg-accent/90 text-accent-fg opacity-0 hover:opacity-100 transition-opacity">
+                <ChevronRight className="w-6 h-6 stroke-[3]" />
+              </div>
+            </div>
+          </div>
+        ) : chapterData && isWebtoon ? (
+          /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */
+          <div className="flex flex-col items-center w-full py-4 space-y-0 relative">
+            {/* Phone/Tablet Center Touch Overlay for HUD Toggle */}
+            <div
+              className="absolute inset-0 z-10 pointer-events-auto cursor-pointer"
+              onClick={(e) => {
+                // Toggle HUD on center tap
+                const clickX = e.clientX / window.innerWidth;
+                if (clickX >= 0.3 && clickX <= 0.7) {
+                  setShowHud(!showHud);
+                }
+              }}
+            />
+
+            <div
+              className="w-full mx-auto flex flex-col items-center shadow-2xl relative z-20"
+              style={{
+                ...zoom.transformStyle,
+                maxWidth: settings.maxWidth,
+                gap: `${settings.noPanelSpacing ? 0 : settings.pageGap}px`
+              }}
+            >
+              {chapterData.pages.map((pageSrc, idx) => {
+                const pageState = pageLoadStates.get(idx);
+                const displaySrc = pageState?.blobUrl || pageSrc;
+                const isLoading = pageState?.status === 'loading';
+                const isError = pageState?.status === 'error';
+                const isSeamless = settings.noPanelSpacing || settings.pageGap === 0;
+
+                return (
+                  <WebtoonPanel
+                    key={idx}
+                    idx={idx}
+                    totalPages={chapterData.pages.length}
+                    displaySrc={displaySrc}
+                    isLoading={isLoading}
+                    isError={isError}
+                    isSeamless={isSeamless}
+                    imageFilterStyle={imageFilterStyle}
+                    isLoupeActive={isLoupeActive}
+                    showPageNumberOverlay={Boolean(settings.showPageNumberOverlay)}
+                    enableSmartWebtoonify={Boolean(settings.smartWebtoonify)}
+                    readingDirection={detectMangaFormat(manga) === 'manga' ? 'rtl' : 'ltr'}
+                    stickyNotesForPage={stickyNotesByPage[idx]}
+                    onAddNote={handleOpenAddNote}
+                    onOpenNote={handleOpenEditNote}
+                    onMouseMove={handleImageMouseMove}
+                    onMouseLeave={handleImageMouseLeave}
+                    onRetry={(pageIdx) => loaderRef.current?.retryPage(pageIdx)}
+                    onDoubleTap={zoom.handleDoubleTap}
+                  />
+                );
+              })}
+
+              {/* End of Chapter Navigation Card */}
+              <div className="w-full p-8 my-8 bg-surface border border-edge rounded-2xl text-center space-y-4 max-w-lg mx-auto shadow-2xl relative z-30">
+                <div className="w-12 h-12 rounded-2xl bg-success/10 text-success border border-success/20 flex items-center justify-center mx-auto">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-primary">Finished Chapter {currentChapterNum}</h3>
+                  <p className="text-xs text-secondary">Marked read in your library.</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={onClose}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-elevated hover:bg-elevated text-primary font-bold text-xs"
+                  >
+                    Back to Library
+                  </button>
+
+                  {chapterData.nextChapterNumber && (
+                    <button
+                      onClick={() => setCurrentChapterNum(chapterData.nextChapterNumber!)}
+                      className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-bold text-xs shadow-lg flex items-center justify-center gap-2"
+                    >
+                      <span>Read Chapter {chapterData.nextChapterNumber}</span>
+                      <ChevronRight className="w-4 h-4 stroke-[3]" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* SINGLE / DOUBLE BOOK SPREAD / RTL / LTR PAGE MODE WITH TOUCH TAP ZONES */
+          <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 relative select-none">
+            <div
+              className={`relative w-full mx-auto flex items-center justify-center ${
+                settings.viewMode === 'double' ? 'max-w-6xl' : ''
+              }`}
+              style={{
+                ...zoom.transformStyle,
+                maxWidth: settings.viewMode === 'double' ? '1200px' : settings.maxWidth
+              }}
+            >
+              {settings.viewMode === 'double' && chapterData ? (
+                /* DOUBLE-PAGE SPREAD RENDERING */
+                (() => {
+                  const isCover = currentPageIndex === 0;
+                  const idx1 = currentPageIndex;
+                  const idx2 = !isCover && currentPageIndex + 1 < chapterData.pages.length ? currentPageIndex + 1 : null;
+                  
+                  // For RTL (Manga), the earlier page is on the right, later on the left.
+                  const isRtl = detectMangaFormat(manga) === 'manga';
+                  const leftIndex = isRtl ? idx2 : idx1;
+                  const rightIndex = isRtl ? idx1 : idx2;
+
+                  return (
+                    <div
+                      onDoubleClick={(e) => zoom.handleDoubleTap(e.clientX, e.clientY)}
+                      className="flex items-center justify-center gap-1 w-full max-h-[85vh]"
+                    >
+                      {leftIndex !== null && chapterData.pages[leftIndex] && (
+                        <div className={`flex-1 flex ${rightIndex === null ? 'justify-center' : 'justify-end'}`}>
+                          <img
+                            src={pageLoadStates.get(leftIndex)?.blobUrl || chapterData.pages[leftIndex]}
+                            alt={`Page ${leftIndex + 1}`}
+                            style={imageFilterStyle}
+                            onMouseMove={handleImageMouseMove}
+                            onMouseLeave={handleImageMouseLeave}
+                            decoding="async"
+                            className={`max-h-[82vh] w-auto object-contain shadow-2xl ${rightIndex === null ? 'rounded-xl' : 'rounded-l-xl border-r border-edge/30'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+                          />
+                        </div>
+                      )}
+                      {rightIndex !== null && chapterData.pages[rightIndex] && (
+                        <div className="flex-1 flex justify-start">
+                          <img
+                            src={pageLoadStates.get(rightIndex)?.blobUrl || chapterData.pages[rightIndex]}
+                            alt={`Page ${rightIndex + 1}`}
+                            style={imageFilterStyle}
+                            onMouseMove={handleImageMouseMove}
+                            onMouseLeave={handleImageMouseLeave}
+                            decoding="async"
+                            className={`max-h-[82vh] w-auto object-contain rounded-r-xl shadow-2xl ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : (
+                /* SINGLE PAGE RENDERING */
+                chapterData?.pages[currentPageIndex] && (() => {
+                  const pageState = pageLoadStates.get(currentPageIndex);
+                  const displaySrc = pageState?.blobUrl || chapterData.pages[currentPageIndex];
+                  const isLoading = pageState?.status === 'loading';
+                  const isError = pageState?.status === 'error';
+
+                  return (
+                    <div
+                      onDoubleClick={(e) => zoom.handleDoubleTap(e.clientX, e.clientY)}
+                      className="relative w-full flex items-center justify-center"
+                    >
+                      <img
+                        src={displaySrc}
+                        alt={`Page ${currentPageIndex + 1}`}
+                        style={imageFilterStyle}
+                        onMouseMove={handleImageMouseMove}
+                        onMouseLeave={handleImageMouseLeave}
+                        decoding="async"
+                        className={`w-full rounded-xl shadow-2xl transition-all ${
+                          settings.mangaFitMode === 'fit-height'
+                            ? 'max-h-[82vh] w-auto object-contain'
+                            : settings.mangaFitMode === 'fit-width'
+                            ? 'w-full h-auto'
+                            : 'w-auto h-auto'
+                        } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+                      />
+
+                      {/* Pinned Sticky Notes in Paged Mode */}
+                      {stickyNotesByPage[currentPageIndex] && stickyNotesByPage[currentPageIndex].length > 0 && (
+                        <div className="absolute top-4 right-4 z-30 flex flex-col items-end gap-1.5 pointer-events-auto">
+                          {stickyNotesByPage[currentPageIndex].map((note) => {
+                            const colorClass =
+                              note.color === 'blue'
+                                ? 'bg-blue-500/95 text-white shadow-blue-500/40 border-blue-300'
+                                : note.color === 'purple'
+                                ? 'bg-purple-500/95 text-white shadow-purple-500/40 border-purple-300'
+                                : note.color === 'green'
+                                ? 'bg-emerald-500/95 text-white shadow-emerald-500/40 border-emerald-300'
+                                : 'bg-amber-400/95 text-black shadow-amber-400/40 border-amber-300';
+
+                            return (
+                              <div key={note.id} className="relative group/pin">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditNote(note);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-xl border backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-all ${colorClass}`}
+                                  title="View Sticky Note"
+                                >
+                                  <StickyNote className="w-3.5 h-3.5" />
+                                  <span className="max-w-[110px] truncate">{note.noteText || 'Note'}</span>
+                                </button>
+                                <div className="absolute right-0 top-full mt-1.5 w-64 p-3 rounded-2xl bg-surface/95 border border-edge shadow-2xl backdrop-blur-xl opacity-0 translate-y-1 pointer-events-none group-hover/pin:opacity-100 group-hover/pin:translate-y-0 group-hover/pin:pointer-events-auto transition-all duration-200 z-50 text-left">
+                                  <div className="flex items-center justify-between text-[10px] text-muted mb-1 pb-1 border-b border-edge">
+                                    <span className="font-bold text-accent">Sticky Note · Page {currentPageIndex + 1}</span>
+                                    <span>{new Date(note.updatedAt).toLocaleDateString()}</span>
+                                  </div>
+                                  <p className="text-xs text-primary whitespace-pre-wrap line-clamp-4 leading-relaxed font-sans">
+                                    {note.noteText}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditNote(note);
+                                    }}
+                                    className="mt-2.5 w-full py-1.5 rounded-xl bg-elevated hover:bg-elevated/80 text-[10px] font-bold text-secondary hover:text-primary transition-colors text-center cursor-pointer"
+                                  >
+                                    Edit in Notes Drawer
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center skeleton-shimmer text-accent gap-2 rounded-xl">
+                          <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                          <span className="text-xs font-mono font-bold text-primary bg-app/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-edge/60">
+                            Loading Page {currentPageIndex + 1}...
+                          </span>
+                        </div>
+                      )}
+
+                      {isError && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-app/90 text-primary gap-3 p-4 text-center rounded-xl">
+                          <p className="text-xs font-bold text-secondary">Failed to load Page {currentPageIndex + 1}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              loaderRef.current?.retryPage(currentPageIndex);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent-bright text-accent-fg font-bold text-xs flex items-center gap-1.5 shadow-lg"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Retry Page</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* Touch Tap Zone - Left 30% (Prev) */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const step = settings.viewMode === 'double' && currentPageIndex > 0 ? 2 : 1;
+                  if (settings.viewMode === 'rtl') {
+                    if (currentPageIndex < chapterData!.pages.length - 1) setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
+                  } else {
+                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
+                  }
+                }}
+                className="absolute left-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-start pl-4 z-30"
+              >
+                <div className="p-3 rounded-full bg-surface/80 text-secondary opacity-0 hover:opacity-100 transition-opacity">
+                  <ChevronLeft className="w-6 h-6" />
+                </div>
+              </div>
+
+              {/* Touch Tap Zone - Center 40% (Toggle HUD) */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowHud(!showHud);
+                }}
+                className="absolute left-[30%] right-[30%] top-0 bottom-0 cursor-pointer z-30"
+              />
+
+              {/* Touch Tap Zone - Right 30% (Next) */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const step = settings.viewMode === 'double' ? 2 : 1;
+                  if (settings.viewMode === 'rtl') {
+                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
+                  } else {
+                    if (currentPageIndex < chapterData!.pages.length - 1) {
+                      setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
+                    } else if (chapterData?.nextChapterNumber) {
+                      setCurrentChapterNum(chapterData.nextChapterNumber);
+                    }
+                  }
+                }}
+                className="absolute right-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-end pr-4 z-30"
+              >
+                <div className="p-3 rounded-full bg-accent/90 text-accent-fg opacity-0 hover:opacity-100 transition-opacity">
+                  <ChevronRight className="w-6 h-6 stroke-[3]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* BOTTOM HUD AUTO-SCROLL GRANULAR SPEED SELECTOR & PAGE SLIDER */}
+      {showHud && chapterData && (
+        <ReaderFooter
+          chapterData={chapterData}
+          currentPageIndex={currentPageIndex}
+          isAutoScrolling={isAutoScrolling}
+          settings={settings}
+          onSeekPage={(idx) => setCurrentPageIndex(idx)}
+          onToggleAutoScroll={() => setIsAutoScrolling(!isAutoScrolling)}
+          onSelectAutoScrollSpeed={(spd) => {
+            setSettings({ ...settings, autoScrollSpeed: spd });
+            triggerToast(`Auto-Scroll Speed: ${spd}x`);
+          }}
+          onOpenPageGrid={() => setShowPageGridModal(true)}
+        />
+      )}
+
+      {/* STICKY NOTES DRAWER & MODAL */}
+      {(showNotesDrawer || activeNoteModal) && (
+        <StickyNotesDrawer
+          showDrawer={showNotesDrawer}
+          stickyNotes={stickyNotes}
+          currentChapterNum={currentChapterNum}
+          currentPageIndex={currentPageIndex}
+          activeNoteModal={activeNoteModal}
+          noteInputText={noteInputText}
+          noteInputColor={noteInputColor}
+          onCloseDrawer={() => setShowNotesDrawer(false)}
+          onOpenAddModal={(pageIdx) => {
+            setNoteInputText('');
+            setNoteInputColor('yellow');
+            setActiveNoteModal({ pageIndex: pageIdx });
+          }}
+          onOpenEditModal={(note) => {
+            setNoteInputText(note.noteText);
+            setNoteInputColor(note.color || 'yellow');
+            setActiveNoteModal({
+              pageIndex: note.pageIndex,
+              noteId: note.id,
+              initialText: note.noteText,
+              color: note.color,
+            });
+          }}
+          onCloseModal={() => setActiveNoteModal(null)}
+          onChangeNoteText={setNoteInputText}
+          onChangeNoteColor={setNoteInputColor}
+          onSaveNote={handleSaveNote}
+          onDeleteNote={handleDeleteNote}
+          onJumpToNote={(note) => {
+            if (Number(note.chapterNumber) !== Number(currentChapterNum)) {
+              setCurrentChapterNum(note.chapterNumber);
+            }
+            setCurrentPageIndex(note.pageIndex);
+            setShowNotesDrawer(false);
+            if (isWebtoon && scrollContainerRef.current && chapterData?.pages) {
+              const totalH = scrollContainerRef.current.scrollHeight;
+              scrollContainerRef.current.scrollTop = (totalH / chapterData.pages.length) * note.pageIndex;
+            }
+          }}
+        />
+      )}
+
+      {/* AMBIENT SOUNDSCAPE & SFX MODAL */}
+      {showAmbientModal && (
+        <AmbientSoundModal
+          isOpen={showAmbientModal}
+          onClose={() => setShowAmbientModal(false)}
+          pageTurnSfxEnabled={pageTurnSfxEnabled}
+          onTogglePageTurnSfx={setPageTurnSfxEnabled}
+        />
+      )}
+
+      {/* FLOATING CIRCULAR PANEL MAGNIFIER / LOUPE LENS */}
+      {isLoupeActive && loupeData && (
+        <div
+          className="pointer-events-none fixed z-9999 w-44 h-44 rounded-full border-2 border-indigo-400 shadow-2xl shadow-indigo-500/50 overflow-hidden ring-4 ring-black/40"
+          style={{
+            left: `${loupeData.x - 88}px`,
+            top: `${loupeData.y - 88}px`,
+            backgroundImage: `url(${loupeData.imgSrc})`,
+            backgroundPosition: `${loupeData.bgX}% ${loupeData.bgY}%`,
+            backgroundSize: '280%',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+      )}
+
+      {/* PANEL OCR & LIVE TRANSLATION POPOVER */}
+      {ocrResult && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] max-w-lg w-[90%] bg-surface/95 backdrop-blur-md border border-accent/40 rounded-2xl p-4 shadow-2xl space-y-2 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-black text-accent">
+              <Sparkles className="w-4 h-4" />
+              <span>Panel OCR Translation ({ocrResult.detectedLang})</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOcrResult(null)}
+              className="p-1 rounded-lg text-secondary hover:text-primary hover:bg-elevated"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="text-xs text-secondary bg-app/80 p-2.5 rounded-xl border border-edge/60">
+            <div className="text-[10px] uppercase font-bold text-muted mb-1">Raw Detected Text:</div>
+            <p className="font-serif">{ocrResult.rawText}</p>
+          </div>
+          <div className="text-sm font-bold text-primary bg-accent/10 p-3 rounded-xl border border-accent/20">
+            <div className="text-[10px] uppercase font-bold text-accent mb-1">English Translation:</div>
+            <p>{ocrResult.translatedText}</p>
+          </div>
+          {settings.enableAiInpainting && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerToast('AI Inpainting: Dialogue typeset applied to active panel');
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-accent text-accent-fg font-black text-xs hover:opacity-90 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Apply In-Place Speech Bubble Inpaint</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* IN-READER MIRROR & SOURCE SWITCHER MODAL */}
+      {showMirrorModal && (
+        <MirrorSourceModal
+          manga={manga}
+          currentChapterNum={currentChapterNum}
+          activeSourceName={activeSourceName}
+          activeSourceUrl={activeSourceUrl}
+          onClose={() => setShowMirrorModal(false)}
+          onSelectSource={handleSelectSource}
+        />
+      )}
+
+      {/* MANGA TOGETHER LIVE LASER POINTERS */}
+      {mangaTogether.laserPointers.map((ptr) => (
+        <div
+          key={ptr.id}
+          className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center animate-ping duration-1000"
+          style={{ left: `${ptr.x}%`, top: `${ptr.y}%` }}
+        >
+          <div className="w-5 h-5 rounded-full bg-cyan-400 border-2 border-white shadow-lg shadow-cyan-400/80 ring-4 ring-cyan-400/40" />
+          <span className="text-[10px] font-bold text-cyan-200 bg-black/75 px-1.5 py-0.5 rounded mt-1 whitespace-nowrap shadow">
+            {ptr.actorName}
+          </span>
+        </div>
+      ))}
+
+      {/* MANGA TOGETHER FLOATING REACTIONS */}
+      {mangaTogether.floatingReactions.map((rxn) => (
+        <div
+          key={rxn.id}
+          className="pointer-events-none fixed bottom-24 right-8 z-[9999] flex flex-col items-center animate-bounce duration-700"
+        >
+          <span className="text-4xl filter drop-shadow-lg">{rxn.emoji}</span>
+          <span className="text-[10px] font-bold text-secondary bg-app/80 px-1.5 py-0.5 rounded shadow">
+            {rxn.actorName}
+          </span>
+        </div>
+      ))}
+
+      {/* ── MANGA TOGETHER FLOATING CO-READING CAPSULE ──────────────────── */}
+      {mangaTogether.activeRoom && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-surface/95 border border-accent/40 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-300">
+          {/* Room status pill */}
+          <button
+            type="button"
+            onClick={() => setShowMangaTogetherModal(true)}
+            className="flex items-center gap-2 pr-2.5 border-r border-edge cursor-pointer hover:opacity-80 transition-opacity"
+            title="Open Room Settings"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400" />
+            <div className="flex flex-col text-left">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-black text-primary font-mono tracking-wider">
+                  {mangaTogether.activeRoom.id}
+                </span>
+                {mangaTogether.isHost && (
+                  <span className="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400/20 text-amber-400 border border-amber-400/30 uppercase">
+                    Host
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] text-secondary font-medium">
+                {mangaTogether.activeRoom.participants?.length || 1} reading together
+              </span>
+            </div>
+          </button>
+
+          {/* Laser pointer toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLaserModeActive((prev) => {
+                const next = !prev;
+                triggerToast(next ? 'Laser Pointer: Active (Tap anywhere on panel to point)' : 'Laser Pointer: Disabled');
+                return next;
+              });
+            }}
+            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+              isLaserModeActive
+                ? 'bg-cyan-500 text-black border-cyan-400 shadow-md shadow-cyan-500/30 scale-105'
+                : 'bg-elevated/70 hover:bg-elevated text-secondary hover:text-primary border-edge'
+            }`}
+            title="Toggle Laser Pointer"
+          >
+            <Crosshair className="w-4 h-4 stroke-[2.5]" />
+          </button>
+
+          {/* Quick Reaction Emojis */}
+          <div className="flex items-center gap-1 pl-1">
+            {['❤️', '😂', '😱', '🔥', '👏', '🎉'].map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => mangaTogether.sendReaction(emoji)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-elevated hover:scale-125 active:scale-95 transition-all text-sm cursor-pointer select-none"
+                title={`Send ${emoji} reaction`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+
+          {/* Follow Host Toggle (for followers) */}
+          {!mangaTogether.isHost && (
+            <button
+              type="button"
+              onClick={() => {
+                mangaTogether.setAutoFollow(!mangaTogether.autoFollow);
+                triggerToast(mangaTogether.autoFollow ? 'Free Scrolling Active' : 'Synced with Host');
+              }}
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold border transition-all cursor-pointer ml-1 ${
+                mangaTogether.autoFollow
+                  ? 'bg-accent/20 text-accent border-accent/40'
+                  : 'bg-elevated text-muted border-edge'
+              }`}
+            >
+              {mangaTogether.autoFollow ? 'Synced' : 'Free'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* SPOILER-SAFE STORY COMPANION MODAL */}
+      {showStoryCompanionModal && (
+        <StoryCompanionModal
+          manga={manga}
+          currentChapterNumber={currentChapterNum}
+          isOpen={showStoryCompanionModal}
+          onClose={() => setShowStoryCompanionModal(false)}
+        />
+      )}
+
+      {/* MANGA TOGETHER CO-READING MODAL */}
+      {showMangaTogetherModal && (
+        <MangaTogetherModal
+          isOpen={showMangaTogetherModal}
+          onClose={() => setShowMangaTogetherModal(false)}
+          manga={manga}
+          currentChapterNumber={currentChapterNum}
+          activeRoom={mangaTogether.activeRoom}
+          isHost={mangaTogether.isHost}
+          currentUser={mangaTogether.currentUser}
+          autoFollow={mangaTogether.autoFollow}
+          setAutoFollow={mangaTogether.setAutoFollow}
+          onCreateRoom={mangaTogether.createRoom}
+          onJoinRoom={mangaTogether.joinRoom}
+          onLeaveRoom={mangaTogether.leaveRoom}
+          onSendReaction={mangaTogether.sendReaction}
+        />
+      )}
+    </div>
+  );
+};
+
+

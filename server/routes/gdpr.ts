@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { toPublicUser, isHostRequest } from '../security';
 import {
   userProfiles,

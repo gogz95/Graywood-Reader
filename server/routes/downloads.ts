@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { downloadManager } from '../services/downloadManagerService';
 
 export const downloadsRouter = Router();

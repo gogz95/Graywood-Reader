@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router, Request, Response } from 'express';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { MangaItem } from '../../src/types';
 import { resolveRequestUserId } from '../appState';
 import { scanStorage, getArchiveEntry } from './localLibrary';

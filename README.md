@@ -6,7 +6,7 @@
 [![Node.js Version](https://img.shields.io/badge/node.js-%E2%89%A522.12-brightgreen.svg?style=flat-square)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6.svg?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg?style=flat-square&logo=react&logoColor=black)](package.json)
-[![Database: SQLite WAL](https://img.shields.io/badge/Database-SQLite%20(WAL)-003B57.svg?style=flat-square&logo=sqlite&logoColor=white)](sqlite-db.ts)
+[![Database: SQLite WAL](https://img.shields.io/badge/Database-SQLite%20(WAL)-003B57.svg?style=flat-square&logo=sqlite&logoColor=white)](db/)
 [![Tests](https://img.shields.io/badge/Tests-380%2B%20Passing-success.svg?style=flat-square)](tests/)
 [![Protocol: OPDS 1.2](https://img.shields.io/badge/Feed-OPDS%201.2%20PSE-orange.svg?style=flat-square)](server/routes/opds.ts)
 [![PWA Ready](https://img.shields.io/badge/PWA-Installable-purple.svg?style=flat-square)](public/manifest.webmanifest)
@@ -78,8 +78,8 @@ Graywood Reader is a single-binary-capable Node.js + React application powered b
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/gogz95/Remix-ManhuaSync-to-a-reader.git
-cd Remix-ManhuaSync-to-a-reader
+git clone https://github.com/gogz95/Graywood-Reader.git
+cd Graywood-Reader
 npm install
 ```
 
@@ -185,7 +185,8 @@ graph TD
 ```
 Graywood-Reader/
 ├── server.ts                    # Express 5 API + OPDS 1.2 server + scrapers
-├── sqlite-db.ts                 # better-sqlite3 DAL (manga, profiles, reading progress, notes)
+├── db/                          # better-sqlite3 DAL (manga, profiles, reading progress, notes)
+├── deploy/                      # Systemd service, Nginx config, PM2 ecosystem
 ├── server/
 │   ├── captchaSolver.ts         # Cloudflare Turnstile & 2Captcha solver orchestrator
 │   ├── circuitBreaker.ts        # Source failure backoff and circuit breaker
@@ -194,12 +195,15 @@ Graywood-Reader/
 │   ├── routes/                  # REST controllers (auth, manga, reader, sources, opds, gdpr)
 │   └── services/                # Crawler engine, metadata enrichers, download manager
 ├── src/
-│   ├── App.tsx                  # Root application controller & lazy module router
-│   ├── components/              # Reader, Library, Settings, Browse, Modals
+│   ├── App.tsx                  # Root application controller & router
+│   ├── components/
+│   │   ├── modals/              # Standalone modal dialogs
+│   │   ├── views/               # Primary routed and tab view components
+│   │   └── common/              # Shared UI components
 │   ├── hooks/                   # Custom React hooks (useReaderSession, useKeyboardNav)
 │   └── utils/                   # IndexedDB cache, Tachiyomi parser, AniList scrobbler
 ├── public/                      # PWA Web Manifest, service worker, icons
-└── tests/                       # 40+ Vitest test suites (380+ tests)
+└── tests/                       # 43+ Vitest test suites (400+ tests)
 ```
 
 For full details on data isolation, zero-data guarantees, and persistence paths, see [`STORAGE.md`](STORAGE.md).

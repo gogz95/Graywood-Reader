@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { MangaItem, isNsfwManga } from '../../src/types';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import {
   saveDatabaseToDisk,
   syncAddOrUpdateManga,
@@ -577,26 +577,46 @@ exploreRouter.post('/api/scrape/source-catalog', async (req, res) => {
 
 // ── GET /api/scrape/browse ───────────────────────────────────────────────────
 exploreRouter.get('/api/scrape/browse', async (req, res) => {
-  const sourceId = (req.query.sourceId as string || '').toLowerCase();
+  const sourceId = (req.query.sourceId as string || '').toLowerCase().trim();
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+  const offset = (page - 1) * limit;
+  const search = (req.query.query as string || req.query.search as string || req.query.q as string || '').trim();
 
   try {
-    let items: any[] = [];
-    let totalCount = 0;
-    if (sourceId === 'asurascans') {
-      const result = await scrapeAsuraScans(page, limit);
-      items = result.items;
-      totalCount = result.totalCount;
-    } else if (sourceId === 'flamecomics') {
-      items = await scrapeFlameComics(page, limit);
-      totalCount = items.length;
-    } else if (sourceId === 'manhwa18') {
-      items = await scrapeManhwa18(page, limit);
-      totalCount = 90 * limit;
-    } else {
-      return res.status(400).json({ error: `No scraper registered for sourceId "${sourceId}"` });
+    const user = (req as any).user;
+    // Serve title queries from local SQLite catalog rather than dispatching blocking live HTTP crawler requests
+    const result = SqliteDb.queryManga({
+      limit,
+      offset,
+      search: search || undefined,
+      sortBy: 'lastUpdated',
+      order: 'desc',
+      userId: user?.id,
+    });
+
+    let items = result.items;
+    let totalCount = result.total;
+
+    if (sourceId) {
+      const allMatchingSource = SqliteDb.getAllManga().filter((m) => {
+        const sid = (m.sourceName || '').toLowerCase().replace(/\s+/g, '');
+        const idPrefix = (m.id || '').toLowerCase();
+        const sUrl = (m.sourceUrl || '').toLowerCase();
+        return sid.includes(sourceId) || idPrefix.startsWith(sourceId) || sUrl.includes(sourceId);
+      });
+
+      if (search) {
+        const sLower = search.toLowerCase();
+        const filtered = allMatchingSource.filter((m) => m.title.toLowerCase().includes(sLower));
+        totalCount = filtered.length;
+        items = filtered.slice(offset, offset + limit);
+      } else {
+        totalCount = allMatchingSource.length;
+        items = allMatchingSource.slice(offset, offset + limit);
+      }
     }
+
     res.setHeader('X-Total-Count', String(totalCount));
     res.setHeader('X-Total-Pages', String(Math.ceil(totalCount / limit)));
     return res.json(items);

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../../utils/api';
 import { AppSettings, AutoUpdateLog, DatabaseSyncConfig, MangaItem } from '../../types';
-import { AutoUpdateView } from '../AutoUpdateView';
+import { AutoUpdateView } from '../views/AutoUpdateView';
 import {
   Bell,
   Send,

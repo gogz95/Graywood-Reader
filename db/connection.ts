@@ -22,6 +22,8 @@ export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 db.pragma('busy_timeout = 5000');
+db.pragma('wal_autocheckpoint = 1000');
+db.pragma('foreign_keys = ON');
 db.pragma('cache_size = -64000');
 db.pragma('temp_store = MEMORY');
 db.pragma('mmap_size = 268435456');
@@ -29,6 +31,12 @@ db.pragma('mmap_size = 268435456');
 // 1. Initialize Tables, Indexes & Schema Migrations
 export function initializeDatabaseSchema(): void {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS system_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS manga (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -70,6 +78,7 @@ export function initializeDatabaseSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_manga_rating ON manga(rating DESC);
     CREATE INDEX IF NOT EXISTS idx_manga_lastRead ON manga(lastReadAt DESC);
     CREATE INDEX IF NOT EXISTS idx_manga_status ON manga(status);
+    CREATE INDEX IF NOT EXISTS idx_manga_status_updated ON manga(status, lastUpdated DESC);
     CREATE INDEX IF NOT EXISTS idx_manga_user_updated ON manga(userId, lastUpdated DESC);
     CREATE INDEX IF NOT EXISTS idx_manga_user_favorite ON manga(userId, isFavorite);
     CREATE INDEX IF NOT EXISTS idx_manga_user_lastRead ON manga(userId, lastReadAt DESC);
@@ -86,6 +95,7 @@ export function initializeDatabaseSchema(): void {
 
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_isNsfw ON manga(isNsfw)'); } catch (e) { }
+  try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_nsfw_status_updated ON manga(isNsfw, status, lastUpdated DESC)'); } catch (e) { }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
@@ -179,6 +189,7 @@ export function initializeDatabaseSchema(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_read_progress_user ON reading_progress(user_id, last_read_at);
+    CREATE INDEX IF NOT EXISTS idx_read_progress_lookup ON reading_progress(manga_id, user_id, chapter_number);
     CREATE INDEX IF NOT EXISTS idx_read_activity_user ON reading_activity(user_id, date);
 
     CREATE TABLE IF NOT EXISTS user_favorites (
@@ -211,7 +222,9 @@ export function initializeDatabaseSchema(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_user_fav_user ON user_favorites(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_fav_reverse ON user_favorites(manga_id, user_id);
     CREATE INDEX IF NOT EXISTS idx_user_lib_user ON user_library_state(user_id, last_read_at);
+    CREATE INDEX IF NOT EXISTS idx_user_lib_status ON user_library_state(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_sticky_notes_manga ON page_sticky_notes(manga_id, chapter_number);
 
     CREATE TABLE IF NOT EXISTS revoked_tokens (

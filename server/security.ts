@@ -6,7 +6,7 @@ import net from 'net';
 import express from 'express';
 import { Agent } from 'undici';
 import { UserProfile } from '../src/types';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 
 declare global {
   namespace Express {
@@ -344,19 +344,53 @@ export function isHostOnlyPath(p: string): boolean {
 export const MAX_PROXY_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB hard cap per proxied image
 
 export function isPrivateOrReservedIp(ip: string): boolean {
-  const normalized = ip.toLowerCase().replace(/^::ffff:/, '').replace(/^\[|\]$/g, '');
-  if (normalized === '::1' || normalized === '::' || normalized === 'localhost') return true;
-  if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
-  const parts = normalized.split('.').map(Number);
-  if (parts.length === 4 && parts.every((p) => Number.isInteger(p) && p >= 0 && p <= 255)) {
-    const [a, b] = parts;
-    if (a === 10 || a === 127 || a === 0) return true;          // RFC1918 / loopback / "this"
-    if (a === 172 && b >= 16 && b <= 31) return true;            // RFC1918
-    if (a === 192 && b === 168) return true;                     // RFC1918
-    if (a === 169 && b === 254) return true;                     // link-local / cloud metadata
-    if (a === 100 && b >= 64 && b <= 127) return true;           // CGNAT
+  if (!ip || typeof ip !== 'string') return true;
+  const raw = ip.trim().toLowerCase().replace(/^\[|\]$/g, '');
+
+  if (raw === '::1' || raw === '::' || raw === 'localhost' || raw === '0.0.0.0') return true;
+
+  // Handle IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 or ::ffff:7f00:1)
+  if (raw.startsWith('::ffff:')) {
+    const v4Part = raw.slice(7);
+    return isPrivateOrReservedIp(v4Part);
   }
-  return false;
+
+  // IPv6 checks
+  if (net.isIPv6(raw)) {
+    // Link-local: fe80::/10 (fe80 to febf)
+    if (/^fe[89ab]/i.test(raw)) return true;
+    // Unique Local: fc00::/7 (fc00 to fdff)
+    if (/^f[cd]/i.test(raw)) return true;
+    // Multicast: ff00::/8
+    if (/^ff/i.test(raw)) return true;
+    // Discard prefix / Documentation
+    if (raw.startsWith('100::') || raw.startsWith('2001:db8:')) return true;
+    return false;
+  }
+
+  // IPv4 checks
+  const parts = raw.split('.');
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const [a, b, c, d] = parts.map(Number);
+    if ([a, b, c, d].some((n) => isNaN(n) || n < 0 || n > 255)) return true;
+
+    if (a === 10) return true;                                // 10.0.0.0/8 (RFC 1918)
+    if (a === 127) return true;                               // 127.0.0.0/8 (Loopback)
+    if (a === 0) return true;                                 // 0.0.0.0/8 (Current network)
+    if (a === 172 && b >= 16 && b <= 31) return true;         // 172.16.0.0/12 (RFC 1918)
+    if (a === 192 && b === 168) return true;                  // 192.168.0.0/16 (RFC 1918)
+    if (a === 169 && b === 254) return true;                  // 169.254.0.0/16 (Link-local / Cloud metadata)
+    if (a === 100 && b >= 64 && b <= 127) return true;        // 100.64.0.0/10 (Carrier-Grade NAT)
+    if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24, 192.0.2.0/24
+    if (a === 198 && (b === 18 || b === 19)) return true;     // 198.18.0.0/15 (Benchmarking)
+    if (a === 198 && b === 51 && c === 100) return true;      // 198.51.100.0/24 (TEST-NET-2)
+    if (a === 203 && b === 0 && c === 113) return true;       // 203.0.113.0/24 (TEST-NET-3)
+    if (a >= 224) return true;                                // 224.0.0.0/4 (Multicast) and 240.0.0.0/4 (Reserved)
+    return false;
+  }
+
+  // Not a valid standard IP string -> block
+  return true;
 }
 
 export async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {

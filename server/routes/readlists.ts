@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { Router, Request, Response } from 'express';
-import { SqliteDb } from '../../sqlite-db';
+import { SqliteDb } from '../../db';
 import { resolveRequestUserId } from '../appState';
 
 export const readlistsRouter = Router();

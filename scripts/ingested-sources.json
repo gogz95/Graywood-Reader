@@ -6952,7 +6952,7 @@
     "name": "RavenScans",
     "lang": "en",
     "engine": "mangathemesia",
-    "baseUrl": "https://ravenscans.com",
+    "baseUrl": "https://ravenscans.org",
     "usedFallback": false,
     "rel": "kotatsu-parsers/src/main/kotlin/org/koitharu/kotatsu/parsers/site/mangareader/en/RavenScans.kt"
   },

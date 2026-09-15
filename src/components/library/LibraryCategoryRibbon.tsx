@@ -1,6 +1,6 @@
 import React from 'react';
 import { UserCategory, MangaItem, ReadingStatus } from '../../types';
-import { renderCategoryIcon } from '../ManageCategoriesModal';
+import { renderCategoryIcon } from '../modals/ManageCategoriesModal';
 import {
   Bookmark,
   ChevronLeft,

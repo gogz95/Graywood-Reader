@@ -12,7 +12,7 @@ import {
 import { getAniListMediaId, syncAniListProgress } from '../utils/aniListScrobbler';
 import { getMALMediaId, syncMALProgress } from '../utils/malScrobbler';
 import { getKitsuMediaId, syncKitsuProgress } from '../utils/kitsuScrobbler';
-import type { BugReportInitialData } from '../components/SubmitBugModal';
+import type { BugReportInitialData } from '../components/modals/SubmitBugModal';
 
 // ============================================================================
 // useReaderStore — Reader target state & chapter-read orchestration (Zustand)

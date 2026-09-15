@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { MangaItem } from '../../../src/types';
-import { SqliteDb } from '../../../sqlite-db';
+import { SqliteDb } from '../../../db';
 import { appSettings, saveDatabaseToDisk, syncConfig } from '../../appState';
 import {
   KOTATSU_SOURCES,
@@ -83,6 +83,7 @@ export function setExploreBuffer(items: any[], sourceIds: string[], lastError: s
 export async function buildUniversalExploreCatalog(options: {
   maxSources?: number;
   itemsPerSource?: number;
+  metadataOnly?: boolean;
 } = {}): Promise<any[]> {
   const maxSources = options.maxSources || 15;
   const itemsPerSource = options.itemsPerSource || 20;
@@ -132,23 +133,28 @@ export async function buildUniversalExploreCatalog(options: {
 }
 
 let isRefresherRunning = false;
-let exploreWarmupTimer: NodeJS.Timeout | null = null;
 let exploreRefresherTimer: NodeJS.Timeout | null = null;
 
 export function scheduleExploreRefresher(): void {
   if (isRefresherRunning) return;
   isRefresherRunning = true;
 
-  // Background warm-up 5 seconds after boot
-  exploreWarmupTimer = setTimeout(async () => {
-    try {
-      console.log('[Explore Engine] Warming up universal catalog buffer in background...');
-      await buildUniversalExploreCatalog();
-      console.log('[Explore Engine] Universal catalog buffer warm-up completed.');
-    } catch (err) {
-      console.error('[Explore Engine] Catalog warm-up error:', err);
-    }
-  }, 5000);
+  // Gate initial catalog syncs behind initial_sync_complete in system_state.
+  // The un-throttled 5-second post-boot scraper sweep across external targets is eliminated.
+  const isInitialSyncDone = SqliteDb.getSystemState('initial_sync_complete');
+  if (isInitialSyncDone !== 'true') {
+    // Cold boot without initial sync: perform polite metadata-only indexing
+    setTimeout(async () => {
+      try {
+        console.log('[Explore Engine] Cold boot: performing initial metadata-only catalog indexing...');
+        await buildUniversalExploreCatalog({ maxSources: 5, itemsPerSource: 10, metadataOnly: true });
+        SqliteDb.setSystemState('initial_sync_complete', 'true');
+        console.log('[Explore Engine] Cold boot metadata-only indexing completed.');
+      } catch (err) {
+        console.error('[Explore Engine] Cold boot indexing error:', err);
+      }
+    }, 15000);
+  }
 
   // Hourly background refresher
   exploreRefresherTimer = setInterval(async () => {
@@ -162,10 +168,6 @@ export function scheduleExploreRefresher(): void {
 }
 
 export function stopExploreRefresher(): void {
-  if (exploreWarmupTimer) {
-    clearTimeout(exploreWarmupTimer);
-    exploreWarmupTimer = null;
-  }
   if (exploreRefresherTimer) {
     clearInterval(exploreRefresherTimer);
     exploreRefresherTimer = null;

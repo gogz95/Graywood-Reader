@@ -1,28 +1,28 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router';
 import { Navbar } from '../components/Navbar';
-import { ConfirmModal } from '../components/ConfirmModal';
+import { ConfirmModal } from '../components/modals/ConfirmModal';
 
 // Lazy-loaded modals
-const MangaDetailModal = lazy(() => import('../components/MangaDetailModal').then((m) => ({ default: m.MangaDetailModal })));
-const AddEditModal = lazy(() => import('../components/AddEditModal').then((m) => ({ default: m.AddEditModal })));
-const ChapterListModal = lazy(() => import('../components/ChapterListModal').then((m) => ({ default: m.ChapterListModal })));
-const UserProfileModal = lazy(() => import('../components/UserProfileModal').then((m) => ({ default: m.UserProfileModal })));
-const AuthModal = lazy(() => import('../components/AuthModal').then((m) => ({ default: m.AuthModal })));
-const SubmitBugModal = lazy(() => import('../components/SubmitBugModal').then((m) => ({ default: m.SubmitBugModal })));
-const ExtensionManagerModal = lazy(() => import('../components/ExtensionManagerModal').then((m) => ({ default: m.ExtensionManagerModal })));
+const MangaDetailModal = lazy(() => import('../components/modals/MangaDetailModal').then((m) => ({ default: m.MangaDetailModal })));
+const AddEditModal = lazy(() => import('../components/modals/AddEditModal').then((m) => ({ default: m.AddEditModal })));
+const ChapterListModal = lazy(() => import('../components/modals/ChapterListModal').then((m) => ({ default: m.ChapterListModal })));
+const UserProfileModal = lazy(() => import('../components/modals/UserProfileModal').then((m) => ({ default: m.UserProfileModal })));
+const AuthModal = lazy(() => import('../components/modals/AuthModal').then((m) => ({ default: m.AuthModal })));
+const SubmitBugModal = lazy(() => import('../components/modals/SubmitBugModal').then((m) => ({ default: m.SubmitBugModal })));
+const ExtensionManagerModal = lazy(() => import('../components/modals/ExtensionManagerModal').then((m) => ({ default: m.ExtensionManagerModal })));
 const AppLockOverlay = lazy(() => import('../components/AppLockOverlay').then((m) => ({ default: m.AppLockOverlay })));
-const CommandPaletteModal = lazy(() => import('../components/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal })));
+const CommandPaletteModal = lazy(() => import('../components/modals/CommandPaletteModal').then((m) => ({ default: m.CommandPaletteModal })));
 const InitialSetupWizard = lazy(() => import('../components/InitialSetupWizard').then((m) => ({ default: m.InitialSetupWizard })));
-const BulkScrapeModal = lazy(() => import('../components/BulkScrapeModal').then((m) => ({ default: m.BulkScrapeModal })));
-const DownloadManagerModal = lazy(() => import('../components/DownloadManagerModal').then((m) => ({ default: m.DownloadManagerModal })));
-const ReadlistsModal = lazy(() => import('../components/ReadlistsModal').then((m) => ({ default: m.ReadlistsModal })));
-const SettingsModal = lazy(() => import('../components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
-const AnalyticsModal = lazy(() => import('../components/AnalyticsModal').then((m) => ({ default: m.AnalyticsModal })));
-const AchievementsModal = lazy(() => import('../components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })));
-const AdminPanelModal = lazy(() => import('../components/AdminPanelModal').then((m) => ({ default: m.AdminPanelModal })));
-const ChallengeNotificationModal = lazy(() => import('../components/ChallengeNotificationModal').then((m) => ({ default: m.ChallengeNotificationModal })));
-const ReaderView = lazy(() => import('../components/ReaderView').then((m) => ({ default: m.ReaderView })));
+const BulkScrapeModal = lazy(() => import('../components/modals/BulkScrapeModal').then((m) => ({ default: m.BulkScrapeModal })));
+const DownloadManagerModal = lazy(() => import('../components/modals/DownloadManagerModal').then((m) => ({ default: m.DownloadManagerModal })));
+const ReadlistsModal = lazy(() => import('../components/modals/ReadlistsModal').then((m) => ({ default: m.ReadlistsModal })));
+const SettingsModal = lazy(() => import('../components/modals/SettingsModal').then((m) => ({ default: m.SettingsModal })));
+const AnalyticsModal = lazy(() => import('../components/modals/AnalyticsModal').then((m) => ({ default: m.AnalyticsModal })));
+const AchievementsModal = lazy(() => import('../components/modals/AchievementsModal').then((m) => ({ default: m.AchievementsModal })));
+const AdminPanelModal = lazy(() => import('../components/modals/AdminPanelModal').then((m) => ({ default: m.AdminPanelModal })));
+const ChallengeNotificationModal = lazy(() => import('../components/modals/ChallengeNotificationModal').then((m) => ({ default: m.ChallengeNotificationModal })));
+const ReaderView = lazy(() => import('../components/views/ReaderView').then((m) => ({ default: m.ReaderView })));
 const PwaInstallPrompt = lazy(() => import('../components/PwaInstallPrompt').then((m) => ({ default: m.PwaInstallPrompt })));
 
 import { OfflineIndicator } from '../components/OfflineIndicator';

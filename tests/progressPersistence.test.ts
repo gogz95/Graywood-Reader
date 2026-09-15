@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 import { parseKotatsuBackup } from '../src/utils/kotatsuImporter';
 import { parseTachiyomiBackup } from '../src/utils/tachiyomiImporter';
 

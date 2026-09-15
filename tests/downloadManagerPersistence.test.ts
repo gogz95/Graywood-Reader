@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SqliteDb, PersistedDownloadJob } from '../sqlite-db';
+import { SqliteDb, PersistedDownloadJob } from '../db';
 import { downloadManager } from '../server/services/downloadManagerService';
 import { MangaItem } from '../src/types';
 

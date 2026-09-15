@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
-import { SqliteDb } from '../sqlite-db';
+import { SqliteDb } from '../db';
 import { signAuthToken } from '../server/security';
 
 describe('User-Defined Categories & Custom Shelves', () => {
@@ -382,7 +382,7 @@ describe('User-Defined Categories & Custom Shelves', () => {
   });
 
   it('persists isNsfw flag and protects it via metadataOverrides across DB and refresh cycles', async () => {
-    const { SqliteDb } = await import('../sqlite-db');
+    const { SqliteDb } = await import('../db');
     const { snapshotMetadataOverrides, restoreMetadataOverrides } = await import('../src/utils/metadataHelpers');
     const { isNsfwManga } = await import('../src/types');
 
