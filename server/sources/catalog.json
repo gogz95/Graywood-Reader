@@ -1172,7 +1172,7 @@
   {
     "id": "crystalscan",
     "name": "CrystalComics",
-    "baseUrl": "https://crystalcomics.com",
+    "baseUrl": "http://ww38.crystalcomics.com",
     "engineType": "madara",
     "lang": "pt",
     "isNsfw": false,
@@ -1217,7 +1217,7 @@
   {
     "id": "cypherscans",
     "name": "CypherScans",
-    "baseUrl": "https://cypheroscans.xyz",
+    "baseUrl": "https://dwinnow.com",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
@@ -1262,7 +1262,7 @@
   {
     "id": "dark_scans",
     "name": "DarkScans",
-    "baseUrl": "https://darkscans.net",
+    "baseUrl": "https://depoboslogin.services",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -2297,7 +2297,7 @@
   {
     "id": "guncel_manga",
     "name": "GuncelManga",
-    "baseUrl": "https://aguanuvo.cl",
+    "baseUrl": "https://hud.cl",
     "engineType": "madara",
     "lang": "tr",
     "isNsfw": false,
@@ -2882,7 +2882,7 @@
   {
     "id": "huntersscanen",
     "name": "EnHuntersScan",
-    "baseUrl": "https://en.huntersscan.xyz",
+    "baseUrl": "https://holycityfishing.net",
     "engineType": "madara",
     "lang": "en",
     "isNsfw": false,
@@ -2927,7 +2927,7 @@
   {
     "id": "ikiru",
     "name": "Ikiru",
-    "baseUrl": "https://07.ikiru.wtf",
+    "baseUrl": "https://08.ikiru.wtf",
     "engineType": "custom_html",
     "lang": "id",
     "isNsfw": false,
@@ -3242,7 +3242,7 @@
   {
     "id": "kdtscans",
     "name": "KdtScans",
-    "baseUrl": "https://www.silentquill.net",
+    "baseUrl": "https://silentquill.net",
     "engineType": "custom_html",
     "lang": "en",
     "isNsfw": false,
@@ -3512,7 +3512,7 @@
   {
     "id": "komiklokalcfd",
     "name": "KomikLokal.mom",
-    "baseUrl": "https://komikmu.icu",
+    "baseUrl": "https://dwinnow.com",
     "engineType": "mangathemesia",
     "lang": "id",
     "isNsfw": false,
@@ -4146,7 +4146,8 @@
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,
-    "baseUrlReliable": true
+    "baseUrlReliable": false,
+    "healthStatus": "down"
   },
   {
     "id": "lunarhentai",
@@ -6167,7 +6168,7 @@
   {
     "id": "manhwafreake",
     "name": "ManhwaFreake",
-    "baseUrl": "https://manhwafreake.com",
+    "baseUrl": "http://ww38.manhwafreake.com",
     "engineType": "mangathemesia",
     "lang": "en",
     "isNsfw": false,

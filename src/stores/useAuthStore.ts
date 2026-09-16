@@ -3,6 +3,7 @@ import { UserProfile, UserRole } from '../types';
 import { apiFetch, clearAuthToken, getAuthToken, logout } from '../utils/api';
 import { migrateClientSessionHistoryToUser } from '../hooks/useReaderSession';
 import { useLibraryStore } from './useLibraryStore';
+import { hashPin } from '../utils/pinHash';
 
 // ============================================================================
 // useAuthStore — Global authentication & profile state (Zustand)
@@ -76,6 +77,20 @@ interface AuthState {
   }) => Promise<boolean>;
   handlePromoteUser: (userId: string, newRole: UserRole) => Promise<void>;
   handleDeleteProfile: (profileId: string) => void;
+
+  // ── NSFW Vault ─────────────────────────────────────────────────────────────
+  /**
+   * True when the user has successfully entered the vault PIN this session.
+   * NEVER persisted — a page refresh always resets this to false.
+   */
+  isVaultUnlocked: boolean;
+  /**
+   * Verify `pin` against the stored PIN hash from AppSettings and, on match,
+   * set `isVaultUnlocked = true`. Returns true on success, false on mismatch.
+   */
+  unlockVault: (pin: string) => Promise<boolean>;
+  /** Immediately lock the vault without requiring a PIN. */
+  lockVault: () => void;
 }
 
 export function resolveActiveProfile(profiles: UserProfile[], activeProfileId: string): UserProfile {
@@ -102,6 +117,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isHostComputer: true,
   activeProfile: initialActiveProfile,
   isGuestClient: initialIsGuest,
+
+  // ── NSFW Vault — in-memory only, never persisted ──────────────────────────
+  isVaultUnlocked: false,
+
+  unlockVault: async (pin: string): Promise<boolean> => {
+    try {
+      // Lazily import to avoid circular-dependency issues at module load time
+      const { useSettingsStore } = await import('./useSettingsStore');
+      const pinHash = useSettingsStore.getState().appSettings.appLockPinHash;
+      if (!pinHash) {
+        // No PIN configured — vault cannot be unlocked via PIN
+        return false;
+      }
+      const computed = await hashPin(pin);
+      if (computed === pinHash) {
+        set({ isVaultUnlocked: true });
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  lockVault: () => set({ isVaultUnlocked: false }),
 
   setProfiles: (profiles) => {
     const { activeProfileId } = get();
@@ -241,6 +281,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   handleLogoutUser: async () => {
     await logout();
     clearAuthToken();
+    // Lock the vault on logout so a re-login is required to access NSFW content
+    set({ isVaultUnlocked: false });
     const fallbackId = get().isHostComputer ? 'usr_admin' : 'usr_guest';
     get().setActiveProfileId(fallbackId);
     useLibraryStore.getState().fetchMangaList();

@@ -10,9 +10,11 @@ import {
   Trash2,
   AlertTriangle,
   Check,
+  ShieldOff,
 } from 'lucide-react';
 
 import { SafeCoverImage } from '../common/SafeCoverImage';
+import { useVaultUnlock } from '../modals/VaultUnlockModal';
 
 /** Memoized Shimmer Placeholder Card for smooth loading */
 export const MangaSkeletonCard = React.memo(() => (
@@ -45,7 +47,8 @@ export interface MangaGridCardProps {
 }
 
 /** Memoized Manga Grid Card to eliminate redundant re-renders on large libraries */
-export const MangaGridCard = React.memo<MangaGridCardProps>(({
+export const MangaGridCard = React.memo<MangaGridCardProps>((
+  {
   manga,
   isSelectMode,
   isSelected,
@@ -57,19 +60,35 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
   onIncrementChapter,
   onQuickEdit,
 }) => {
+  const { openVaultFor, VaultModal, isVaultUnlocked } = useVaultUnlock();
+  const isNsfw = isNsfwManga(manga);
+  const isVaultLocked = isNsfw && !isVaultUnlocked;
+
   const hasNewChapter = manga.latestChapter > manga.currentChapter;
   const progress =
     manga.latestChapter > 0
       ? Math.min(100, Math.round((manga.currentChapter / manga.latestChapter) * 100))
       : 0;
 
+  /** Wrap an action so it goes through the vault gate if the card is NSFW-locked */
+  const gated = (action: () => void) => {
+    if (isVaultLocked) {
+      openVaultFor(action);
+    } else {
+      action();
+    }
+  };
+
   return (
     <div className="group card-interactive bg-surface/95 border border-edge/80 hover:border-accent/50 rounded-2xl overflow-hidden shadow-xl flex flex-col relative transition-all duration-300">
+      {/* Vault modal — renders only when open */}
+      {VaultModal}
+
       {/* Cover Image Container */}
       <div
         onClick={() => {
           if (isSelectMode) onToggleSelect(manga.id);
-          else onSelectManga(manga);
+          else gated(() => onSelectManga(manga));
         }}
         className="relative aspect-[3/4] w-full overflow-hidden bg-app cursor-pointer"
       >
@@ -77,6 +96,7 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
           src={manga.coverImage}
           alt={manga.title}
           fallbackMessage="Missing Cover"
+          isNsfw={isNsfw}
           className="w-full h-full object-cover group-hover:scale-108 transition-all duration-500 ease-out"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-app via-transparent to-black/30 group-hover:from-app/90 transition-colors pointer-events-none" />
@@ -114,7 +134,7 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
             </span>
           )}
 
-          {isNsfwManga(manga) && (
+          {isNsfw && (
             <span className="px-1.5 py-0.5 rounded-lg text-[10px] font-black bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-md">
               🔞 18+
             </span>
@@ -148,15 +168,23 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
       <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1">
           <h4
-            onClick={() => onSelectManga(manga)}
+            onClick={() => gated(() => onSelectManga(manga))}
             className="text-sm font-bold font-display text-primary line-clamp-1 hover:text-accent cursor-pointer transition-colors"
             title={manga.title}
           >
             {manga.title}
           </h4>
-          <p className="text-[11px] text-secondary line-clamp-1 font-medium">
-            {manga.altTitles[0] || manga.sourceName}
-          </p>
+          {/* When NSFW vault is locked, replace alt-title / source with a vault indicator */}
+          {isVaultLocked ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-rose-950/80 text-rose-300 border border-rose-500/40">
+              <ShieldOff className="w-3 h-3" />
+              [18+ Vault]
+            </span>
+          ) : (
+            <p className="text-[11px] text-secondary line-clamp-1 font-medium">
+              {manga.altTitles[0] || manga.sourceName}
+            </p>
+          )}
         </div>
 
         {/* Chapter Progress */}
@@ -184,7 +212,7 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
         <div className="space-y-1.5 pt-1">
           {isReaderAvailable ? (
             <button
-              onClick={() => onOpenReader(manga, manga.currentChapter + 1)}
+              onClick={() => gated(() => onOpenReader(manga, manga.currentChapter + 1))}
               className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gradient-to-r from-accent to-accent-2 hover:from-accent-bright hover:to-accent-2 text-accent-fg font-black text-xs transition-all shadow-md shadow-accent/20 hover:shadow-accent/40 active:scale-[0.97] cursor-pointer"
               title="Open Webtoon Reader for next chapter"
             >
@@ -193,7 +221,7 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
             </button>
           ) : (
             <button
-              onClick={() => onSelectManga(manga)}
+              onClick={() => gated(() => onSelectManga(manga))}
               className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-elevated hover:bg-elevated/80 text-primary font-bold text-xs transition-all border border-edge-strong active:scale-[0.97] cursor-pointer"
             >
               <BookOpen className="w-3.5 h-3.5 text-accent" />
@@ -203,7 +231,7 @@ export const MangaGridCard = React.memo<MangaGridCardProps>(({
 
           <div className="flex items-center gap-1">
             <button
-              onClick={() => onOpenChapters(manga)}
+              onClick={() => gated(() => onOpenChapters(manga))}
               className="flex-1 py-1.5 rounded-lg bg-elevated hover:bg-elevated/80 text-secondary hover:text-white text-[11px] font-bold transition-colors border border-edge-strong/80 active:scale-[0.97] cursor-pointer"
               title="View full chapter list"
             >
@@ -247,7 +275,8 @@ export interface MangaListRowProps {
 }
 
 /** Memoized Manga List Row for high-performance table view */
-export const MangaListRow = React.memo<MangaListRowProps>(({
+export const MangaListRow = React.memo<MangaListRowProps>((
+  {
   manga,
   isSelectMode,
   isSelected,
@@ -260,7 +289,18 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
   onQuickEdit,
   onDeleteManga,
 }) => {
+  const { openVaultFor, VaultModal, isVaultUnlocked } = useVaultUnlock();
+  const isNsfw = isNsfwManga(manga);
+  const isVaultLocked = isNsfw && !isVaultUnlocked;
   const hasNew = manga.latestChapter > manga.currentChapter;
+
+  const gated = (action: () => void) => {
+    if (isVaultLocked) {
+      openVaultFor(action);
+    } else {
+      action();
+    }
+  };
 
   return (
     <tr
@@ -271,6 +311,9 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
         isSelected ? 'bg-accent/10' : ''
       } ${isSelectMode ? 'cursor-pointer' : ''}`}
     >
+      {/* Vault modal */}
+      {VaultModal}
+
       {isSelectMode && (
         <td className="py-3 px-3">
           <div className={`w-5 h-5 rounded flex items-center justify-center border ${
@@ -287,6 +330,7 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
               src={manga.coverImage}
               alt={manga.title}
               compact
+              isNsfw={isNsfw}
               fallbackMessage="Missing"
               className="w-9 h-12 rounded-lg object-cover bg-app border border-edge/60 shrink-0"
             />
@@ -294,7 +338,7 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
           <div>
             <div
               onClick={() => {
-                if (!isSelectMode) onSelectManga(manga);
+                if (!isSelectMode) gated(() => onSelectManga(manga));
               }}
               className="font-bold text-primary hover:text-accent cursor-pointer line-clamp-1 flex items-center gap-1.5"
             >
@@ -360,7 +404,7 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onOpenReader(manga, manga.currentChapter + 1);
+              gated(() => onOpenReader(manga, manga.currentChapter + 1));
             }}
             className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded bg-accent text-accent-fg font-bold hover:bg-accent-bright transition-all text-xs sm:text-sm flex items-center gap-1 cursor-pointer"
           >
@@ -370,7 +414,7 @@ export const MangaListRow = React.memo<MangaListRowProps>(({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onOpenChapters(manga);
+              gated(() => onOpenChapters(manga));
             }}
             className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded bg-elevated text-secondary hover:text-white transition-all text-xs sm:text-sm cursor-pointer"
           >

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ShieldOff } from 'lucide-react';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export interface SafeCoverImageProps {
   src?: string;
@@ -10,6 +11,8 @@ export interface SafeCoverImageProps {
   loading?: 'lazy' | 'eager';
   decoding?: 'async' | 'auto' | 'sync';
   onLoad?: () => void;
+  /** When true, applies blur concealment if the NSFW vault is currently locked. */
+  isNsfw?: boolean;
 }
 
 /**
@@ -21,6 +24,10 @@ export const failedCoverUrls = new Set<string>();
 /**
  * SafeCoverImage renders cover art or a clean "Missing Page / Cover" placeholder UI.
  * It avoids requesting broken or hardcoded fallback images and stops any recursive error loops.
+ *
+ * When `isNsfw` is true and the NSFW vault is locked, the cover is rendered with a
+ * heavy 32px blur filter and an 18+ Vault overlay — concealing the artwork without
+ * breaking the DOM layout. The blur lifts automatically once the vault is unlocked.
  */
 export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
   src,
@@ -31,7 +38,11 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
   loading = 'lazy',
   decoding = 'async',
   onLoad,
+  isNsfw = false,
 }) => {
+  const isVaultUnlocked = useAuthStore((s) => s.isVaultUnlocked);
+  const shouldConceal = isNsfw && !isVaultUnlocked;
+
   const cleanSrc = src?.trim();
   const [hasError, setHasError] = useState(() => (cleanSrc ? failedCoverUrls.has(cleanSrc) : true));
 
@@ -55,6 +66,41 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
             {fallbackMessage}
           </span>
         )}
+      </div>
+    );
+  }
+
+  // ── NSFW vault concealment ──────────────────────────────────────────────────
+  if (shouldConceal) {
+    return (
+      <div className={`relative overflow-hidden ${className}`}>
+        {/* Image is present in DOM for preloading but blurred beyond recognition */}
+        <img
+          src={cleanSrc}
+          alt={alt}
+          loading={loading}
+          decoding={decoding}
+          className="w-full h-full object-cover"
+          style={{ filter: 'blur(32px)', transform: 'scale(1.12)' }}
+          aria-hidden="true"
+          onError={() => {
+            if (cleanSrc) failedCoverUrls.add(cleanSrc);
+            setHasError(true);
+          }}
+        />
+        {/* 18+ Vault overlay */}
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 gap-1.5 select-none pointer-events-none"
+          role="img"
+          aria-label="18+ content — vault locked"
+        >
+          <ShieldOff className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-rose-400 drop-shadow`} />
+          {!compact && (
+            <span className="text-[10px] font-black text-rose-300 tracking-wider uppercase px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/40">
+              18+ Vault
+            </span>
+          )}
+        </div>
       </div>
     );
   }

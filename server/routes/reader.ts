@@ -89,6 +89,22 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
   const sourceUrl = req.query.sourceUrl as string;
   const pageUrl = req.query.pageUrl as string;
 
+  // ── NSFW image-stream gate ──────────────────────────────────────────────────
+  // If the caller supplies a mangaId, verify the series is not NSFW-restricted
+  // before fetching a single byte. This prevents anonymous access to explicit
+  // chapter image streams even when the caller provides a direct CDN URL.
+  const proxyMangaId = (req.query.mangaId as string) || '';
+  if (proxyMangaId) {
+    const proxyManga = SqliteDb.getMangaById(proxyMangaId) ?? SqliteDb.getMangaByApiId(proxyMangaId);
+    if (proxyManga && (proxyManga.isNsfw || isNsfwManga(proxyManga)) && !isNsfwAccessAllowed(req)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: '18+ Adult content is restricted. Please sign in to access explicit image streams.',
+        isNsfwRestricted: true,
+      });
+    }
+  }
+
   if (!targetUrl) {
     return res.status(400).json({ error: "Missing required 'url' parameter" });
   }
@@ -492,7 +508,7 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
           const cleanUrl = pageUrl.trim();
           if (cleanUrl.startsWith('/api/reader/panel-image')) return cleanUrl;
           if (cleanUrl.startsWith('/api/')) return cleanUrl;
-          return `/api/reader/proxy-image?url=${encodeURIComponent(cleanUrl)}&sourceUrl=${encodeURIComponent(targetUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}`;
+          return `/api/reader/proxy-image?url=${encodeURIComponent(cleanUrl)}&sourceUrl=${encodeURIComponent(targetUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;  
         });
 
         return res.json({
@@ -547,7 +563,7 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
         if (baseUrl && chapterHash && pageFileNames.length > 0) {
           const proxiedPages = pageFileNames.map((fileName, idx) => {
             const directCdnUrl = `${baseUrl}/data/${chapterHash}/${fileName}`;
-            return `/api/mangadex/image-proxy?url=${encodeURIComponent(directCdnUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}`;
+            return `/api/mangadex/image-proxy?url=${encodeURIComponent(directCdnUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;  
           });
 
           return res.json({
