@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import crypto from 'crypto';
 import type { Request } from 'express';
 import {
@@ -20,6 +20,10 @@ import {
 } from '../server/security';
 import { isImageProxyPath } from '../server/rateLimit';
 import { canModifyManga } from '../server/appState';
+import request from 'supertest';
+import { app } from '../server';
+import { SqliteDb } from '../db';
+import { optimizeImageBuffer } from '../server/services/imageOptimizer';
 
 describe('PII encryption (AES-256-GCM)', () => {
   it('round-trips plaintext and does not leak it in ciphertext', () => {
@@ -318,4 +322,141 @@ describe('isNsfwAccessAllowed (18+ Adult Access Gate)', async () => {
     expect(isNsfwAccessAllowed(hostReq)).toBe(true);
   });
 });
+
+describe('SQL-Level NSFW Filtering (getAllManga & queryManga)', () => {
+  const safeId = 'test_safe_sql_' + Date.now();
+  const adultId = 'test_adult_sql_' + Date.now();
+
+  const safeItem = {
+    id: safeId,
+    title: 'Safe Action Quest Hardened',
+    altTitles: [],
+    type: 'manhwa' as const,
+    coverImage: 'https://example.com/cover.jpg',
+    description: 'Clean story',
+    genres: ['Action'],
+    status: 'reading' as const,
+    currentChapter: 1,
+    totalChapters: 100,
+    latestChapter: 10,
+    lastUpdated: new Date().toISOString(),
+    rating: 9.0,
+    sourceUrl: 'https://example.com/safe-quest',
+    sourceName: 'Safe Source',
+    availableSources: [],
+    autoUpdateEnabled: true,
+    notes: '',
+    addedAt: new Date().toISOString(),
+    lastReadAt: new Date().toISOString(),
+    syncedFromApi: '',
+    apiId: safeId,
+    userId: null,
+    isFavorite: false,
+    isFlagged: false,
+    metadataOverrides: [],
+    customTags: [],
+    categories: [],
+    isNsfw: false,
+  };
+
+  const adultItem = {
+    id: adultId,
+    title: 'Explicit Adult Romance Hardened',
+    altTitles: [],
+    type: 'manhwa' as const,
+    coverImage: 'https://example.com/adult.jpg',
+    description: 'Adult 18+ story',
+    genres: ['Adult', 'Smut'],
+    status: 'reading' as const,
+    currentChapter: 1,
+    totalChapters: 100,
+    latestChapter: 10,
+    lastUpdated: new Date().toISOString(),
+    rating: 9.0,
+    sourceUrl: 'https://example.com/adult-story',
+    sourceName: 'Adult Source',
+    availableSources: [],
+    autoUpdateEnabled: true,
+    notes: '',
+    addedAt: new Date().toISOString(),
+    lastReadAt: new Date().toISOString(),
+    syncedFromApi: '',
+    apiId: adultId,
+    userId: null,
+    isFavorite: false,
+    isFlagged: false,
+    metadataOverrides: ['isNsfw'],
+    customTags: [],
+    categories: [],
+    isNsfw: true,
+  };
+
+  beforeAll(() => {
+    SqliteDb.upsertManga(safeItem);
+    SqliteDb.upsertManga(adultItem);
+  });
+
+  afterAll(() => {
+    SqliteDb.deleteManga(safeId);
+    SqliteDb.deleteManga(adultId);
+  });
+
+  it('SqliteDb.getAllManga(false) enforces WHERE isNsfw = 0 at the SQL level', () => {
+    const safeOnly = SqliteDb.getAllManga(false);
+    const ids = safeOnly.map((m) => m.id);
+    expect(ids).toContain(safeId);
+    expect(ids).not.toContain(adultId);
+  });
+
+  it('SqliteDb.getAllManga(true) includes all items', () => {
+    const all = SqliteDb.getAllManga(true);
+    const ids = all.map((m) => m.id);
+    expect(ids).toContain(safeId);
+    expect(ids).toContain(adultId);
+  });
+
+  it('SqliteDb.queryManga({ isNsfwAllowed: false }) gates adult series at the SQL level', () => {
+    const res = SqliteDb.queryManga({ isNsfwAllowed: false, search: 'Hardened' });
+    const titles = res.items.map((m) => m.title);
+    expect(titles).toContain('Safe Action Quest Hardened');
+    expect(titles).not.toContain('Explicit Adult Romance Hardened');
+  });
+
+  it('GET /api/reader/chapter-pages returns 403 Forbidden with NSFW_RESTRICTED for adult manga on guest request', async () => {
+    const res = await request(app)
+      .get(`/api/reader/chapter-pages?mangaId=${adultId}&chapterNumber=1`)
+      .set('x-guest-mode', '1');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Forbidden');
+    expect(res.body.code).toBe('NSFW_RESTRICTED');
+    expect(res.body.isNsfwRestricted).toBe(true);
+  });
+
+  it('GET /api/reader/proxy-image returns 403 Forbidden with NSFW_RESTRICTED for adult manga on guest request', async () => {
+    const res = await request(app)
+      .get(`/api/reader/proxy-image?mangaId=${adultId}&url=${encodeURIComponent('https://example.com/chapter1/page1.jpg')}`)
+      .set('x-guest-mode', '1');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Forbidden');
+    expect(res.body.code).toBe('NSFW_RESTRICTED');
+    expect(res.body.isNsfwRestricted).toBe(true);
+  });
+});
+
+describe('Image Optimization and WebP Transcoder (sharp)', () => {
+  it('transcodes uncompressed test buffer into webp format with quality 80', async () => {
+    // 1x1 transparent PNG buffer
+    const pngBuffer = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const res = await optimizeImageBuffer(pngBuffer, 'image/png', { format: 'webp', quality: 80 });
+    expect(res.contentType).toBe('image/webp');
+    expect(res.buffer).toBeInstanceOf(Buffer);
+    expect(res.buffer.length).toBeGreaterThan(0);
+  });
+});
+
 

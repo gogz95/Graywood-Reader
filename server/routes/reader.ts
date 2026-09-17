@@ -93,12 +93,13 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
   // If the caller supplies a mangaId, verify the series is not NSFW-restricted
   // before fetching a single byte. This prevents anonymous access to explicit
   // chapter image streams even when the caller provides a direct CDN URL.
-  const proxyMangaId = (req.query.mangaId as string) || '';
+  const proxyMangaId = (req.query.mangaId as string) || (req.query.id as string) || '';
   if (proxyMangaId) {
-    const proxyManga = SqliteDb.getMangaById(proxyMangaId) ?? SqliteDb.getMangaByApiId(proxyMangaId);
+    const proxyManga = resolveManga(proxyMangaId);
     if (proxyManga && (proxyManga.isNsfw || isNsfwManga(proxyManga)) && !isNsfwAccessAllowed(req)) {
       return res.status(403).json({
         error: 'Forbidden',
+        code: 'NSFW_RESTRICTED',
         message: '18+ Adult content is restricted. Please sign in to access explicit image streams.',
         isNsfwRestricted: true,
       });
@@ -466,13 +467,14 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
 
   // Gate 18+ / NSFW titles for guest users
   const isPagesNsfw = Boolean(
-    (manga && isNsfwManga(manga)) ||
+    (manga && (manga.isNsfw || isNsfwManga(manga))) ||
     (targetUrl && /manhwa18|adultwebtoon|hentai|nsfw|porn|doujin/i.test(targetUrl))
   );
   if (isPagesNsfw && !isNsfwAccessAllowed(req)) {
     return res.status(403).json({
-      error: "Authentication required",
-      message: "18+ Adult content is restricted for guest users. Please sign in to read this series.",
+      error: 'Forbidden',
+      code: 'NSFW_RESTRICTED',
+      message: '18+ Adult content is restricted for guest users. Please sign in to read this series.',
       isNsfwRestricted: true,
     });
   }

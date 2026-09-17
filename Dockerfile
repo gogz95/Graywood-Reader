@@ -2,32 +2,30 @@
 # MULTI-STAGE DOCKERFILE FOR GRAYWOOD READER
 # ==============================================================================
 
-FROM node:24-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 
-ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
-
 RUN apt-get update && \
   apt-get upgrade -y && \
   apt-get install -y --no-install-recommends python3 make g++ && \
   npm ci && \
-  apt-get purge -y --auto-remove python3 make g++ && \
   rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
 RUN npm run build
 
-FROM node:24-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
+ENV STORAGE_PATH=/data
 
 COPY package*.json ./
 
@@ -40,17 +38,19 @@ RUN apt-get update && \
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
+COPY --from=builder /app/server ./server
+COPY --from=builder /app/db ./db
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/BUGS.md ./BUGS.md
 COPY --from=builder /app/package.json ./package.json
 
-RUN mkdir -p /app/data/storage && chown -R node:node /app
+RUN mkdir -p /data /app/data && chown -R node:node /data /app
 
 USER node
 
 EXPOSE 3000
 
-VOLUME ["/app/data"]
+VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1

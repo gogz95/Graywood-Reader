@@ -18,10 +18,10 @@ export function parseOptimizationParams(req: Request): ImageOptimizationOptions 
 
   let format: ImageOptimizationOptions['format'] = 'original';
 
-  if (['webp', 'avif', 'jpeg', 'png'].includes(reqFormat)) {
+  if (['webp', 'avif', 'jpeg', 'png', 'original'].includes(reqFormat)) {
     format = reqFormat as any;
   } else if (reqFormat === 'auto' || !reqFormat) {
-    if (acceptHeader.includes('image/webp')) {
+    if (acceptHeader.includes('image/webp') || !acceptHeader || acceptHeader.includes('*/*') || acceptHeader.includes('image/*')) {
       format = 'webp';
     } else if (acceptHeader.includes('image/avif')) {
       format = 'avif';

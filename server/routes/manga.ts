@@ -44,7 +44,7 @@ export const handleFullTextSearch = (req: any, res: any) => {
   }
 
   const allowNsfw = isNsfwAccessAllowed(req);
-  const allManga = SqliteDb.getAllManga().filter((m) => allowNsfw || !isNsfwManga(m));
+  const allManga = SqliteDb.getAllManga(allowNsfw);
   const results = searchIndexer.search(query, allManga);
   res.json({ query, totalMatches: results.length, results });
 };

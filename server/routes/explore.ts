@@ -375,10 +375,8 @@ exploreRouter.get('/api/explore', async (req: Request, res: Response) => {
 // ── GET /api/kotatsu/explore/featured ────────────────────────────────────────
 exploreRouter.get('/api/kotatsu/explore/featured', async (req, res) => {
   try {
-    let allManga = SqliteDb.getAllManga();
-    if (!isNsfwAccessAllowed(req)) {
-      allManga = allManga.filter((m) => !isNsfwManga(m));
-    }
+    const isNsfw = isNsfwAccessAllowed(req);
+    const allManga = SqliteDb.getAllManga(isNsfw);
     const isReadable = (m: any) =>
       (m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl)) ||
       (Array.isArray(m.availableSources) && m.availableSources.some((s: any) => !isMangaDexSourceLink(s.sourceName, s.sourceUrl)));
@@ -421,10 +419,8 @@ exploreRouter.get('/api/kotatsu/explore/featured', async (req, res) => {
 // ── GET /api/kotatsu/updates ─────────────────────────────────────────────────
 exploreRouter.get('/api/kotatsu/updates', async (req, res) => {
   try {
-    let allManga = SqliteDb.getAllManga();
-    if (!isNsfwAccessAllowed(req)) {
-      allManga = allManga.filter((m: any) => !isNsfwManga(m));
-    }
+    const isNsfw = isNsfwAccessAllowed(req);
+    const allManga = SqliteDb.getAllManga(isNsfw);
     const live = allManga
       .filter((m: any) => m.sourceUrl && !isMangaDexSourceLink(m.sourceName, m.sourceUrl))
       .sort((a: any, b: any) => new Date(b.lastUpdated || 0).getTime() - new Date(a.lastUpdated || 0).getTime())

@@ -92,6 +92,7 @@ export function initializeDatabaseSchema(): void {
   try { db.exec('ALTER TABLE manga ADD COLUMN customTags TEXT'); } catch (e) { }
   try { db.exec('ALTER TABLE manga ADD COLUMN categories TEXT'); } catch (e) { }
   try { db.exec('ALTER TABLE manga ADD COLUMN isNsfw INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('UPDATE manga SET isNsfw = 0 WHERE isNsfw IS NULL'); } catch (e) { }
 
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_flagged ON manga(isFlagged)'); } catch (e) { }
   try { db.exec('CREATE INDEX IF NOT EXISTS idx_manga_isNsfw ON manga(isNsfw)'); } catch (e) { }

@@ -7,6 +7,7 @@ import { logger } from '../server/logger';
 
 // Prepared Statements for Sub-millisecond Execution
 const stmtGetAllManga = db.prepare('SELECT * FROM manga ORDER BY lastUpdated DESC');
+const stmtGetAllMangaSafe = db.prepare('SELECT * FROM manga WHERE isNsfw = 0 ORDER BY lastUpdated DESC');
 const stmtGetMangaById = db.prepare('SELECT * FROM manga WHERE id = ?');
 const stmtGetMangaByApiId = db.prepare('SELECT * FROM manga WHERE apiId = ?');
 
@@ -304,8 +305,9 @@ export function invalidateMangaCache() {
   // Maintained for backward-compatible interface contract
 }
 
-export function getAllManga(): MangaItem[] {
-  const rows = stmtGetAllManga.all();
+export function getAllManga(allowNsfw: boolean | { isNsfwAllowed?: boolean } = true): MangaItem[] {
+  const isAllowed = typeof allowNsfw === 'boolean' ? allowNsfw : (allowNsfw?.isNsfwAllowed ?? true);
+  const rows = isAllowed ? stmtGetAllManga.all() : stmtGetAllMangaSafe.all();
   return rows.map(mapRowToMangaItem);
 }
 
@@ -371,7 +373,7 @@ export function queryManga(
   const params: Record<string, any> = {};
 
   if (options.isNsfwAllowed === false) {
-    clauses.push('(isNsfw = 0 OR isNsfw IS NULL)');
+    clauses.push('isNsfw = 0');
   }
 
   if (options.type) {
