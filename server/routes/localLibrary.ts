@@ -6,6 +6,7 @@ import AdmZip from 'adm-zip';
 import { SqliteDb } from '../../db';
 import { MangaItem } from '../../src/types';
 import { comicInfoService, ComicInfoMetadata } from '../services/comicInfoService';
+import { syncAddOrUpdateManga } from '../appState';
 
 export const localLibraryRouter = Router();
 
@@ -477,7 +478,7 @@ localLibraryRouter.post('/api/local/library/:id/add', (req: Request, res: Respon
       metadataOverrides: [],
       customTags: [],
     };
-    SqliteDb.upsertManga(item);
+    syncAddOrUpdateManga(item);
     res.json({ success: true, manga: item });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to add local archive', details: err.message });

@@ -47,12 +47,41 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
   const [hasError, setHasError] = useState(() => (cleanSrc ? failedCoverUrls.has(cleanSrc) : true));
 
   useEffect(() => {
-    if (cleanSrc && failedCoverUrls.has(cleanSrc)) {
+    if (!cleanSrc) {
       setHasError(true);
-    } else {
-      setHasError(false);
+      return;
     }
-  }, [cleanSrc]);
+    // If the vault was just unlocked, allow retry for any previously failed NSFW covers
+    if (isVaultUnlocked && failedCoverUrls.has(cleanSrc)) {
+      failedCoverUrls.delete(cleanSrc);
+      setHasError(false);
+      return;
+    }
+    setHasError(failedCoverUrls.has(cleanSrc));
+  }, [cleanSrc, isVaultUnlocked]);
+
+  // ── NSFW vault concealment ──────────────────────────────────────────────────
+  // While the vault is locked, render a dedicated 18+ Vault badge placeholder
+  // without requesting the restricted asset across the wire or triggering 403 errors.
+  if (shouldConceal) {
+    return (
+      <div
+        className={`relative overflow-hidden flex flex-col items-center justify-center bg-slate-950/90 border border-rose-500/20 text-center select-none ${className}`}
+        role="img"
+        aria-label="18+ content — vault locked"
+      >
+        <div className="absolute inset-0 bg-radial from-rose-950/20 via-transparent to-black/60 pointer-events-none" />
+        <div className="relative z-10 flex flex-col items-center justify-center gap-1.5 p-2">
+          <ShieldOff className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-rose-400 drop-shadow`} />
+          {!compact && (
+            <span className="text-[10px] font-black text-rose-300 tracking-wider uppercase px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/40 shadow-xs">
+              18+ Vault
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!cleanSrc || hasError) {
     return (
@@ -66,41 +95,6 @@ export const SafeCoverImage: React.FC<SafeCoverImageProps> = ({
             {fallbackMessage}
           </span>
         )}
-      </div>
-    );
-  }
-
-  // ── NSFW vault concealment ──────────────────────────────────────────────────
-  if (shouldConceal) {
-    return (
-      <div className={`relative overflow-hidden ${className}`}>
-        {/* Image is present in DOM for preloading but blurred beyond recognition */}
-        <img
-          src={cleanSrc}
-          alt={alt}
-          loading={loading}
-          decoding={decoding}
-          className="w-full h-full object-cover"
-          style={{ filter: 'blur(32px)', transform: 'scale(1.12)' }}
-          aria-hidden="true"
-          onError={() => {
-            if (cleanSrc) failedCoverUrls.add(cleanSrc);
-            setHasError(true);
-          }}
-        />
-        {/* 18+ Vault overlay */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 gap-1.5 select-none pointer-events-none"
-          role="img"
-          aria-label="18+ content — vault locked"
-        >
-          <ShieldOff className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-rose-400 drop-shadow`} />
-          {!compact && (
-            <span className="text-[10px] font-black text-rose-300 tracking-wider uppercase px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/40">
-              18+ Vault
-            </span>
-          )}
-        </div>
       </div>
     );
   }

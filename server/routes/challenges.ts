@@ -5,7 +5,7 @@ import { sourceCookieJar } from '../services/sourceHealthService';
 import { sourceCircuitBreaker } from '../circuitBreaker';
 import { assertSafeProxyTarget, fetchWithSsrfGuard } from '../security';
 import { solveWithFlareSolverr, checkSolverBalance } from '../captchaSolver';
-import { sourceCustomUserAgents } from '../../server';
+import { sourceCustomUserAgents } from '../userAgentPool';
 
 export const challengesRouter = Router();
 

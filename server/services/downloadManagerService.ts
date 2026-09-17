@@ -277,6 +277,10 @@ export class DownloadManagerService {
       }
 
       // 3. Inject standard ComicInfo.xml into CBZ
+      if ((job.status as string) === 'cancelled' || (job.status as string) === 'paused') {
+        return;
+      }
+
       job.status = 'packaging';
       SqliteDb.saveDownloadJob(job);
 
@@ -286,6 +290,10 @@ export class DownloadManagerService {
         pageCount: pages.length,
         scanGroup: job.sourceName,
       });
+
+      if ((job.status as string) === 'cancelled') {
+        return;
+      }
 
       // 4. Write CBZ archive to disk
       const cbzFilename = `${safeSeriesName} - Ch.${job.chapterNumber}.cbz`;
@@ -301,6 +309,9 @@ export class DownloadManagerService {
 
       logger.info('DownloadManager', `Successfully saved "${cbzFilename}" (${job.progress.bytesDownloaded} bytes, ${pages.length} pages)`);
     } catch (err: any) {
+      if ((job.status as string) === 'cancelled') {
+        return;
+      }
       logger.error('DownloadManager', `Download failed for "${job.mangaTitle}" Ch.${job.chapterNumber}: ${err?.message || err}`);
       job.status = 'failed';
       job.error = err.message || 'Download failed';

@@ -1,8 +1,10 @@
 import React, { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Settings } from 'lucide-react';
 import { AppLockOverlay } from '../AppLockOverlay';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { useModalStore } from '../../stores/useModalStore';
 
 // ============================================================================
 // VaultUnlockModal
@@ -13,6 +15,8 @@ import { useSettingsStore } from '../../stores/useSettingsStore';
 // Reads the PIN hash from AppSettings and sets the Zustand vault state on a
 // successful match. If no PIN is configured, shows a guidance notice directing
 // the user to Settings → Security instead of presenting a useless keypad.
+// Uses React Portal to avoid being trapped inside transformed card containers
+// or invalid table element nesting.
 // ============================================================================
 
 interface VaultUnlockModalProps {
@@ -40,11 +44,16 @@ export const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
     onUnlocked?.();
   }, [onUnlocked]);
 
+  const handleOpenSettings = useCallback(() => {
+    onDismiss?.();
+    useModalStore.getState().openModal('settings');
+  }, [onDismiss]);
+
   if (!isOpen) return null;
 
   // ── No PIN configured: guide the user to Settings ─────────────────────────
   if (!hasPinConfigured) {
-    return (
+    const modalContent = (
       <div
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-200"
         role="dialog"
@@ -80,7 +89,7 @@ export const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
             <button
               type="button"
               id="vault-modal-settings"
-              onClick={onDismiss}
+              onClick={handleOpenSettings}
               className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-600/30 cursor-pointer flex items-center justify-center gap-1.5"
             >
               <Settings className="w-4 h-4" />
@@ -90,10 +99,12 @@ export const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
         </div>
       </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
   }
 
   // ── PIN configured: render the full keypad overlay ─────────────────────────
-  return (
+  const keypadContent = (
     <div
       className="fixed inset-0 z-[9999]"
       role="dialog"
@@ -110,6 +121,8 @@ export const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
       />
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(keypadContent, document.body) : keypadContent;
 };
 
 // ============================================================================

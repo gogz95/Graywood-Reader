@@ -27,7 +27,7 @@ import {
 
 export const trackerRouter = Router();
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 // In-memory logs & status for tracker auto-updater
 export interface AutoUpdateLog {

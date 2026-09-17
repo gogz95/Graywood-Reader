@@ -134,6 +134,7 @@ export async function buildUniversalExploreCatalog(options: {
 
 let isRefresherRunning = false;
 let exploreRefresherTimer: NodeJS.Timeout | null = null;
+let initialSyncTimer: NodeJS.Timeout | null = null;
 
 export function scheduleExploreRefresher(): void {
   if (isRefresherRunning) return;
@@ -144,7 +145,7 @@ export function scheduleExploreRefresher(): void {
   const isInitialSyncDone = SqliteDb.getSystemState('initial_sync_complete');
   if (isInitialSyncDone !== 'true') {
     // Cold boot without initial sync: perform polite metadata-only indexing
-    setTimeout(async () => {
+    initialSyncTimer = setTimeout(async () => {
       try {
         console.log('[Explore Engine] Cold boot: performing initial metadata-only catalog indexing...');
         await buildUniversalExploreCatalog({ maxSources: 5, itemsPerSource: 10, metadataOnly: true });
@@ -152,6 +153,8 @@ export function scheduleExploreRefresher(): void {
         console.log('[Explore Engine] Cold boot metadata-only indexing completed.');
       } catch (err) {
         console.error('[Explore Engine] Cold boot indexing error:', err);
+      } finally {
+        initialSyncTimer = null;
       }
     }, 15000);
   }
@@ -171,6 +174,10 @@ export function stopExploreRefresher(): void {
   if (exploreRefresherTimer) {
     clearInterval(exploreRefresherTimer);
     exploreRefresherTimer = null;
+  }
+  if (initialSyncTimer) {
+    clearTimeout(initialSyncTimer);
+    initialSyncTimer = null;
   }
   isRefresherRunning = false;
   console.log('[Explore Engine] Stopped explore refresher timers.');

@@ -223,3 +223,5 @@ export function getBrowserHeaders(
 
   return headers;
 }
+
+export const sourceCustomUserAgents = new Map<string, string>();

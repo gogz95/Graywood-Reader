@@ -213,7 +213,7 @@ setInterval(() => {
     SqliteDb.cleanupExpiredRevokedTokens();
     SqliteDb.cleanupExpiredChapterPages();
   } catch {}
-}, 60 * 60 * 1000); // Hourly cleanup
+}, 60 * 60 * 1000).unref(); // Hourly cleanup
 
 export function verifyAuthToken(token: string): Record<string, unknown> | null {
   if (!token) return null;

@@ -6,8 +6,8 @@
 
 import { Router, Request, Response } from 'express';
 import { SqliteDb } from '../../db';
-import { MangaItem } from '../../src/types';
-import { resolveRequestUserId } from '../appState';
+import { MangaItem, isNsfwManga } from '../../src/types';
+import { resolveRequestUserId, isNsfwAccessAllowed } from '../appState';
 import { scanStorage, getArchiveEntry } from './localLibrary';
 import { kotatsuImageEngine, matchLiveDomain, autoDiscoverLiveSourceForManga } from '../services/crawlerEngine';
 
@@ -98,7 +98,7 @@ function toKomgaBookDto(manga: MangaItem, chapterNum: number, libraryId = 'lib_m
     media: {
       status: 'READY',
       mediaType: 'image/jpeg',
-      pagesCount: 15,
+      pagesCount: 20,
     },
     metadata: {
       title: `Chapter ${chapterNum}`,
@@ -108,11 +108,16 @@ function toKomgaBookDto(manga: MangaItem, chapterNum: number, libraryId = 'lib_m
       releaseDate: manga.lastUpdated ? manga.lastUpdated.substring(0, 10) : null,
       authors: [],
       tags: [],
-      isbn: '',
-      links: [],
+      isbn: null,
     },
     readProgress: isRead
-      ? { page: 15, completed: true, readDate: manga.lastReadAt || new Date().toISOString() }
+      ? {
+          page: 20,
+          completed: true,
+          readDate: manga.lastReadAt || new Date().toISOString(),
+          created: manga.addedAt || new Date().toISOString(),
+          lastModified: manga.lastReadAt || new Date().toISOString(),
+        }
       : null,
   };
 }
@@ -149,13 +154,14 @@ komgaCompatRouter.get('/api/v1/libraries', (req: Request, res: Response) => {
 
 // GET /api/v1/users/me - Komga Authenticated User Profile
 komgaCompatRouter.get('/api/v1/users/me', (req: Request, res: Response) => {
-  const userId = resolveRequestUserId(req) || 'usr_admin';
+  const userId = resolveRequestUserId(req);
+  const isGuest = !userId || userId === 'usr_guest';
   res.json({
-    id: userId,
-    email: 'reader@graywood.local',
-    roles: ['ROLE_USER', 'ROLE_ADMIN', 'ROLE_PAGE_STREAMING'],
+    id: userId || 'usr_guest',
+    email: isGuest ? 'guest@graywood.local' : 'reader@graywood.local',
+    roles: isGuest ? ['ROLE_USER', 'ROLE_PAGE_STREAMING'] : ['ROLE_USER', 'ROLE_ADMIN', 'ROLE_PAGE_STREAMING'],
     sharedLibraries: { all: true, libraryIds: ['lib_main'] },
-    ageRestriction: null,
+    ageRestriction: isGuest ? { restriction: 'RESTRICTED', maxAgeRating: 16 } : null,
     labelsAllow: [],
     labelsExclude: [],
   });
@@ -164,13 +170,15 @@ komgaCompatRouter.get('/api/v1/users/me', (req: Request, res: Response) => {
 // GET /api/v1/series - Komga Series Page
 komgaCompatRouter.get('/api/v1/series', (req: Request, res: Response) => {
   const all = SqliteDb.getAllManga();
+  const isNsfwAllowed = isNsfwAccessAllowed(req);
+  const visible = isNsfwAllowed ? all : all.filter((m) => !isNsfwManga(m));
   const search = String(req.query.search || '').trim().toLowerCase();
   const page = Math.max(0, Number(req.query.page) || 0);
   const size = Math.max(1, Math.min(200, Number(req.query.size) || 50));
 
   const filtered = search
-    ? all.filter((m) => m.title.toLowerCase().includes(search) || m.genres?.some((g) => g.toLowerCase().includes(search)))
-    : all;
+    ? visible.filter((m) => m.title.toLowerCase().includes(search) || m.genres?.some((g) => g.toLowerCase().includes(search)))
+    : visible;
 
   const totalElements = filtered.length;
   const totalPages = Math.ceil(totalElements / size) || 1;
@@ -193,6 +201,9 @@ komgaCompatRouter.get('/api/v1/series', (req: Request, res: Response) => {
 komgaCompatRouter.get('/api/v1/series/:id', (req: Request, res: Response) => {
   const manga = SqliteDb.getMangaById(String(req.params.id));
   if (!manga) return res.status(404).json({ error: 'Series not found' });
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult series restricted for guests' });
+  }
   res.json(toKomgaSeriesDto(manga));
 });
 
@@ -200,6 +211,9 @@ komgaCompatRouter.get('/api/v1/series/:id', (req: Request, res: Response) => {
 komgaCompatRouter.get('/api/v1/series/:id/books', (req: Request, res: Response) => {
   const manga = SqliteDb.getMangaById(String(req.params.id));
   if (!manga) return res.status(404).json({ error: 'Series not found' });
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult series restricted for guests' });
+  }
 
   const total = Math.max(1, manga.totalChapters || manga.latestChapter || 1);
   const books = Array.from({ length: total }, (_, i) => toKomgaBookDto(manga, i + 1));
@@ -220,8 +234,10 @@ komgaCompatRouter.get('/api/v1/series/:id/books', (req: Request, res: Response) 
 // GET /api/v1/books - Komga Books Page
 komgaCompatRouter.get('/api/v1/books', (req: Request, res: Response) => {
   const all = SqliteDb.getAllManga();
+  const isNsfwAllowed = isNsfwAccessAllowed(req);
+  const visible = isNsfwAllowed ? all : all.filter((m) => !isNsfwManga(m));
   const books: any[] = [];
-  for (const m of all) {
+  for (const m of visible) {
     const total = Math.max(1, m.totalChapters || m.latestChapter || 1);
     for (let c = 1; c <= total; c++) {
       books.push(toKomgaBookDto(m, c));
@@ -252,6 +268,9 @@ komgaCompatRouter.get('/api/v1/books/:id', (req: Request, res: Response) => {
 
   const manga = SqliteDb.getMangaById(mangaId);
   if (!manga) return res.status(404).json({ error: 'Book not found' });
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult book restricted for guests' });
+  }
   res.json(toKomgaBookDto(manga, chNum));
 });
 
@@ -265,11 +284,14 @@ komgaCompatRouter.get('/api/v1/books/:id/thumbnail', (req: Request, res: Respons
   if (!manga || !manga.coverImage) {
     return res.redirect('/api/reader/proxy-image?url=');
   }
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult book restricted for guests' });
+  }
 
   if (manga.coverImage.startsWith('/api/')) {
     return res.redirect(manga.coverImage);
   }
-  return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(manga.coverImage)}`);
+  return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(manga.coverImage)}&mangaId=${encodeURIComponent(manga.id)}`);
 });
 
 // GET /api/v1/series/:id/thumbnail - Series Cover
@@ -278,10 +300,13 @@ komgaCompatRouter.get('/api/v1/series/:id/thumbnail', (req: Request, res: Respon
   if (!manga || !manga.coverImage) {
     return res.status(404).json({ error: 'Cover not found' });
   }
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult series restricted for guests' });
+  }
   if (manga.coverImage.startsWith('/api/')) {
     return res.redirect(manga.coverImage);
   }
-  return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(manga.coverImage)}`);
+  return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(manga.coverImage)}&mangaId=${encodeURIComponent(manga.id)}`);
 });
 
 // GET /api/v1/books/:id/pages - Komga Page Streaming Manifest
@@ -293,6 +318,9 @@ komgaCompatRouter.get('/api/v1/books/:id/pages', async (req: Request, res: Respo
 
   const manga = SqliteDb.getMangaById(mangaId);
   if (!manga) return res.status(404).json({ error: 'Book not found' });
+  if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult book restricted for guests' });
+  }
 
   // If local archive
   if (manga.sourceUrl?.startsWith('local://')) {
@@ -331,6 +359,9 @@ komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', async (req: Request
   const pageNum = Number(req.params.pageNumber) || 1;
 
   const manga = SqliteDb.getMangaById(mangaId);
+  if (manga && isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    return res.status(403).json({ error: 'Forbidden', message: '18+ Adult book restricted for guests' });
+  }
   if (manga?.sourceUrl?.startsWith('local://')) {
     const archiveId = manga.sourceUrl.replace('local://', '');
     return res.redirect(`/api/local/library/${archiveId}/page/${pageNum - 1}`);
@@ -344,7 +375,7 @@ komgaCompatRouter.get('/api/v1/books/:id/pages/:pageNumber', async (req: Request
       if (pageUrl.startsWith('/api/reader/panel-image')) {
         return res.redirect(pageUrl);
       }
-      return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(pageUrl)}&sourceUrl=${encodeURIComponent(manga.sourceUrl || '')}`);
+      return res.redirect(`/api/reader/proxy-image?url=${encodeURIComponent(pageUrl)}&sourceUrl=${encodeURIComponent(manga.sourceUrl || '')}&mangaId=${encodeURIComponent(manga.id)}`);
     }
   }
 

@@ -148,7 +148,7 @@ export const LibraryCategoryRibbon: React.FC<LibraryCategoryRibbonProps> = ({
           <span>All Shelves</span>
           <span
             className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-              activeCategory === null ? 'bg-black/25 text-black' : 'bg-surface text-muted'
+              activeCategory === null ? 'bg-black/20 text-inherit' : 'bg-surface text-muted'
             }`}
           >
             {mangaList.length}

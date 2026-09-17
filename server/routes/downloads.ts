@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { SqliteDb } from '../../db';
+import { isNsfwManga } from '../../src/types';
+import { canWriteCatalog, isNsfwAccessAllowed } from '../appState';
 import { downloadManager } from '../services/downloadManagerService';
 
 export const downloadsRouter = Router();
@@ -13,6 +15,11 @@ export const downloadsRouter = Router();
 // POST /api/downloads/queue - Enqueue one or more chapters for downloading
 downloadsRouter.post('/api/downloads/queue', async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!canWriteCatalog(req)) {
+      res.status(401).json({ error: 'Unauthorized', message: 'Queueing chapter downloads requires signing in or host access.' });
+      return;
+    }
+
     const { mangaId, chapters, chapterNumber, priority, sourceUrl, sourceName } = req.body;
 
     if (!mangaId) {
@@ -23,6 +30,15 @@ downloadsRouter.post('/api/downloads/queue', async (req: Request, res: Response)
     const manga = SqliteDb.getMangaById(String(mangaId));
     if (!manga) {
       res.status(404).json({ error: `Series "${mangaId}" not found` });
+      return;
+    }
+
+    if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+      res.status(403).json({
+        error: 'Forbidden',
+        message: '18+ Adult content download is restricted. Please sign in to download explicit chapters.',
+        isNsfwRestricted: true,
+      });
       return;
     }
 
@@ -120,6 +136,16 @@ downloadsRouter.get('/api/downloads/file/:mangaId/:chapterNum', (req: Request, r
   const num = parseFloat(rawNum);
   if (isNaN(num)) {
     res.status(400).json({ error: 'Invalid chapter number' });
+    return;
+  }
+
+  const manga = SqliteDb.getMangaById(mangaId) || SqliteDb.getMangaByApiId(mangaId);
+  if (manga && isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+    res.status(403).json({
+      error: 'Forbidden',
+      message: '18+ Adult content download is restricted. Please sign in to download explicit chapters.',
+      isNsfwRestricted: true,
+    });
     return;
   }
 

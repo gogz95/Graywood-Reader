@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import AdmZip from 'adm-zip';
 import { SqliteDb } from '../../db';
+import { isNsfwManga } from '../../src/types';
+import { isNsfwAccessAllowed } from '../appState';
 import { scanStorage } from './localLibrary';
 import { kotatsuImageEngine, matchLiveDomain, autoDiscoverLiveSourceForManga } from '../services/crawlerEngine';
 import { fetchWithSsrfGuard } from '../security';
@@ -23,24 +25,25 @@ function escapeXml(unsafe: string): string {
 
 // Serve covers through the same-origin image proxy so e-readers (KOReader,
 // Moon+, Panels, Paperback) can fetch them without hotlink blocks.
-function proxiedCover(rawUrl: string | undefined): string {
-  if (!rawUrl) return '';
-  if (rawUrl.startsWith('/api/') || rawUrl.startsWith('data:')) return rawUrl;
-  return `/api/proxy/image?url=${encodeURIComponent(rawUrl)}`;
-}
-
 const CATALOG_FEED_TYPE = 'application/atom+xml;profile=opds-catalog;kind=acquisition';
+
+function proxiedCover(url?: string): string {
+  if (!url) return '/icons/icon-192.png';
+  if (url.startsWith('/api/')) return url;
+  return `/api/reader/proxy-image?url=${encodeURIComponent(url)}`;
+}
 
 function feedHeader(title: string, updated: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom"
       xmlns:dc="http://purl.org/dc/terms/"
       xmlns:opds="http://opds-spec.org/2010/catalog">
-  <id>urn:uuid:graywood-reader-opds-catalog</id>
-  <title>${title}</title>
+  <id>urn:uuid:graywood-reader-catalog</id>
+  <title>${escapeXml(title)}</title>
   <updated>${updated}</updated>
   <author>
     <name>Graywood Reader</name>
+    <uri>https://github.com/gogz95/Graywood-Reader</uri>
   </author>
   <link rel="self" href="/api/opds/catalog.xml" type="${CATALOG_FEED_TYPE}"/>
   <link rel="start" href="/api/opds/catalog.xml" type="${CATALOG_FEED_TYPE}"/>
@@ -48,14 +51,14 @@ function feedHeader(title: string, updated: string): string {
 }
 
 function entryForManga(manga: any): string {
+  const updated = manga.lastUpdated || new Date().toISOString();
   const title = escapeXml(manga.title);
-  const desc = escapeXml(manga.description || `Reading progress: Chapter ${manga.currentChapter} / ${manga.latestChapter}`);
+  const desc = escapeXml(manga.description || 'No description.');
   const cover = escapeXml(proxiedCover(manga.coverImage));
-  const type = manga.type ? escapeXml(manga.type) : 'manga';
-  const updated = escapeXml(manga.lastUpdated || new Date().toISOString());
+  const type = escapeXml(manga.type || 'manga');
   return `  <entry>
     <title>${title}</title>
-    <id>urn:uuid:graywood-series-${escapeXml(manga.id)}</id>
+    <id>urn:uuid:graywood-manga-${escapeXml(manga.id)}</id>
     <updated>${updated}</updated>
     <summary>${desc}</summary>
     <dc:language>en</dc:language>
@@ -71,8 +74,10 @@ function entryForManga(manga: any): string {
 opdsRouter.get('/api/opds/catalog.xml', (req: Request, res: Response) => {
   try {
     const allManga = SqliteDb.getAllManga();
+    const isNsfwAllowed = isNsfwAccessAllowed(req);
+    const visibleManga = isNsfwAllowed ? allManga : allManga.filter((m) => !isNsfwManga(m));
     const q = String(req.query.q || '').trim().toLowerCase();
-    const filtered = q ? allManga.filter((m) => (m.title || '').toLowerCase().includes(q)) : allManga;
+    const filtered = q ? visibleManga.filter((m) => (m.title || '').toLowerCase().includes(q)) : visibleManga;
 
     // OPDS 1.2 pagination (startIndex / maxRecords)
     const startIndex = Math.max(0, Number(req.query.startIndex) || 0);
@@ -142,6 +147,10 @@ opdsRouter.get('/api/opds/series/:id', (req: Request, res: Response) => {
       return res.status(404).send('<?xml version="1.0"?><error>Series not found</error>');
     }
 
+    if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+      return res.status(403).send('<?xml version="1.0"?><error>18+ Adult content is restricted. Please sign in to access this title.</error>');
+    }
+
     const updated = new Date().toISOString();
     const title = escapeXml(manga.title);
     const cover = escapeXml(proxiedCover(manga.coverImage));
@@ -191,6 +200,9 @@ opdsRouter.get(['/api/opds/download/:id/:ch.cbz', '/api/opds/download/:id/:ch'],
     const ch = Math.max(1, Number(req.params.ch) || 1);
     const manga = SqliteDb.getMangaById(id);
     if (!manga) return res.status(404).send('Series not found');
+    if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+      return res.status(403).send('18+ Adult content download is restricted. Please sign in to access explicit chapters.');
+    }
 
     let targetUrl = manga.sourceUrl || '';
     if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {
@@ -273,6 +285,9 @@ opdsRouter.get('/api/opds/stream/:id/:ch/:page', async (req: Request, res: Respo
     const pageNum = Math.max(1, Number(req.params.page) || 1);
     const manga = SqliteDb.getMangaById(id);
     if (!manga) return res.status(404).send('Series not found');
+    if (isNsfwManga(manga) && !isNsfwAccessAllowed(req)) {
+      return res.status(403).send('18+ Adult content streaming is restricted. Please sign in to access explicit chapters.');
+    }
 
     let targetUrl = manga.sourceUrl || '';
     if (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org')) {

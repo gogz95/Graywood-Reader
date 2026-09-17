@@ -67,7 +67,7 @@ import {
 } from "./server/appState";
 
 export const sourceCustomCookies = new Map<string, string[]>();
-export const sourceCustomUserAgents = new Map<string, string>();
+export { sourceCustomUserAgents } from "./server/userAgentPool";
 
 // Initialize Express
 export const app = express();
