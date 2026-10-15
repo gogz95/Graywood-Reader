@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import { SqliteDb } from '../../db';
 import { APP_VERSION } from '../version';
@@ -13,8 +14,10 @@ import {
   sanitizeIncomingSettings,
   sanitizeIncomingConfig,
   MASKED_SECRET,
+  registerUnlockedVaultSession,
 } from '../appState';
 import { hashPassword, toPublicUser } from '../security';
+import { checkLoginRateLimit, recordLoginFailure, clearLoginFailures } from '../rateLimit';
 
 // ============================================================================
 // APP SETTINGS & BACKUP IMPORT/EXPORT ROUTES
@@ -33,11 +36,14 @@ settingsRouter.get("/api/settings", (_req, res) => {
     SqliteDb.getSetting('appSettings') !== null
   );
 
-  // Secrets never leave the server in plaintext: captcha API keys and webhook
-  // URLs/tokens are replaced by a mask sentinel for EVERY caller.
+  // Secrets never leave the server in plaintext: captcha API keys, webhook
+  // URLs/tokens, and appLockPinHash are masked for EVERY caller.
+  const hasAppLockPin = Boolean(appSettings.appLockPinHash);
   res.json({
     ...appSettings,
     initialSetupCompleted: isSetupCompleted,
+    hasAppLockPin,
+    appLockPinHash: hasAppLockPin ? MASKED_SECRET : '',
     captchaApiKey: appSettings.captchaApiKey ? MASKED_SECRET : '',
     discordWebhookUrl: (appSettings as any).discordWebhookUrl ? MASKED_SECRET : '',
     telegramBotToken: (appSettings as any).telegramBotToken ? MASKED_SECRET : '',
@@ -418,4 +424,53 @@ settingsRouter.post("/api/settings/db/vacuum", (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: `Database vacuum failed: ${err.message}` });
   }
+});
+
+// POST /api/settings/vault/verify - Server-side verification for NSFW vault PIN
+settingsRouter.post("/api/settings/vault/verify", (req, res) => {
+  const ip = (req.ip || req.socket.remoteAddress || '127.0.0.1').replace(/^::ffff:/, '');
+  const rateLimitCheck = checkLoginRateLimit(ip);
+  if (rateLimitCheck) {
+    return res.status(429).json({
+      error: `Too many failed attempts. Try again in ${rateLimitCheck.retryAfterSeconds}s.`,
+      retryAfterSeconds: rateLimitCheck.retryAfterSeconds,
+    });
+  }
+
+  const { pin } = req.body || {};
+  if (!pin || typeof pin !== 'string') {
+    return res.status(400).json({ error: "PIN is required." });
+  }
+
+  const configuredHash = appSettings.appLockPinHash;
+  if (!configuredHash) {
+    return res.status(400).json({ error: "No vault PIN is configured on the server." });
+  }
+
+  const computedHash = crypto
+    .createHash('sha256')
+    .update(pin + '_graywood_salt_2026')
+    .digest('hex');
+
+  const bufConfigured = Buffer.from(configuredHash, 'utf8');
+  const bufComputed = Buffer.from(computedHash, 'utf8');
+
+  const isMatch =
+    bufConfigured.length === bufComputed.length &&
+    crypto.timingSafeEqual(bufConfigured, bufComputed);
+
+  if (!isMatch) {
+    recordLoginFailure(ip);
+    return res.status(401).json({ error: "Incorrect PIN." });
+  }
+
+  clearLoginFailures(ip);
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  registerUnlockedVaultSession(sessionToken);
+
+  res.json({
+    success: true,
+    message: "Vault unlocked successfully.",
+    vaultToken: sessionToken,
+  });
 });

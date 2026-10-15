@@ -12,14 +12,18 @@ export const downloadsRouter = Router();
 // SERVER-SIDE CHAPTER DOWNLOAD MANAGER API
 // ============================================================================
 
+// Gate all /api/downloads/* routes behind authentication
+downloadsRouter.use((req: Request, res: Response, next) => {
+  if (!canWriteCatalog(req)) {
+    res.status(401).json({ error: 'Unauthorized', message: 'Authentication required for download manager operations.' });
+    return;
+  }
+  next();
+});
+
 // POST /api/downloads/queue - Enqueue one or more chapters for downloading
 downloadsRouter.post('/api/downloads/queue', async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!canWriteCatalog(req)) {
-      res.status(401).json({ error: 'Unauthorized', message: 'Queueing chapter downloads requires signing in or host access.' });
-      return;
-    }
-
     const { mangaId, chapters, chapterNumber, priority, sourceUrl, sourceName } = req.body;
 
     if (!mangaId) {
@@ -71,8 +75,14 @@ downloadsRouter.post('/api/downloads/queue', async (req: Request, res: Response)
 });
 
 // GET /api/downloads/queue - List all download jobs with real-time status and progress
-downloadsRouter.get('/api/downloads/queue', (_req: Request, res: Response): void => {
-  const jobs = downloadManager.getJobs();
+downloadsRouter.get('/api/downloads/queue', (req: Request, res: Response): void => {
+  let jobs = downloadManager.getJobs();
+  if (!isNsfwAccessAllowed(req)) {
+    jobs = jobs.filter((j) => {
+      const manga = SqliteDb.getMangaById(j.mangaId) || SqliteDb.getMangaByApiId(j.mangaId);
+      return !manga || !isNsfwManga(manga);
+    });
+  }
   res.json({
     total: jobs.length,
     active: jobs.filter((j) => j.status === 'downloading' || j.status === 'packaging').length,
@@ -149,12 +159,22 @@ downloadsRouter.get('/api/downloads/file/:mangaId/:chapterNum', (req: Request, r
     return;
   }
 
-  const filePath = downloadManager.getDownloadedFilePath(mangaId, num);
-  if (!filePath || !fs.existsSync(filePath)) {
-    res.status(404).json({ error: 'Downloaded chapter CBZ archive not found on server' });
+  // 1. Stream from in-memory transient buffer
+  const inMemory = downloadManager.getDownloadedArchive(mangaId, num);
+  if (inMemory) {
+    res.setHeader('Content-Type', 'application/vnd.comicbook+zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(inMemory.filename)}"`);
+    res.send(inMemory.buffer);
     return;
   }
 
-  const fileName = path.basename(filePath);
-  res.download(filePath, fileName);
+  // 2. Fallback to existing disk file if present
+  const filePath = downloadManager.getDownloadedFilePath(mangaId, num);
+  if (filePath && fs.existsSync(filePath)) {
+    const fileName = path.basename(filePath);
+    res.download(filePath, fileName);
+    return;
+  }
+
+  res.status(404).json({ error: 'Downloaded chapter CBZ archive not found or expired from memory' });
 });

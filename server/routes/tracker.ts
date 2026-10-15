@@ -306,6 +306,26 @@ trackerRouter.post('/api/tracker/merge-duplicates', (req, res) => {
   const maxCurrentChapter = Math.max(primary.currentChapter || 0, secondary.currentChapter || 0);
   const maxLatestChapter = Math.max(primary.latestChapter || 1, secondary.latestChapter || 1);
 
+  const allSourcesMap = new Map<string, { sourceName: string; sourceUrl: string; sourceId?: string; latestChapter?: number; lastCheckedAt?: string }>();
+  const addSrc = (s: any) => {
+    if (!s || !s.sourceUrl || typeof s.sourceUrl !== 'string') return;
+    const cleanUrl = s.sourceUrl.trim();
+    if (!cleanUrl) return;
+    if (!allSourcesMap.has(cleanUrl)) {
+      allSourcesMap.set(cleanUrl, {
+        sourceName: s.sourceName || 'Mirror Source',
+        sourceUrl: cleanUrl,
+        sourceId: s.sourceId,
+        latestChapter: typeof s.latestChapter === 'number' ? s.latestChapter : undefined,
+        lastCheckedAt: s.lastCheckedAt || new Date().toISOString(),
+      });
+    }
+  };
+  addSrc({ sourceName: primary.sourceName, sourceUrl: primary.sourceUrl, latestChapter: primary.latestChapter });
+  addSrc({ sourceName: secondary.sourceName, sourceUrl: secondary.sourceUrl, latestChapter: secondary.latestChapter });
+  (primary.availableSources || []).forEach(addSrc);
+  (secondary.availableSources || []).forEach(addSrc);
+
   const mergedPrimary: MangaItem = {
     ...primary,
     title: newTitle || primary.title,
@@ -316,6 +336,7 @@ trackerRouter.post('/api/tracker/merge-duplicates', (req, res) => {
     latestChapter: maxLatestChapter,
     rating: Math.max(primary.rating || 0, secondary.rating || 0),
     notes: [primary.notes, secondary.notes].filter(Boolean).join(" | Merged note: "),
+    availableSources: Array.from(allSourcesMap.values()),
     lastUpdated: new Date().toISOString(),
   };
 

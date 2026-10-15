@@ -1,70 +1,35 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
+import sharp from 'sharp';
+import { getCoverCache, setCoverCache } from '../../db/cache';
 
 export interface CachedImage {
   buffer: Buffer;
   contentType: string;
   etag: string;
+  isCover?: boolean;
 }
 
-interface MetaInfo {
-  contentType: string;
-  etag: string;
-  size: number;
+interface MemEntry {
+  image: CachedImage;
   lastAccessed: number;
+  createdAt: number;
 }
 
-const CACHE_DIR = path.join(process.cwd(), 'data', 'image_cache');
-const MAX_DISK_BYTES = 500 * 1024 * 1024; // 500 MB max disk usage
-const MAX_MEM_ITEMS = 80; // Up to 80 hot items in RAM
-const MEM_MAX_TOTAL_BYTES = 40 * 1024 * 1024; // 40 MB max in RAM
+const MAX_MEM_ITEMS = 250; // Max in-memory chapter page panels
+const MEM_MAX_TOTAL_BYTES = 150 * 1024 * 1024; // 150 MB hard cap in RAM
+const CHAPTER_PAGE_TTL_MS = 30 * 60 * 1000; // 30-minute TTL
+
+export function isCoverUrl(url: string, isCoverHint?: boolean): boolean {
+  if (isCoverHint !== undefined) return isCoverHint;
+  return /(\/covers\/|covers\.openlibrary\.org|\/cover[._-]|cover\.jpg|cover\.webp|cover\.png|\.512\.jpg|\.256\.jpg)/i.test(url);
+}
 
 class ImageCacheService {
-  private memCache = new Map<string, { image: CachedImage; lastAccessed: number }>();
+  // Strictly bounded in-memory LRU for transient chapter pages (zero permanent disk hosting)
+  private memCache = new Map<string, MemEntry>();
+  // In-flight request coalescing to eliminate duplicate upstream fetches across concurrent users
   private inFlight = new Map<string, Promise<CachedImage | null>>();
-  private diskMetaIndex = new Map<string, { size: number; lastAccessed: number }>();
   private totalMemBytes = 0;
-  private totalDiskBytes = 0;
-  private isInitialized = false;
-  private lastDiskPruneTime = 0;
-
-  constructor() {
-    this.ensureDirectory();
-  }
-
-  private ensureDirectory() {
-    try {
-      if (!fs.existsSync(CACHE_DIR)) {
-        fs.mkdirSync(CACHE_DIR, { recursive: true });
-      }
-      this.isInitialized = true;
-      // Asynchronously initialize disk metadata index once in the background
-      setTimeout(() => this.initializeDiskIndex().catch(() => {}), 1000);
-    } catch (err) {
-      console.warn('[ImageCache] Failed to initialize disk cache dir:', err);
-    }
-  }
-
-  private async initializeDiskIndex() {
-    if (!this.isInitialized) return;
-    try {
-      const files = await fs.promises.readdir(CACHE_DIR);
-      const metaFiles = files.filter((f) => f.endsWith('.json'));
-      let sumBytes = 0;
-      for (const mf of metaFiles) {
-        try {
-          const raw = await fs.promises.readFile(path.join(CACHE_DIR, mf), 'utf8');
-          const meta: MetaInfo = JSON.parse(raw);
-          const key = mf.replace('.json', '');
-          const size = meta.size || 0;
-          sumBytes += size;
-          this.diskMetaIndex.set(key, { size, lastAccessed: meta.lastAccessed || 0 });
-        } catch {}
-      }
-      this.totalDiskBytes = sumBytes;
-    } catch {}
-  }
 
   private hashUrl(url: string): string {
     return crypto.createHash('sha256').update(url).digest('hex');
@@ -80,99 +45,126 @@ class ImageCacheService {
     return ifNoneMatch === etag || ifNoneMatch === `W/${etag}`;
   }
 
-  public async get(url: string): Promise<CachedImage | null> {
+  /**
+   * Retrieves an image from permanent SQLite cover_cache (if cover)
+   * or warm in-memory LRU (if chapter page panel).
+   */
+  public async get(url: string, isCoverHint?: boolean): Promise<CachedImage | null> {
     const key = this.hashUrl(url);
+    const isCover = isCoverUrl(url, isCoverHint);
 
-    // 1. Tier 1: In-memory cache
+    // 1. Permanent SQLite cover thumbnail cache
+    if (isCover) {
+      const dbCover = getCoverCache(key);
+      if (dbCover) {
+        return {
+          buffer: dbCover.data,
+          contentType: dbCover.contentType || 'image/webp',
+          etag: this.getEtag(url),
+          isCover: true,
+        };
+      }
+    }
+
+    // 2. Bounded in-memory LRU cache for transient chapter pages
     const memEntry = this.memCache.get(key);
     if (memEntry) {
-      memEntry.lastAccessed = Date.now();
+      const now = Date.now();
+      if (now - memEntry.createdAt > CHAPTER_PAGE_TTL_MS) {
+        // Expired transient chapter page panel
+        this.totalMemBytes -= memEntry.image.buffer.length;
+        this.memCache.delete(key);
+        return null;
+      }
+      memEntry.lastAccessed = now;
       return memEntry.image;
     }
 
-    // 2. Tier 2: Disk cache
-    if (!this.isInitialized) return null;
-    const binPath = path.join(CACHE_DIR, `${key}.bin`);
-    const metaPath = path.join(CACHE_DIR, `${key}.json`);
-
-    try {
-      if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
-        const metaRaw = await fs.promises.readFile(metaPath, 'utf8');
-        const meta: MetaInfo = JSON.parse(metaRaw);
-        const buffer = await fs.promises.readFile(binPath);
-
-        const cached: CachedImage = {
-          buffer,
-          contentType: meta.contentType || 'image/jpeg',
-          etag: meta.etag || this.getEtag(url),
-        };
-
-        // Promote to RAM cache if small
-        this.putMemory(key, cached);
-
-        // Update access time asynchronously
-        const now = Date.now();
-        meta.lastAccessed = now;
-        const indexed = this.diskMetaIndex.get(key);
-        if (indexed) indexed.lastAccessed = now;
-        fs.promises.writeFile(metaPath, JSON.stringify(meta)).catch(() => {});
-
-        return cached;
-      }
-    } catch (err) {
-      // Ignore read error, fallback to network
+    // Fallback: check SQLite cover_cache even if not hinted as cover
+    const dbCoverFallback = getCoverCache(key);
+    if (dbCoverFallback) {
+      return {
+        buffer: dbCoverFallback.data,
+        contentType: dbCoverFallback.contentType || 'image/webp',
+        etag: this.getEtag(url),
+        isCover: true,
+      };
     }
 
     return null;
   }
 
-  public async put(url: string, buffer: Buffer, contentType: string): Promise<CachedImage> {
+  /**
+   * Caches an image. Catalog covers are transcoded via sharp into compact WebP thumbnails
+   * (~20 KB) and permanently persisted into SQLite. Chapter panels are stored ONLY in
+   * bounded RAM (never written to server disk).
+   */
+  public async put(
+    url: string,
+    buffer: Buffer,
+    contentType: string,
+    isCoverHint?: boolean
+  ): Promise<CachedImage> {
     const key = this.hashUrl(url);
     const etag = this.getEtag(url);
-    const cached: CachedImage = { buffer, contentType, etag };
+    const isCover = isCoverUrl(url, isCoverHint);
 
-    // Save to memory
-    this.putMemory(key, cached);
+    if (isCover) {
+      let finalBuffer = buffer;
+      let finalContentType = contentType;
 
-    // Save to disk
-    if (this.isInitialized) {
+      // Transcode covers via sharp into compact WebP thumbnails (width: 360, quality: 80)
       try {
-        const binPath = path.join(CACHE_DIR, `${key}.bin`);
-        const metaPath = path.join(CACHE_DIR, `${key}.json`);
-        const now = Date.now();
-        const meta: MetaInfo = {
-          contentType,
-          etag,
-          size: buffer.length,
-          lastAccessed: now,
-        };
-
-        await fs.promises.writeFile(binPath, buffer);
-        await fs.promises.writeFile(metaPath, JSON.stringify(meta));
-
-        // Update in-memory index
-        const prev = this.diskMetaIndex.get(key);
-        if (prev) this.totalDiskBytes -= prev.size;
-        this.diskMetaIndex.set(key, { size: buffer.length, lastAccessed: now });
-        this.totalDiskBytes += buffer.length;
-
-        // Throttled background disk prune check (runs at most once every 10 minutes)
-        if (now - this.lastDiskPruneTime > 10 * 60 * 1000 && this.totalDiskBytes > MAX_DISK_BYTES) {
-          this.lastDiskPruneTime = now;
-          this.pruneDiskCache().catch(() => {});
-        }
+        finalBuffer = await sharp(buffer, { failOnError: false })
+          .resize({ width: 360, withoutEnlargement: true })
+          .webp({ quality: 80 })
+          .toBuffer();
+        finalContentType = 'image/webp';
       } catch (err) {
-        console.warn('[ImageCache] Error persisting to disk:', err);
+        // Fallback to original buffer if sharp encountered an unsupported image format (e.g. svg)
+        console.warn('[ImageCache] Sharp cover transcoding fallback to original buffer:', err);
       }
+
+      // Persist permanently in SQLite cover_cache
+      setCoverCache(key, finalBuffer, finalContentType);
+
+      const cached: CachedImage = {
+        buffer: finalBuffer,
+        contentType: finalContentType,
+        etag,
+        isCover: true,
+      };
+
+      this.putMemory(key, cached);
+      return cached;
     }
 
+    // Chapter page panels: transient in-memory LRU only (zero disk writes)
+    const cached: CachedImage = {
+      buffer,
+      contentType,
+      etag,
+      isCover: false,
+    };
+
+    this.putMemory(key, cached);
     return cached;
   }
 
   private putMemory(key: string, image: CachedImage) {
-    if (image.buffer.length > 5 * 1024 * 1024) return; // Don't hold single >5MB images in memory
+    if (image.buffer.length > 10 * 1024 * 1024) return; // Cap single in-memory item at 10 MB
 
-    // Evict oldest if exceeding count or bytes limit
+    const now = Date.now();
+
+    // Evict expired items first
+    for (const [k, entry] of this.memCache.entries()) {
+      if (now - entry.createdAt > CHAPTER_PAGE_TTL_MS) {
+        this.totalMemBytes -= entry.image.buffer.length;
+        this.memCache.delete(k);
+      }
+    }
+
+    // Evict oldest if exceeding count or memory byte cap
     while (
       (this.memCache.size >= MAX_MEM_ITEMS || this.totalMemBytes + image.buffer.length > MEM_MAX_TOTAL_BYTES) &&
       this.memCache.size > 0
@@ -186,7 +178,7 @@ class ImageCacheService {
       }
     }
 
-    this.memCache.set(key, { image, lastAccessed: Date.now() });
+    this.memCache.set(key, { image, lastAccessed: now, createdAt: now });
     this.totalMemBytes += image.buffer.length;
   }
 
@@ -203,15 +195,16 @@ class ImageCacheService {
   }
 
   /**
-   * Request Coalescing (Single-Flight Pattern):
-   * If concurrent requests arrive for the same URL, collapse them onto one in-flight fetch.
+   * In-Flight Request Coalescing (Single-Flight Stampede Protection):
+   * Multiple concurrent readers requesting the same image await a single upstream Promise.
    */
   public async fetchCoalesced(
     url: string,
-    fetcher: () => Promise<{ buffer: Buffer; contentType: string } | null>
+    fetcher: () => Promise<{ buffer: Buffer; contentType: string } | null>,
+    isCoverHint?: boolean
   ): Promise<CachedImage | null> {
-    // Check cache first
-    const existing = await this.get(url);
+    // 1. Check cache first
+    const existing = await this.get(url, isCoverHint);
     if (existing) return existing;
 
     const key = this.hashUrl(url);
@@ -223,7 +216,7 @@ class ImageCacheService {
       try {
         const fetched = await fetcher();
         if (!fetched) return null;
-        return await this.put(url, fetched.buffer, fetched.contentType);
+        return await this.put(url, fetched.buffer, fetched.contentType, isCoverHint);
       } finally {
         this.inFlight.delete(key);
       }
@@ -231,36 +224,6 @@ class ImageCacheService {
 
     this.inFlight.set(key, promise);
     return promise;
-  }
-
-  private async pruneDiskCache() {
-    if (!this.isInitialized) return;
-    try {
-      if (this.totalDiskBytes <= MAX_DISK_BYTES) return;
-
-      const entries = Array.from(this.diskMetaIndex.entries()).map(([key, info]) => ({
-        key,
-        size: info.size,
-        lastAccessed: info.lastAccessed,
-      }));
-
-      // Sort oldest first
-      entries.sort((a, b) => a.lastAccessed - b.lastAccessed);
-
-      for (const entry of entries) {
-        if (this.totalDiskBytes <= MAX_DISK_BYTES * 0.8) break;
-        try {
-          await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.bin`)).catch(() => {});
-          await fs.promises.unlink(path.join(CACHE_DIR, `${entry.key}.json`)).catch(() => {});
-          this.totalDiskBytes -= entry.size;
-          this.diskMetaIndex.delete(entry.key);
-        } catch {
-          // ignore unlink errors
-        }
-      }
-    } catch {
-      // ignore
-    }
   }
 }
 

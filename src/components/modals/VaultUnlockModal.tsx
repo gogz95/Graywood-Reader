@@ -36,7 +36,7 @@ export const VaultUnlockModal: React.FC<VaultUnlockModalProps> = ({
   const appSettings = useSettingsStore((s) => s.appSettings);
   const pinHash = appSettings.appLockPinHash ?? '';
   const lockType = appSettings.appLockType ?? 'pin';
-  const hasPinConfigured = Boolean(pinHash);
+  const hasPinConfigured = Boolean(appSettings.hasAppLockPin || (pinHash && pinHash !== '••••••••'));
 
   const handleUnlock = useCallback(() => {
     // AppLockOverlay already verified the PIN hash; sync Zustand vault state

@@ -33,6 +33,7 @@ import { APP_USER_AGENT } from '../version';
 import { getLibraryCacheStatus, refreshLibraryCache } from '../services/libraryCacheService';
 import { searchIndexer } from '../services/searchIndexer';
 import { generateStoryCompanion } from '../services/storyCompanion';
+import { eventBus } from '../services/eventBus';
 
 export const mangaRouter = Router();
 
@@ -192,6 +193,32 @@ mangaRouter.post('/', (req, res) => {
     isFavorite: MANGA_CREATE_FIELDS.isFavorite(body.isFavorite),
     isNsfw: MANGA_CREATE_FIELDS.isNsfw(body.isNsfw, body),
     metadataOverrides: Array.isArray(body.metadataOverrides) ? body.metadataOverrides : [],
+    availableSources: (() => {
+      const rawSources = Array.isArray(body.availableSources) ? body.availableSources : [];
+      const primarySrc = body.sourceUrl ? [{
+        sourceName: body.sourceName || 'Primary Source',
+        sourceUrl: String(body.sourceUrl).trim(),
+        sourceId: body.sourceId,
+        latestChapter: typeof body.latestChapter === 'number' ? body.latestChapter : undefined,
+        lastCheckedAt: new Date().toISOString(),
+      }] : [];
+      const sMap = new Map<string, any>();
+      for (const s of [...primarySrc, ...rawSources]) {
+        if (s && s.sourceUrl && typeof s.sourceUrl === 'string') {
+          const u = s.sourceUrl.trim();
+          if (!sMap.has(u)) {
+            sMap.set(u, {
+              sourceName: s.sourceName || 'Unknown Source',
+              sourceUrl: u,
+              sourceId: s.sourceId,
+              latestChapter: typeof s.latestChapter === 'number' ? s.latestChapter : undefined,
+              lastCheckedAt: s.lastCheckedAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+      return Array.from(sMap.values());
+    })(),
     userId: (req as any).user ? (req as any).user.id : null,
   };
 
@@ -1021,7 +1048,10 @@ mangaRouter.put('/:id', (req, res) => {
   }
 
   const body = req.body || {};
-  const updatedItem: MangaItem = {
+  const uid = resolveRequestUserId(req) || 'usr_guest';
+
+  // Shared catalog metadata update: do NOT clobber other users' state on global manga table
+  const sharedItem: MangaItem = {
     ...existing,
     title: body.title !== undefined ? String(body.title) : existing.title,
     altTitles: body.altTitles !== undefined ? (Array.isArray(body.altTitles) ? body.altTitles : existing.altTitles) : existing.altTitles,
@@ -1029,17 +1059,12 @@ mangaRouter.put('/:id', (req, res) => {
     coverImage: body.coverImage !== undefined ? String(body.coverImage) : existing.coverImage,
     description: body.description !== undefined ? String(body.description) : existing.description,
     genres: body.genres !== undefined ? (Array.isArray(body.genres) ? body.genres : existing.genres) : existing.genres,
-    status: body.status !== undefined ? (String(body.status) as MangaItem['status']) : existing.status,
-    currentChapter: body.currentChapter !== undefined ? Number(body.currentChapter) || 0 : existing.currentChapter,
     totalChapters: body.totalChapters !== undefined ? (body.totalChapters ? Number(body.totalChapters) : null) : existing.totalChapters,
     latestChapter: body.latestChapter !== undefined ? Number(body.latestChapter) || 1 : existing.latestChapter,
-    rating: body.rating !== undefined ? Number(body.rating) || 0 : existing.rating,
     sourceUrl: body.sourceUrl !== undefined ? String(body.sourceUrl) : existing.sourceUrl,
     sourceName: body.sourceName !== undefined ? String(body.sourceName) : existing.sourceName,
     availableSources: body.availableSources !== undefined ? (Array.isArray(body.availableSources) ? body.availableSources : existing.availableSources) : existing.availableSources,
     autoUpdateEnabled: body.autoUpdateEnabled !== undefined ? Boolean(body.autoUpdateEnabled) : existing.autoUpdateEnabled,
-    notes: body.notes !== undefined ? String(body.notes) : existing.notes,
-    isFavorite: body.isFavorite !== undefined ? Boolean(body.isFavorite) : existing.isFavorite,
     isFlagged: body.isFlagged !== undefined ? Boolean(body.isFlagged) : existing.isFlagged,
     flagReason: body.flagReason !== undefined ? String(body.flagReason) : existing.flagReason,
     flaggedAt: body.flaggedAt !== undefined ? (body.flaggedAt ? String(body.flaggedAt) : undefined) : existing.flaggedAt,
@@ -1048,36 +1073,54 @@ mangaRouter.put('/:id', (req, res) => {
     apiId: body.apiId !== undefined ? String(body.apiId) : existing.apiId,
     metadataOverrides: body.metadataOverrides !== undefined ? (Array.isArray(body.metadataOverrides) ? body.metadataOverrides : existing.metadataOverrides) : existing.metadataOverrides,
     customTags: body.customTags !== undefined ? (Array.isArray(body.customTags) ? body.customTags : existing.customTags) : existing.customTags,
-    categories: body.categories !== undefined && Array.isArray(body.categories) ? body.categories : existing.categories,
     addedAt: body.addedAt !== undefined ? String(body.addedAt) : existing.addedAt,
-    lastReadAt: body.lastReadAt !== undefined ? String(body.lastReadAt) : existing.lastReadAt,
     lastUpdated: new Date().toISOString(),
   };
 
-  syncAddOrUpdateManga(updatedItem);
-  const uid = resolveRequestUserId(req) || 'usr_guest';
-  if (body.isFavorite !== undefined || updatedItem.isFavorite !== undefined) {
-    SqliteDb.setUserFavorite(uid, updatedItem.id, Boolean(updatedItem.isFavorite));
+  syncAddOrUpdateManga(sharedItem);
+
+  // Write per-user state to user_library_state, user_favorites, and reading_progress
+  if (body.isFavorite !== undefined) {
+    SqliteDb.setUserFavorite(uid, id, Boolean(body.isFavorite));
   }
   if (body.categories !== undefined && Array.isArray(body.categories)) {
-    SqliteDb.setMangaCategories(updatedItem.id, body.categories, uid);
-  } else if (Array.isArray(updatedItem.categories)) {
-    SqliteDb.setMangaCategories(updatedItem.id, updatedItem.categories, uid);
+    SqliteDb.setMangaCategories(id, body.categories, uid);
   }
-  if (body.currentChapter !== undefined || body.status !== undefined || updatedItem.currentChapter !== undefined) {
-    SqliteDb.setUserLibraryChapter(uid, updatedItem.id, updatedItem.currentChapter || 0, {
-      status: updatedItem.status,
+  if (
+    body.currentChapter !== undefined ||
+    body.status !== undefined ||
+    body.rating !== undefined ||
+    body.notes !== undefined ||
+    body.lastReadAt !== undefined
+  ) {
+    const ch = body.currentChapter !== undefined ? Number(body.currentChapter) : null;
+    SqliteDb.setUserLibraryChapter(uid, id, ch, {
+      status: body.status !== undefined ? String(body.status) : undefined,
+      rating: body.rating !== undefined ? Number(body.rating) : undefined,
+      notes: body.notes !== undefined ? String(body.notes) : undefined,
+      lastReadAt: body.lastReadAt !== undefined ? String(body.lastReadAt) : undefined,
     });
-    if (updatedItem.currentChapter > 0) {
+    if (ch !== null && ch > 0) {
       SqliteDb.upsertReadingProgress({
-        manga_id: updatedItem.id,
+        manga_id: id,
         user_id: uid,
-        chapter_number: updatedItem.currentChapter,
+        chapter_number: ch,
         percent: 100,
       });
     }
   }
-  res.json(uid ? SqliteDb.applyUserOverlay([updatedItem], uid)[0] : updatedItem);
+
+  const finalManga = SqliteDb.applyUserOverlay([sharedItem], uid)[0];
+  try {
+    eventBus.publish('progress_updated', {
+      userId: uid,
+      mangaId: id,
+      chapterNumber: finalManga.currentChapter,
+      manga: finalManga,
+    }, uid);
+  } catch {}
+
+  res.json(finalManga);
 });
 
 // ── POST /api/manga/increment/:id - Quick Chapter Read Increment ──────────────
@@ -1093,7 +1136,22 @@ mangaRouter.post('/increment/:id', (req, res) => {
     status: overlay.status === 'plan_to_read' ? 'reading' : overlay.status,
   });
   SqliteDb.setUserFavorite(userId, id, true);
+  SqliteDb.upsertReadingProgress({
+    manga_id: id,
+    user_id: userId,
+    chapter_number: newChapter,
+    percent: 100,
+  });
   const updated = SqliteDb.applyUserOverlay([existing], userId)[0];
+  try {
+    eventBus.publish('progress_updated', {
+      userId,
+      mangaId: id,
+      chapterNumber: newChapter,
+      manga: updated,
+    }, userId);
+  } catch {}
+
   res.json(updated);
 });
 

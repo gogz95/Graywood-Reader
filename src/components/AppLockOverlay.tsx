@@ -42,6 +42,41 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
 
   if (!isLocked) return null;
 
+  const verifyPinOrPassword = async (candidate: string): Promise<boolean> => {
+    // 1. Try server-side verification first
+    try {
+      const res = await fetch('/api/settings/vault/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: candidate }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.vaultToken) {
+          try {
+            sessionStorage.setItem('graywood_vault_token', data.vaultToken);
+          } catch {}
+        }
+        return true;
+      }
+      if (res.status === 429) {
+        const data = await res.json().catch(() => ({}));
+        setErrorMessage(data.error || 'Too many attempts. Please wait.');
+        return false;
+      }
+    } catch {
+      // Server unreachable, fallback to client hash match if pinHash is non-empty and unmasked
+    }
+
+    // 2. Client fallback
+    if (pinHash && pinHash !== '••••••••') {
+      const hashed = await hashPin(candidate);
+      return hashed === pinHash;
+    }
+
+    return false;
+  };
+
   const handleKeyPress = async (digit: string) => {
     if (enteredPin.length >= 6) return;
     const nextPin = enteredPin + digit;
@@ -49,13 +84,13 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
     setErrorMessage('');
 
     if (nextPin.length >= 4) {
-      const hashed = await hashPin(nextPin);
-      if (hashed === pinHash) {
+      const isSuccess = await verifyPinOrPassword(nextPin);
+      if (isSuccess) {
         onUnlock();
       } else if (nextPin.length === 6) {
         // If reached max length without match, trigger shake & clear
         setErrorShake(true);
-        setErrorMessage('Incorrect PIN');
+        if (!errorMessage) setErrorMessage('Incorrect PIN');
         setTimeout(() => {
           setEnteredPin('');
           setErrorShake(false);
@@ -72,12 +107,12 @@ export const AppLockOverlay: React.FC<AppLockOverlayProps> = ({
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!enteredPassword) return;
-    const hashed = await hashPin(enteredPassword);
-    if (hashed === pinHash) {
+    const isSuccess = await verifyPinOrPassword(enteredPassword);
+    if (isSuccess) {
       onUnlock();
     } else {
       setErrorShake(true);
-      setErrorMessage('Incorrect password');
+      if (!errorMessage) setErrorMessage('Incorrect password');
       setTimeout(() => setErrorShake(false), 500);
     }
   };

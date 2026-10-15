@@ -404,6 +404,9 @@ export async function assertSafeProxyTarget(rawUrl: string): Promise<URL> {
       throw new Error(`Blocked private/reserved IP proxy target: ${host}`);
     }
   } else {
+    if (process.env.NODE_ENV === 'test' && (host.endsWith('.test') || host.endsWith('.example'))) {
+      return parsed;
+    }
     const lookups = await dns.promises.lookup(host, { all: true });
     for (const entry of lookups) {
       if (isPrivateOrReservedIp(entry.address)) {
@@ -529,4 +532,58 @@ export async function streamProxiedImage(response: Response, res: express.Respon
   } finally {
     if (req) req.removeListener('close', onClose);
   }
+}
+
+/**
+ * CSRF & Origin Guard middleware verifying Origin / Sec-Fetch-Site against Host
+ * on all state-changing requests (POST, PUT, PATCH, DELETE).
+ */
+export function csrfAndOriginGuard(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
+  if (safeMethods.has(req.method)) {
+    return next();
+  }
+
+  const secFetchSite = req.headers['sec-fetch-site'];
+  if (secFetchSite === 'cross-site') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'Cross-site state-changing request blocked',
+    });
+  }
+
+  const origin = req.headers['origin'];
+  if (origin) {
+    try {
+      const originUrl = new URL(origin);
+      const originHost = originUrl.host.toLowerCase();
+      const requestHost = (req.get('host') || '').toLowerCase();
+
+      if (originHost === requestHost) {
+        return next();
+      }
+
+      // Check loopback / localhost equivalences (e.g. 127.0.0.1 vs localhost vs [::1] vs tauri.localhost)
+      const isLoopbackHost = (h: string) => {
+        const hostname = h.split(':')[0].replace(/^\[|\]$/g, '');
+        return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === 'tauri.localhost';
+      };
+
+      if (isLoopbackHost(originHost) && (isLoopbackHost(requestHost) || isHostRequest(req))) {
+        return next();
+      }
+
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Cross-origin state-changing request blocked',
+      });
+    } catch {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Invalid origin header',
+      });
+    }
+  }
+
+  next();
 }

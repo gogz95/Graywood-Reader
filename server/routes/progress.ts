@@ -205,6 +205,14 @@ progressRouter.post("/api/reader/progress", (req, res) => {
       pageCount: pCount,
       percent: pct,
     });
+    eventBus.publish('progress_updated', {
+      userId,
+      mangaId: mId,
+      chapterNumber: chNum,
+      pageIndex: pIdx,
+      pageCount: pCount,
+      percent: pct,
+    }, userId);
   } catch (err) {
     console.error('[SSE Sync Engine] Broadcast failed:', err);
   }

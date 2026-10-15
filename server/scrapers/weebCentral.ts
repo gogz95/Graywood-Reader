@@ -1,5 +1,8 @@
 import * as cheerio from 'cheerio';
 import { ResolvedScraperChapter } from './flameComics';
+import { fetchWithSsrfGuard } from '../security';
+import { sourceCircuitBreaker } from '../circuitBreaker';
+import { isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 
 const UA_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
@@ -53,17 +56,25 @@ export async function scrapeWeebCentral(
   page: number = 1,
   limit: number = 24
 ): Promise<{ items: WeebCentralSeriesItem[]; totalCount: number }> {
+  const url = `https://weebcentral.com/search/data?sort=Popularity&order=Descending&official=Any&anime=Any&adult=Any&display_mode=Full+Display&page=${page}&limit=${limit}`;
+  if (!sourceCircuitBreaker.canAttempt('weebcentral') || isSourceUrlOrNameDisabled('Weeb Central', url)) {
+    return { items: [], totalCount: 0 };
+  }
+
   try {
-    const url = `https://weebcentral.com/search/data?sort=Popularity&order=Descending&official=Any&anime=Any&adult=Any&display_mode=Full+Display&page=${page}&limit=${limit}`;
-    const res = await fetch(url, {
+    const res = await fetchWithSsrfGuard(url, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return { items: [], totalCount: 0 };
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('weebcentral', res.status);
+      return { items: [], totalCount: 0 };
+    }
 
     const html = await res.text();
     const $ = cheerio.load(html);
     const items: WeebCentralSeriesItem[] = [];
+    const seen = new Set<string>();
 
     $('article').each((_, el) => {
       const a = $(el).find('a[href*="/series/"]').first();
@@ -76,6 +87,9 @@ export async function scrapeWeebCentral(
 
       const fullUrl = href.startsWith('http') ? href : `https://weebcentral.com${href}`;
       const seriesId = extractWeebCentralSeriesId(fullUrl) || href;
+      if (seen.has(seriesId)) return;
+      seen.add(seriesId);
+
       const cover = $(el).find('img').first().attr('src') || '';
       const desc = $(el).find('p, .description').text().trim().replace(/\s+/g, ' ');
 
@@ -97,8 +111,10 @@ export async function scrapeWeebCentral(
       });
     });
 
+    sourceCircuitBreaker.recordSuccess('weebcentral');
     return { items, totalCount: items.length * 100 };
   } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('weebcentral', 0, err.message);
     console.warn('[WeebCentral Scraper] scrapePopular error:', err.message);
     return { items: [], totalCount: 0 };
   }
@@ -106,16 +122,23 @@ export async function scrapeWeebCentral(
 
 /** Search Weeb Central by query string. */
 export async function searchWeebCentral(query: string): Promise<WeebCentralSeriesItem[]> {
-  try {
-    const cleanQ = (query || '').trim();
-    if (!cleanQ) return [];
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) return [];
 
-    const url = `https://weebcentral.com/search/data?text=${encodeURIComponent(cleanQ)}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`;
-    const res = await fetch(url, {
+  const url = `https://weebcentral.com/search/data?text=${encodeURIComponent(cleanQ)}&sort=Best+Match&order=Ascending&official=Any&anime=Any&adult=Any&display_mode=Full+Display`;
+  if (!sourceCircuitBreaker.canAttempt('weebcentral') || isSourceUrlOrNameDisabled('Weeb Central', url)) {
+    return [];
+  }
+
+  try {
+    const res = await fetchWithSsrfGuard(url, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('weebcentral', res.status);
+      return [];
+    }
 
     const html = await res.text();
     const $ = cheerio.load(html);
@@ -157,8 +180,10 @@ export async function searchWeebCentral(query: string): Promise<WeebCentralSerie
       });
     });
 
+    sourceCircuitBreaker.recordSuccess('weebcentral');
     return results;
   } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('weebcentral', 0, err.message);
     console.warn('[WeebCentral Scraper] search error:', err.message);
     return [];
   }
@@ -166,14 +191,22 @@ export async function searchWeebCentral(query: string): Promise<WeebCentralSerie
 
 /** Fetch detailed metadata for a specific Weeb Central series URL or ID. */
 export async function fetchWeebCentralSeriesMetadata(seriesUrlOrSlug: string): Promise<WeebCentralSeriesItem | null> {
+  const seriesId = extractWeebCentralSeriesId(seriesUrlOrSlug);
+  const targetUrl = seriesId ? `https://weebcentral.com/series/${seriesId}` : seriesUrlOrSlug;
+
+  if (!sourceCircuitBreaker.canAttempt('weebcentral') || isSourceUrlOrNameDisabled('Weeb Central', targetUrl)) {
+    return null;
+  }
+
   try {
-    const seriesId = extractWeebCentralSeriesId(seriesUrlOrSlug);
-    const targetUrl = seriesId ? `https://weebcentral.com/series/${seriesId}` : seriesUrlOrSlug;
-    const res = await fetch(targetUrl, {
+    const res = await fetchWithSsrfGuard(targetUrl, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('weebcentral', res.status);
+      return null;
+    }
     const html = await res.text();
     const $ = cheerio.load(html);
     const rawTitle = $('h1').first().text().trim() || $('title').text().replace(/ - Weeb Central.*/i, '').trim();
@@ -186,6 +219,8 @@ export async function fetchWeebCentralSeriesMetadata(seriesUrlOrSlug: string): P
       const tagText = $(el).text().trim();
       if (tagText && !genres.includes(tagText)) genres.push(tagText);
     });
+
+    sourceCircuitBreaker.recordSuccess('weebcentral');
     return {
       id: `weebcentral_${seriesId || 'series'}`,
       title,
@@ -197,24 +232,31 @@ export async function fetchWeebCentralSeriesMetadata(seriesUrlOrSlug: string): P
       type: 'manga',
     };
   } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('weebcentral', 0, err.message);
     console.warn('[WeebCentral Scraper] fetchSeriesMetadata error:', err.message);
     return null;
   }
 }
 
-
 /** Enumerate all chapters for a Weeb Central series. */
 export async function fetchWeebCentralChapterList(seriesUrl: string): Promise<ResolvedScraperChapter[]> {
-  try {
-    const seriesId = extractWeebCentralSeriesId(seriesUrl);
-    if (!seriesId) return [];
+  const seriesId = extractWeebCentralSeriesId(seriesUrl);
+  if (!seriesId) return [];
 
-    const chListUrl = `https://weebcentral.com/series/${seriesId}/full-chapter-list`;
-    const res = await fetch(chListUrl, {
+  const chListUrl = `https://weebcentral.com/series/${seriesId}/full-chapter-list`;
+  if (!sourceCircuitBreaker.canAttempt('weebcentral') || isSourceUrlOrNameDisabled('Weeb Central', chListUrl)) {
+    return [];
+  }
+
+  try {
+    const res = await fetchWithSsrfGuard(chListUrl, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('weebcentral', res.status);
+      return [];
+    }
 
     const html = await res.text();
     const $ = cheerio.load(html);
@@ -243,8 +285,10 @@ export async function fetchWeebCentralChapterList(seriesUrl: string): Promise<Re
       });
     });
 
+    sourceCircuitBreaker.recordSuccess('weebcentral');
     return chapters.sort((a, b) => a.number - b.number);
   } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('weebcentral', 0, err.message);
     console.warn('[WeebCentral Scraper] fetchChapterList error:', err.message);
     return [];
   }
@@ -252,15 +296,19 @@ export async function fetchWeebCentralChapterList(seriesUrl: string): Promise<Re
 
 /** Extract panel images for a Weeb Central chapter. */
 export async function fetchWeebCentralChapterPages(chapterUrl: string): Promise<string[] | null> {
-  try {
-    const chapterId = extractWeebCentralChapterId(chapterUrl);
-    if (!chapterId) return null;
+  const chapterId = extractWeebCentralChapterId(chapterUrl);
+  if (!chapterId) return null;
 
+  if (!sourceCircuitBreaker.canAttempt('weebcentral') || isSourceUrlOrNameDisabled('Weeb Central', chapterUrl)) {
+    return null;
+  }
+
+  try {
     // WeebCentral loads chapter images via its dedicated /images endpoint
     const imagesEndpoint = `https://weebcentral.com/chapters/${chapterId}/images?is_prev=False&current_page=1&reading_style=long_strip`;
-    const res = await fetch(imagesEndpoint, {
+    const res = await fetchWithSsrfGuard(imagesEndpoint, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(10000),
     });
 
     const pages: string[] = [];
@@ -280,9 +328,9 @@ export async function fetchWeebCentralChapterPages(chapterUrl: string): Promise<
 
     // Fallback: If /images endpoint didn't give pages, check the direct chapter page
     if (pages.length === 0) {
-      const pageRes = await fetch(`https://weebcentral.com/chapters/${chapterId}`, {
+      const pageRes = await fetchWithSsrfGuard(`https://weebcentral.com/chapters/${chapterId}`, {
         headers: UA_HEADERS,
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(10000),
       });
       if (pageRes.ok) {
         const html = await pageRes.text();
@@ -297,8 +345,13 @@ export async function fetchWeebCentralChapterPages(chapterUrl: string): Promise<
       }
     }
 
-    return pages.length > 0 ? pages : null;
+    if (pages.length > 0) {
+      sourceCircuitBreaker.recordSuccess('weebcentral');
+      return pages;
+    }
+    return null;
   } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('weebcentral', 0, err.message);
     console.warn('[WeebCentral Scraper] fetchChapterPages error:', err.message);
     return null;
   }

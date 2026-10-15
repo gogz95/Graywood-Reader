@@ -164,13 +164,38 @@ export function getLiveDomains(targetDomain: string): string[] {
   return Array.from(set);
 }
 
-export function matchResolvedChapter(chapters: { number: number; url: string; title: string; slug?: string }[], targetNumber: number) {
+export function matchResolvedChapter(
+  chapters: { number: number; url: string; title: string; slug?: string }[],
+  targetNumber: number,
+  requestedIndex?: number
+) {
   if (!chapters || chapters.length === 0) return undefined;
+  // 1. Exact match
   const exact = chapters.find((c) => Math.abs(c.number - targetNumber) < 0.001);
   if (exact) return exact;
+
+  // 2. Integer floor match
   const targetInt = Math.floor(targetNumber);
   const intMatch = chapters.find((c) => Math.floor(c.number) === targetInt);
   if (intMatch) return intMatch;
+
+  // 3. Closest fallback within delta <= 1.0 (e.g. 10.1 -> 10 or 10 -> 10.5)
+  let closest: { number: number; url: string; title: string; slug?: string } | undefined;
+  let minDiff = Infinity;
+  for (const c of chapters) {
+    const diff = Math.abs(c.number - targetNumber);
+    if (diff < minDiff && diff <= 1.0) {
+      minDiff = diff;
+      closest = c;
+    }
+  }
+  if (closest) return closest;
+
+  // 4. Relative index fallback if requestedIndex provided and within range
+  if (typeof requestedIndex === 'number' && requestedIndex >= 0 && requestedIndex < chapters.length) {
+    return chapters[requestedIndex];
+  }
+
   return undefined;
 }
 

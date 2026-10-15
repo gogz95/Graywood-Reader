@@ -14,7 +14,9 @@ import * as authDb from './auth';
 import * as notesDb from './notes';
 import * as maintenanceDb from './maintenance';
 
-export { db, DATA_DIR, DB_PATH } from './connection';
+import * as connectionDb from './connection';
+
+export { db, DATA_DIR, DB_PATH, closeDatabase } from './connection';
 export type { PersistedDownloadJob } from './downloads';
 export type { DatabaseMaintenanceResult } from './maintenance';
 
@@ -32,7 +34,7 @@ export {
   deleteStickyNote,
 } from './notes';
 
-export { getSystemState, setSystemState } from './cache';
+export { getSystemState, setSystemState, getCoverCache, setCoverCache } from './cache';
 
 export { optimizeDatabase } from './maintenance';
 
@@ -56,11 +58,14 @@ export const SqliteDb = {
   toggleFavorite: mangaDb.toggleFavorite,
   toggleFlag: mangaDb.toggleFlag,
   deleteManga: mangaDb.deleteManga,
+  deleteMangaById: mangaDb.deleteMangaById,
   bulkDeleteManga: mangaDb.bulkDeleteManga,
   deleteMangaByUserId: mangaDb.deleteMangaByUserId,
   purgeReaperScans: mangaDb.purgeReaperScans,
   deleteAllManga: mangaDb.deleteAllManga,
   getMangaCount: mangaDb.getMangaCount,
+  getMangaForAutoUpdate: mangaDb.getMangaForAutoUpdate,
+  getFlaggedManga: mangaDb.getFlaggedManga,
   ensureMangaPlaceholder: mangaDb.ensureMangaPlaceholder,
   getRecentlyUpdatedManga: mangaDb.getRecentlyUpdatedManga,
   getPopularManga: mangaDb.getPopularManga,
@@ -137,6 +142,8 @@ export const SqliteDb = {
   getCachedChapterPages: cacheDb.getCachedChapterPages,
   setCachedChapterPages: cacheDb.setCachedChapterPages,
   cleanupExpiredChapterPages: cacheDb.cleanupExpiredChapterPages,
+  getCoverCache: cacheDb.getCoverCache,
+  setCoverCache: cacheDb.setCoverCache,
 
   // Auth & Token Revocation
   revokeToken: authDb.revokeToken,
@@ -153,4 +160,5 @@ export const SqliteDb = {
   importFullDatabaseDump: maintenanceDb.importFullDatabaseDump,
   createLiveDatabaseBackup: maintenanceDb.createLiveDatabaseBackup,
   performDatabaseMaintenance: maintenanceDb.performDatabaseMaintenance,
+  close: connectionDb.closeDatabase,
 };

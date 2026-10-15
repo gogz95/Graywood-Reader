@@ -60,8 +60,8 @@ eventsRouter.get('/', (req: Request, res: Response) => {
 
   // Subscribe to EventBus
   const unsubscribe = eventBus.subscribe((event: AppEventPayload) => {
-    // If event is scoped to a specific user and requester is authenticated, verify matching user
-    if (event.userId && authenticatedUserId && event.userId !== authenticatedUserId) {
+    // If event is scoped to a specific user, verify client matches that user
+    if (event.userId && (!authenticatedUserId || event.userId !== authenticatedUserId)) {
       return;
     }
 

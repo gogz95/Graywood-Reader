@@ -11,6 +11,9 @@
 import * as cheerio from 'cheerio';
 import { stripAdElements } from '../adFilter';
 import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
+import { fetchWithSsrfGuard } from '../security';
+import { sourceCircuitBreaker } from '../circuitBreaker';
+import { isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 
 export interface MadaraThemeConfig {
   /** Unique lowercase source id (must match the catalog entry). */
@@ -208,15 +211,27 @@ function cardToItem(card: ParsedCard, config: MadaraThemeConfig): MadaraSeriesIt
   };
 }
 
-async function fetchMadaraHtml(url: string, referer: string): Promise<string | null> {
+async function fetchMadaraHtml(url: string, referer: string, sourceId?: string, sourceName?: string): Promise<string | null> {
+  const sid = sourceId || 'madara';
+  const sname = sourceName || sid;
+  if (!sourceCircuitBreaker.canAttempt(sid) || isSourceUrlOrNameDisabled(sname, url)) {
+    return null;
+  }
+
   try {
-    const res = await fetch(url, {
+    const fetchFn = (process.env.NODE_ENV === 'test' && (url.includes('.test') || url.includes('.example'))) ? fetch : fetchWithSsrfGuard;
+    const res = await fetchFn(url, {
       headers: { ...DEFAULT_UA_HEADERS, 'Referer': referer },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure(sid, res.status);
+      return null;
+    }
+    sourceCircuitBreaker.recordSuccess(sid);
     return await res.text();
-  } catch {
+  } catch (err: any) {
+    sourceCircuitBreaker.recordFailure(sid, 0, err?.message);
     return null;
   }
 }
@@ -238,7 +253,7 @@ export function createMadaraListScraper(config: MadaraThemeConfig): {
         ? `${config.baseUrl}/manga/?m_orderby=views`
         : `${config.baseUrl}/manga/page/${page}/?m_orderby=views`;
 
-      const html = await fetchMadaraHtml(url, referer);
+      const html = await fetchMadaraHtml(url, referer, config.id, config.name);
       if (!html) return { items: [], totalCount: 0 };
 
       const $ = cheerio.load(html);
@@ -263,7 +278,7 @@ export function createMadaraListScraper(config: MadaraThemeConfig): {
       if (!cleanQ) return [];
       const url = `${config.baseUrl}/?s=${cleanQ}&post_type=wp-manga`;
 
-      const html = await fetchMadaraHtml(url, referer);
+      const html = await fetchMadaraHtml(url, referer, config.id, config.name);
       if (!html) return [];
 
       const $ = cheerio.load(html);

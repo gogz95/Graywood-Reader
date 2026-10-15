@@ -844,47 +844,63 @@ export async function fetchFoolSlideChapterPages(chapterUrl: string, domainId: s
   }
 }
 
+export const inFlightChapterRequests = new Map<string, Promise<any>>();
+
 export async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Promise<ResolvedChapter[]> {
   const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
-  const { getEngineConfig } = await import('./engineRegistry');
-  const { fetchWeebCentralChapterList } = await import('../../scrapers/weebCentral');
-  const { fetchAsuraChapterList } = await import('../../scrapers/asuraScans');
-  const { fetchFlameChapterList } = await import('../../scrapers/flameComics');
-
-  const engineConfig = getEngineConfig(domainId);
-  if (engineConfig && engineConfig.engine === 'manhwa18') {
-    const chapters = await fetchManhwa18ChapterList(targetUrl, engineConfig.domain || domainId);
-    if (chapters.length > 0) return chapters;
-  }
-  if (engineConfig && engineConfig.engine === 'madara') {
-    const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
-    if (chapters.length > 0) return chapters;
-  }
-  if (engineConfig && (engineConfig.engine === 'mangareader' || engineConfig.engine === 'mangathemesia')) {
-    const chapters = await fetchMangaReaderChapterList(targetUrl);
-    if (chapters.length > 0) return chapters;
-  }
-  if (engineConfig && engineConfig.engine === 'foolslide') {
-    const chapters = await fetchFoolSlideChapterList(targetUrl, domainId);
-    if (chapters.length > 0) return chapters;
+  const cacheKey = `list:${domainId}:${targetUrl}`;
+  if (inFlightChapterRequests.has(cacheKey)) {
+    return inFlightChapterRequests.get(cacheKey)!;
   }
 
-  if (domainId === 'weebcentral' || targetUrl.includes('weebcentral.com')) {
-    const weebChapters = await fetchWeebCentralChapterList(targetUrl);
-    if (weebChapters.length > 0) return weebChapters;
-  }
-  if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
-    return (await fetchAsuraChapterList(targetUrl)).chapters;
-  }
-  if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
-    return await fetchFlameChapterList(targetUrl);
-  }
+  const promise = (async () => {
+    const { getEngineConfig } = await import('./engineRegistry');
+    const { fetchWeebCentralChapterList } = await import('../../scrapers/weebCentral');
+    const { fetchAsuraChapterList } = await import('../../scrapers/asuraScans');
+    const { fetchFlameChapterList } = await import('../../scrapers/flameComics');
 
-  switch (domainId) {
-    case 'dynasty':
-      return await fetchDynastyChapterList(targetUrl);
-    default:
-      return await fetchGenericChapterList(targetUrl);
+    const engineConfig = getEngineConfig(domainId);
+    if (engineConfig && engineConfig.engine === 'manhwa18') {
+      const chapters = await fetchManhwa18ChapterList(targetUrl, engineConfig.domain || domainId);
+      if (chapters.length > 0) return chapters;
+    }
+    if (engineConfig && engineConfig.engine === 'madara') {
+      const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
+      if (chapters.length > 0) return chapters;
+    }
+    if (engineConfig && (engineConfig.engine === 'mangareader' || engineConfig.engine === 'mangathemesia')) {
+      const chapters = await fetchMangaReaderChapterList(targetUrl);
+      if (chapters.length > 0) return chapters;
+    }
+    if (engineConfig && engineConfig.engine === 'foolslide') {
+      const chapters = await fetchFoolSlideChapterList(targetUrl, domainId);
+      if (chapters.length > 0) return chapters;
+    }
+
+    if (domainId === 'weebcentral' || targetUrl.includes('weebcentral.com')) {
+      const weebChapters = await fetchWeebCentralChapterList(targetUrl);
+      if (weebChapters.length > 0) return weebChapters;
+    }
+    if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
+      return (await fetchAsuraChapterList(targetUrl)).chapters;
+    }
+    if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
+      return await fetchFlameChapterList(targetUrl);
+    }
+
+    switch (domainId) {
+      case 'dynasty':
+        return await fetchDynastyChapterList(targetUrl);
+      default:
+        return await fetchGenericChapterList(targetUrl);
+    }
+  })();
+
+  inFlightChapterRequests.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlightChapterRequests.delete(cacheKey);
   }
 }
 
@@ -893,6 +909,13 @@ export async function extractLiveDomainChapterPages(
   domainId: string,
   chapterNumber: number = 1
 ): Promise<string[] | null> {
+  const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
+  const cacheKey = `pages:${domainId}:${targetUrl}:${chapterNumber}`;
+  if (inFlightChapterRequests.has(cacheKey)) {
+    return inFlightChapterRequests.get(cacheKey)!;
+  }
+
+  const promise = (async () => {
   try {
     if (domainId && !sourceCircuitBreaker.canAttempt(domainId)) {
       console.warn(`[Live Source Extractor] Fast-failing extract from ${domainId} (circuit OPEN)`);
@@ -1099,5 +1122,14 @@ export async function extractLiveDomainChapterPages(
   }
 
   return null;
+  })();
+
+  inFlightChapterRequests.set(cacheKey, promise);
+  try {
+    return await promise;
+  } finally {
+    inFlightChapterRequests.delete(cacheKey);
+  }
 }
+
 

@@ -44,6 +44,18 @@ const stmtGetAllGenres = db.prepare(`
     AND genres != '[]'
 `);
 
+const stmtGetMangaForAutoUpdate = db.prepare(`
+  SELECT * FROM manga
+  WHERE autoUpdateEnabled = 1
+    AND status IN ('reading', 'plan_to_read', 'on_hold')
+  ORDER BY
+    (CASE WHEN status = 'reading' THEN 10 ELSE 0 END + CASE WHEN isFavorite = 1 THEN 5 ELSE 0 END) DESC,
+    lastUpdated DESC
+  LIMIT ?
+`);
+
+const stmtGetFlaggedManga = db.prepare('SELECT * FROM manga WHERE isFlagged = 1 ORDER BY flaggedAt DESC');
+
 const stmtUpsertManga = db.prepare(`
   INSERT INTO manga (
     id, title, altTitles, type, coverImage, description, genres, status,
@@ -301,13 +313,21 @@ export function migrateJsonToSqlite() {
   }
 }
 
+let cachedAllManga: MangaItem[] | null = null;
+
 export function invalidateMangaCache() {
-  // Maintained for backward-compatible interface contract
+  cachedAllManga = null;
 }
 
 export function getAllManga(allowNsfw: boolean | { isNsfwAllowed?: boolean } = true): MangaItem[] {
   const isAllowed = typeof allowNsfw === 'boolean' ? allowNsfw : (allowNsfw?.isNsfwAllowed ?? true);
-  const rows = isAllowed ? stmtGetAllManga.all() : stmtGetAllMangaSafe.all();
+  if (isAllowed) {
+    if (!cachedAllManga) {
+      cachedAllManga = stmtGetAllManga.all().map(mapRowToMangaItem);
+    }
+    return cachedAllManga;
+  }
+  const rows = stmtGetAllMangaSafe.all();
   return rows.map(mapRowToMangaItem);
 }
 
@@ -443,6 +463,7 @@ export function getMangaByApiId(apiId: string): MangaItem | null {
 
 export function upsertManga(item: MangaItem) {
   stmtUpsertManga.run(mapMangaItemToRow(item));
+  invalidateMangaCache();
 }
 
 export function bulkUpsertManga(items: MangaItem[]) {
@@ -487,18 +508,22 @@ export function bulkUpsertManga(items: MangaItem[]) {
     }
   });
   transaction(items);
+  invalidateMangaCache();
 }
 
 export function updateChapterProgress(id: string, chapterNumber: number) {
   stmtUpdateProgress.run(chapterNumber, new Date().toISOString(), id);
+  invalidateMangaCache();
 }
 
 export function toggleFavorite(id: string, isFavorite: boolean) {
   stmtToggleFavorite.run(isFavorite ? 1 : 0, id);
+  invalidateMangaCache();
 }
 
 export function toggleFlag(id: string, isFlagged: boolean, flagReason?: string) {
   stmtToggleFlag.run(isFlagged ? 1 : 0, flagReason || null, isFlagged ? new Date().toISOString() : null, id);
+  invalidateMangaCache();
 }
 
 export function deleteManga(id: string) {
@@ -510,7 +535,10 @@ export function deleteManga(id: string) {
     db.prepare('DELETE FROM manga_categories WHERE manga_id = ?').run(id);
     db.prepare('DELETE FROM readlist_items WHERE manga_id = ?').run(id);
   } catch {}
+  invalidateMangaCache();
 }
+
+export const deleteMangaById = deleteManga;
 
 export function bulkDeleteManga(ids: string[]): number {
   if (!ids || ids.length === 0) return 0;
@@ -529,11 +557,14 @@ export function bulkDeleteManga(ids: string[]): number {
     }
     return count;
   });
-  return deleteTx(ids);
+  const res = deleteTx(ids);
+  invalidateMangaCache();
+  return res;
 }
 
 export function deleteMangaByUserId(userId: string): number {
   const info = stmtDeleteMangaByUserId.run(userId);
+  invalidateMangaCache();
   return Number(info.changes) || 0;
 }
 
@@ -546,6 +577,17 @@ export function deleteAllManga() {
     db.prepare('DELETE FROM manga_categories').run();
     db.prepare('DELETE FROM readlist_items').run();
   } catch {}
+  invalidateMangaCache();
+}
+
+export function getMangaForAutoUpdate(limit = 120): MangaItem[] {
+  const rows = stmtGetMangaForAutoUpdate.all(limit);
+  return rows.map(mapRowToMangaItem);
+}
+
+export function getFlaggedManga(): MangaItem[] {
+  const rows = stmtGetFlaggedManga.all();
+  return rows.map(mapRowToMangaItem);
 }
 
 export function getMangaCount(): number {

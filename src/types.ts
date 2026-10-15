@@ -187,6 +187,7 @@ export interface AppSettings {
   // App Lock & Security Properties
   appLockEnabled?: boolean;
   appLockPinHash?: string;
+  hasAppLockPin?: boolean;
   appLockType?: 'pin' | 'password' | 'biometric';
   appLockTimeoutMinutes?: number;
   // Scheduled Auto-Backups

@@ -40,7 +40,7 @@ export interface ExploreBufferCacheEntry {
 }
 
 let memoryExploreBuffer: ExploreBufferCacheEntry | null = null;
-const EXPLORE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+export const EXPLORE_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12-hour TTL (demand-driven refresh)
 
 export function getExploreBuffer(): ExploreBufferCacheEntry | null {
   if (memoryExploreBuffer && memoryExploreBuffer.expiresAt > Date.now()) {
@@ -159,15 +159,9 @@ export function scheduleExploreRefresher(): void {
     }, 15000);
   }
 
-  // Hourly background refresher
-  exploreRefresherTimer = setInterval(async () => {
-    try {
-      console.log('[Explore Engine] Refreshing explore buffer...');
-      await buildUniversalExploreCatalog();
-    } catch (err) {
-      console.error('[Explore Engine] Scheduled refresh error:', err);
-    }
-  }, EXPLORE_CACHE_TTL_MS);
+  // Demand-driven explore architecture:
+  // Unconditional hourly polling interval is eliminated to prevent idle background bandwidth drain.
+  // Feeds are cached in SQLite with a 12-hour TTL and refreshed only on demand when a user views /api/explore.
 }
 
 export function stopExploreRefresher(): void {

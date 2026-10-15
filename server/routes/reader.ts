@@ -55,6 +55,9 @@ function escapeXml(unsafe: string | number): string {
 export const MAX_NEGATIVE_PROXY_CACHE_SIZE = 2000;
 export const negativeProxyCache = new Map<string, number>();
 
+// Multi-user in-flight request stampede coalescing map
+export const inFlightRequests = new Map<string, Promise<any>>();
+
 export function pruneNegativeProxyCache() {
   if (negativeProxyCache.size < 500) return;
   const now = Date.now();
@@ -155,6 +158,14 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
     return res.status(304).end();
   }
 
+  const isCover =
+    req.query.type === 'cover' ||
+    req.query.isCover === 'true' ||
+    req.query.cover === '1' ||
+    req.path.includes('/cover') ||
+    targetUrl.includes('/covers/') ||
+    /\/covers?(\/|[._-])/i.test(targetUrl);
+
   try {
     const cached = await imageCacheService.fetchCoalesced(targetUrl, async () => {
       let referer: string;
@@ -208,7 +219,7 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
 
       const contentType = response.headers.get('content-type') || 'image/jpeg';
       return { buffer, contentType };
-    });
+    }, isCover);
 
     if (!cached) {
       recordNegativeProxyFailure(targetUrl);
@@ -225,7 +236,11 @@ export const handleImageProxyRequest = async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', optimized.contentType);
     res.setHeader('ETag', cached.etag);
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    if (cached.isCover || isCover) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    }
     res.setHeader('Content-Disposition', 'inline');
     res.end(optimized.buffer);
   } catch (err: any) {
@@ -522,6 +537,7 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
           sourceType: 'live_webtoon_crawler',
           sourceDomain: matchedDomain ? matchedDomain.domain : 'webtoon-source',
           sourceName: matchedDomain ? matchedDomain.name : 'Live Webtoon Source',
+          resolvedChapterUrl: targetUrl,
           isRealImages: true,
           notice: `Streaming ${proxiedPages.length} high-res panels from ${matchedDomain ? matchedDomain.name : 'Source'}.`,
         });

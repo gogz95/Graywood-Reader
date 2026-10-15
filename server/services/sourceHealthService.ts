@@ -4,6 +4,8 @@
 
 import { SqliteDb } from '../../db';
 import { sourceCircuitBreaker, CircuitState } from '../circuitBreaker';
+import { fetchWithSsrfGuard } from '../security';
+import { isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 
 export interface SourceHealth {
   id: string;
@@ -135,11 +137,14 @@ export async function attemptAutoDomainMigration(sourceId: string, currentUrl: s
   if (!mirrors || mirrors.length === 0) return null;
 
   for (const mirror of mirrors) {
+    if (!sourceCircuitBreaker.canAttempt(sourceId) || isSourceUrlOrNameDisabled(sourceId, mirror)) {
+      continue;
+    }
     try {
-      const probe = await fetch(mirror, {
+      const probe = await fetchWithSsrfGuard(mirror, {
         method: 'HEAD',
         headers: { 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(10000),
       });
       if (probe.ok || probe.status === 403) { // 403 means server exists and is alive
         console.log(`[Domain Resolver] Successfully discovered active mirror for "${sourceId}": ${mirror}`);

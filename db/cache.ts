@@ -20,7 +20,17 @@ const stmtCleanupCachedPages = db.prepare(`
   DELETE FROM chapter_pages_cache WHERE expires_at <= ?
 `);
 
-const stmtGetAllLogs = db.prepare('SELECT * FROM logs ORDER BY timestamp DESC');
+const stmtGetCoverCache = db.prepare('SELECT data, content_type FROM cover_cache WHERE url_hash = ?');
+const stmtSetCoverCache = db.prepare(`
+  INSERT INTO cover_cache (url_hash, data, content_type, updated_at)
+  VALUES (@url_hash, @data, @content_type, @updated_at)
+  ON CONFLICT(url_hash) DO UPDATE SET
+    data = excluded.data,
+    content_type = excluded.content_type,
+    updated_at = excluded.updated_at
+`);
+
+const stmtGetAllLogs = db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 500');
 const stmtDeleteAllLogs = db.prepare('DELETE FROM logs');
 const stmtInsertLog = db.prepare(`
   INSERT OR REPLACE INTO logs (id, mangaId, mangaTitle, sourceName, previousChapter, newChapter, timestamp, status, details, type)
@@ -67,8 +77,8 @@ export function getAllLogs(): any[] {
 }
 
 export function replaceAllLogs(logs: any[]) {
+  const boundedLogs = (logs || []).slice(0, 500);
   const transaction = db.transaction((list: any[]) => {
-    stmtDeleteAllLogs.run();
     for (const l of list) {
       stmtInsertLog.run({
         id: l.id,
@@ -83,8 +93,13 @@ export function replaceAllLogs(logs: any[]) {
         type: l.type || 'manhwa',
       });
     }
+    db.prepare(`
+      DELETE FROM logs WHERE id NOT IN (
+        SELECT id FROM logs ORDER BY timestamp DESC LIMIT 500
+      )
+    `).run();
   });
-  transaction(logs);
+  transaction(boundedLogs);
 }
 
 // ── Explore Catalog Buffer Persistence ──────────────────────────────────────
@@ -211,3 +226,28 @@ export function cleanupExpiredChapterPages(): number {
     return 0;
   }
 }
+
+// ── Permanent Cover Cache ───────────────────────────────────────────────────
+export function getCoverCache(urlHash: string): { data: Buffer; contentType: string } | null {
+  try {
+    const row = stmtGetCoverCache.get(urlHash) as { data: Buffer; content_type: string } | undefined;
+    if (!row || !row.data) return null;
+    return { data: row.data, contentType: row.content_type };
+  } catch {
+    return null;
+  }
+}
+
+export function setCoverCache(urlHash: string, data: Buffer, contentType: string): void {
+  try {
+    stmtSetCoverCache.run({
+      url_hash: urlHash,
+      data,
+      content_type: contentType,
+      updated_at: Date.now(),
+    });
+  } catch (err) {
+    console.error('[SQLite Engine] Failed to cache cover:', err);
+  }
+}
+

@@ -171,7 +171,21 @@ export function AppLayout() {
   }, [navigate]);
 
   useRealtimeSync('*', (event) => {
-    if (event.type === 'library_updated' || event.type === 'progress_updated') {
+    if (event.type === 'progress_updated') {
+      const payload: any = event.data || event;
+      const currentUserId = useAuthStore.getState().activeProfile?.id || useAuthStore.getState().activeProfileId || 'usr_guest';
+      // User-scoped check: ignore other users' progress updates
+      if (event.userId && event.userId !== currentUserId) {
+        return;
+      }
+      if (payload.mangaId) {
+        useLibraryStore.getState().updateMangaInPlace(payload.mangaId, {
+          ...(payload.chapterNumber !== undefined ? { currentChapter: payload.chapterNumber } : {}),
+          ...(payload.manga ? payload.manga : {}),
+          lastReadAt: new Date().toISOString(),
+        });
+      }
+    } else if (event.type === 'library_updated') {
       fetchMangaList();
     }
   });

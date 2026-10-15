@@ -100,6 +100,11 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   const token = getAuthToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
+  try {
+    const vaultToken = sessionStorage.getItem('graywood_vault_token');
+    if (vaultToken) headers.set('x-vault-token', vaultToken);
+  } catch {}
+
   const targetUrl = resolveApiUrl(input);
   const res = await fetch(targetUrl, { ...init, headers });
   if (res.status === 401 && getAuthToken()) {

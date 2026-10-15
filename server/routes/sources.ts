@@ -12,6 +12,7 @@ import {
   syncConfig,
   saveDatabaseToDisk,
   isNsfwAccessAllowed,
+  canWriteCatalog,
 } from '../appState';
 import { sourceCircuitBreaker } from '../circuitBreaker';
 import { challengeManager } from '../challengeManager';
@@ -604,6 +605,9 @@ sourcesRouter.get('/api/extensions/list', (_req, res) => {
 });
 
 sourcesRouter.post('/api/extensions/install', (req, res) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
   try {
     const manifest = req.body;
     const installed = extensionEngine.installExtension(manifest);
@@ -614,6 +618,9 @@ sourcesRouter.post('/api/extensions/install', (req, res) => {
 });
 
 sourcesRouter.post('/api/extensions/install-url', async (req, res) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
   try {
     const { url } = req.body || {};
     if (!url || typeof url !== 'string') {
@@ -631,6 +638,9 @@ sourcesRouter.post('/api/extensions/install-url', async (req, res) => {
 });
 
 sourcesRouter.post('/api/extensions/toggle/:id', (req, res) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
   const { id } = req.params;
   const { enabled } = req.body || {};
   const newStatus = extensionEngine.toggleExtension(id, enabled);
@@ -638,6 +648,9 @@ sourcesRouter.post('/api/extensions/toggle/:id', (req, res) => {
 });
 
 sourcesRouter.delete('/api/extensions/:id', (req, res) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
   const { id } = req.params;
   const success = extensionEngine.uninstallExtension(id);
   res.json({ success });
@@ -656,15 +669,18 @@ sourcesRouter.post('/api/extensions/execute/:id', async (req, res) => {
 
 // POST /api/extensions/test-selector - Live CSS Selector Sandbox Debugger
 sourcesRouter.post('/api/extensions/test-selector', async (req, res) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
   try {
     const { targetUrl, listSelector, titleSelector, linkSelector, coverSelector } = req.body || {};
     if (!targetUrl) return res.status(400).json({ error: "targetUrl is required" });
 
-    const fetchRes = await fetch(targetUrl, {
+    const fetchRes = await fetchWithSsrfGuard(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!fetchRes.ok) {

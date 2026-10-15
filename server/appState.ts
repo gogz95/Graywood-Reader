@@ -81,6 +81,18 @@ export function rejectCatalogWrite(res: express.Response): void {
   });
 }
 
+// In-memory set of unlocked NSFW vault session tokens
+const unlockedVaultSessions = new Set<string>();
+
+export function registerUnlockedVaultSession(token: string): void {
+  if (token) unlockedVaultSessions.add(token);
+}
+
+export function isVaultSessionUnlocked(token: string): boolean {
+  return Boolean(token && unlockedVaultSessions.has(token));
+}
+
+
 /**
  * Check if the request is permitted to access 18+ / NSFW adult content.
  * Guests (unauthenticated remote clients, or sessions with role='guest' / id='usr_guest')
@@ -89,6 +101,12 @@ export function rejectCatalogWrite(res: express.Response): void {
 export function isNsfwAccessAllowed(req: express.Request): boolean {
   if (req.headers['x-guest-mode'] === '1' || req.headers['x-user-id'] === 'usr_guest') {
     return false;
+  }
+
+  // Check if caller holds an unlocked NSFW vault session claim (header or cookie)
+  const vaultToken = (req.headers['x-vault-token'] as string) || (req.headers['x-vault-session'] as string) || '';
+  if (vaultToken && isVaultSessionUnlocked(vaultToken)) {
+    return true;
   }
 
   const user = (req as any).user || resolveAuthUser(req);
@@ -229,14 +247,21 @@ export function setSyncConfig(next: DatabaseSyncConfig): void { syncConfig = nex
 let saveTimeoutTimer: NodeJS.Timeout | null = null;
 
 export function buildEncryptedProfiles() {
-  return userProfiles.map((p) => ({
-    ...p,
-    email: encryptPII(p.email || ''),
-    storageFolderPath: p.storageFolderPath && !String(p.storageFolderPath).startsWith('enc:')
-      ? encryptPII(String(p.storageFolderPath))
-      : (p.storageFolderPath || ''),
-    password: p.password ? (isAlreadyHashed(p.password) ? p.password : hashPassword(p.password)) : '',
-  }));
+  return userProfiles.map((p) => {
+    let pwd = p.password || '';
+    if (pwd && !isAlreadyHashed(pwd)) {
+      pwd = hashPassword(pwd);
+      p.password = pwd; // Cache hashed password in memory so it never re-hashes
+    }
+    return {
+      ...p,
+      email: encryptPII(p.email || ''),
+      storageFolderPath: p.storageFolderPath && !String(p.storageFolderPath).startsWith('enc:')
+        ? encryptPII(String(p.storageFolderPath))
+        : (p.storageFolderPath || ''),
+      password: pwd,
+    };
+  });
 }
 
 export function buildEncryptedSettings() {

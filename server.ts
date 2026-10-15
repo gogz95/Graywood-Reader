@@ -9,6 +9,7 @@ import {
   normalizeGatePath,
   isHostOnlyPath,
   SENSITIVE_GET_PATHS,
+  csrfAndOriginGuard,
 } from "./server/security";
 import { rateLimitMiddleware } from "./server/rateLimit";
 import { notesRouter } from "./server/routes/notes";
@@ -89,6 +90,7 @@ app.use((_req, res, next) => {
 });
 
 app.use(requestLoggerMiddleware);
+app.use(csrfAndOriginGuard);
 
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -221,23 +223,10 @@ async function runLiveRateSpacedAutoUpdate() {
   autoUpdateStatus.lastScanTimestamp = nowIso;
   SqliteDb.setSystemState('auto_update_last_run', nowIso);
 
-  // Prioritize reading series & favorites over cold catalog entries.
-  // Filter updated manga strictly by active status: 'reading', 'plan_to_read', 'on_hold'.
-  // Never check or scrape updates for completed or dropped series.
-  const activeStatuses = new Set(['reading', 'plan_to_read', 'on_hold']);
-  const eligibleSeries = SqliteDb.getAllManga()
-    .filter((m) => m.autoUpdateEnabled && !isSeriesFromDisabledSource(m) && activeStatuses.has(m.status))
-    .sort((a, b) => {
-      const aPrio = (a.status === 'reading' ? 10 : 0) + (a.isFavorite ? 5 : 0);
-      const bPrio = (b.status === 'reading' ? 10 : 0) + (b.isFavorite ? 5 : 0);
-      if (aPrio !== bPrio) return bPrio - aPrio;
-      const aTime = Math.max(new Date(a.lastReadAt || 0).getTime(), new Date(a.lastUpdated || 0).getTime());
-      const bTime = Math.max(new Date(b.lastReadAt || 0).getTime(), new Date(b.lastUpdated || 0).getTime());
-      return bTime - aTime;
-    });
-
-  // Process a prioritized batch of up to 120 series per cycle to avoid endless background scraping
-  const activeSeries = eligibleSeries.slice(0, 120);
+  // Prioritize reading series & favorites over cold catalog entries via indexed SQL.
+  const activeSeries = SqliteDb.getMangaForAutoUpdate(150)
+    .filter((m) => !isSeriesFromDisabledSource(m))
+    .slice(0, 120);
   autoUpdateStatus.totalCount = activeSeries.length;
 
   for (const manga of activeSeries) {
@@ -420,8 +409,15 @@ function scheduleDatabaseMaintenance() {
 }
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
-  startServer();
+  startServer().catch((err) => {
+    logger.error('Startup', 'Fatal error during server startup', { error: String(err) });
+    process.exit(1);
+  });
 }
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('System', 'Unhandled promise rejection', { reason: String(reason) });
+});
 
 function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
@@ -452,6 +448,13 @@ function gracefulShutdown(signal: string) {
   } catch (err) {
     logger.error('Shutdown', 'Error while flushing state', { error: String(err) });
   }
+
+  try {
+    SqliteDb.close();
+  } catch (err) {
+    logger.error('Shutdown', 'Error while closing SQLite database', { error: String(err) });
+  }
+
   if (httpServer) {
     const forceTimer = setTimeout(() => process.exit(0), 5000);
     httpServer.close(() => {

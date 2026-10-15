@@ -6,12 +6,13 @@
 import fs from 'fs';
 import path from 'path';
 import vm from 'node:vm';
-import { SourceDefinition } from './sourcesCatalog';
+import { SourceDefinition, isSourceUrlOrNameDisabled } from './sourcesCatalog';
 import { fetchWithSsrfGuard } from '../security';
+import { sourceCircuitBreaker } from '../circuitBreaker';
 
 /** Hard caps for sandboxed extension execution (Mihon/Suwayomi parity). */
 const EXTENSION_EXEC_TIMEOUT_MS = 15000;
-const EXTENSION_FETCH_TIMEOUT_MS = 12000;
+const EXTENSION_FETCH_TIMEOUT_MS = 10000;
 const MAX_EXTENSION_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB per fetch
 const MAX_EXTENSION_RESULTS = 100;
 
@@ -175,6 +176,10 @@ export class ExtensionEngine {
       const absUrl = /^https?:\/\//i.test(raw)
         ? raw
         : `${origin}/${raw.replace(/^\/+/, '')}`;
+
+      if (!sourceCircuitBreaker.canAttempt(origin) || isSourceUrlOrNameDisabled(origin, absUrl)) {
+        throw new Error(`Circuit breaker open or source disabled for ${absUrl}`);
+      }
 
       const method = String(options?.method || 'GET').toUpperCase();
       if (!['GET', 'POST', 'HEAD'].includes(method)) {

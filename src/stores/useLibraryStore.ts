@@ -33,6 +33,7 @@ interface LibraryState {
 
   // Setters
   setMangaList: (list: MangaItem[] | ((prev: MangaItem[]) => MangaItem[])) => void;
+  updateMangaInPlace: (id: string, partial: Partial<MangaItem>) => void;
   setLogs: (logs: AutoUpdateLog[]) => void;
   setDuplicates: (duplicates: DuplicateCandidate[]) => void;
   setConfig: (config: DatabaseSyncConfig | ((prev: DatabaseSyncConfig) => DatabaseSyncConfig)) => void;
@@ -84,6 +85,11 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   setMangaList: (list) =>
     set((state) => ({
       mangaList: typeof list === 'function' ? list(state.mangaList) : list,
+    })),
+
+  updateMangaInPlace: (id, partial) =>
+    set((state) => ({
+      mangaList: state.mangaList.map((m) => (m.id === id ? { ...m, ...partial } : m)),
     })),
 
   setLogs: (logs) => set({ logs }),

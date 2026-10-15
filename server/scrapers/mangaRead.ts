@@ -2,6 +2,9 @@ import * as cheerio from 'cheerio';
 import { MangaItem } from '../../src/types';
 import { stripAdElements } from '../adFilter';
 import { createMadaraListScraper, MadaraSeriesItem } from './madaraTheme';
+import { fetchWithSsrfGuard } from '../security';
+import { sourceCircuitBreaker } from '../circuitBreaker';
+import { isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 
 export type MangaReadSeriesItem = MadaraSeriesItem;
 
@@ -24,12 +27,20 @@ const UA_HEADERS = {
 };
 
 export async function fetchMangaReadMetadata(seriesUrl: string): Promise<Partial<MangaItem> | null> {
+  if (!sourceCircuitBreaker.canAttempt('mangaread') || isSourceUrlOrNameDisabled('MangaRead', seriesUrl)) {
+    return null;
+  }
+
   try {
-    const res = await fetch(seriesUrl, {
+    const res = await fetchWithSsrfGuard(seriesUrl, {
       headers: UA_HEADERS,
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('mangaread', res.status);
+      return null;
+    }
+    sourceCircuitBreaker.recordSuccess('mangaread');
 
     const html = await res.text();
     const $ = cheerio.load(html);

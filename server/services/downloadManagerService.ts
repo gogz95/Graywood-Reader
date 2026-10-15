@@ -40,6 +40,13 @@ export class DownloadManagerService {
   private maxConcurrentJobs = 2;
   private activeJobCount = 0;
   private storageDir: string;
+  private archiveBuffers = new Map<string, { buffer: Buffer; filename: string; createdAt: number }>();
+
+  public getDownloadedArchive(mangaId: string, chapterNumber: number): { buffer: Buffer; filename: string } | null {
+    const entry = this.archiveBuffers.get(`${mangaId}_${chapterNumber}`);
+    if (entry) return { buffer: entry.buffer, filename: entry.filename };
+    return null;
+  }
 
   constructor() {
     const rawStorage = (process.env.STORAGE_PATH || '').trim() || path.join(process.cwd(), 'data', 'downloads');
@@ -295,19 +302,29 @@ export class DownloadManagerService {
         return;
       }
 
-      // 4. Write CBZ archive to disk
+      // 4. Generate in-memory transient archive buffer (zero permanent server disk hosting)
       const cbzFilename = `${safeSeriesName} - Ch.${job.chapterNumber}.cbz`;
-      const finalPath = path.join(seriesDir, cbzFilename);
+      const cbzBuffer = zip.toBuffer();
 
-      zip.writeZip(finalPath);
+      this.archiveBuffers.set(`${manga.id}_${job.chapterNumber}`, {
+        buffer: cbzBuffer,
+        filename: cbzFilename,
+        createdAt: Date.now(),
+      });
+
+      // Bounded buffer retention
+      if (this.archiveBuffers.size > 20) {
+        const oldestKey = this.archiveBuffers.keys().next().value;
+        if (oldestKey) this.archiveBuffers.delete(oldestKey);
+      }
 
       job.status = 'completed';
-      job.outputPath = finalPath;
+      job.outputPath = null;
       job.finishedAt = new Date().toISOString();
       job.progress.percent = 100;
       SqliteDb.saveDownloadJob(job);
 
-      logger.info('DownloadManager', `Successfully saved "${cbzFilename}" (${job.progress.bytesDownloaded} bytes, ${pages.length} pages)`);
+      logger.info('DownloadManager', `Successfully generated in-memory stream archive "${cbzFilename}" (${job.progress.bytesDownloaded} bytes, ${pages.length} pages)`);
     } catch (err: any) {
       if ((job.status as string) === 'cancelled') {
         return;

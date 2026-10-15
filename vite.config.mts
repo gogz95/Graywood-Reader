@@ -12,7 +12,7 @@ export default defineConfig(() => {
       },
     },
     build: {
-      target: 'esnext',
+      target: ['es2022', 'safari16', 'chrome110'],
       minify: 'esbuild',
       cssMinify: true,
       sourcemap: false,

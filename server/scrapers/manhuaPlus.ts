@@ -15,6 +15,9 @@ import * as cheerio from 'cheerio';
 import { cleanMangaTitle } from '../../src/utils/metadataHelpers';
 import { stripAdElements } from '../adFilter';
 import { extractMadaraSlug, MadaraSeriesItem, MadaraScrapeResult } from './madaraTheme';
+import { fetchWithSsrfGuard } from '../security';
+import { sourceCircuitBreaker } from '../circuitBreaker';
+import { isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
 
 export type ManhuaPlusSeriesItem = MadaraSeriesItem;
 
@@ -108,33 +111,52 @@ export async function scrapeManhuaPlus(
   page: number = 1,
   limit: number = 24,
 ): Promise<MadaraScrapeResult> {
+  const url = `${BASE_URL}/all-manga/${Math.max(1, page)}/?sort=views`;
+  if (!sourceCircuitBreaker.canAttempt('manhuaplus') || isSourceUrlOrNameDisabled('ManhuaPlus', url)) {
+    return { items: [], totalCount: 0 };
+  }
+
   try {
-    const url = `${BASE_URL}/all-manga/${Math.max(1, page)}/?sort=views`;
-    const res = await fetch(url, { headers: UA_HEADERS, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return { items: [], totalCount: 0 };
+    const res = await fetchWithSsrfGuard(url, { headers: UA_HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('manhuaplus', res.status);
+      return { items: [], totalCount: 0 };
+    }
 
     const html = await res.text();
     const items = parseManhuaPlusCards(html);
     const parsedTotal = parseManhuaPlusTotalCount(html, Math.max(items.length, 1));
     const totalCount = parsedTotal > 0 ? Math.max(parsedTotal, items.length) : items.length;
+    sourceCircuitBreaker.recordSuccess('manhuaplus');
     return { items: items.slice(0, limit), totalCount };
-  } catch (e) {
+  } catch (e: any) {
+    sourceCircuitBreaker.recordFailure('manhuaplus', 0, e?.message);
     console.error('[Scraper] ManhuaPlus failed:', (e as Error).message);
     return { items: [], totalCount: 0 };
   }
 }
 
 export async function searchManhuaPlus(query: string, limit: number = 24): Promise<ManhuaPlusSeriesItem[]> {
+  const cleanQ = encodeURIComponent(query.trim());
+  if (!cleanQ) return [];
+  const url = `${BASE_URL}/filter?keyword=${cleanQ}`;
+
+  if (!sourceCircuitBreaker.canAttempt('manhuaplus') || isSourceUrlOrNameDisabled('ManhuaPlus', url)) {
+    return [];
+  }
+
   try {
-    const cleanQ = encodeURIComponent(query.trim());
-    if (!cleanQ) return [];
-    const url = `${BASE_URL}/filter?keyword=${cleanQ}`;
-    const res = await fetch(url, { headers: UA_HEADERS, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return [];
+    const res = await fetchWithSsrfGuard(url, { headers: UA_HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      sourceCircuitBreaker.recordFailure('manhuaplus', res.status);
+      return [];
+    }
 
     const html = await res.text();
+    sourceCircuitBreaker.recordSuccess('manhuaplus');
     return parseManhuaPlusCards(html).slice(0, limit);
-  } catch {
+  } catch (err: any) {
+    sourceCircuitBreaker.recordFailure('manhuaplus', 0, err?.message);
     return [];
   }
 }

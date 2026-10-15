@@ -36,18 +36,18 @@ const stmtGetUserFavorite = db.prepare(`
 const stmtDeleteUserFavoritesByUser = db.prepare(`DELETE FROM user_favorites WHERE user_id = ?`);
 
 const stmtUpsertUserLibraryState = db.prepare(`
-  INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status)
-  VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status)
+  INSERT INTO user_library_state (user_id, manga_id, current_chapter, last_read_at, status, rating, notes)
+  VALUES (@user_id, @manga_id, @current_chapter, @last_read_at, @status, @rating, @notes)
   ON CONFLICT(user_id, manga_id) DO UPDATE SET
     current_chapter = CASE
-      WHEN excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+      WHEN excluded.current_chapter IS NOT NULL AND excluded.current_chapter > COALESCE(user_library_state.current_chapter, 0) THEN excluded.current_chapter
+      WHEN excluded.current_chapter IS NOT NULL THEN excluded.current_chapter
       ELSE user_library_state.current_chapter
     END,
-    last_read_at = CASE
-      WHEN excluded.current_chapter >= COALESCE(user_library_state.current_chapter, 0) THEN excluded.last_read_at
-      ELSE user_library_state.last_read_at
-    END,
-    status = COALESCE(excluded.status, user_library_state.status)
+    last_read_at = COALESCE(excluded.last_read_at, user_library_state.last_read_at),
+    status = COALESCE(excluded.status, user_library_state.status),
+    rating = COALESCE(excluded.rating, user_library_state.rating),
+    notes = COALESCE(excluded.notes, user_library_state.notes)
 `);
 const stmtGetUserLibraryState = db.prepare(`
   SELECT * FROM user_library_state WHERE user_id = ?
@@ -92,7 +92,7 @@ export function deleteProfile(id: string) {
 
 export function replaceAllProfiles(profiles: any[]) {
   const transaction = db.transaction((list: any[]) => {
-    stmtDeleteAllProfiles.run();
+    const keepIds = new Set(list.map((p) => p.id));
     for (const p of list) {
       stmtUpsertProfile.run({
         id: p.id,
@@ -105,6 +105,12 @@ export function replaceAllProfiles(profiles: any[]) {
         storageFolderPath: p.storageFolderPath || '',
         createdAt: p.createdAt || new Date().toISOString(),
       });
+    }
+    const existing = db.prepare('SELECT id FROM users').all() as { id: string }[];
+    for (const row of existing) {
+      if (!keepIds.has(row.id)) {
+        stmtDeleteProfile.run(row.id);
+      }
     }
   });
   transaction(profiles);
@@ -134,30 +140,36 @@ export function isUserFavorite(userId: string, mangaId: string): boolean {
 export function setUserLibraryChapter(
   userId: string,
   mangaId: string,
-  currentChapter: number,
-  opts?: { status?: string }
+  currentChapter?: number | null,
+  opts?: { status?: string; rating?: number; notes?: string; lastReadAt?: string }
 ) {
   const existing = stmtGetUserLibraryStateOne.get(userId, mangaId) as
-    | { current_chapter?: number; status?: string }
+    | { current_chapter?: number; status?: string; rating?: number; notes?: string; last_read_at?: string }
     | undefined;
-  const nextCh = Math.max(Number(existing?.current_chapter) || 0, Number(currentChapter) || 0);
+  const nextCh = currentChapter !== undefined && currentChapter !== null
+    ? Number(currentChapter)
+    : (existing?.current_chapter !== undefined ? Number(existing.current_chapter) : 0);
   stmtUpsertUserLibraryState.run({
     user_id: userId,
     manga_id: mangaId,
     current_chapter: nextCh,
-    last_read_at: new Date().toISOString(),
-    status: opts?.status || existing?.status || null,
+    last_read_at: opts?.lastReadAt || new Date().toISOString(),
+    status: opts?.status !== undefined ? opts.status : (existing?.status || null),
+    rating: opts?.rating !== undefined ? opts.rating : (existing?.rating !== undefined ? existing.rating : null),
+    notes: opts?.notes !== undefined ? opts.notes : (existing?.notes || null),
   });
 }
 
-export function getUserLibraryStateMap(userId: string): Map<string, { currentChapter: number; lastReadAt?: string; status?: string }> {
+export function getUserLibraryStateMap(userId: string): Map<string, { currentChapter: number; lastReadAt?: string; status?: string; rating?: number; notes?: string }> {
   const rows = stmtGetUserLibraryState.all(userId) as any[];
-  const map = new Map<string, { currentChapter: number; lastReadAt?: string; status?: string }>();
+  const map = new Map<string, { currentChapter: number; lastReadAt?: string; status?: string; rating?: number; notes?: string }>();
   for (const r of rows) {
     map.set(r.manga_id, {
       currentChapter: Number(r.current_chapter) || 0,
       lastReadAt: r.last_read_at || undefined,
       status: r.status || undefined,
+      rating: r.rating !== null && r.rating !== undefined ? Number(r.rating) : undefined,
+      notes: r.notes || undefined,
     });
   }
   return map;
@@ -171,7 +183,13 @@ export function getAllUserLibraryStates(userId: string): any[] {
 export function applyUserOverlayOne(manga: MangaItem, userId: string | null | undefined): MangaItem {
   if (!userId) return manga;
   const isFav = isUserFavorite(userId, manga.id);
-  const stateRow = stmtGetUserLibraryStateOne.get(userId, manga.id) as { current_chapter?: number; last_read_at?: string; status?: string } | undefined;
+  const stateRow = stmtGetUserLibraryStateOne.get(userId, manga.id) as {
+    current_chapter?: number;
+    last_read_at?: string;
+    status?: string;
+    rating?: number;
+    notes?: string;
+  } | undefined;
   const catRows = stmtGetMangaCategories.all(manga.id, userId) as { category_id: string }[];
   const categories = catRows.map((r) => r.category_id);
 
@@ -183,6 +201,8 @@ export function applyUserOverlayOne(manga: MangaItem, userId: string | null | un
     currentChapter: effectiveChapter,
     lastReadAt: stateRow?.last_read_at || manga.lastReadAt,
     status: (stateRow?.status as MangaItem['status']) || manga.status,
+    rating: stateRow?.rating !== undefined && stateRow?.rating !== null ? Number(stateRow.rating) : manga.rating,
+    notes: stateRow?.notes !== undefined && stateRow?.notes !== null ? stateRow.notes : manga.notes,
     categories,
   };
 }
@@ -213,6 +233,8 @@ export function applyUserOverlay(items: MangaItem[], userId: string | null | und
       currentChapter: effectiveChapter,
       lastReadAt: state?.lastReadAt || m.lastReadAt,
       status: (state?.status as MangaItem['status']) || m.status,
+      rating: state?.rating !== undefined && state?.rating !== null ? Number(state.rating) : m.rating,
+      notes: state?.notes !== undefined && state?.notes !== null ? state.notes : m.notes,
       categories: userCats || [],
     };
   });
