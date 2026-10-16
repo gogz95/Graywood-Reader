@@ -51,6 +51,7 @@
         "lint": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:source": "tsx scripts/test-source.ts",
         "reader:smoke": "node scripts/reader-smoke.mjs",
         "reader:smoke:source": "node scripts/reader-smoke.mjs --source",
         "liveness:scan": "node scripts/catalog-liveness.mjs",

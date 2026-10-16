@@ -134,6 +134,7 @@ mangaRouter.get('/', (req, res) => {
 
   if (hasPagination) {
     res.setHeader('X-Total-Count', String(result.total));
+    res.setHeader('X-Total-Pages', String(Math.max(1, Math.ceil(result.total / limit))));
     return res.json(filteredItems);
   }
   res.json(filteredItems);

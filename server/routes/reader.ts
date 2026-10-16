@@ -52,209 +52,20 @@ function escapeXml(unsafe: string | number): string {
     .replace(/'/g, '&#39;');
 }
 
-// Negative cache for proxy images that returned 404/410/failed upstream (TTL: 10 minutes)
-export const MAX_NEGATIVE_PROXY_CACHE_SIZE = 2000;
-export const negativeProxyCache = new Map<string, number>();
+export {
+  negativeProxyCache,
+  MAX_NEGATIVE_PROXY_CACHE_SIZE,
+  pruneNegativeProxyCache,
+  recordNegativeProxyFailure,
+  clearNegativeProxyCache,
+  handleImageProxyRequest,
+} from '../services/reader/imageProxyService';
+
+import { handleImageProxyRequest } from '../services/reader/imageProxyService';
+import { resolveChapterPages } from '../services/reader/pageResolverService';
 
 // Multi-user in-flight request stampede coalescing map
 export const inFlightRequests = new Map<string, Promise<any>>();
-
-export function pruneNegativeProxyCache() {
-  if (negativeProxyCache.size < 500) return;
-  const now = Date.now();
-  for (const [key, expiresAt] of negativeProxyCache.entries()) {
-    if (now > expiresAt) negativeProxyCache.delete(key);
-  }
-  // Hard cap: if still exceeding max capacity after pruning expired items, evict oldest entries (FIFO)
-  if (negativeProxyCache.size >= MAX_NEGATIVE_PROXY_CACHE_SIZE) {
-    const overflowCount = negativeProxyCache.size - MAX_NEGATIVE_PROXY_CACHE_SIZE + 200;
-    const keysToRemove = Array.from(negativeProxyCache.keys()).slice(0, overflowCount);
-    for (const k of keysToRemove) negativeProxyCache.delete(k);
-  }
-}
-
-export function recordNegativeProxyFailure(targetUrl: string, ttlMs = 10 * 60 * 1000) {
-  if (!targetUrl) return;
-  pruneNegativeProxyCache();
-  if (negativeProxyCache.size >= MAX_NEGATIVE_PROXY_CACHE_SIZE) {
-    const oldestKey = negativeProxyCache.keys().next().value;
-    if (oldestKey) negativeProxyCache.delete(oldestKey);
-  }
-  negativeProxyCache.set(targetUrl, Date.now() + ttlMs);
-}
-
-export function clearNegativeProxyCache() {
-  negativeProxyCache.clear();
-}
-
-// Universal Image Proxy Engine (Bypasses Hotlinking Restrictions & SSL blocks)
-export const handleImageProxyRequest = async (req: Request, res: Response) => {
-  let targetUrl = req.query.url as string;
-  const sourceUrl = req.query.sourceUrl as string;
-  const pageUrl = req.query.pageUrl as string;
-
-  // ── NSFW image-stream gate ──────────────────────────────────────────────────
-  // If the caller supplies a mangaId, verify the series is not NSFW-restricted
-  // before fetching a single byte. This prevents anonymous access to explicit
-  // chapter image streams even when the caller provides a direct CDN URL.
-  const proxyMangaId = (req.query.mangaId as string) || (req.query.id as string) || '';
-  if (proxyMangaId) {
-    const proxyManga = resolveManga(proxyMangaId);
-    if (proxyManga && (proxyManga.isNsfw || isNsfwManga(proxyManga)) && !isNsfwAccessAllowed(req)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        code: 'NSFW_RESTRICTED',
-        message: '18+ Adult content is restricted. Please sign in to access explicit image streams.',
-        isNsfwRestricted: true,
-      });
-    }
-  }
-
-  if (!targetUrl) {
-    return res.status(400).json({ error: "Missing required 'url' parameter" });
-  }
-
-  let unwrapGuard = 0;
-  while (
-    unwrapGuard++ < 5 &&
-    (targetUrl.includes('/api/mangadex/image-proxy?url=') ||
-      targetUrl.includes('/api/reader/proxy-image?url=') ||
-      targetUrl.includes('/api/proxy/image?url='))
-  ) {
-    const match = targetUrl.match(/[?&]url=([^&]+)/);
-    if (match && match[1]) {
-      try {
-        targetUrl = decodeURIComponent(match[1]);
-      } catch {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
-
-  if (targetUrl.startsWith('/api/reader/panel-image')) {
-    return res.redirect(targetUrl);
-  }
-
-  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-    return res.status(400).json({ error: 'Proxy target must be an absolute http(s) URL' });
-  }
-
-  pruneNegativeProxyCache();
-  const cachedFailureExpiry = negativeProxyCache.get(targetUrl);
-  if (cachedFailureExpiry && Date.now() < cachedFailureExpiry) {
-    res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
-    return res.status(502).json({ error: 'Failed to fetch image from remote host (cached failure)' });
-  }
-
-  try {
-    await assertSafeProxyTarget(targetUrl);
-  } catch (err: any) {
-    console.warn(`[Proxy Image Engine] Blocked unsafe proxy target: ${err?.message || err}`);
-    return res.status(403).json({ error: 'Blocked proxy target', message: String(err?.message || err) });
-  }
-
-  if (imageCacheService.matchesEtag(targetUrl, req.headers['if-none-match'] as string)) {
-    return res.status(304).end();
-  }
-
-  const isCover =
-    req.query.type === 'cover' ||
-    req.query.isCover === 'true' ||
-    req.query.cover === '1' ||
-    req.path.includes('/cover') ||
-    targetUrl.includes('/covers/') ||
-    /\/covers?(\/|[._-])/i.test(targetUrl);
-
-  try {
-    const cached = await imageCacheService.fetchCoalesced(targetUrl, async () => {
-      let referer: string;
-      if (pageUrl) {
-        referer = pageUrl;
-      } else if (targetUrl.includes('mangadex.org') || targetUrl.includes('uploads.mangadex.org')) {
-        referer = 'https://mangadex.org/';
-      } else if (targetUrl.includes('pornwa') || targetUrl.includes('manhwa18')) {
-        referer = 'https://manhwa18.com/';
-      } else if (sourceUrl) {
-        try {
-          referer = new URL(sourceUrl).origin + '/';
-        } catch {
-          referer = 'https://mangadex.org/';
-        }
-      } else {
-        try {
-          referer = new URL(targetUrl).origin + '/';
-        } catch {
-          referer = 'https://mangadex.org/';
-        }
-      }
-
-      let response: globalThis.Response;
-      try {
-        response = await fetchWithSsrfGuard(targetUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-            'Referer': referer,
-            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-          },
-          signal: AbortSignal.timeout(12000),
-        });
-      } catch (fetchErr: any) {
-        recordNegativeProxyFailure(targetUrl);
-        console.warn(`[Proxy Image Engine] Upstream network/socket failure for ${targetUrl}:`, fetchErr?.message || fetchErr);
-        return null;
-      }
-
-      if (!response.ok) {
-        recordNegativeProxyFailure(targetUrl);
-        console.warn(`[Proxy Image Engine] Host returned HTTP ${response.status} for ${targetUrl}`);
-        return null;
-      }
-
-      const arrayBuf = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuf);
-      if (buffer.length > MAX_PROXY_IMAGE_BYTES) {
-        throw new Error('Proxied image exceeds size cap');
-      }
-
-      const contentType = response.headers.get('content-type') || 'image/jpeg';
-      return { buffer, contentType };
-    }, isCover);
-
-    if (!cached) {
-      recordNegativeProxyFailure(targetUrl);
-      res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
-      return res.status(502).json({ error: 'Failed to fetch image from remote host' });
-    }
-
-    if (req.headers['if-none-match'] === cached.etag) {
-      return res.status(304).end();
-    }
-
-    const optParams = parseOptimizationParams(req);
-    const optimized = await optimizeImageBuffer(cached.buffer, cached.contentType, optParams);
-
-    res.setHeader('Content-Type', optimized.contentType);
-    res.setHeader('ETag', cached.etag);
-    if (cached.isCover || isCover) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    } else {
-      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-    }
-    res.setHeader('Content-Disposition', 'inline');
-    res.end(optimized.buffer);
-  } catch (err: any) {
-    recordNegativeProxyFailure(targetUrl);
-    console.warn(`[Proxy Image Engine] Error proxying image (${targetUrl}):`, err?.message || err);
-    if (!res.headersSent) {
-      res.setHeader('Cache-Control', 'public, max-age=600, stale-if-error=300');
-      res.status(502).json({ error: 'Error proxying target image', message: err?.message || String(err) });
-    } else {
-      res.end();
-    }
-  }
-};
 
 // Image proxy endpoints (canonical path + legacy aliases)
 readerRouter.get('/api/proxy/image', handleImageProxyRequest);
@@ -486,54 +297,10 @@ readerRouter.get('/api/reader/chapter-mirrors', (req, res) => {
 readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
   const mangaId = req.query.mangaId as string;
   const chapterNumber = Math.max(1, parseFloat(req.query.chapterNumber as string) || 1);
-  let chapterId = (req.query.chapterId as string) || '';
+  const chapterId = (req.query.chapterId as string) || '';
 
   const manga = resolveManga(String(mangaId || ''));
-  let mangaTitle = (req.query.title as string) || (manga ? manga.title : 'Webtoon Series');
-  const totalChapters = manga ? Math.max(manga.latestChapter || 1, manga.currentChapter || 1, chapterNumber) : 1;
-
-  let targetUrl = (req.query.url as string) || manga?.sourceUrl || '';
-
-  if (!targetUrl && mangaId) {
-    if (mangaId.startsWith('asura_')) {
-      const slug = mangaId.replace('asura_', '');
-      targetUrl = `https://asurascans.com/comics/${slug}`;
-      if (mangaTitle === 'Webtoon Series') {
-        mangaTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-      }
-    } else if (mangaId.startsWith('flame_')) {
-      const slug = mangaId.replace('flame_', '');
-      targetUrl = `https://flamecomics.xyz/series/${slug}`;
-      if (mangaTitle === 'Webtoon Series') {
-        mangaTitle = slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-      }
-    } else if (mangaId.startsWith('kotatsu_')) {
-      for (const src of KOTATSU_SOURCES) {
-        if (mangaId.startsWith(`kotatsu_${src.id}_`)) {
-          const pathOrSlug = mangaId.replace(`kotatsu_${src.id}_`, '');
-          targetUrl = pathOrSlug.startsWith('http') ? pathOrSlug : `${src.baseUrl.replace(/\/$/, '')}/${pathOrSlug}`;
-          break;
-        }
-      }
-    }
-  }
-
-  if (targetUrl && (targetUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) && manga?.availableSources?.length) {
-    const altSource = manga.availableSources.find(
-      (s) => s.sourceUrl && s.sourceUrl.startsWith('http') && !s.sourceUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(s.sourceName, s.sourceUrl)
-    );
-    if (altSource) {
-      console.log(`[Reader Stream Engine] Promoting alternative live source "${altSource.sourceName}" over broken/metadata-only sourceUrl.`);
-      targetUrl = altSource.sourceUrl;
-    }
-  }
-
-  if (manga && (!targetUrl || targetUrl.toLowerCase().includes('mangadex.org') || isSourceUrlOrNameDisabled(manga.sourceName, targetUrl, manga.id))) {
-    const autoSource = await autoDiscoverLiveSourceForManga(manga);
-    if (autoSource) {
-      targetUrl = autoSource.sourceUrl;
-    }
-  }
+  const targetUrl = (req.query.url as string) || manga?.sourceUrl || '';
 
   // Gate 18+ / NSFW titles for guest users
   const isPagesNsfw = Boolean(
@@ -549,191 +316,20 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     });
   }
 
-  // If the target URL is explicitly from a disabled/broken source, do not serve it
-  if (targetUrl && isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) {
-    return res.json({
-      mangaId,
-      chapterNumber,
-      chapterId: chapterId || `ch_${chapterNumber}`,
-      totalPages: 0,
-      pages: [],
-      sourceType: 'none',
-      sourceDomain: '',
-      sourceName: 'Source Disabled',
-      isRealImages: false,
-      contentUnavailable: true,
-      isPlaceholder: false,
-      loadError: `Chapter ${chapterNumber} is unavailable because this source has been flagged as broken or disabled. Please switch to another source from the mirror menu.`,
-      notice: `Source is flagged as broken.`,
-    });
-  }
-
-  let realPages: string[] | null = null;
-  const matchedDomain = matchLiveDomain(targetUrl);
-  let activeDomainId = (req.query.sourceId as string) || (matchedDomain ? matchedDomain.id : 'general');
-  let activeSourceLabel = matchedDomain ? matchedDomain.name : 'Live Webtoon Source';
-  let activeTargetUrl = targetUrl;
-  let usedFallback = false;
-  let fallbackSourceLabel = '';
-
-  if (activeTargetUrl && (activeTargetUrl.startsWith('http://') || activeTargetUrl.startsWith('https://')) && !activeTargetUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(mangaTitle, activeTargetUrl, mangaId)) {
-    try {
-      realPages = await kotatsuImageEngine.getChapterPages(activeTargetUrl, activeDomainId, chapterNumber);
-    } catch (err: any) {
-      console.warn(`[Reader Stream Engine] Primary source error (${activeDomainId}):`, err?.message || err);
-    }
-  }
-
-  // Automatic Failover: If primary upstream failed (HTTP error, timeout, CF block) or returned 0 pages, check alternative mirrors
-  if ((!realPages || realPages.length === 0) && mangaId) {
-    const alternativeMirrors = SqliteDb.getAlternativeMirrorsForChapter(mangaId, chapterNumber, activeDomainId);
-    for (const mirror of alternativeMirrors) {
-      if (sourceCircuitBreaker.canAttempt(mirror.source_id) && !isSourceUrlOrNameDisabled(mirror.source_id, mirror.url)) {
-        const mirrorResolvedUrl = resolveChapterUrl(mirror.url, mirror.source_id);
-        try {
-          const fallbackPages = await kotatsuImageEngine.getChapterPages(mirrorResolvedUrl, mirror.source_id, chapterNumber);
-          if (fallbackPages && fallbackPages.length > 0) {
-            const srcDef = getSourceById(mirror.source_id);
-            fallbackSourceLabel = srcDef?.name || mirror.source_id;
-            realPages = fallbackPages;
-            activeTargetUrl = mirrorResolvedUrl;
-            activeDomainId = mirror.source_id;
-            activeSourceLabel = fallbackSourceLabel;
-            usedFallback = true;
-            break;
-          }
-        } catch (mirrorErr: any) {
-          console.warn(`[Reader Stream Engine] Failover mirror ${mirror.source_id} failed:`, mirrorErr?.message || mirrorErr);
-        }
-      }
-    }
-
-    // Secondary fallback: check manga.availableSources if still no pages found
-    if ((!realPages || realPages.length === 0) && manga?.availableSources?.length) {
-      for (const alt of manga.availableSources) {
-        if (!alt.sourceUrl || alt.sourceUrl === activeTargetUrl || isSourceUrlOrNameDisabled(alt.sourceName, alt.sourceUrl)) continue;
-        const matchedAlt = matchLiveDomain(alt.sourceUrl);
-        const altDomainId = matchedAlt ? matchedAlt.id : 'general';
-        if (altDomainId === activeDomainId) continue;
-        if (sourceCircuitBreaker.canAttempt(altDomainId)) {
-          try {
-            const fallbackPages = await kotatsuImageEngine.getChapterPages(alt.sourceUrl, altDomainId, chapterNumber);
-            if (fallbackPages && fallbackPages.length > 0) {
-              fallbackSourceLabel = alt.sourceName || (matchedAlt ? matchedAlt.name : altDomainId);
-              realPages = fallbackPages;
-              activeTargetUrl = alt.sourceUrl;
-              activeDomainId = altDomainId;
-              activeSourceLabel = fallbackSourceLabel;
-              usedFallback = true;
-              break;
-            }
-          } catch {}
-        }
-      }
-    }
-  }
-
-  if (realPages && realPages.length > 0) {
-    if (usedFallback && fallbackSourceLabel) {
-      res.setHeader('x-mirror-fallback', fallbackSourceLabel);
-    }
-    const proxiedPages = realPages.map((pageUrl, idx) => {
-      const cleanUrl = pageUrl.trim();
-      if (cleanUrl.startsWith('/api/reader/panel-image')) return cleanUrl;
-      if (cleanUrl.startsWith('/api/')) return cleanUrl;
-      return `/api/reader/proxy-image?url=${encodeURIComponent(cleanUrl)}&sourceUrl=${encodeURIComponent(activeTargetUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;
-    });
-
-    return res.json({
-      mangaId,
-      chapterNumber,
-      chapterId: chapterId || `ch_${chapterNumber}`,
-      totalPages: proxiedPages.length,
-      pages: proxiedPages,
-      sourceType: 'live_webtoon_crawler',
-      sourceDomain: activeDomainId,
-      sourceName: activeSourceLabel,
-      resolvedChapterUrl: activeTargetUrl,
-      isRealImages: true,
-      ...(usedFallback ? { fallbackOccurred: true, fallbackSource: fallbackSourceLabel } : {}),
-      notice: usedFallback
-        ? `Failover active: Streaming ${proxiedPages.length} panels from fallback mirror "${fallbackSourceLabel}".`
-        : `Streaming ${proxiedPages.length} high-res panels from ${activeSourceLabel}.`,
-    });
-  }
-
-  // MangaDex direct reading fallback
-  let mdChapterUuid = chapterId.startsWith('md_') ? chapterId.replace('md_', '') : null;
-  const mangaDexId = manga?.apiId || (mangaId && mangaId.startsWith('md_') ? mangaId.replace('md_', '') : null);
-
-  if (!mdChapterUuid && mangaDexId) {
-    try {
-      const feedRes = await fetchMangaDex(
-        `https://api.mangadex.org/manga/${mangaDexId}/feed?limit=100&translatedLanguage[]=en&order[chapter]=desc&includeExternalUrl=0`
-      );
-      if (feedRes && feedRes.ok) {
-        const data = await feedRes.json();
-        const rawChapters: any[] = data.data || [];
-        const matched = rawChapters.find((c: any) => parseFloat(c.attributes?.chapter) === chapterNumber);
-        if (matched && matched.id) {
-          mdChapterUuid = matched.id;
-        }
-      }
-    } catch (err) {
-      console.warn('[MangaDex Direct Stream] Feed resolution error:', err);
-    }
-  }
-
-  if (mdChapterUuid) {
-    try {
-      const atHomeRes = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${mdChapterUuid}`);
-      if (atHomeRes && atHomeRes.ok) {
-        const atHomeData = await atHomeRes.json();
-        const baseUrl = atHomeData.baseUrl;
-        const chapterHash = atHomeData.chapter?.hash;
-        const pageFileNames: string[] = atHomeData.chapter?.data || [];
-
-        if (baseUrl && chapterHash && pageFileNames.length > 0) {
-          const proxiedPages = pageFileNames.map((fileName, idx) => {
-            const directCdnUrl = `${baseUrl}/data/${chapterHash}/${fileName}`;
-            return `/api/mangadex/image-proxy?url=${encodeURIComponent(directCdnUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;  
-          });
-
-          return res.json({
-            mangaId,
-            chapterNumber,
-            chapterId: `md_${mdChapterUuid}`,
-            totalPages: proxiedPages.length,
-            pages: proxiedPages,
-            sourceType: 'mangadex_athome_cdn',
-            sourceDomain: 'mangadex.org',
-            sourceName: 'MangaDex (@Home CDN)',
-            isRealImages: true,
-            notice: `Streaming ${proxiedPages.length} high-res panels directly from MangaDex @Home CDN.`,
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('[MangaDex Direct Stream] At-Home fetch error:', err);
-    }
-  }
-
-  // No placeholder panels when entering read mode: report missing pages cleanly
-  return res.json({
+  const result = await resolveChapterPages({
     mangaId,
     chapterNumber,
-    chapterId: chapterId || `ch_${chapterNumber}`,
-    totalPages: 0,
-    pages: [],
-    sourceType: 'none',
-    sourceDomain: '',
-    sourceName: 'Source Unavailable',
-    isRealImages: false,
-    contentUnavailable: true,
-    isPlaceholder: false,
-    loadError: `Chapter ${chapterNumber} is missing pages. No readable panel images could be extracted from the source (${targetUrl || 'unavailable'}). Try switching to another mirror or source.`,
-    notice: `Chapter ${chapterNumber} is missing pages.`,
+    chapterId,
+    requestedUrl: targetUrl,
+    requestedSourceId: req.query.sourceId as string,
+    requestedTitle: req.query.title as string,
   });
+
+  if (result.fallbackOccurred && result.fallbackSource) {
+    res.setHeader('x-mirror-fallback', result.fallbackSource);
+  }
+
+  return res.json(result);
 });
 
 // ── GET /api/reader/panel-image - SVG Generator for unavailable / aesthetic panels ─

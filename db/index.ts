@@ -20,13 +20,15 @@ import * as connectionDb from './connection';
 export { db, DATA_DIR, DB_PATH, closeDatabase } from './connection';
 export type { PersistedDownloadJob } from './downloads';
 export type { DatabaseMaintenanceResult } from './maintenance';
-export type { ChapterRecord } from './chapters';
+export type { ChapterRecord, ChapterRow, ChapterInput } from './chapters';
 
 export {
   upsertChapters,
   getChaptersByMangaId,
+  getChaptersForManga,
   getChapterByNumberAndSource,
   getAlternativeMirrorsForChapter,
+  getMirrorsForChapter,
 } from './chapters';
 
 export {
@@ -167,8 +169,10 @@ export const SqliteDb = {
   // Chapters & Mirrors
   upsertChapters: chaptersDb.upsertChapters,
   getChaptersByMangaId: chaptersDb.getChaptersByMangaId,
+  getChaptersForManga: chaptersDb.getChaptersForManga,
   getChapterByNumberAndSource: chaptersDb.getChapterByNumberAndSource,
   getAlternativeMirrorsForChapter: chaptersDb.getAlternativeMirrorsForChapter,
+  getMirrorsForChapter: chaptersDb.getMirrorsForChapter,
 
   // Maintenance & Migration
   exportFullDatabaseDump: maintenanceDb.exportFullDatabaseDump,

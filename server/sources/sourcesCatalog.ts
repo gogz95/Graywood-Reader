@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { SourceDefinition, SourceEngineType, DatabaseSyncConfig, isMangaDexSourceLink, MangaItem } from '../../src/types';
+import { DOMAIN_MIRRORS } from '../services/crawler/types';
 
 export type { SourceDefinition, SourceEngineType };
 
@@ -607,6 +608,80 @@ export function normalizeChapterUrl(rawUrl: string, baseUrl?: string): string {
   return clean;
 }
 
+const DOMAIN_CORRECTIONS_MAP = new Map<string, string>();
+try {
+  const corrCandidates = [
+    path.join(process.cwd(), 'scripts', 'domain-corrections.json'),
+    path.join(__dirname, '..', '..', 'scripts', 'domain-corrections.json'),
+  ];
+  for (const corrPath of corrCandidates) {
+    if (fs.existsSync(corrPath)) {
+      const raw = JSON.parse(fs.readFileSync(corrPath, 'utf8'));
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
+          if (item?.id && item?.baseUrl) {
+            DOMAIN_CORRECTIONS_MAP.set(String(item.id).toLowerCase(), item.baseUrl);
+          }
+        }
+      }
+      break;
+    }
+  }
+} catch {}
+
+/**
+ * Resolves a stored URL against canonical source domain and relative path.
+ * Replaces outdated mirrors or prepends canonical base URL if relative.
+ */
+export function resolveSourceUrl(sourceIdOrName: string, storedUrl: string): string {
+  if (!storedUrl) return '';
+  const cleanUrl = storedUrl.trim();
+  const idLower = (sourceIdOrName || '').toLowerCase().trim();
+
+  let canonicalBaseUrl = DOMAIN_CORRECTIONS_MAP.get(idLower);
+  if (!canonicalBaseUrl && idLower) {
+    if (sourceIdOrName.startsWith('http://') || sourceIdOrName.startsWith('https://')) {
+      canonicalBaseUrl = sourceIdOrName;
+    } else {
+      const src = getSourceById(idLower) || ALL_SOURCES_CATALOG.find((s) => s.id.toLowerCase() === idLower || s.name.toLowerCase() === idLower);
+      if (src?.baseUrl) {
+        canonicalBaseUrl = src.baseUrl;
+      }
+    }
+  }
+
+  // Handle relative URLs
+  if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    if (canonicalBaseUrl) {
+      const root = canonicalBaseUrl.replace(/\/+$/, '');
+      const pathname = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
+      return `${root}${pathname}`;
+    }
+    return cleanUrl;
+  }
+
+  // Handle absolute URLs with domain migration / mirror normalization
+  try {
+    const parsed = new URL(cleanUrl);
+    if (canonicalBaseUrl) {
+      const canonicalHost = new URL(canonicalBaseUrl).hostname.toLowerCase().replace(/^www\./, '');
+      const currentHost = parsed.hostname.toLowerCase().replace(/^www\./, '');
+      if (currentHost !== canonicalHost) {
+        const canonicalRoot = canonicalBaseUrl.replace(/\/+$/, '');
+        return `${canonicalRoot}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+    }
+    for (const [mirror, target] of Object.entries(DOMAIN_MIRRORS)) {
+      if (parsed.hostname.toLowerCase().includes(mirror.toLowerCase())) {
+        parsed.hostname = target;
+        return parsed.toString();
+      }
+    }
+  } catch {}
+
+  return cleanUrl;
+}
+
 /**
  * Dynamically resolves a stored chapter URL against an active source base URL or source ID.
  */
@@ -618,22 +693,9 @@ export function resolveChapterUrl(storedUrl: string, sourceIdOrBaseUrl?: string)
   }
   if (!sourceIdOrBaseUrl) return clean;
 
-  let base = sourceIdOrBaseUrl.trim();
-  if (!base.startsWith('http://') && !base.startsWith('https://')) {
-    const src = getSourceById(base);
-    if (src?.baseUrl) {
-      base = src.baseUrl;
-    }
-  }
-
-  if (base.startsWith('http://') || base.startsWith('https://')) {
-    const root = base.replace(/\/+$/, '');
-    const path = clean.startsWith('/') ? clean : `/${clean}`;
-    return `${root}${path}`;
-  }
-
-  return clean;
+  return resolveSourceUrl(sourceIdOrBaseUrl, clean);
 }
+
 
 
 

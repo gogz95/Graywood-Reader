@@ -2,7 +2,21 @@
  * Shared API client: attaches Bearer auth token and centralizes token storage.
  */
 const TOKEN_KEY = 'graywood_auth_token';
-const SERVER_URL_KEY = 'graywood_server_url';
+import {
+  SERVER_URL_KEY,
+  getServerUrl,
+  setServerUrl,
+  getApiBaseUrl,
+  resolveApiUrl,
+} from './apiConfig';
+
+export {
+  SERVER_URL_KEY,
+  getServerUrl,
+  setServerUrl,
+  getApiBaseUrl,
+  resolveApiUrl,
+};
 
 export function getAuthToken(): string | null {
   try {
@@ -25,25 +39,6 @@ export function clearAuthToken(): void {
   setAuthToken(null);
 }
 
-export function getServerUrl(): string | null {
-  try {
-    return localStorage.getItem(SERVER_URL_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function setServerUrl(url: string | null): void {
-  try {
-    if (url) {
-      const normalized = url.trim().replace(/\/+$/, '');
-      localStorage.setItem(SERVER_URL_KEY, normalized);
-    } else {
-      localStorage.removeItem(SERVER_URL_KEY);
-    }
-  } catch {}
-}
-
 export async function testServerConnection(url: string): Promise<{ success: boolean; isHost?: boolean; version?: string; error?: string }> {
   try {
     const baseUrl = url.trim().replace(/\/+$/, '');
@@ -54,18 +49,6 @@ export async function testServerConnection(url: string): Promise<{ success: bool
   } catch (err: any) {
     return { success: false, error: err?.message || 'Connection failed' };
   }
-}
-
-export function getApiBaseUrl(): string {
-  return getServerUrl() || '';
-}
-
-export function resolveApiUrl(input: string): string {
-  const base = getServerUrl();
-  if (base && input.startsWith('/api/')) {
-    return `${base}${input}`;
-  }
-  return input;
 }
 
 /**

@@ -359,13 +359,17 @@ export function initializeDatabaseSchema(): void {
             chapter_number REAL NOT NULL,
             title TEXT,
             url TEXT NOT NULL,
+            branch TEXT,
             scanlator TEXT,
             upload_date TEXT,
             created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now')),
             FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
           );
           CREATE INDEX IF NOT EXISTS idx_manga_chapters_lookup ON manga_chapters(manga_id, chapter_number);
           CREATE INDEX IF NOT EXISTS idx_manga_chapters_source ON manga_chapters(source_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_manga_chapters_unique_source
+            ON manga_chapters(manga_id, source_id, chapter_number, COALESCE(branch, ''));
 
           CREATE TRIGGER IF NOT EXISTS trg_manga_chapters_cleanup
           AFTER DELETE ON manga
@@ -373,6 +377,30 @@ export function initializeDatabaseSchema(): void {
           BEGIN
             DELETE FROM manga_chapters WHERE manga_id = OLD.id;
           END;
+        `);
+      },
+    },
+    {
+      version: 5,
+      name: 'manga_chapters_branch_and_unique_index',
+      run: (database) => {
+        const getCols = (tbl: string) => {
+          try {
+            return new Set((database.prepare(`PRAGMA table_info(${tbl})`).all() as any[]).map((c) => c.name));
+          } catch {
+            return new Set<string>();
+          }
+        };
+        const chCols = getCols('manga_chapters');
+        if (!chCols.has('branch')) database.exec('ALTER TABLE manga_chapters ADD COLUMN branch TEXT');
+        if (!chCols.has('updated_at')) {
+          database.exec("ALTER TABLE manga_chapters ADD COLUMN updated_at INTEGER DEFAULT (strftime('%s', 'now'))");
+        }
+        database.exec(`
+          CREATE INDEX IF NOT EXISTS idx_manga_chapters_lookup
+            ON manga_chapters(manga_id, chapter_number);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_manga_chapters_unique_source
+            ON manga_chapters(manga_id, source_id, chapter_number, COALESCE(branch, ''));
         `);
       },
     },

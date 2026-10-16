@@ -47,6 +47,7 @@ import { searchWeebCentral } from '../scrapers/weebCentral';
 import { ASURA_API_HEADERS } from '../scrapers/asuraScans';
 import { fetchFlameSeriesContext } from '../scrapers/flameComics';
 import { bulkScraperService } from '../services/bulkScraperService';
+import { getRecentTraces, getTraceSummary, clearTraces } from '../diagnostics/traceBuffer';
 
 export function reviveSource(sourceId: string): { ok: boolean; message: string; source?: SourceDefinition } {
   if (!sourceId) return { ok: false, message: "sourceId is required" };
@@ -743,6 +744,34 @@ sourcesRouter.post('/api/sources/bulk-scrape/stop', (req: Request, res: Response
   const stopped = bulkScraperService.stop();
   res.json({ success: true, stopped, progress: bulkScraperService.getProgress() });
 });
+
+// ── GET /api/sources/diagnostics - Structured diagnostic trace ring buffer ─────
+sourcesRouter.get('/api/sources/diagnostics', (req: Request, res: Response) => {
+  const { domain, sourceId, stage, status, limit } = req.query;
+  const traces = getRecentTraces({
+    domain: domain as string,
+    sourceId: sourceId as string,
+    stage: stage as string,
+    status: status as string,
+    limit: limit ? parseInt(limit as string, 10) : undefined,
+  });
+  const summary = getTraceSummary();
+  res.json({
+    summary,
+    count: traces.length,
+    traces,
+  });
+});
+
+// DELETE /api/sources/diagnostics - Clear diagnostic trace buffer
+sourcesRouter.delete('/api/sources/diagnostics', (req: Request, res: Response) => {
+  if (!canWriteCatalog(req)) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Admin access required' });
+  }
+  clearTraces();
+  res.json({ success: true, message: 'Diagnostic traces cleared' });
+});
+
 
 
 

@@ -9,9 +9,7 @@ import {
   saveClientSessionProgress,
   getClientSessionHistory,
 } from '../hooks/useReaderSession';
-import { getAniListMediaId, syncAniListProgress } from '../utils/aniListScrobbler';
-import { getMALMediaId, syncMALProgress } from '../utils/malScrobbler';
-import { getKitsuMediaId, syncKitsuProgress } from '../utils/kitsuScrobbler';
+import { syncProgressToTrackers } from '../services/scrobbleDispatcher';
 import type { BugReportInitialData } from '../components/modals/SubmitBugModal';
 
 // ============================================================================
@@ -204,38 +202,8 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       const mangaItem = libraryStore.mangaList.find((m) => m.id === mangaId) || currentManga;
       if (!mangaItem) return;
 
-      // AniList Scrobbler
-      if (appSettings.anilistConnected && appSettings.anilistToken && appSettings.anilistAutoSync) {
-        getAniListMediaId(mangaItem.title)
-          .then((mediaId) => {
-            if (mediaId && appSettings.anilistToken) {
-              syncAniListProgress(appSettings.anilistToken!, mediaId, chapterNumber, mangaItem.status === 'completed');
-            }
-          })
-          .catch(() => {});
-      }
-
-      // MAL Scrobbler
-      if (appSettings.malConnected && appSettings.malToken && appSettings.malAutoSync) {
-        getMALMediaId(mangaItem.title)
-          .then((mediaId) => {
-            if (mediaId && appSettings.malToken) {
-              syncMALProgress(appSettings.malToken, mediaId, chapterNumber, mangaItem.status);
-            }
-          })
-          .catch(() => {});
-      }
-
-      // Kitsu Scrobbler
-      if (appSettings.kitsuConnected && appSettings.kitsuToken && appSettings.kitsuAutoSync) {
-        getKitsuMediaId(mangaItem.title)
-          .then((mediaId) => {
-            if (mediaId && appSettings.kitsuToken) {
-              syncKitsuProgress(appSettings.kitsuToken, mediaId, chapterNumber, mangaItem.status);
-            }
-          })
-          .catch(() => {});
-      }
+      // Dispatch non-blocking progress updates to all enabled external trackers
+      syncProgressToTrackers(mangaItem, chapterNumber).catch(() => {});
     } catch (err) {
       console.error('Mark read error:', err);
     }
