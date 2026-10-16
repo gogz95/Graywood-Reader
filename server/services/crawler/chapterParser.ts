@@ -12,6 +12,8 @@ import { isAdUrl, isAdTitle, isAdSeries, stripAdElements } from '../../adFilter'
 import { sourceCookieJar, updateSourceHealth } from '../sourceHealthService';
 import { appSettings } from '../../appState';
 import { fetchWithSsrfGuard } from '../../security';
+import { SqliteDb } from '../../../db';
+import { normalizeChapterUrl, resolveChapterUrl } from '../../sources/sourcesCatalog';
 
 export function normalizeAsuraPageList(rawPages: unknown): string[] {
   if (!Array.isArray(rawPages)) return [];
@@ -846,7 +848,11 @@ export async function fetchFoolSlideChapterPages(chapterUrl: string, domainId: s
 
 export const inFlightChapterRequests = new Map<string, Promise<any>>();
 
-export async function fetchLiveChapterList(rawTargetUrl: string, domainId: string): Promise<ResolvedChapter[]> {
+export async function fetchLiveChapterList(
+  rawTargetUrl: string,
+  domainId: string,
+  mangaId?: string
+): Promise<ResolvedChapter[]> {
   const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
   const cacheKey = `list:${domainId}:${targetUrl}`;
   if (inFlightChapterRequests.has(cacheKey)) {
@@ -859,41 +865,81 @@ export async function fetchLiveChapterList(rawTargetUrl: string, domainId: strin
     const { fetchAsuraChapterList } = await import('../../scrapers/asuraScans');
     const { fetchFlameChapterList } = await import('../../scrapers/flameComics');
 
+    let resolvedList: ResolvedChapter[] = [];
+
     const engineConfig = getEngineConfig(domainId);
     if (engineConfig && engineConfig.engine === 'manhwa18') {
       const chapters = await fetchManhwa18ChapterList(targetUrl, engineConfig.domain || domainId);
-      if (chapters.length > 0) return chapters;
-    }
-    if (engineConfig && engineConfig.engine === 'madara') {
+      if (chapters.length > 0) resolvedList = chapters;
+    } else if (engineConfig && engineConfig.engine === 'madara') {
       const chapters = await fetchMadaraChapterList(targetUrl, engineConfig);
-      if (chapters.length > 0) return chapters;
-    }
-    if (engineConfig && (engineConfig.engine === 'mangareader' || engineConfig.engine === 'mangathemesia')) {
+      if (chapters.length > 0) resolvedList = chapters;
+    } else if (engineConfig && (engineConfig.engine === 'mangareader' || engineConfig.engine === 'mangathemesia')) {
       const chapters = await fetchMangaReaderChapterList(targetUrl);
-      if (chapters.length > 0) return chapters;
-    }
-    if (engineConfig && engineConfig.engine === 'foolslide') {
+      if (chapters.length > 0) resolvedList = chapters;
+    } else if (engineConfig && engineConfig.engine === 'foolslide') {
       const chapters = await fetchFoolSlideChapterList(targetUrl, domainId);
-      if (chapters.length > 0) return chapters;
+      if (chapters.length > 0) resolvedList = chapters;
     }
 
-    if (domainId === 'weebcentral' || targetUrl.includes('weebcentral.com')) {
-      const weebChapters = await fetchWeebCentralChapterList(targetUrl);
-      if (weebChapters.length > 0) return weebChapters;
-    }
-    if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
-      return (await fetchAsuraChapterList(targetUrl)).chapters;
-    }
-    if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
-      return await fetchFlameChapterList(targetUrl);
+    if (resolvedList.length === 0) {
+      if (domainId === 'weebcentral' || targetUrl.includes('weebcentral.com')) {
+        const weebChapters = await fetchWeebCentralChapterList(targetUrl);
+        if (weebChapters.length > 0) resolvedList = weebChapters;
+      } else if (domainId === 'asura' || domainId === 'asurascans' || targetUrl.includes('asurascans.com') || targetUrl.includes('asuracomic.net')) {
+        resolvedList = (await fetchAsuraChapterList(targetUrl)).chapters;
+      } else if (domainId === 'flame' || domainId === 'flamecomics' || targetUrl.includes('flamecomics.xyz') || targetUrl.includes('flamescans')) {
+        resolvedList = await fetchFlameChapterList(targetUrl);
+      } else {
+        switch (domainId) {
+          case 'dynasty':
+            resolvedList = await fetchDynastyChapterList(targetUrl);
+            break;
+          default:
+            resolvedList = await fetchGenericChapterList(targetUrl);
+            break;
+        }
+      }
     }
 
-    switch (domainId) {
-      case 'dynasty':
-        return await fetchDynastyChapterList(targetUrl);
-      default:
-        return await fetchGenericChapterList(targetUrl);
+    // Ensure URLs are properly resolved against domain base
+    const chapters = resolvedList.map((ch) => ({
+      ...ch,
+      url: resolveChapterUrl(ch.url, targetUrl),
+    }));
+
+    // Transactionally persist to manga_chapters relational index
+    try {
+      let resolvedMangaId = mangaId;
+      if (!resolvedMangaId) {
+        const allManga = SqliteDb.getAllManga();
+        const matched = allManga.find(
+          (m) =>
+            m.sourceUrl === rawTargetUrl ||
+            m.sourceUrl === targetUrl ||
+            (m.availableSources || []).some((s) => s.sourceUrl === rawTargetUrl || s.sourceUrl === targetUrl)
+        );
+        if (matched) resolvedMangaId = matched.id;
+      }
+
+      if (resolvedMangaId && chapters.length > 0) {
+        const records = chapters.map((c) => ({
+          id: `${resolvedMangaId}_${domainId}_${c.number}`,
+          manga_id: resolvedMangaId!,
+          source_id: domainId,
+          chapter_number: c.number,
+          title: c.title || `Chapter ${c.number}`,
+          url: normalizeChapterUrl(c.url, targetUrl),
+          scanlator: null,
+          upload_date: null,
+        }));
+        SqliteDb.upsertChapters(records);
+      }
+    } catch (err: any) {
+      console.warn('[Chapter Parser] Failed to transactionally populate manga_chapters:', err?.message || err);
     }
+
+    return chapters;
   })();
 
   inFlightChapterRequests.set(cacheKey, promise);
@@ -909,7 +955,7 @@ export async function extractLiveDomainChapterPages(
   domainId: string,
   chapterNumber: number = 1
 ): Promise<string[] | null> {
-  const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
+  const targetUrl = resolveChapterUrl(normalizeLiveTargetUrl(rawTargetUrl), domainId);
   const cacheKey = `pages:${domainId}:${targetUrl}:${chapterNumber}`;
   if (inFlightChapterRequests.has(cacheKey)) {
     return inFlightChapterRequests.get(cacheKey)!;
@@ -921,7 +967,6 @@ export async function extractLiveDomainChapterPages(
       console.warn(`[Live Source Extractor] Fast-failing extract from ${domainId} (circuit OPEN)`);
       return null;
     }
-    const targetUrl = normalizeLiveTargetUrl(rawTargetUrl);
     const { getEngineConfig } = await import('./engineRegistry');
     const { fetchWeebCentralChapterPages, fetchWeebCentralChapterList } = await import('../../scrapers/weebCentral');
     const { fetchAsuraChapterList, ASURA_API_HEADERS } = await import('../../scrapers/asuraScans');

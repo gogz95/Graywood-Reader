@@ -20,7 +20,8 @@ import {
 } from '../security';
 import { imageCacheService } from '../services/imageCache';
 import { fetchMangaDex } from '../services/metadataService';
-import { KOTATSU_SOURCES, isSourceUrlOrNameDisabled } from '../sources/sourcesCatalog';
+import { KOTATSU_SOURCES, isSourceUrlOrNameDisabled, getSourceById, resolveChapterUrl, normalizeChapterUrl } from '../sources/sourcesCatalog';
+import { sourceCircuitBreaker } from '../circuitBreaker';
 import { parseOptimizationParams, optimizeImageBuffer } from '../services/imageOptimizer';
 import {
   kotatsuImageEngine,
@@ -322,7 +323,7 @@ readerRouter.get('/api/reader/chapters/:mangaId', async (req, res) => {
     const domainId = matchedDomain ? matchedDomain.id : 'general';
     const sourceLabel = matchedDomain ? matchedDomain.name : 'Webtoon Source';
     try {
-      const realChapters = await fetchLiveChapterList(liveSourceUrl, domainId);
+      const realChapters = await fetchLiveChapterList(liveSourceUrl, domainId, manga?.id);
       if (realChapters.length > 0) {
         const sorted = [...realChapters].sort((a, b) =>
           order === 'asc' ? a.number - b.number : b.number - a.number
@@ -419,13 +420,67 @@ readerRouter.get('/api/reader/sources/:mangaId', async (req, res) => {
 
   const primaryIsBroken = isSourceUrlOrNameDisabled(manga.sourceName, manga.sourceUrl);
 
+  const chapterNumber = req.query.chapterNumber ? parseFloat(req.query.chapterNumber as string) : undefined;
+  let chapterMirrors: any[] = [];
+  if (chapterNumber !== undefined && Number.isFinite(chapterNumber)) {
+    const mirrors = SqliteDb.getAlternativeMirrorsForChapter(manga.id, chapterNumber);
+    const primaryCh = SqliteDb.getChapterByNumberAndSource(manga.id, chapterNumber);
+    const allMatching = primaryCh ? [primaryCh, ...mirrors.filter((m) => m.id !== primaryCh.id)] : mirrors;
+    chapterMirrors = allMatching.map((m) => {
+      const srcDef = getSourceById(m.source_id);
+      return {
+        id: m.id,
+        sourceId: m.source_id,
+        sourceName: srcDef?.name || m.source_id,
+        chapterNumber: m.chapter_number,
+        title: m.title,
+        url: resolveChapterUrl(m.url, m.source_id),
+        scanlator: m.scanlator,
+        uploadDate: m.upload_date,
+      };
+    });
+  }
+
   res.json({
     mangaId: manga.id,
     title: manga.title,
     primarySource: primaryIsBroken ? (existing[0]?.sourceUrl || '') : manga.sourceUrl,
     sources: existing,
+    chapterMirrors,
   });
 });
+
+// ── GET /api/reader/chapter-mirrors - Get available mirrors for specific chapter ──
+readerRouter.get('/api/reader/chapter-mirrors', (req, res) => {
+  const mangaId = req.query.mangaId as string;
+  const chapterNumber = parseFloat(req.query.chapterNumber as string);
+  if (!mangaId || !Number.isFinite(chapterNumber)) {
+    return res.status(400).json({ error: 'Missing mangaId or chapterNumber' });
+  }
+
+  const mirrors = SqliteDb.getAlternativeMirrorsForChapter(mangaId, chapterNumber);
+  const primaryCh = SqliteDb.getChapterByNumberAndSource(mangaId, chapterNumber);
+  const allMatching = primaryCh ? [primaryCh, ...mirrors.filter((m) => m.id !== primaryCh.id)] : mirrors;
+
+  return res.json({
+    mangaId,
+    chapterNumber,
+    mirrors: allMatching.map((m) => {
+      const srcDef = getSourceById(m.source_id);
+      return {
+        id: m.id,
+        sourceId: m.source_id,
+        sourceName: srcDef?.name || m.source_id,
+        chapterNumber: m.chapter_number,
+        title: m.title,
+        url: resolveChapterUrl(m.url, m.source_id),
+        scanlator: m.scanlator,
+        uploadDate: m.upload_date,
+      };
+    }),
+  });
+});
+
 
 // ── GET /api/reader/chapter-pages - Resolve chapter page image URLs ───────────
 readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
@@ -513,38 +568,98 @@ readerRouter.get('/api/reader/chapter-pages', async (req, res) => {
     });
   }
 
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(mangaTitle, targetUrl, mangaId)) {
-    const matchedDomain = matchLiveDomain(targetUrl);
-    const domainId = matchedDomain ? matchedDomain.id : 'general';
+  let realPages: string[] | null = null;
+  const matchedDomain = matchLiveDomain(targetUrl);
+  let activeDomainId = (req.query.sourceId as string) || (matchedDomain ? matchedDomain.id : 'general');
+  let activeSourceLabel = matchedDomain ? matchedDomain.name : 'Live Webtoon Source';
+  let activeTargetUrl = targetUrl;
+  let usedFallback = false;
+  let fallbackSourceLabel = '';
 
+  if (activeTargetUrl && (activeTargetUrl.startsWith('http://') || activeTargetUrl.startsWith('https://')) && !activeTargetUrl.toLowerCase().includes('mangadex.org') && !isSourceUrlOrNameDisabled(mangaTitle, activeTargetUrl, mangaId)) {
     try {
-      const realPages = await kotatsuImageEngine.getChapterPages(targetUrl, domainId, chapterNumber);
-
-      if (realPages && realPages.length > 0) {
-        const proxiedPages = realPages.map((pageUrl, idx) => {
-          const cleanUrl = pageUrl.trim();
-          if (cleanUrl.startsWith('/api/reader/panel-image')) return cleanUrl;
-          if (cleanUrl.startsWith('/api/')) return cleanUrl;
-          return `/api/reader/proxy-image?url=${encodeURIComponent(cleanUrl)}&sourceUrl=${encodeURIComponent(targetUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;  
-        });
-
-        return res.json({
-          mangaId,
-          chapterNumber,
-          chapterId: chapterId || `ch_${chapterNumber}`,
-          totalPages: proxiedPages.length,
-          pages: proxiedPages,
-          sourceType: 'live_webtoon_crawler',
-          sourceDomain: matchedDomain ? matchedDomain.domain : 'webtoon-source',
-          sourceName: matchedDomain ? matchedDomain.name : 'Live Webtoon Source',
-          resolvedChapterUrl: targetUrl,
-          isRealImages: true,
-          notice: `Streaming ${proxiedPages.length} high-res panels from ${matchedDomain ? matchedDomain.name : 'Source'}.`,
-        });
-      }
+      realPages = await kotatsuImageEngine.getChapterPages(activeTargetUrl, activeDomainId, chapterNumber);
     } catch (err: any) {
-      console.error("[Reader Stream Engine] Error crawling real webtoon pages:", err?.message || err);
+      console.warn(`[Reader Stream Engine] Primary source error (${activeDomainId}):`, err?.message || err);
     }
+  }
+
+  // Automatic Failover: If primary upstream failed (HTTP error, timeout, CF block) or returned 0 pages, check alternative mirrors
+  if ((!realPages || realPages.length === 0) && mangaId) {
+    const alternativeMirrors = SqliteDb.getAlternativeMirrorsForChapter(mangaId, chapterNumber, activeDomainId);
+    for (const mirror of alternativeMirrors) {
+      if (sourceCircuitBreaker.canAttempt(mirror.source_id) && !isSourceUrlOrNameDisabled(mirror.source_id, mirror.url)) {
+        const mirrorResolvedUrl = resolveChapterUrl(mirror.url, mirror.source_id);
+        try {
+          const fallbackPages = await kotatsuImageEngine.getChapterPages(mirrorResolvedUrl, mirror.source_id, chapterNumber);
+          if (fallbackPages && fallbackPages.length > 0) {
+            const srcDef = getSourceById(mirror.source_id);
+            fallbackSourceLabel = srcDef?.name || mirror.source_id;
+            realPages = fallbackPages;
+            activeTargetUrl = mirrorResolvedUrl;
+            activeDomainId = mirror.source_id;
+            activeSourceLabel = fallbackSourceLabel;
+            usedFallback = true;
+            break;
+          }
+        } catch (mirrorErr: any) {
+          console.warn(`[Reader Stream Engine] Failover mirror ${mirror.source_id} failed:`, mirrorErr?.message || mirrorErr);
+        }
+      }
+    }
+
+    // Secondary fallback: check manga.availableSources if still no pages found
+    if ((!realPages || realPages.length === 0) && manga?.availableSources?.length) {
+      for (const alt of manga.availableSources) {
+        if (!alt.sourceUrl || alt.sourceUrl === activeTargetUrl || isSourceUrlOrNameDisabled(alt.sourceName, alt.sourceUrl)) continue;
+        const matchedAlt = matchLiveDomain(alt.sourceUrl);
+        const altDomainId = matchedAlt ? matchedAlt.id : 'general';
+        if (altDomainId === activeDomainId) continue;
+        if (sourceCircuitBreaker.canAttempt(altDomainId)) {
+          try {
+            const fallbackPages = await kotatsuImageEngine.getChapterPages(alt.sourceUrl, altDomainId, chapterNumber);
+            if (fallbackPages && fallbackPages.length > 0) {
+              fallbackSourceLabel = alt.sourceName || (matchedAlt ? matchedAlt.name : altDomainId);
+              realPages = fallbackPages;
+              activeTargetUrl = alt.sourceUrl;
+              activeDomainId = altDomainId;
+              activeSourceLabel = fallbackSourceLabel;
+              usedFallback = true;
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+  }
+
+  if (realPages && realPages.length > 0) {
+    if (usedFallback && fallbackSourceLabel) {
+      res.setHeader('x-mirror-fallback', fallbackSourceLabel);
+    }
+    const proxiedPages = realPages.map((pageUrl, idx) => {
+      const cleanUrl = pageUrl.trim();
+      if (cleanUrl.startsWith('/api/reader/panel-image')) return cleanUrl;
+      if (cleanUrl.startsWith('/api/')) return cleanUrl;
+      return `/api/reader/proxy-image?url=${encodeURIComponent(cleanUrl)}&sourceUrl=${encodeURIComponent(activeTargetUrl)}&page=${idx + 1}&manga=${encodeURIComponent(mangaTitle)}&mangaId=${encodeURIComponent(mangaId || '')}`;
+    });
+
+    return res.json({
+      mangaId,
+      chapterNumber,
+      chapterId: chapterId || `ch_${chapterNumber}`,
+      totalPages: proxiedPages.length,
+      pages: proxiedPages,
+      sourceType: 'live_webtoon_crawler',
+      sourceDomain: activeDomainId,
+      sourceName: activeSourceLabel,
+      resolvedChapterUrl: activeTargetUrl,
+      isRealImages: true,
+      ...(usedFallback ? { fallbackOccurred: true, fallbackSource: fallbackSourceLabel } : {}),
+      notice: usedFallback
+        ? `Failover active: Streaming ${proxiedPages.length} panels from fallback mirror "${fallbackSourceLabel}".`
+        : `Streaming ${proxiedPages.length} high-res panels from ${activeSourceLabel}.`,
+    });
   }
 
   // MangaDex direct reading fallback

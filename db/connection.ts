@@ -347,6 +347,35 @@ export function initializeDatabaseSchema(): void {
         `);
       },
     },
+    {
+      version: 4,
+      name: 'manga_chapters_schema',
+      run: (database) => {
+        database.exec(`
+          CREATE TABLE IF NOT EXISTS manga_chapters (
+            id TEXT PRIMARY KEY,
+            manga_id TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            chapter_number REAL NOT NULL,
+            title TEXT,
+            url TEXT NOT NULL,
+            scanlator TEXT,
+            upload_date TEXT,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_manga_chapters_lookup ON manga_chapters(manga_id, chapter_number);
+          CREATE INDEX IF NOT EXISTS idx_manga_chapters_source ON manga_chapters(source_id);
+
+          CREATE TRIGGER IF NOT EXISTS trg_manga_chapters_cleanup
+          AFTER DELETE ON manga
+          FOR EACH ROW
+          BEGIN
+            DELETE FROM manga_chapters WHERE manga_id = OLD.id;
+          END;
+        `);
+      },
+    },
   ];
 
   for (const migration of migrations) {

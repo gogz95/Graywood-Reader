@@ -15,6 +15,17 @@ import {
 import { MangaItem, MangaSourceLink } from '../../types';
 import { apiFetch } from '../../utils/api';
 
+export interface ChapterMirrorItem {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  chapterNumber: number;
+  title?: string;
+  url: string;
+  scanlator?: string;
+  uploadDate?: string;
+}
+
 export interface MirrorSourceModalProps {
   manga: MangaItem;
   currentChapterNum: number;
@@ -32,6 +43,7 @@ export const MirrorSourceModal: React.FC<MirrorSourceModalProps> = ({
   onClose,
   onSelectSource,
 }) => {
+  const [chapterMirrors, setChapterMirrors] = useState<ChapterMirrorItem[]>([]);
   const [sourcesList, setSourcesList] = useState<MangaSourceLink[]>(() => {
     const list: MangaSourceLink[] = [];
     if (manga.sourceUrl) {
@@ -52,10 +64,13 @@ export const MirrorSourceModal: React.FC<MirrorSourceModalProps> = ({
 
   useEffect(() => {
     let isMounted = true;
-    apiFetch(`/api/reader/sources/${encodeURIComponent(manga.id)}`)
+    apiFetch(`/api/reader/sources/${encodeURIComponent(manga.id)}?chapterNumber=${currentChapterNum}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!isMounted || !data) return;
+        if (Array.isArray(data.chapterMirrors)) {
+          setChapterMirrors(data.chapterMirrors);
+        }
         const validList: MangaSourceLink[] = [];
         if (data.primarySource) {
           validList.push({
@@ -78,7 +93,7 @@ export const MirrorSourceModal: React.FC<MirrorSourceModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [manga.id, manga.sourceName]);
+  }, [manga.id, manga.sourceName, currentChapterNum]);
 
   const [searchQuery, setSearchQuery] = useState<string>(manga.title || '');
   const [searching, setSearching] = useState<boolean>(false);
@@ -183,6 +198,103 @@ export const MirrorSourceModal: React.FC<MirrorSourceModalProps> = ({
 
         {/* Content */}
         <div className="p-4 overflow-y-auto space-y-4 flex-1">
+          {/* Active Chapter Mirrors (Exact Match from manga_chapters) */}
+          {chapterMirrors.length > 0 && (
+            <div>
+              <h3 className="text-xs font-bold text-accent uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-accent" />
+                Active Chapter Mirrors ({chapterMirrors.length})
+              </h3>
+              <div className="space-y-2">
+                {chapterMirrors.map((mirror) => {
+                  const isActive = mirror.url === activeSourceUrl || mirror.sourceName === activeSourceName || mirror.sourceId === activeSourceName;
+                  const test = testResults[mirror.url];
+                  const isTesting = testingUrl === mirror.url;
+
+                  return (
+                    <div
+                      key={mirror.id}
+                      className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        isActive
+                          ? 'bg-accent/15 border-accent shadow-sm ring-1 ring-accent/30'
+                          : 'bg-elevated/60 border-edge hover:border-accent/50'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-primary truncate">{mirror.sourceName}</span>
+                          <span className="text-[10px] bg-accent/20 text-accent font-semibold px-2 py-0.5 rounded-full">
+                            Ch. {mirror.chapterNumber}
+                          </span>
+                          {mirror.scanlator && (
+                            <span className="text-[10px] bg-surface text-secondary border border-edge px-1.5 py-0.5 rounded-md">
+                              {mirror.scanlator}
+                            </span>
+                          )}
+                          {isActive && (
+                            <span className="text-[10px] bg-accent text-accent-fg font-bold px-2 py-0.5 rounded-full">
+                              Active
+                            </span>
+                          )}
+                          {test && (
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                test.ok
+                                  ? 'bg-success/20 text-success border border-success/30'
+                                  : 'bg-danger/20 text-danger border border-danger/30'
+                              }`}
+                            >
+                              {test.message}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-secondary/70 truncate mt-0.5 font-mono">{mirror.url}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => handleTestChapter(mirror.url, mirror.sourceName)}
+                          disabled={isTesting}
+                          className="px-2.5 py-1.5 rounded-lg bg-surface hover:bg-elevated text-xs font-semibold text-secondary hover:text-primary border border-edge transition-all flex items-center gap-1"
+                          title="Test if Chapter is available on this mirror"
+                        >
+                          {isTesting ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent" />
+                          ) : (
+                            <Zap className="w-3.5 h-3.5 text-accent" />
+                          )}
+                          <span>{isTesting ? 'Testing...' : 'Test'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => onSelectSource(mirror.sourceName, mirror.url, persistChanges)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            isActive
+                              ? 'bg-accent/30 text-accent cursor-default'
+                              : 'bg-accent hover:bg-accent-bright text-accent-fg shadow-md'
+                          }`}
+                          disabled={isActive}
+                        >
+                          {isActive ? (
+                            <>
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Switch</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Active / Known Sources */}
           <div>
             <h3 className="text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">

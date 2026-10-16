@@ -568,4 +568,72 @@ export function isSeriesFromDisabledSource(m: MangaItem): boolean {
   return false;
 }
 
+/**
+ * Normalizes a chapter URL by stripping the active source base URL or hostname,
+ * storing a clean relative path (e.g. '/read/chapter-1') wherever possible.
+ */
+export function normalizeChapterUrl(rawUrl: string, baseUrl?: string): string {
+  if (!rawUrl) return '';
+  let clean = rawUrl.trim();
+  if (baseUrl) {
+    try {
+      const baseObj = new URL(baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`);
+      if (clean.startsWith('http://') || clean.startsWith('https://')) {
+        const uObj = new URL(clean);
+        if (uObj.hostname.toLowerCase() === baseObj.hostname.toLowerCase()) {
+          clean = uObj.pathname + uObj.search + uObj.hash;
+        }
+      }
+    } catch {}
+  } else if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    try {
+      const uObj = new URL(clean);
+      for (const s of ALL_SOURCES_CATALOG) {
+        if (s.baseUrl) {
+          try {
+            const b = new URL(s.baseUrl);
+            if (b.hostname.toLowerCase() === uObj.hostname.toLowerCase()) {
+              clean = uObj.pathname + uObj.search + uObj.hash;
+              break;
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+  if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/')) {
+    clean = '/' + clean;
+  }
+  return clean;
+}
+
+/**
+ * Dynamically resolves a stored chapter URL against an active source base URL or source ID.
+ */
+export function resolveChapterUrl(storedUrl: string, sourceIdOrBaseUrl?: string): string {
+  if (!storedUrl) return '';
+  const clean = storedUrl.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
+  }
+  if (!sourceIdOrBaseUrl) return clean;
+
+  let base = sourceIdOrBaseUrl.trim();
+  if (!base.startsWith('http://') && !base.startsWith('https://')) {
+    const src = getSourceById(base);
+    if (src?.baseUrl) {
+      base = src.baseUrl;
+    }
+  }
+
+  if (base.startsWith('http://') || base.startsWith('https://')) {
+    const root = base.replace(/\/+$/, '');
+    const path = clean.startsWith('/') ? clean : `/${clean}`;
+    return `${root}${path}`;
+  }
+
+  return clean;
+}
+
+
 

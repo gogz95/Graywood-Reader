@@ -13,12 +13,21 @@ import * as cacheDb from './cache';
 import * as authDb from './auth';
 import * as notesDb from './notes';
 import * as maintenanceDb from './maintenance';
+import * as chaptersDb from './chapters';
 
 import * as connectionDb from './connection';
 
 export { db, DATA_DIR, DB_PATH, closeDatabase } from './connection';
 export type { PersistedDownloadJob } from './downloads';
 export type { DatabaseMaintenanceResult } from './maintenance';
+export type { ChapterRecord } from './chapters';
+
+export {
+  upsertChapters,
+  getChaptersByMangaId,
+  getChapterByNumberAndSource,
+  getAlternativeMirrorsForChapter,
+} from './chapters';
 
 export {
   purgeReaperScans,
@@ -154,6 +163,12 @@ export const SqliteDb = {
   getStickyNotes: notesDb.getStickyNotes,
   saveStickyNote: notesDb.saveStickyNote,
   deleteStickyNote: notesDb.deleteStickyNote,
+
+  // Chapters & Mirrors
+  upsertChapters: chaptersDb.upsertChapters,
+  getChaptersByMangaId: chaptersDb.getChaptersByMangaId,
+  getChapterByNumberAndSource: chaptersDb.getChapterByNumberAndSource,
+  getAlternativeMirrorsForChapter: chaptersDb.getAlternativeMirrorsForChapter,
 
   // Maintenance & Migration
   exportFullDatabaseDump: maintenanceDb.exportFullDatabaseDump,
