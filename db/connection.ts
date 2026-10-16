@@ -202,6 +202,16 @@ export function initializeDatabaseSchema(): void {
             PRIMARY KEY (user_id, manga_id)
           );
 
+          CREATE TABLE IF NOT EXISTS user_manga_ratings (
+            user_id TEXT NOT NULL,
+            manga_id TEXT NOT NULL,
+            rating REAL NOT NULL,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+            PRIMARY KEY (user_id, manga_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_manga_ratings_lookup ON user_manga_ratings(user_id, manga_id);
+
           CREATE TABLE IF NOT EXISTS page_sticky_notes (
             id TEXT PRIMARY KEY,
             manga_id TEXT NOT NULL,
@@ -397,6 +407,15 @@ export function initializeDatabaseSchema(): void {
           database.exec("ALTER TABLE manga_chapters ADD COLUMN updated_at INTEGER DEFAULT (strftime('%s', 'now'))");
         }
         database.exec(`
+          CREATE TABLE IF NOT EXISTS user_manga_ratings (
+            user_id TEXT NOT NULL,
+            manga_id TEXT NOT NULL,
+            rating REAL NOT NULL,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+            PRIMARY KEY (user_id, manga_id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_manga_ratings_lookup ON user_manga_ratings(user_id, manga_id);
           CREATE INDEX IF NOT EXISTS idx_manga_chapters_lookup
             ON manga_chapters(manga_id, chapter_number);
           CREATE UNIQUE INDEX IF NOT EXISTS idx_manga_chapters_unique_source
