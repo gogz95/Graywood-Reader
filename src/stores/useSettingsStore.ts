@@ -42,6 +42,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultManhwaMode: 'webtoon-seamless',
   defaultManhuaMode: 'webtoon-seamless',
   readerDefaults: {
+    mode: 'webtoon',
+    direction: 'vertical',
+    fit: 'fit-width',
+    seamless: true,
+    gapPx: 0,
+    spreadCoverOffset: true,
+    backgroundTheme: 'dark',
     viewMode: 'webtoon-seamless',
     maxWidth: '850px',
     pageGap: 0,

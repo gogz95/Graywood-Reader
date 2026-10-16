@@ -1,13 +1,17 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import { ReaderViewMode } from '../../types';
+import { ReaderViewMode, ReadingMode, ReadingDirection, ImageFitMode } from '../../types';
 
 interface PagedRendererProps {
   currentPageIndex: number;
   totalPages: number;
   pages: string[];
   pageStates: Record<number, { isLoading: boolean; isError: boolean }>;
-  viewMode: ReaderViewMode;
+  viewMode?: ReaderViewMode;
+  mode?: ReadingMode;
+  direction?: ReadingDirection;
+  spreadCoverOffset?: boolean;
+  fit?: ImageFitMode;
   imageFilterStyle?: React.CSSProperties;
   onNextPage: () => void;
   onPrevPage: () => void;
@@ -19,19 +23,33 @@ export const PagedRenderer: React.FC<PagedRendererProps> = ({
   totalPages,
   pages,
   pageStates,
-  viewMode,
+  viewMode = 'single',
+  mode,
+  direction,
+  spreadCoverOffset = true,
+  fit = 'fit-height',
   imageFilterStyle,
   onNextPage,
   onPrevPage,
   onRetryPage,
 }) => {
-  const isDouble = viewMode === 'double';
-  const isRtl = viewMode === 'rtl';
+  const isDouble = mode === 'double' || viewMode === 'double';
+  const isRtl = direction === 'rtl' || viewMode === 'rtl';
 
+  const isCover = isDouble && spreadCoverOffset && currentPageIndex === 0;
   const firstIdx = currentPageIndex;
-  const secondIdx = isDouble && firstIdx + 1 < totalPages ? firstIdx + 1 : null;
+  const secondIdx = isDouble && !isCover && firstIdx + 1 < totalPages ? firstIdx + 1 : null;
 
   const activeIndices = isRtl && secondIdx !== null ? [secondIdx, firstIdx] : [firstIdx, secondIdx].filter((i): i is number => i !== null);
+
+  const fitClasses =
+    fit === 'fit-width'
+      ? 'w-full h-auto object-contain'
+      : fit === 'fit-both'
+      ? 'max-w-full max-h-[85vh] w-auto h-auto object-contain'
+      : fit === 'original'
+      ? 'max-w-none max-h-none w-auto h-auto'
+      : 'max-w-full max-h-[85vh] object-contain';
 
   return (
     <div className="relative w-full h-full flex items-center justify-center select-none overflow-hidden">
@@ -78,7 +96,7 @@ export const PagedRenderer: React.FC<PagedRendererProps> = ({
                   src={src}
                   alt={`Page ${idx + 1}`}
                   style={imageFilterStyle}
-                  className="max-w-full max-h-[85vh] object-contain transition-opacity duration-200"
+                  className={`${fitClasses} transition-opacity duration-200`}
                 />
               )}
             </div>

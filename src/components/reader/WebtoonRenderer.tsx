@@ -1,10 +1,13 @@
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
+import type { ImageFitMode } from '../../types';
 
 interface WebtoonRendererProps {
   pages: string[];
   pageStates: Record<number, { isLoading: boolean; isError: boolean }>;
   isSeamless: boolean;
+  gapPx?: number;
+  imageFit?: ImageFitMode;
   imageFilterStyle?: React.CSSProperties;
   showPageNumberOverlay: boolean;
   onRetryPage: (idx: number) => void;
@@ -17,6 +20,8 @@ export const WebtoonRenderer: React.FC<WebtoonRendererProps> = ({
   pages,
   pageStates,
   isSeamless,
+  gapPx = 0,
+  imageFit = 'fit-width',
   imageFilterStyle,
   showPageNumberOverlay,
   onRetryPage,
@@ -24,19 +29,47 @@ export const WebtoonRenderer: React.FC<WebtoonRendererProps> = ({
   panelRefs,
   imageRefs,
 }) => {
+  const effectiveSeamless = isSeamless || gapPx === 0;
+  const effectiveGap = effectiveSeamless ? 0 : gapPx;
+
+  const fitClasses =
+    imageFit === 'fit-height'
+      ? 'max-h-[100vh] w-auto max-w-full object-contain'
+      : imageFit === 'fit-both'
+      ? 'max-h-[100vh] max-w-full w-auto h-auto object-contain'
+      : imageFit === 'original'
+      ? 'max-w-none max-h-none w-auto h-auto'
+      : 'w-full max-w-full h-auto object-contain';
+
   return (
-    <div className={`w-full max-w-4xl mx-auto flex flex-col items-center ${isSeamless ? 'gap-0' : 'gap-4 py-4'}`}>
+    <div
+      className={`w-full max-w-4xl mx-auto flex flex-col items-center ${
+        effectiveSeamless ? 'gap-0 p-0 m-0 leading-none' : 'py-4'
+      }`}
+      style={{
+        gap: `${effectiveGap}px`,
+        lineHeight: effectiveSeamless ? 0 : undefined,
+        fontSize: effectiveSeamless ? 0 : undefined,
+      }}
+    >
       {pages.map((src, idx) => {
         const state = pageStates[idx] || { isLoading: true, isError: false };
         return (
           <div
             key={`webtoon-panel-${idx}`}
             ref={(el) => { panelRefs.current[idx] = el; }}
-            className="relative w-full flex justify-center group"
+            className={`relative w-full flex justify-center group ${
+              effectiveSeamless ? 'p-0 m-0 border-0 leading-none text-[0px]' : ''
+            }`}
+            style={{
+              margin: effectiveSeamless ? 0 : undefined,
+              padding: effectiveSeamless ? 0 : undefined,
+              lineHeight: effectiveSeamless ? 0 : undefined,
+            }}
             onClick={() => onPageClick && onPageClick(idx)}
           >
             {state.isError ? (
-              <div className="w-full h-80 bg-zinc-900 border border-red-950/60 rounded-xl flex flex-col items-center justify-center p-6 text-center gap-3">
+              <div className="w-full h-80 bg-zinc-900 border border-red-950/60 rounded-xl flex flex-col items-center justify-center p-6 text-center gap-3 text-xs leading-normal">
                 <p className="text-zinc-400 text-sm font-medium">Failed to load panel #{idx + 1}</p>
                 <button
                   onClick={(e) => {
@@ -54,14 +87,22 @@ export const WebtoonRenderer: React.FC<WebtoonRendererProps> = ({
                 ref={(el) => { imageRefs.current[idx] = el; }}
                 src={src}
                 alt={`Panel ${idx + 1}`}
-                style={imageFilterStyle}
-                className="w-full max-w-full h-auto object-contain transition-opacity duration-300 select-none"
+                style={{
+                  ...imageFilterStyle,
+                  display: 'block',
+                  verticalAlign: 'bottom',
+                  margin: 0,
+                  padding: 0,
+                }}
+                className={`block align-bottom transition-opacity duration-300 select-none ${fitClasses} ${
+                  effectiveSeamless ? 'p-0 m-0 border-0' : ''
+                }`}
                 loading={idx < 4 ? 'eager' : 'lazy'}
               />
             )}
 
             {showPageNumberOverlay && (
-              <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-zinc-300 text-[10px] font-mono rounded opacity-0 group-hover:opacity-100 transition pointer-events-none">
+              <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-zinc-300 text-[10px] font-mono rounded opacity-0 group-hover:opacity-100 transition pointer-events-none leading-normal">
                 {idx + 1} / {pages.length}
               </span>
             )}

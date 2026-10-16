@@ -8,7 +8,17 @@ import {
   AlertTriangle,
   Play,
 } from 'lucide-react';
-import { MangaItem, ReaderSettings, ReaderImageFilter, MangaType } from '../../types';
+import {
+  MangaItem,
+  ReaderSettings,
+  ReaderImageFilter,
+  MangaType,
+  ReadingMode,
+  ReadingDirection,
+  ImageFitMode,
+  ReaderBackgroundTheme,
+  normalizeReaderSettings,
+} from '../../types';
 import { getRecommendedReadingMode } from '../../utils/readingMode';
 
 export interface ReaderSettingsModalProps {
@@ -34,6 +44,17 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
   onTriggerToast,
   onToggleFlagDropdown,
 }) => {
+  const currentMode: ReadingMode = settings.mode || (settings.viewMode === 'double' ? 'double' : settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless' ? 'webtoon' : 'single');
+  const currentDirection: ReadingDirection = settings.direction || (settings.viewMode === 'rtl' ? 'rtl' : settings.viewMode === 'vertical-paged' ? 'vertical' : 'ltr');
+  const currentFit: ImageFitMode = settings.fit || (settings.mangaFitMode === 'fit-width' ? 'fit-width' : settings.mangaFitMode === 'original' ? 'original' : 'fit-height');
+  const currentGap = settings.seamless ? 0 : (settings.gapPx ?? settings.pageGap ?? 0);
+
+  const saveNormalized = (updates: Partial<ReaderSettings>, toastMsg?: string) => {
+    const next = normalizeReaderSettings({ ...settings, ...updates });
+    onSaveSettings(next);
+    if (toastMsg) onTriggerToast(toastMsg);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-surface border border-edge rounded-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl text-primary text-xs sm:text-sm">
@@ -67,7 +88,7 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
               </div>
               <div className="text-[10px] text-secondary">
                 {settings.autoFormatMode !== false
-                  ? 'Auto-detection active (remembering your layout)'
+                  ? 'Auto-detection active (adapts to Manga vs Webtoon)'
                   : 'Manual layout override active'}
               </div>
             </div>
@@ -78,17 +99,18 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
               const next = settings.autoFormatMode === false;
               if (next) {
                 const rec = getRecommendedReadingMode(manga);
-                onSaveSettings({
-                  ...settings,
+                saveNormalized({
                   autoFormatMode: true,
+                  mode: rec.mode,
+                  direction: rec.direction,
+                  seamless: rec.seamless,
+                  gapPx: rec.gapPx,
                   viewMode: rec.viewMode,
                   noPanelSpacing: rec.noPanelSpacing,
                   pageGap: rec.pageGap,
-                });
-                onTriggerToast(`Auto-Format Active: ${rec.viewMode.toUpperCase()}`);
+                }, `Auto-Format Active: ${rec.mode.toUpperCase()}`);
               } else {
-                onSaveSettings({ ...settings, autoFormatMode: false });
-                onTriggerToast('Auto-Format Disabled');
+                saveNormalized({ autoFormatMode: false }, 'Auto-Format Disabled');
               }
             }}
             className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
@@ -101,74 +123,201 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
           </button>
         </div>
 
-        {/* 1. READER VIEWING MODE (KOTATSU INSPIRED) */}
+        {/* 1. READING MODE (WEBTOON / SINGLE / DOUBLE / CONTINUOUS) */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5 text-accent" />
-            Reading Mode & Page Layout
+            Reading Mode
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             {[
-              { id: 'webtoon-seamless', label: '📱 Webtoon Seamless (0px Gap)', desc: 'Continuous vertical (No panel spacing)' },
-              { id: 'webtoon', label: '📜 Webtoon Standard', desc: 'Continuous vertical (Custom gap)' },
-              { id: 'rtl', label: '🇯🇵 Manga (RTL)', desc: 'Right to Left page turn' },
-              { id: 'ltr', label: '🇺🇸 Western / Manhua', desc: 'Left to Right page turn' },
-              { id: 'single', label: '📄 Single Page', desc: 'One page per view' },
-              { id: 'double', label: '📖 Double Spread', desc: 'Two pages side-by-side' },
-              { id: 'vertical-paged', label: '📑 Paged Vertical', desc: 'Full-screen pages, vertical scroll' },
-            ].map((mode) => (
+              { id: 'webtoon' as ReadingMode, label: '📱 Webtoon', desc: 'Seamless strip' },
+              { id: 'continuous' as ReadingMode, label: '📜 Continuous', desc: 'Vertical strip' },
+              { id: 'single' as ReadingMode, label: '📄 Single Page', desc: '1 page view' },
+              { id: 'double' as ReadingMode, label: '📖 Double Spread', desc: '2 pages side-by-side' },
+            ].map((m) => (
               <button
-                key={mode.id}
+                key={m.id}
                 type="button"
                 onClick={() => {
-                  onSaveSettings({
-                    ...settings,
-                    viewMode: mode.id as any,
-                    noPanelSpacing: mode.id === 'webtoon-seamless',
-                    pageGap: mode.id === 'webtoon-seamless' ? 0 : settings.pageGap || 8,
-                  });
-                  onTriggerToast(`Reader Mode: ${mode.label}`);
+                  const isWeb = m.id === 'webtoon';
+                  saveNormalized({
+                    mode: m.id,
+                    seamless: isWeb,
+                    gapPx: isWeb ? 0 : settings.gapPx,
+                    viewMode: isWeb ? 'webtoon-seamless' : m.id === 'double' ? 'double' : currentDirection === 'rtl' ? 'rtl' : 'single',
+                  }, `Reading Mode: ${m.label}`);
                 }}
-                className={`p-2.5 sm:p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
-                  settings.viewMode === mode.id || (mode.id === 'webtoon-seamless' && settings.noPanelSpacing && isWebtoon)
-                    ? 'border-accent bg-accent/10 text-accent font-bold'
+                className={`p-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition-all ${
+                  currentMode === m.id
+                    ? 'border-accent bg-accent/15 text-accent font-bold ring-1 ring-accent'
                     : 'border-edge bg-app text-secondary hover:bg-elevated'
                 }`}
               >
-                <span className="text-xs sm:text-sm font-bold text-primary">{mode.label}</span>
-                <span className="text-[10px] sm:text-[11px] opacity-70 line-clamp-1">{mode.desc}</span>
+                <span className="text-xs font-bold text-primary">{m.label}</span>
+                <span className="text-[10px] opacity-70">{m.desc}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* 2. WEBTOON PANEL SPACING / GAP */}
+        {/* 2. READING DIRECTION (RTL, LTR, VERTICAL) */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-secondary flex items-center justify-between">
-            <span>Webtoon Vertical Panel Spacing (Gap):</span>
-            <span className="text-accent font-mono font-bold">
-              {settings.noPanelSpacing ? '0px (Seamless Webtoon)' : `${settings.pageGap}px`}
-            </span>
+            <span>Reading Direction:</span>
+            <span className="text-accent font-mono font-bold uppercase text-[11px]">{currentDirection}</span>
           </label>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            {[
+              { id: 'rtl' as ReadingDirection, label: '🇯🇵 Right to Left (RTL)', desc: 'Manga standard' },
+              { id: 'ltr' as ReadingDirection, label: '🇺🇸 Left to Right (LTR)', desc: 'Western & Manhua' },
+              { id: 'vertical' as ReadingDirection, label: '📑 Vertical Paged', desc: 'Top to bottom' },
+            ].map((dir) => (
+              <button
+                key={dir.id}
+                type="button"
+                onClick={() => {
+                  saveNormalized({
+                    direction: dir.id,
+                    viewMode: currentMode === 'single' ? (dir.id === 'rtl' ? 'rtl' : dir.id === 'vertical' ? 'vertical-paged' : 'ltr') : settings.viewMode,
+                  }, `Direction: ${dir.label}`);
+                }}
+                className={`py-2 px-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition-all ${
+                  currentDirection === dir.id
+                    ? 'border-accent bg-accent/15 text-accent font-bold ring-1 ring-accent'
+                    : 'border-edge bg-app text-secondary hover:bg-elevated'
+                }`}
+              >
+                <span className="text-xs font-bold text-primary">{dir.label}</span>
+                <span className="text-[10px] opacity-70">{dir.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. IMAGE FIT MODE (FIT-WIDTH, FIT-HEIGHT, FIT-BOTH, ORIGINAL) */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-secondary flex items-center justify-between">
+            <span>Image Fit Adjustment:</span>
+            <span className="text-accent font-mono font-bold uppercase text-[11px]">{currentFit}</span>
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            {[
+              { id: 'fit-width' as ImageFitMode, label: '↔️ Fit Width', desc: 'Fill width' },
+              { id: 'fit-height' as ImageFitMode, label: '↕️ Fit Height', desc: 'Fit viewport' },
+              { id: 'fit-both' as ImageFitMode, label: '🔲 Fit Both', desc: 'Best fit screen' },
+              { id: 'original' as ImageFitMode, label: '🔍 Original', desc: '1:1 Native size' },
+            ].map((fitOption) => (
+              <button
+                key={fitOption.id}
+                type="button"
+                onClick={() => {
+                  saveNormalized({
+                    fit: fitOption.id,
+                    mangaFitMode: fitOption.id === 'fit-width' ? 'fit-width' : fitOption.id === 'original' ? 'original' : 'fit-height',
+                  }, `Image Fit: ${fitOption.label}`);
+                }}
+                className={`py-2 px-2.5 rounded-xl border text-left flex flex-col gap-0.5 transition-all ${
+                  currentFit === fitOption.id
+                    ? 'border-accent bg-accent/15 text-accent font-bold ring-1 ring-accent'
+                    : 'border-edge bg-app text-secondary hover:bg-elevated'
+                }`}
+              >
+                <span className="text-xs font-bold text-primary">{fitOption.label}</span>
+                <span className="text-[10px] opacity-70">{fitOption.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. PAGE GAP & SEAMLESS ADJUSTMENT */}
+        <div className="space-y-2 p-3 bg-app/80 rounded-xl border border-edge">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-secondary">
+              Page Gap & Seamless Rendering:
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-accent font-mono font-bold text-xs">
+                {currentGap === 0 ? '0px (Seamless 0-Seam)' : `${currentGap}px`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextSeamless = !settings.seamless;
+                  saveNormalized({
+                    seamless: nextSeamless,
+                    gapPx: nextSeamless ? 0 : 8,
+                    noPanelSpacing: nextSeamless,
+                    pageGap: nextSeamless ? 0 : 8,
+                  }, nextSeamless ? 'Seamless Mode ON (0px)' : 'Standard Gap ON (8px)');
+                }}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                  settings.seamless || currentGap === 0
+                    ? 'bg-accent text-accent-fg border-accent'
+                    : 'bg-elevated text-secondary border-edge hover:text-primary'
+                }`}
+              >
+                {settings.seamless || currentGap === 0 ? '✓ Seamless' : 'Seamed'}
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <input
               type="range"
               min="0"
               max="32"
-              step="4"
-              value={settings.noPanelSpacing ? 0 : settings.pageGap}
+              step="2"
+              value={currentGap}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                onSaveSettings({
-                  ...settings,
+                saveNormalized({
+                  gapPx: val,
                   pageGap: val,
+                  seamless: val === 0,
                   noPanelSpacing: val === 0,
                 });
               }}
               className="flex-1 accent-accent cursor-pointer"
             />
           </div>
+          <div className="flex items-center gap-1.5 pt-1">
+            {[0, 4, 8, 16, 24].map((px) => (
+              <button
+                key={px}
+                type="button"
+                onClick={() => {
+                  saveNormalized({
+                    gapPx: px,
+                    pageGap: px,
+                    seamless: px === 0,
+                    noPanelSpacing: px === 0,
+                  });
+                }}
+                className={`flex-1 py-1 rounded text-[10px] font-bold border transition-all ${
+                  currentGap === px
+                    ? 'border-accent bg-accent/20 text-accent font-black'
+                    : 'border-edge bg-surface text-secondary hover:text-primary'
+                }`}
+              >
+                {px === 0 ? '0px' : `${px}px`}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* 5. DOUBLE SPREAD COVER OFFSET TOGGLE */}
+        <label className="p-3 bg-app rounded-xl border border-edge flex items-center justify-between cursor-pointer">
+          <div>
+            <div className="text-xs font-bold text-primary">Spread Cover Offset</div>
+            <div className="text-[10px] text-secondary">Display Page 1 as standalone cover before starting 2-page spreads</div>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.spreadCoverOffset !== false}
+            onChange={(e) => saveNormalized({ spreadCoverOffset: e.target.checked }, e.target.checked ? 'Cover Offset Enabled' : 'Cover Offset Disabled')}
+            className="w-4 h-4 accent-accent"
+          />
+        </label>
 
         {/* 3. MAX CONTAINER WIDTH */}
         <div className="space-y-2">
@@ -358,20 +507,22 @@ export const ReaderSettingsModal: React.FC<ReaderSettingsModalProps> = React.mem
           <label className="text-xs font-bold text-secondary">Background Canvas Theme:</label>
           <div className="grid grid-cols-4 gap-2 text-xs">
             {[
-              { id: 'slate', name: 'Dark Slate', bg: 'bg-surface text-primary' },
-              { id: 'black', name: 'AMOLED Black', bg: 'bg-black text-primary' },
-              { id: 'sepia', name: 'Soft Sepia', bg: 'bg-[#f4ecd8] text-[#5b4636]' },
-              { id: 'white', name: 'Paper White', bg: 'bg-white text-accent-fg' },
-            ].map((bg) => (
+              { id: 'dark' as ReaderBackgroundTheme, legacyBg: 'slate', name: 'Dark Slate', bg: 'bg-surface text-primary' },
+              { id: 'black' as ReaderBackgroundTheme, legacyBg: 'black', name: 'AMOLED Black', bg: 'bg-black text-primary' },
+              { id: 'sepia' as ReaderBackgroundTheme, legacyBg: 'sepia', name: 'Soft Sepia', bg: 'bg-[#f4ecd8] text-[#5b4636]' },
+              { id: 'white' as ReaderBackgroundTheme, legacyBg: 'white', name: 'Paper White', bg: 'bg-white text-accent-fg' },
+            ].map((b) => (
               <button
-                key={bg.id}
+                key={b.id}
                 type="button"
-                onClick={() => onSaveSettings({ ...settings, bgColor: bg.id as any })}
-                className={`py-2 sm:py-2.5 rounded-lg font-bold border text-center transition-all ${bg.bg} ${
-                  settings.bgColor === bg.id ? 'ring-2 ring-accent border-accent' : 'border-edge-strong'
+                onClick={() => saveNormalized({ backgroundTheme: b.id, bgColor: b.legacyBg as any }, `Background: ${b.name}`)}
+                className={`py-2 sm:py-2.5 rounded-lg font-bold border text-center transition-all ${b.bg} ${
+                  (settings.backgroundTheme === b.id || (!settings.backgroundTheme && settings.bgColor === b.legacyBg))
+                    ? 'ring-2 ring-accent border-accent'
+                    : 'border-edge-strong'
                 }`}
               >
-                {bg.name}
+                {b.name}
               </button>
             ))}
           </div>

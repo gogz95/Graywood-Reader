@@ -1,5 +1,16 @@
 import { create } from 'zustand';
-import { MangaItem, AppTheme, isNsfwManga, FlagCategory } from '../types';
+import {
+  MangaItem,
+  AppTheme,
+  isNsfwManga,
+  FlagCategory,
+  ReaderSettings,
+  ReadingMode,
+  ReadingDirection,
+  ImageFitMode,
+  DEFAULT_READER_SETTINGS,
+  normalizeReaderSettings,
+} from '../types';
 import { apiFetch } from '../utils/api';
 import { useAuthStore, getDeviceId } from './useAuthStore';
 import { useLibraryStore } from './useLibraryStore';
@@ -10,6 +21,13 @@ import {
   getClientSessionHistory,
 } from '../hooks/useReaderSession';
 import { syncProgressToTrackers } from '../services/scrobbleDispatcher';
+import {
+  getSavedSeriesReadingMode,
+  saveSeriesReadingMode,
+  fetchSeriesReadingModeFromServer,
+  pushSeriesReadingModeToServer,
+  resolveInitialReaderSettings,
+} from '../utils/readingMode';
 import type { BugReportInitialData } from '../components/modals/SubmitBugModal';
 
 // ============================================================================
@@ -21,6 +39,15 @@ interface ReaderState {
   readerTarget: { manga: MangaItem; chapterNumber: number; chapterId?: string } | null;
   chapterListTarget: MangaItem | null;
   isIncognito: boolean;
+
+  // Reader Settings & Per-Series Layout Engine
+  activeSettings: ReaderSettings;
+  seriesSettings: Record<string, ReaderSettings>;
+
+  getSeriesSettings: (mangaId: string) => ReaderSettings | null;
+  setSeriesSettings: (mangaId: string, settings: Partial<ReaderSettings>) => void;
+  updateActiveSettings: (settings: Partial<ReaderSettings>, mangaId?: string) => void;
+  loadSeriesSettings: (manga: MangaItem) => Promise<ReaderSettings>;
 
   // Actions
   setReaderTarget: (target: { manga: MangaItem; chapterNumber: number; chapterId?: string } | null) => void;
@@ -49,6 +76,69 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   readerTarget: null,
   chapterListTarget: null,
   isIncognito: false,
+
+  activeSettings: DEFAULT_READER_SETTINGS,
+  seriesSettings: {},
+
+  getSeriesSettings: (mangaId: string) => {
+    const memory = get().seriesSettings[mangaId];
+    if (memory) return memory;
+    const local = getSavedSeriesReadingMode(mangaId);
+    if (local) {
+      set((state) => ({ seriesSettings: { ...state.seriesSettings, [mangaId]: local } }));
+      return local;
+    }
+    return null;
+  },
+
+  setSeriesSettings: (mangaId: string, settings: Partial<ReaderSettings>) => {
+    const current = get().seriesSettings[mangaId] || getSavedSeriesReadingMode(mangaId) || DEFAULT_READER_SETTINGS;
+    const merged = normalizeReaderSettings({ ...current, ...settings });
+    saveSeriesReadingMode(mangaId, merged);
+    pushSeriesReadingModeToServer(mangaId, merged);
+    set((state) => ({
+      seriesSettings: { ...state.seriesSettings, [mangaId]: merged },
+      activeSettings: state.readerTarget?.manga?.id === mangaId ? merged : state.activeSettings,
+    }));
+  },
+
+  updateActiveSettings: (settings: Partial<ReaderSettings>, mangaId?: string) => {
+    const targetId = mangaId || get().readerTarget?.manga?.id;
+    const merged = normalizeReaderSettings({ ...get().activeSettings, ...settings });
+    if (targetId) {
+      saveSeriesReadingMode(targetId, merged);
+      pushSeriesReadingModeToServer(targetId, merged);
+      set((state) => ({
+        activeSettings: merged,
+        seriesSettings: { ...state.seriesSettings, [targetId]: merged },
+      }));
+    } else {
+      set({ activeSettings: merged });
+    }
+  },
+
+  loadSeriesSettings: async (manga: MangaItem) => {
+    const initial = resolveInitialReaderSettings(manga);
+    set((state) => ({
+      activeSettings: initial,
+      seriesSettings: { ...state.seriesSettings, [manga.id]: initial },
+    }));
+    try {
+      const serverSettings = await fetchSeriesReadingModeFromServer(manga.id);
+      if (serverSettings) {
+        const merged = normalizeReaderSettings({ ...initial, ...serverSettings });
+        saveSeriesReadingMode(manga.id, merged);
+        set((state) => ({
+          activeSettings: state.readerTarget?.manga?.id === manga.id ? merged : state.activeSettings,
+          seriesSettings: { ...state.seriesSettings, [manga.id]: merged },
+        }));
+        return merged;
+      }
+    } catch {
+      // offline fallback
+    }
+    return initial;
+  },
 
   setReaderTarget: (target) => set({ readerTarget: target }),
   setChapterListTarget: (manga) => set({ chapterListTarget: manga }),
@@ -126,6 +216,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       if (!ch || ch <= 0) ch = 1;
     }
 
+    get().loadSeriesSettings(manga).catch(() => {});
     set({ readerTarget: { manga, chapterNumber: ch, chapterId } });
   },
 

@@ -13,6 +13,11 @@ import {
   isNsfwManga,
   FlagCategory,
   FLAG_CATEGORIES,
+  ReadingMode,
+  ReadingDirection,
+  ImageFitMode,
+  ReaderBackgroundTheme,
+  normalizeReaderSettings,
 } from '../../types';
 import {
   detectMangaFormat,
@@ -101,6 +106,7 @@ interface WebtoonPanelProps {
   isLoading: boolean;
   isError: boolean;
   isSeamless: boolean;
+  imageFit?: ImageFitMode;
   imageFilterStyle?: React.CSSProperties;
   isLoupeActive: boolean;
   showPageNumberOverlay: boolean;
@@ -123,6 +129,7 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
   isLoading,
   isError,
   isSeamless,
+  imageFit = 'fit-width',
   imageFilterStyle,
   isLoupeActive,
   showPageNumberOverlay,
@@ -207,14 +214,27 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
 
   const isReadyToRenderImage = Boolean(!isLoading || (displaySrc && displaySrc.startsWith('blob:')));
 
+  const fitClasses =
+    imageFit === 'fit-height'
+      ? 'max-h-[100vh] w-auto max-w-full object-contain'
+      : imageFit === 'fit-both'
+      ? 'max-h-[100vh] max-w-full w-auto h-auto object-contain'
+      : imageFit === 'original'
+      ? 'max-w-none max-h-none w-auto h-auto'
+      : 'w-full max-w-full h-auto object-contain';
+
   return (
     <div
       id={`webtoon-panel-${idx}`}
       ref={containerRef}
       onClick={handlePanelClick}
-      style={{ minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px' }}
+      style={{
+        minHeight: cachedHeight ? `${cachedHeight}px` : isSeamless ? undefined : '300px',
+        lineHeight: isSeamless ? 0 : undefined,
+        fontSize: isSeamless ? 0 : undefined,
+      }}
       className={`w-full relative flex items-center justify-center overflow-hidden transition-all reader-page-panel group ${
-        isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0' : 'bg-app min-h-[300px] border border-edge/50'
+        isSeamless ? 'border-none p-0 m-0 bg-transparent min-h-0 leading-none text-[0px]' : 'bg-app min-h-[300px] border border-edge/50'
       }`}
     >
       {isVisible ? (
@@ -225,11 +245,17 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
                 key={`slice-${sliceIdx}`}
                 src={sliceSrc}
                 alt={`Page ${idx + 1} - Panel ${sliceIdx + 1}`}
-                style={imageFilterStyle}
+                style={{
+                  ...imageFilterStyle,
+                  display: 'block',
+                  verticalAlign: 'bottom',
+                  margin: 0,
+                  padding: 0,
+                }}
                 onMouseMove={onMouseMove}
                 onMouseLeave={onMouseLeave}
                 decoding="async"
-                className={`w-full h-auto block object-contain ${
+                className={`block align-bottom object-contain ${fitClasses} ${
                   isSeamless ? 'm-0 p-0 border-0' : 'mb-2 shadow-md'
                 } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
               />
@@ -239,12 +265,18 @@ const WebtoonPanel = React.memo<WebtoonPanelProps>(({
           <img
             src={displaySrc}
             alt={`Page ${idx + 1}`}
-            style={imageFilterStyle}
+            style={{
+              ...imageFilterStyle,
+              display: 'block',
+              verticalAlign: 'bottom',
+              margin: 0,
+              padding: 0,
+            }}
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
             onLoad={handleImageLoad}
             decoding="async"
-            className={`w-full h-auto block object-contain transition-opacity duration-300 ${
+            className={`block align-bottom object-contain transition-opacity duration-300 ${fitClasses} ${
               isSeamless ? 'm-0 p-0 border-0' : ''
             } ${isLoading ? 'opacity-40 blur-xs min-h-[250px]' : 'opacity-100'} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
             loading="lazy"
@@ -431,14 +463,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const setSettings = useCallback(
     (newSettings: ReaderSettings) => {
       hydratedRef.current = true; // user took control — don't let hydration override
-      setSettingsState(newSettings);
-      saveSeriesReadingMode(manga.id, newSettings);
-      saveFormatReadingMode(detectedFormat, newSettings);
-      saveLastUsedReadingMode(newSettings);
+      const normalized = normalizeReaderSettings(newSettings);
+      setSettingsState(normalized);
+      saveSeriesReadingMode(manga.id, normalized);
+      saveFormatReadingMode(detectedFormat, normalized);
+      saveLastUsedReadingMode(normalized);
       // Durable server-side sync so settings roam across devices/browsers.
-      pushSeriesReadingModeToServer(manga.id, newSettings);
+      pushSeriesReadingModeToServer(manga.id, normalized);
       if (onSaveSettings) {
-        onSaveSettings(newSettings);
+        onSaveSettings(normalized);
       }
     },
     [manga.id, detectedFormat, onSaveSettings]
@@ -456,7 +489,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         const remote = await fetchSeriesReadingModeFromServer(manga.id);
         if (!remote || cancelled || hydratedRef.current) return;
         hydratedRef.current = true;
-        setSettingsState((prev) => ({ ...prev, ...remote }));
+        setSettingsState((prev) => normalizeReaderSettings({ ...prev, ...remote }));
       } catch {
         /* best-effort */
       }
@@ -476,8 +509,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     [onMarkChapterRead]
   );
 
-
-  const isWebtoon = settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless';
+  const isWebtoon = settings.mode === 'webtoon' || settings.mode === 'continuous' || settings.viewMode === 'webtoon' || settings.viewMode === 'webtoon-seamless';
+  const isDoubleMode = settings.mode === 'double' || settings.viewMode === 'double';
+  const isRtlDirection = settings.direction === 'rtl' || (!settings.direction && (settings.viewMode === 'rtl' || detectMangaFormat(manga) === 'manga'));
+  const isSeamlessWebtoon = Boolean(settings.seamless || settings.gapPx === 0 || settings.noPanelSpacing);
+  const effectiveGapPx = isSeamlessWebtoon ? 0 : (settings.gapPx ?? settings.pageGap ?? 8);
 
   // Auto-scroll state
   const [isAutoScrolling, setIsAutoScrolling] = useState<boolean>(false);
@@ -1319,12 +1355,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Canvas background style mapping
   const bgStyleClass = useMemo(() => {
-    if (settings.bgColor === 'black') return 'bg-black text-primary';
+    if (settings.backgroundTheme === 'black' || settings.bgColor === 'black') return 'bg-black text-primary';
     if (settings.bgColor === 'charcoal') return 'bg-zinc-950 text-primary';
-    if (settings.bgColor === 'sepia') return 'bg-[#1c1813] text-[#e8d5b7]';
-    if (settings.bgColor === 'white') return 'bg-slate-100 text-accent-fg';
+    if (settings.backgroundTheme === 'sepia' || settings.bgColor === 'sepia') return 'bg-[#1c1813] text-[#e8d5b7]';
+    if (settings.backgroundTheme === 'white' || settings.bgColor === 'white') return 'bg-slate-100 text-accent-fg';
     return 'bg-app text-primary';
-  }, [settings.bgColor]);
+  }, [settings.backgroundTheme, settings.bgColor]);
 
   // CSS Image Filters Mapping (Including OLED pitch black, Warm Amber, E-Ink and Line-Art Sharpener)
   const imageFilterStyle = useMemo(() => {
@@ -1810,7 +1846,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           </div>
         ) : chapterData && isWebtoon ? (
           /* WEBTOON VERTICAL LONG STRIP MODE (STANDARD OR SEAMLESS) */
-          <div className="flex flex-col items-center w-full py-4 space-y-0 relative">
+          <div className={`flex flex-col items-center w-full space-y-0 relative ${isSeamlessWebtoon ? 'py-0 my-0' : 'py-4'}`}>
             {/* Phone/Tablet Center Touch Overlay for HUD Toggle */}
             <div
               className="absolute inset-0 z-10 pointer-events-auto cursor-pointer"
@@ -1824,11 +1860,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             />
 
             <div
-              className="w-full mx-auto flex flex-col items-center shadow-2xl relative z-20"
+              className={`w-full mx-auto flex flex-col items-center shadow-2xl relative z-20 ${
+                isSeamlessWebtoon ? 'gap-0 p-0 m-0 leading-none' : ''
+              }`}
               style={{
                 ...zoom.transformStyle,
                 maxWidth: settings.maxWidth,
-                gap: `${settings.noPanelSpacing ? 0 : settings.pageGap}px`
+                gap: `${effectiveGapPx}px`,
+                lineHeight: isSeamlessWebtoon ? 0 : undefined,
+                fontSize: isSeamlessWebtoon ? 0 : undefined,
               }}
             >
               {chapterData.pages.map((pageSrc, idx) => {
@@ -1836,7 +1876,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 const displaySrc = pageState?.blobUrl || pageSrc;
                 const isLoading = pageState?.status === 'loading';
                 const isError = pageState?.status === 'error';
-                const isSeamless = settings.noPanelSpacing || settings.pageGap === 0;
 
                 return (
                   <WebtoonPanel
@@ -1846,12 +1885,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     displaySrc={displaySrc}
                     isLoading={isLoading}
                     isError={isError}
-                    isSeamless={isSeamless}
+                    isSeamless={isSeamlessWebtoon}
+                    imageFit={settings.fit}
                     imageFilterStyle={imageFilterStyle}
                     isLoupeActive={isLoupeActive}
                     showPageNumberOverlay={Boolean(settings.showPageNumberOverlay)}
                     enableSmartWebtoonify={Boolean(settings.smartWebtoonify)}
-                    readingDirection={detectMangaFormat(manga) === 'manga' ? 'rtl' : 'ltr'}
+                    readingDirection={isRtlDirection ? 'rtl' : 'ltr'}
                     stickyNotesForPage={stickyNotesByPage[idx]}
                     onAddNote={handleOpenAddNote}
                     onOpenNote={handleOpenEditNote}
@@ -1900,22 +1940,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 relative select-none">
             <div
               className={`relative w-full mx-auto flex items-center justify-center ${
-                settings.viewMode === 'double' ? 'max-w-6xl' : ''
+                isDoubleMode ? 'max-w-6xl' : ''
               }`}
               style={{
                 ...zoom.transformStyle,
-                maxWidth: settings.viewMode === 'double' ? '1200px' : settings.maxWidth
+                maxWidth: isDoubleMode ? '1200px' : settings.maxWidth
               }}
             >
-              {settings.viewMode === 'double' && chapterData ? (
+              {isDoubleMode && chapterData ? (
                 /* DOUBLE-PAGE SPREAD RENDERING */
                 (() => {
-                  const isCover = currentPageIndex === 0;
+                  const isCover = settings.spreadCoverOffset !== false && currentPageIndex === 0;
                   const idx1 = currentPageIndex;
                   const idx2 = !isCover && currentPageIndex + 1 < chapterData.pages.length ? currentPageIndex + 1 : null;
                   
                   // For RTL (Manga), the earlier page is on the right, later on the left.
-                  const isRtl = detectMangaFormat(manga) === 'manga';
+                  const isRtl = isRtlDirection;
                   const leftIndex = isRtl ? idx2 : idx1;
                   const rightIndex = isRtl ? idx1 : idx2;
 
@@ -1961,6 +2001,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   const isLoading = pageState?.status === 'loading';
                   const isError = pageState?.status === 'error';
 
+                  const fitClass =
+                    settings.fit === 'fit-width' || settings.mangaFitMode === 'fit-width'
+                      ? 'w-full h-auto'
+                      : settings.fit === 'fit-both'
+                      ? 'max-h-[82vh] max-w-full w-auto h-auto object-contain'
+                      : settings.fit === 'original' || settings.mangaFitMode === 'original'
+                      ? 'w-auto h-auto max-w-none max-h-none'
+                      : 'max-h-[82vh] w-auto object-contain';
+
                   return (
                     <div
                       onDoubleClick={(e) => zoom.handleDoubleTap(e.clientX, e.clientY)}
@@ -1973,13 +2022,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                         onMouseMove={handleImageMouseMove}
                         onMouseLeave={handleImageMouseLeave}
                         decoding="async"
-                        className={`w-full rounded-xl shadow-2xl transition-all ${
-                          settings.mangaFitMode === 'fit-height'
-                            ? 'max-h-[82vh] w-auto object-contain'
-                            : settings.mangaFitMode === 'fit-width'
-                            ? 'w-full h-auto'
-                            : 'w-auto h-auto'
-                        } ${isLoupeActive ? 'cursor-crosshair' : ''}`}
+                        className={`rounded-xl shadow-2xl transition-all ${fitClass} ${isLoupeActive ? 'cursor-crosshair' : ''}`}
                       />
 
                       {/* Pinned Sticky Notes in Paged Mode */}
@@ -2063,15 +2106,41 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 })()
               )}
 
-              {/* Touch Tap Zone - Left 30% (Prev) */}
+              {/* Touch Tap Zone - Left 30% */}
               <div
                 onClick={(e) => {
                   e.stopPropagation();
-                  const step = settings.viewMode === 'double' && currentPageIndex > 0 ? 2 : 1;
-                  if (settings.viewMode === 'rtl') {
-                    if (currentPageIndex < chapterData!.pages.length - 1) setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
+                  if (!chapterData) return;
+                  const isDouble = isDoubleMode;
+                  const isRtl = isRtlDirection;
+                  if (isRtl) {
+                    // RTL: Left is Next Page
+                    if (isDouble) {
+                      const nextStep = (settings.spreadCoverOffset !== false && currentPageIndex === 0) ? 1 : 2;
+                      if (currentPageIndex < chapterData.pages.length - 1) {
+                        setCurrentPageIndex((prev) => Math.min(prev + nextStep, chapterData.pages.length - 1));
+                      } else if (chapterData.nextChapterNumber) {
+                        setCurrentChapterNum(chapterData.nextChapterNumber);
+                      }
+                    } else {
+                      if (currentPageIndex < chapterData.pages.length - 1) {
+                        setCurrentPageIndex((prev) => prev + 1);
+                      } else if (chapterData.nextChapterNumber) {
+                        setCurrentChapterNum(chapterData.nextChapterNumber);
+                      }
+                    }
                   } else {
-                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
+                    // LTR / Vertical: Left is Prev Page
+                    if (isDouble) {
+                      const prevStep = (settings.spreadCoverOffset !== false && currentPageIndex <= 2) ? (currentPageIndex === 1 ? 1 : 2) : 2;
+                      setCurrentPageIndex((prev) => Math.max(0, prev - prevStep));
+                    } else {
+                      if (currentPageIndex > 0) {
+                        setCurrentPageIndex((prev) => prev - 1);
+                      } else if (chapterData.prevChapterNumber) {
+                        setCurrentChapterNum(chapterData.prevChapterNumber);
+                      }
+                    }
                   }
                 }}
                 className="absolute left-0 top-0 bottom-0 w-[30%] cursor-pointer hover:bg-accent/5 transition-colors flex items-center justify-start pl-4 z-30"
@@ -2090,18 +2159,41 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 className="absolute left-[30%] right-[30%] top-0 bottom-0 cursor-pointer z-30"
               />
 
-              {/* Touch Tap Zone - Right 30% (Next) */}
+              {/* Touch Tap Zone - Right 30% */}
               <div
                 onClick={(e) => {
                   e.stopPropagation();
-                  const step = settings.viewMode === 'double' ? 2 : 1;
-                  if (settings.viewMode === 'rtl') {
-                    if (currentPageIndex > 0) setCurrentPageIndex((prev) => Math.max(0, prev - step));
+                  if (!chapterData) return;
+                  const isDouble = isDoubleMode;
+                  const isRtl = isRtlDirection;
+
+                  if (isRtl) {
+                    // RTL: Right is Prev Page
+                    if (isDouble) {
+                      const prevStep = (settings.spreadCoverOffset !== false && currentPageIndex <= 2) ? (currentPageIndex === 1 ? 1 : 2) : 2;
+                      setCurrentPageIndex((prev) => Math.max(0, prev - prevStep));
+                    } else {
+                      if (currentPageIndex > 0) {
+                        setCurrentPageIndex((prev) => prev - 1);
+                      } else if (chapterData.prevChapterNumber) {
+                        setCurrentChapterNum(chapterData.prevChapterNumber);
+                      }
+                    }
                   } else {
-                    if (currentPageIndex < chapterData!.pages.length - 1) {
-                      setCurrentPageIndex((prev) => Math.min(prev + step, chapterData!.pages.length - 1));
-                    } else if (chapterData?.nextChapterNumber) {
-                      setCurrentChapterNum(chapterData.nextChapterNumber);
+                    // LTR / Vertical: Right is Next Page
+                    if (isDouble) {
+                      const nextStep = (settings.spreadCoverOffset !== false && currentPageIndex === 0) ? 1 : 2;
+                      if (currentPageIndex < chapterData.pages.length - 1) {
+                        setCurrentPageIndex((prev) => Math.min(prev + nextStep, chapterData.pages.length - 1));
+                      } else if (chapterData.nextChapterNumber) {
+                        setCurrentChapterNum(chapterData.nextChapterNumber);
+                      }
+                    } else {
+                      if (currentPageIndex < chapterData.pages.length - 1) {
+                        setCurrentPageIndex((prev) => Math.min(prev + 1, chapterData.pages.length - 1));
+                      } else if (chapterData.nextChapterNumber) {
+                        setCurrentChapterNum(chapterData.nextChapterNumber);
+                      }
                     }
                   }
                 }}

@@ -89,40 +89,15 @@ export interface ChapterData {
   contentUnavailable?: boolean;
 }
 
-export interface ReaderSettings {
-  viewMode: ReaderViewMode;
-  maxWidth: string; // e.g. '800px', '1000px', '100%'
-  pageGap: number; // e.g. 0, 4, 8, 16
-  noPanelSpacing?: boolean; // Webtoon seamless mode without spacing between panels
-  bgColor: ReaderBgColor;
-  zoomLevel: number; // percentage, e.g. 100
-  autoMarkRead: boolean;
-  imageFilter: ReaderImageFilter;
-  autoScrollEnabled: boolean;
-  autoScrollSpeed: number; // 0.5 to 3.0
-  tapZonesEnabled: boolean;
-  cropWhiteMargins: boolean;
-  showPageNumberOverlay: boolean;
-  showPersistentPageBadge: boolean;
-  autoNextChapter: boolean; // Automatic next chapter for webtoons
-  mangaFitMode: 'fit-height' | 'fit-width' | 'original';
-  preloadCount: number;
-  autoFormatMode?: boolean; // Automatically adapt layout based on Manga (RTL) vs Manhwa/Manhua (Webtoon)
-  rememberPerSeries?: boolean; // Persist last selected layout per individual series
-  guidedPanelView?: boolean; // Snap-to-panel or smooth step advancement for webtoons
-  prefetchNextChapter?: boolean; // Seamless background prefetch for chapter N+1
-  splitLandscapeSpreads?: boolean; // Canvas-based landscape double-page auto-splitting (Mihon-style)
-  smartWebtoonify?: boolean; // Strictly optional: Smart Vision panel segmentation converting multi-panel classic manga to vertical webtoon
-  enableAiInpainting?: boolean; // Strictly optional (disabled by default): AI speech bubble inpainting and in-place dialogue translation
-  inPlaceTranslation?: boolean; // Strictly optional (disabled by default): In-place translated typography overlay
-  targetTranslationLang?: string; // Target translation language code (e.g. 'en', 'es', 'fr', 'de', 'pt')
-  // Reflowable EPUB / Light Novel Typography Settings
-  epubFontFamily?: 'serif' | 'sans' | 'dyslexic' | 'mono';
-  epubFontSize?: number; // px, default 18
-  epubLineHeight?: number; // multiplier, e.g. 1.6
-  epubLetterSpacing?: number; // px, default 0.2
-  epubTextAlign?: 'left' | 'justify' | 'center';
-}
+import type { ReaderSettings } from './types/reader';
+export type {
+  ReadingMode,
+  ReadingDirection,
+  ImageFitMode,
+  ReaderBackgroundTheme,
+  ReaderSettings,
+} from './types/reader';
+export { DEFAULT_READER_SETTINGS, normalizeReaderSettings } from './types/reader';
 
 export interface PageStickyNote {
   id: string;
